@@ -113,8 +113,8 @@ internal sealed class FileIconElement : FrameworkElement
         if (_shellPlace != null || _shellPath != null)
         {
             // Snap the destination to the device pixel grid and request the bitmap at exactly that device
-            // pixel size, so the backend draws it 1:1 with no scaling. (MewVG's texture minification is
-            // fuzzy at non-100% scaling; drawing 1:1 sidesteps it. GDI/D2D are unaffected.)
+            // pixel size, so the backend draws it 1:1 with no scaling. Backends whose minification is fuzzy
+            // at non-100% scaling would otherwise soften the icon.
             var snapped = SnapRect(box, scale);
             if (TryGetShellImage(snapped, scale, out var placeholderImage))
             {

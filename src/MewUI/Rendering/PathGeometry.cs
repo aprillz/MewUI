@@ -697,7 +697,7 @@ public sealed class PathGeometry : IFreezable
         // Position at the arc start.  Skip the LineTo when the current point
         // is already (nearly) at p0 - this avoids a micro-segment caused by
         // the atan2→cos/sin roundtrip in ArcTo, which would create spurious
-        // stroke joins in some backends (especially GDI+).
+        // stroke joins in some backends.
         if (_commands.Count == 0 || _commands[^1].Type == PathCommandType.Close)
         {
             MoveTo(p0x, p0y);

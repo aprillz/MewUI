@@ -25,15 +25,13 @@ public abstract partial class UIElement
     /// </summary>
     /// <remarks>
     /// Setting <c>AllowDrop</c> on a <see cref="Window"/> additionally triggers platform drop-target
-    /// registration (WinForms/WPF style). The behavior per backend:
+    /// registration. What the platform delivers varies:
     /// <list type="bullet">
-    /// <item><description><b>Win32</b>: On an STA UI thread the framework calls <c>OleInitialize</c> + <c>RegisterDragDrop</c>
-    /// for full <c>IDropTarget</c> support (DragEnter/Over/Leave/Drop, effect negotiation, native preview via
-    /// <c>IDropTargetHelper</c>). .NET 6+ entry points default to MTA - apply <c>[STAThread]</c> on
-    /// <c>Main</c> to opt in. On MTA threads the framework falls back to the legacy <c>WM_DROPFILES</c>
-    /// path (file drop only, no enter/over/leave, no preview).</description></item>
-    /// <item><description><b>macOS</b>: Calls <c>[NSView registerForDraggedTypes:]</c> with the file URL type.</description></item>
-    /// <item><description><b>X11</b>: Sets the <c>XdndAware</c> property on the window.</description></item>
+    /// <item><description><b>Windows</b>: An STA UI thread gets the full protocol (DragEnter/Over/Leave/Drop,
+    /// effect negotiation, native drag preview). .NET 6+ entry points default to MTA - apply
+    /// <c>[STAThread]</c> on <c>Main</c> to opt in. On MTA threads only file drop arrives, with no
+    /// enter/over/leave and no preview.</description></item>
+    /// <item><description><b>macOS and Linux</b>: File drop is registered at the window level.</description></item>
     /// </list>
     /// On non-<see cref="Window"/> elements, <c>AllowDrop</c> only affects element-chain participation -
     /// element-level <c>DragEnter</c>/<c>Over</c>/<c>Leave</c>/<c>Drop</c> are bubbled by the framework

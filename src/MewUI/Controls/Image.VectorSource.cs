@@ -243,8 +243,8 @@ public sealed partial class Image
             // The lambda captures locals only; instance cache fields stay UI-thread exclusive.
             await Task.Run(() =>
             {
-                // Backend worker-thread setup: GL activates a share-listed worker context, D2D
-                // (multi-threaded factory), Metal and GDI return a no-op scope.
+                // Lets the backend prepare whatever a worker thread needs before it renders; a
+                // backend with nothing to prepare returns a no-op scope.
                 using var workerScope = factory.AcquireBackgroundRenderScope();
                 // Rented on this thread, not the UI thread: a backend may bind an offscreen surface
                 // to the thread that created it, and the pool only hands back surfaces the calling

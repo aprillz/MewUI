@@ -54,7 +54,7 @@ public abstract class FilterResult : IDisposable
     /// <summary>
     /// The underlying render surface if this result is backed by one (Borrowed/Scratch).
     /// Returns <see langword="null"/> for backend-specific results that wrap native handles only.
-    /// Used by GPU executors to access backend-specific resources (e.g. OpenGL FBO/texture).
+    /// Used by GPU executors to reach the backend resources behind the result.
     /// </summary>
     public abstract IRenderSurface? UnderlyingSurface { get; }
 
