@@ -40,6 +40,9 @@ public sealed class WinFormsHost : FrameworkElement
     private const uint WM_NULL = 0x0000;
     private const uint WM_KEYFIRST = 0x0100;
     private const uint WM_KEYLAST = 0x0109;
+    private const uint WM_KEYDOWN = 0x0100;
+    private const nint VK_TAB = 0x09;
+    private const int VK_SHIFT = 0x10;
 
     private static readonly ConcurrentDictionary<nint, WinFormsHost> _hostMap = new();
     private static readonly WndProcDelegate _hostWndProc = HostWndProc;
@@ -165,11 +168,38 @@ public sealed class WinFormsHost : FrameworkElement
     {
         base.OnGotFocus();
 
-        if (_hostHandle != 0)
+        if (_hostHandle == 0)
         {
-            Interop.SetFocus(_hostHandle);
+            return;
         }
+
+        // Focus has to land on a guest control rather than the host window, or keyboard input has
+        // no target and Tab cannot find a starting point.
+        bool backward = (Interop.GetKeyState(VK_SHIFT) & 0x8000) != 0;
+        nint guest = FindEdgeTabStop(backward);
+        Interop.SetFocus(guest != 0 ? guest : _hostHandle);
     }
+
+    /// <summary>Returns the guest's first tab stop, or its last one when entering backwards.</summary>
+    private nint FindEdgeTabStop(bool backward)
+    {
+        var container = _container;
+        if (container == null)
+        {
+            return 0;
+        }
+
+        var candidate = container.GetNextControl(null, !backward);
+        while (candidate != null && !IsUsableTabStop(candidate))
+        {
+            candidate = container.GetNextControl(candidate, !backward);
+        }
+
+        return candidate != null && candidate.IsHandleCreated ? candidate.Handle : 0;
+    }
+
+    private static bool IsUsableTabStop(WF.Control control)
+        => control.TabStop && control.Enabled && control.Visible;
 
     protected override void OnLostFocus()
     {
@@ -413,11 +443,10 @@ public sealed class WinFormsHost : FrameworkElement
         var message = (Interop.MSG*)lParam;
         if (message->Message >= WM_KEYFIRST && message->Message <= WM_KEYLAST)
         {
-            nint container = FindContainerFor(message->HWnd);
-            if (container != 0 && Interop.IsDialogMessage(container, message) != 0)
+            var host = FindHostFor(message->HWnd);
+            if (host != null && host.HandleKeyMessage(message))
             {
-                // IsDialogMessage already translated and dispatched it; blank the message so the
-                // MewUI loop does not dispatch it a second time.
+                // Already acted on; blank the message so the MewUI loop does not dispatch it again.
                 message->Message = WM_NULL;
             }
         }
@@ -425,23 +454,69 @@ public sealed class WinFormsHost : FrameworkElement
         return Interop.CallNextHookEx(_messageHook, code, wParam, lParam);
     }
 
-    private static nint FindContainerFor(nint target)
+    private static WinFormsHost? FindHostFor(nint target)
     {
         if (target == 0)
         {
-            return 0;
+            return null;
         }
 
         foreach (var host in _hostMap.Values)
         {
-            nint container = host.ContainerHandle;
-            if (container != 0 && (container == target || Interop.IsChild(container, target) != 0))
+            nint handle = host._hostHandle;
+            if (handle != 0 && (handle == target || Interop.IsChild(handle, target) != 0))
             {
-                return container;
+                return host;
             }
         }
 
-        return 0;
+        return null;
+    }
+
+    private unsafe bool HandleKeyMessage(Interop.MSG* message)
+    {
+        nint container = ContainerHandle;
+        if (container == 0)
+        {
+            return false;
+        }
+
+        if (message->Message == WM_KEYDOWN && message->WParam == VK_TAB && TryMoveFocusOutOfHost())
+        {
+            return true;
+        }
+
+        return Interop.IsDialogMessage(container, message) != 0;
+    }
+
+    /// <summary>Hands focus to the next MewUI element when Tab runs past the guest's last tab stop.</summary>
+    private bool TryMoveFocusOutOfHost()
+    {
+        var container = _container;
+        if (container == null || FindVisualRoot() is not Window window)
+        {
+            return false;
+        }
+
+        bool backward = (Interop.GetKeyState(VK_SHIFT) & 0x8000) != 0;
+        var focused = WF.Control.FromHandle(Interop.GetFocus());
+        if (focused == null)
+        {
+            return false;
+        }
+
+        var next = container.GetNextControl(focused, !backward);
+        while (next != null && !IsUsableTabStop(next))
+        {
+            next = container.GetNextControl(next, !backward);
+        }
+
+        if (next != null)
+        {
+            return false;
+        }
+
+        return backward ? window.FocusManager.MoveFocusPrevious() : window.FocusManager.MoveFocusNext();
     }
 
     private static void EnsureMessageHook()
