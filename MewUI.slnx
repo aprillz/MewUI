@@ -51,7 +51,6 @@
     <Project Path="extensions/MewUI.Skia/MewUI.Skia.csproj" />
     <Project Path="extensions/MewUI.Svg/MewUI.Svg.csproj" />
     <Project Path="extensions/MewUI.WebView2.Win32/MewUI.WebView2.Win32.csproj" />
-    <Project Path="extensions/MewUI.WinFormsHost.Win32/MewUI.WinFormsHost.Win32.csproj" />
   </Folder>
   <Folder Name="/extensions/tools/">
     <Project Path="extensions/MewUI.MewCharts/ThirdParty/LiveCharts2/generators/LiveChartsGenerators/LiveChartsGenerators.csproj" />

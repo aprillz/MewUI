@@ -10,12 +10,15 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
     <!-- UseWindowsForms adds a global System.Windows.Forms using that collides with the MewUI
          controls of the same name; Program.cs aliases the namespace as WF instead. -->
     <Using Remove="System.Windows.Forms" />
+    <Using Include="System.Windows.Forms" Alias="WF" />
+    <Using Include="System.Runtime.InteropServices" />
   </ItemGroup>
 
   <ItemGroup>
@@ -24,7 +27,6 @@
     <ProjectReference Include="..\..\src\MewUI.Backend.Direct2D\MewUI.Backend.Direct2D.csproj" />
     <ProjectReference Include="..\..\src\MewUI.Backend.Gdi\MewUI.Backend.GDi.csproj" />
     <ProjectReference Include="..\..\src\MewUI.Backend.MewVG.Win32\MewUI.Backend.MewVG.Win32.csproj" />
-    <ProjectReference Include="..\..\extensions\MewUI.WinFormsHost.Win32\MewUI.WinFormsHost.Win32.csproj" />
   </ItemGroup>
 
   <Import Project="..\..\build\Aprillz.MewUI.targets" />
