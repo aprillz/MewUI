@@ -1988,7 +1988,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
             // Submit only when the target changes, and accept whatever client size the platform
             // applies - possibly clamped to an OS minimum. The fit contract is
-            // max(content, OS minimum); a clamped result is never re-fought (issue #199).
+            // max(content, OS minimum); a clamped result is never re-fought.
             var target = new Size(fitWidth, fitHeight);
             if (!_hasRequestedClientSize || target != _requestedClientSize || Dpi != _requestedClientSizeDpi)
             {
@@ -2106,7 +2106,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         else
         {
             // Unsettled: the pass budget ran out, or overlay layout invalidated again. Hand the
-            // dispatcher exactly one continuation; chaining passes from inside is what spun (#199).
+            // dispatcher exactly one continuation; chaining passes from inside is what spun.
             if (!converged)
             {
                 LogNonConvergedLayout(visualRoot, passDiagnostics);
@@ -2273,7 +2273,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             // The running pass owns pass-internal invalidation: the generation bump above is the
             // arrival signal its convergence loop (or end-of-pass continuation) consumes. Posting
             // here would spin - the dispatcher releases the merge key before execution, so a
-            // mid-pass post becomes a fresh work item instead of merging (issue #199).
+            // mid-pass post becomes a fresh work item instead of merging.
             return;
         }
 

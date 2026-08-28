@@ -507,7 +507,7 @@ internal sealed class X11WindowBackend : IWindowBackend
         // Record the request optimistically (the async ConfigureNotify confirms the applied size),
         // then refresh WM_NORMAL_HINTS before resizing: a non-resizable window pins
         // PMinSize == PMaxSize to the current size, and the stale pin would make the WM reject a
-        // content-driven fit resize (issue #199).
+        // content-driven fit resize.
         Window.SetClientSizeDip(widthDip, heightDip);
         ApplyResizeMode();
 

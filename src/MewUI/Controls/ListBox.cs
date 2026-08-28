@@ -409,7 +409,7 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
         int count = ItemsSource.Count;
 
         // Desired width is the natural item width regardless of alignment: stretch is an arrange
-        // concern, and echoing the constraint made fit-content sizing impossible (issue #199).
+        // concern, and echoing the constraint made fit-content sizing impossible.
         {
             var factory = GetGraphicsFactory();
             var style = GetTextRunStyle();
