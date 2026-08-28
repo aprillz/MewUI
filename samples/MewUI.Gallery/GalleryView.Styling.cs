@@ -130,7 +130,7 @@ partial class GalleryView
         // The Border provides both the nearest named-style scope and the inherited candidate.
         return new Border()
             .WithTheme((t, b) => b.Foreground(t.Palette.Accent))
-            .Apply(b => b.StyleSheet = sheet)
+            .StyleSheet(sheet)
             .Child(
                 new StackPanel()
                     .Vertical()
@@ -173,7 +173,7 @@ partial class GalleryView
             .FontSize(ThemeFontSize.Small);
 
         scope = new Border()
-            .Apply(b => b.StyleSheet = sheet)
+            .StyleSheet(sheet)
             .Child(
                 new Button()
                     .Content("Inside scope: Define<Button>")

@@ -154,7 +154,7 @@ partial class GalleryView
 
         grid = new GridView()
             .ItemsSource(all)
-            .Apply(g => g.SelectionChanged += obj =>
+            .OnSelectionChanged(obj =>
             {
                 if (obj is ComplexGridRow row)
                 {
