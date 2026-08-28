@@ -3,6 +3,9 @@ namespace Aprillz.MewUI;
 /// <summary>
 /// Provides a data source abstraction for list controls.
 /// </summary>
+[Obsolete("Use ItemsView.Create instead. An ItemsSource reports a snapshot only: it does not observe " +
+    "collection changes, so adding or removing items (including through an ObservableCollection) leaves " +
+    "the control showing stale items.")]
 public sealed class ItemsSource
 {
     private readonly Func<int> _getCount;

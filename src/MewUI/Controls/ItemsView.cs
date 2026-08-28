@@ -130,6 +130,8 @@ public static class ItemsView
     /// Wraps the legacy <see cref="ItemsSource"/> type into an <see cref="IItemsView"/>.
     /// </summary>
     /// <param name="source">Legacy items source.</param>
+    [Obsolete("Use ItemsView.Create instead. The wrapped source reports a snapshot only, so the view " +
+        "never raises a change for an added or removed item.")]
     public static ISelectableItemsView From(ItemsSource source) => source == null ? EmptySelectable : new LegacyItemsView(source);
 
     private sealed class EmptyItemsView : ISelectableItemsView
@@ -164,6 +166,7 @@ public static class ItemsView
         public void Invalidate() => Changed?.Invoke(new ItemsChange(ItemsChangeKind.Reset, 0, 0));
     }
 
+    [Obsolete("Backs the obsolete ItemsView.From.")]
     private sealed class LegacyItemsView : ISelectableItemsView
     {
         private readonly ItemsSource _source;
