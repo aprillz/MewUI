@@ -72,6 +72,9 @@ internal static partial class Interop
     [LibraryImport(USER32, EntryPoint = "IsDialogMessageW")]
     internal static unsafe partial int IsDialogMessage(nint dialog, MSG* message);
 
+    [LibraryImport(USER32)]
+    internal static partial short GetKeyState(int virtualKey);
+
     [LibraryImport("kernel32.dll")]
     internal static partial uint GetCurrentThreadId();
 

@@ -60,6 +60,10 @@ package installs a thread-local `WH_GETMESSAGE` hook that runs `IsDialogMessage`
 for keyboard messages headed into a host, so several controls in one host navigate
 the way they do in a Windows Forms application.
 
+Tab crosses the boundary in both directions. Focusing the host lands on the guest's
+first tab stop rather than on the host window, and tabbing past the guest's last tab
+stop moves on to the next MewUI element. Shift+Tab does the same in reverse.
+
 ## Clipping
 
 `ClipToAncestors` (default `true`) intersects the host window with the bounds of
@@ -75,8 +79,6 @@ as scroll viewer padding when that matters.
 ## Limitations
 
 - Not trim-safe and not NativeAOT-compatible, because Windows Forms is neither.
-- Tab cycles within the host it started in and does not step out into MewUI
-  elements.
 - MewUI content cannot be drawn over a hosted control, including popups and
   menus that overlap it.
 
