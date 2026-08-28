@@ -3394,7 +3394,19 @@ public static class ControlExtensions
     /// <returns>The items control for chaining.</returns>
     public static ItemsControl FixedHeightPresenter(this ItemsControl itemsControl)
     {
-        itemsControl.SetPresenter(new FixedHeightItemsPresenter());
+        itemsControl.EnsurePresenter<FixedHeightItemsPresenter>().Anchor = ItemsAnchor.Top;
+        return itemsControl;
+    }
+
+    /// <summary>
+    /// Uses fixed-height row virtualization anchored to the given viewport edge.
+    /// </summary>
+    /// <param name="itemsControl">Target items control.</param>
+    /// <param name="anchor">Viewport edge the item content rests against and follows.</param>
+    /// <returns>The items control for chaining.</returns>
+    public static ItemsControl FixedHeightPresenter(this ItemsControl itemsControl, ItemsAnchor anchor)
+    {
+        itemsControl.EnsurePresenter<FixedHeightItemsPresenter>().Anchor = anchor;
         return itemsControl;
     }
 
@@ -3406,7 +3418,22 @@ public static class ControlExtensions
     /// <returns>The items control for chaining.</returns>
     public static ItemsControl FixedHeightPresenter(this ItemsControl itemsControl, double itemHeight)
     {
-        itemsControl.SetPresenter(new FixedHeightItemsPresenter { ItemHeight = itemHeight });
+        itemsControl.EnsurePresenter<FixedHeightItemsPresenter>().ItemHeight = itemHeight;
+        return itemsControl;
+    }
+
+    /// <summary>
+    /// Uses fixed-height row virtualization with explicit item height, anchored to the given viewport edge.
+    /// </summary>
+    /// <param name="itemsControl">Target items control.</param>
+    /// <param name="itemHeight">Fixed item height.</param>
+    /// <param name="anchor">Viewport edge the item content rests against and follows.</param>
+    /// <returns>The items control for chaining.</returns>
+    public static ItemsControl FixedHeightPresenter(this ItemsControl itemsControl, double itemHeight, ItemsAnchor anchor)
+    {
+        var fixedPresenter = itemsControl.EnsurePresenter<FixedHeightItemsPresenter>();
+        fixedPresenter.ItemHeight = itemHeight;
+        fixedPresenter.Anchor = anchor;
         return itemsControl;
     }
 
@@ -3417,7 +3444,19 @@ public static class ControlExtensions
     /// <returns>The items control for chaining.</returns>
     public static ItemsControl VariableHeightPresenter(this ItemsControl itemsControl)
     {
-        itemsControl.SetPresenter(new VariableHeightItemsPresenter());
+        itemsControl.EnsurePresenter<VariableHeightItemsPresenter>().Anchor = ItemsAnchor.Top;
+        return itemsControl;
+    }
+
+    /// <summary>
+    /// Uses variable-height virtualization anchored to the given viewport edge.
+    /// </summary>
+    /// <param name="itemsControl">Target items control.</param>
+    /// <param name="anchor">Viewport edge the item content rests against and follows.</param>
+    /// <returns>The items control for chaining.</returns>
+    public static ItemsControl VariableHeightPresenter(this ItemsControl itemsControl, ItemsAnchor anchor)
+    {
+        itemsControl.EnsurePresenter<VariableHeightItemsPresenter>().Anchor = anchor;
         return itemsControl;
     }
 
@@ -3428,7 +3467,19 @@ public static class ControlExtensions
     /// <returns>The items control for chaining.</returns>
     public static ItemsControl StackPresenter(this ItemsControl itemsControl)
     {
-        itemsControl.SetPresenter(new StackItemsPresenter());
+        itemsControl.EnsurePresenter<StackItemsPresenter>().Anchor = ItemsAnchor.Top;
+        return itemsControl;
+    }
+
+    /// <summary>
+    /// Uses non-virtualizing stack layout anchored to the given viewport edge.
+    /// </summary>
+    /// <param name="itemsControl">Target items control.</param>
+    /// <param name="anchor">Viewport edge the item content rests against.</param>
+    /// <returns>The items control for chaining.</returns>
+    public static ItemsControl StackPresenter(this ItemsControl itemsControl, ItemsAnchor anchor)
+    {
+        itemsControl.EnsurePresenter<StackItemsPresenter>().Anchor = anchor;
         return itemsControl;
     }
 
@@ -3441,7 +3492,9 @@ public static class ControlExtensions
     /// <returns>The items control for chaining.</returns>
     public static ItemsControl WrapPresenter(this ItemsControl itemsControl, double itemWidth, double itemHeight)
     {
-        itemsControl.SetPresenter(new WrapItemsPresenter { ItemWidth = itemWidth, ItemHeight = itemHeight });
+        var wrapPresenter = itemsControl.EnsurePresenter<WrapItemsPresenter>();
+        wrapPresenter.ItemWidth = itemWidth;
+        wrapPresenter.ItemHeight = itemHeight;
         return itemsControl;
     }
 

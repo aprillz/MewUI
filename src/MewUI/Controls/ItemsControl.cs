@@ -419,6 +419,23 @@ public sealed partial class ItemsControl : ScrollableItemsBase
         base.OnDispose();
     }
 
+    /// <summary>
+    /// Returns the current presenter when it is already of the requested kind, installing a new one
+    /// otherwise. Reuse is what lets a presenter option change at runtime without the swap dropping
+    /// measured heights and jumping the scroll position.
+    /// </summary>
+    internal TPresenter EnsurePresenter<TPresenter>() where TPresenter : class, IItemsPresenter, new()
+    {
+        if (_presenter is TPresenter existing)
+        {
+            return existing;
+        }
+
+        var created = new TPresenter();
+        SetPresenter(created);
+        return created;
+    }
+
     internal void SetPresenter(IItemsPresenter presenter)
     {
         double oldX = _scrollViewer.HorizontalOffset;
