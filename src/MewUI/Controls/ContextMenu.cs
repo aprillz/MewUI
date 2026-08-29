@@ -390,6 +390,28 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
     internal void Show(UIElement placementTarget, Rect anchorInWindow)
         => ShowCore(placementTarget, anchorInWindow, Placement);
 
+    [Obsolete("Use Show(placementTarget) with Placement = MenuPlacement.Below for target-anchored menus, or Show(placementTarget, positionInWindow) for an explicit position. Side placements derive the flip anchor that anchorTopY carried by hand.")]
+    public void ShowAt(UIElement owner, Point positionInWindow, double? anchorTopY = null)
+    {
+        ArgumentNullException.ThrowIfNull(owner);
+
+        if (anchorTopY is double anchorTop)
+        {
+            // The legacy pair (open point, flip anchor) is a Below placement against the rect the
+            // caller derived both values from.
+            var anchor = new Rect(
+                positionInWindow.X,
+                anchorTop,
+                0,
+                Math.Max(0, positionInWindow.Y - anchorTop));
+            ShowCore(owner, anchor, MenuPlacement.Below);
+        }
+        else
+        {
+            Show(owner, positionInWindow);
+        }
+    }
+
     private void ShowCore(UIElement placementTarget, Rect anchorInWindow, MenuPlacement placement)
     {
         var root = placementTarget.FindVisualRoot();
