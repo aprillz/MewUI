@@ -140,7 +140,7 @@ internal class FlexBorderButton : Button
         DockMenuCommands.Add(menu, commands, "close", MewUIDockString.MenuClose.Value, () => model.DoAction(DockAction.DeleteTab(tabId)), _tab.IsEnableClose);
         _context.ConfigureTabMenu?.Invoke(_tab, menu, commands); // host appends app commands
         menu.SetCommandTarget(CommandTarget.From(commands));
-        menu.ShowAt(this, new Point(Bounds.X + localPosition.X, Bounds.Y + localPosition.Y));
+        menu.Show(this, new Point(Bounds.X + localPosition.X, Bounds.Y + localPosition.Y));
     }
 
     protected override void OnDragStarting(DragStartingEventArgs e)

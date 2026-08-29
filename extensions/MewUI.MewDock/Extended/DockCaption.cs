@@ -186,7 +186,7 @@ internal sealed class DockCaption : ContentControl, IToolHeader
         var commands = new CommandScope();
         _buildMenu(menu, commands);
         menu.SetCommandTarget(CommandTarget.From(commands));
-        var bounds = _menuButton.Bounds;
-        menu.ShowAt(_menuButton, new Point(bounds.X, bounds.Bottom));
+        menu.Placement = MenuPlacement.Below;
+        menu.Show(_menuButton);
     }
 }
