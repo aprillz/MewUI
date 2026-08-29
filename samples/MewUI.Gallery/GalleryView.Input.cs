@@ -373,6 +373,15 @@ partial class GalleryView
                                         )
                                         .Separator()
                                         .Item("Disabled", isEnabled: false)
+                                ),
+
+                            new Button()
+                                .Content("Right-click: opens below")
+                                .ContextMenu(
+                                    new ContextMenu { Placement = MenuPlacement.Below, PlacementOffset = new Point(0, 2) }
+                                        .Item("First")
+                                        .Item("Second")
+                                        .Item("Third")
                                 )
                          )
                  )
