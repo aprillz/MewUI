@@ -166,7 +166,7 @@ internal sealed class FlexTabSetView : Control, IVisualTreeHost
         BuildGroupMenu(menu, commands);
         _context.ConfigureGroupMenu?.Invoke(_tabSet, menu, commands); // host appends app commands
         menu.SetCommandTarget(CommandTarget.From(commands));
-        menu.ShowAt(this, new Point(Bounds.X + local.X, Bounds.Y + local.Y));
+        menu.Show(this, new Point(Bounds.X + local.X, Bounds.Y + local.Y));
     }
 
     private void BuildGroupMenu(ContextMenu menu, CommandScope commands)
@@ -528,8 +528,8 @@ internal sealed class FlexTabSetView : Control, IVisualTreeHost
                 () => _tabSet.Model.DoAction(DockAction.SelectTab(node.GetId())));
         }
         menu.SetCommandTarget(CommandTarget.From(commands));
-        var buttonBounds = _overflowButton.Bounds;
-        menu.ShowAt(_overflowButton, new Point(buttonBounds.X, buttonBounds.Bottom));
+        menu.Placement = MenuPlacement.Below;
+        menu.Show(_overflowButton);
     }
 
     protected override UIElement? OnHitTest(Point point)

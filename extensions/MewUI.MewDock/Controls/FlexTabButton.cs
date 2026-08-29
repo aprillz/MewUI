@@ -119,7 +119,7 @@ internal sealed class FlexTabButton : Button
         BuildDefaultMenu(menu, commands);
         _context.ConfigureTabMenu?.Invoke(_tab, menu, commands); // host appends app commands
         menu.SetCommandTarget(CommandTarget.From(commands));
-        menu.ShowAt(this, new Point(Bounds.X + localPosition.X, Bounds.Y + localPosition.Y));
+        menu.Show(this, new Point(Bounds.X + localPosition.X, Bounds.Y + localPosition.Y));
     }
 
     // Default items differ by kind: a document tab gets close-variants / split / maximize; a (pinned) tool tab
