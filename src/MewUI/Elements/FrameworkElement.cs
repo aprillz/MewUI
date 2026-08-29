@@ -140,9 +140,17 @@ public abstract class FrameworkElement : UIElement, IDisposable
             return;
         }
 
-        if (e.Button == MouseButton.Right && ContextMenu != null)
+        if (e.Button == MouseButton.Right && ContextMenu is ContextMenu menu)
         {
-            ContextMenu.ShowAt(this, e.Position);
+            if (menu.Placement == MenuPlacement.Pointer)
+            {
+                menu.Show(this, e.Position);
+            }
+            else
+            {
+                menu.Show(this);
+            }
+
             e.Handled = true;
         }
     }

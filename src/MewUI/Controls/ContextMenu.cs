@@ -89,6 +89,42 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
         set => SetValue(MaxMenuHeightProperty, value);
     }
 
+    public static readonly MewProperty<MenuPlacement> PlacementProperty =
+        MewProperty<MenuPlacement>.Register<ContextMenu>(nameof(Placement), MenuPlacement.Pointer);
+
+    /// <summary>
+    /// Gets or sets where the menu opens relative to its placement target.
+    /// </summary>
+    public MenuPlacement Placement
+    {
+        get => GetValue(PlacementProperty);
+        set => SetValue(PlacementProperty, value);
+    }
+
+    public static readonly MewProperty<Point> PlacementOffsetProperty =
+        MewProperty<Point>.Register<ContextMenu>(nameof(PlacementOffset), default);
+
+    /// <summary>
+    /// Gets or sets a DIP offset applied to the placement, mirrored on the flipped side.
+    /// </summary>
+    public Point PlacementOffset
+    {
+        get => GetValue(PlacementOffsetProperty);
+        set => SetValue(PlacementOffsetProperty, value);
+    }
+
+    private static readonly MewPropertyKey<UIElement?> PlacementTargetPropertyKey =
+        MewProperty<UIElement?>.RegisterReadOnly<ContextMenu>(nameof(PlacementTarget), null);
+
+    /// <summary>The element the last <see cref="Show(UIElement)"/> opened on.</summary>
+    public static readonly MewProperty<UIElement?> PlacementTargetProperty = PlacementTargetPropertyKey.Property;
+
+    /// <summary>
+    /// Gets the element the menu last opened on. Set by <see cref="Show(UIElement)"/> and kept
+    /// until the next show, so a handler that runs after the menu closed can still read it.
+    /// </summary>
+    public UIElement? PlacementTarget => GetValue(PlacementTargetProperty);
+
     static ContextMenu()
     {
         FocusableProperty.OverrideDefaultValue<ContextMenu>(true);
@@ -313,17 +349,57 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
         _hasAnyIcon = false;
     }
 
-    public void ShowAt(UIElement owner, Point positionInWindow, double? anchorTopY = null)
+    /// <summary>
+    /// Opens the menu on the target as <see cref="Placement"/> directs. Pointer placement opens at
+    /// the current pointer position.
+    /// </summary>
+    public void Show(UIElement placementTarget)
     {
-        ArgumentNullException.ThrowIfNull(owner);
+        ArgumentNullException.ThrowIfNull(placementTarget);
 
-        var root = owner.FindVisualRoot();
+        if (Placement == MenuPlacement.Pointer)
+        {
+            if (placementTarget.FindVisualRoot() is not Window window)
+            {
+                return;
+            }
+
+            var pointer = window.LastMousePositionDip;
+            Show(placementTarget, pointer);
+        }
+        else
+        {
+            ShowCore(placementTarget, placementTarget.Bounds, Placement);
+        }
+    }
+
+    /// <summary>
+    /// Opens the menu at an explicit window position (a caret, a stored press point), regardless of
+    /// <see cref="Placement"/>.
+    /// </summary>
+    public void Show(UIElement placementTarget, Point positionInWindow)
+    {
+        ArgumentNullException.ThrowIfNull(placementTarget);
+        ShowCore(placementTarget, new Rect(positionInWindow.X, positionInWindow.Y, 0, 0), MenuPlacement.Pointer);
+    }
+
+    /// <summary>
+    /// Opens the menu against an anchor rectangle that is not the target's own bounds (a MenuBar
+    /// item cell). Placement follows <see cref="Placement"/>.
+    /// </summary>
+    internal void Show(UIElement placementTarget, Rect anchorInWindow)
+        => ShowCore(placementTarget, anchorInWindow, Placement);
+
+    private void ShowCore(UIElement placementTarget, Rect anchorInWindow, MenuPlacement placement)
+    {
+        var root = placementTarget.FindVisualRoot();
         if (root is not Window window)
         {
             return;
         }
 
-        _capturedCommandTarget = _presetCommandTarget ?? CommandTarget.From(owner);
+        SetValue(PlacementTargetPropertyKey, placementTarget);
+        _capturedCommandTarget = _presetCommandTarget ?? CommandTarget.From(placementTarget);
 
         UpdateCommandPresentation(window);
         PrepareMaterializedIcons();
@@ -334,14 +410,14 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
         // Measuring here saw an unstyled zero border, so the width came out short by the border the
         // arrange pass then deflated - and the caption is the only elastic column, so the whole loss
         // landed on it and trimmed the last glyph.
-        window.ShowPopup(owner, this, w => MeasurePlacement(w, positionInWindow, anchorTopY));
+        window.ShowPopup(placementTarget, this, w => MeasurePlacement(w, anchorInWindow, placement));
         window.FocusManager.SetFocus(this);
     }
 
-    private Rect MeasurePlacement(Window window, Point positionInWindow, double? anchorTopY)
+    private Rect MeasurePlacement(Window window, Rect anchor, MenuPlacement placement)
     {
         // Measure without passing infinity into backends that may convert widths to ints.
-        var region = window.GetPopupPlacementRegion(new Rect(positionInWindow.X, positionInWindow.Y, 0, 0));
+        var region = window.GetPopupPlacementRegion(anchor);
         Measure(new Size(Math.Max(0, region.Width), Math.Max(0, region.Height)));
         var desired = DesiredSize;
 
@@ -354,18 +430,63 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
             height = Math.Min(height, maxH);
         }
 
-        double x = PopupPlacement.ClampHorizontal(positionInWindow.X, width, region, floorToLeftEdge: false);
-        double y = positionInWindow.Y;
+        var offset = PlacementOffset;
+        double x;
+        double y;
 
-        if (y + height > region.Bottom)
+        switch (placement)
         {
-            // Flip above the anchor point (anchorTopY for MenuBar items, or the click Y for context menus).
-            double flipAnchor = anchorTopY ?? positionInWindow.Y;
-            double flippedY = flipAnchor - height;
-            y = flippedY >= region.Y ? flippedY : Math.Max(region.Y, region.Bottom - height);
+            case MenuPlacement.Below:
+                x = PopupPlacement.ClampHorizontal(anchor.X + offset.X, width, region, floorToLeftEdge: false);
+                y = ResolveMainAxis(anchor.Bottom + offset.Y, anchor.Y - offset.Y - height, height, region.Y, region.Bottom);
+                break;
+            case MenuPlacement.Above:
+                x = PopupPlacement.ClampHorizontal(anchor.X + offset.X, width, region, floorToLeftEdge: false);
+                y = ResolveMainAxis(anchor.Y - offset.Y - height, anchor.Bottom + offset.Y, height, region.Y, region.Bottom);
+                break;
+            case MenuPlacement.Right:
+                x = ResolveMainAxis(anchor.Right + offset.X, anchor.X - offset.X - width, width, region.X, region.Right);
+                y = ClampCrossAxis(anchor.Y + offset.Y, height, region.Y, region.Bottom);
+                break;
+            case MenuPlacement.Left:
+                x = ResolveMainAxis(anchor.X - offset.X - width, anchor.Right + offset.X, width, region.X, region.Right);
+                y = ClampCrossAxis(anchor.Y + offset.Y, height, region.Y, region.Bottom);
+                break;
+            default:
+                x = PopupPlacement.ClampHorizontal(anchor.X + offset.X, width, region, floorToLeftEdge: false);
+                y = anchor.Y + offset.Y;
+                if (y + height > region.Bottom)
+                {
+                    // Flip above the pointer, falling back to the region's bottom edge.
+                    double flippedY = anchor.Y - offset.Y - height;
+                    y = flippedY >= region.Y ? flippedY : Math.Max(region.Y, region.Bottom - height);
+                }
+                break;
         }
 
         return new Rect(x, y, width, height);
+    }
+
+    // The preferred start along the placement axis, the flipped start when the extent runs past the
+    // far edge, and the far-edge fallback when the flip runs past the near edge.
+    private static double ResolveMainAxis(double preferred, double flipped, double extent, double nearEdge, double farEdge)
+    {
+        if (preferred + extent <= farEdge)
+        {
+            return Math.Max(nearEdge, preferred);
+        }
+
+        return flipped >= nearEdge ? flipped : Math.Max(nearEdge, farEdge - extent);
+    }
+
+    private static double ClampCrossAxis(double preferred, double extent, double nearEdge, double farEdge)
+    {
+        if (preferred + extent > farEdge)
+        {
+            preferred = farEdge - extent;
+        }
+
+        return Math.Max(nearEdge, preferred);
     }
 
     // Whole device pixels, like ResolveSeparatorHeight: a row height that covers a fractional pixel
@@ -930,6 +1051,7 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
 
         // Sub-menus inherit the same target snapshot so nesting never re-targets commands.
         subMenuPopup._capturedCommandTarget = _capturedCommandTarget;
+        subMenuPopup.SetValue(PlacementTargetPropertyKey, PlacementTarget);
         subMenuPopup.UpdateCommandPresentation(window);
         subMenuPopup.PrepareMaterializedIcons();
 

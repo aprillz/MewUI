@@ -90,8 +90,8 @@ internal sealed class DropDownMenuController
         _state = State.Open;
         SetIsOpen(true);
 
-        var bounds = _owner.Bounds;
-        popup.ShowAt(_owner, new Point(bounds.X, bounds.Bottom), anchorTopY: bounds.Y);
+        popup.Placement = MenuPlacement.Below;
+        popup.Show(_owner);
     }
 
     public void Close()

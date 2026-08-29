@@ -45,7 +45,7 @@ public sealed class MenuInteractionTests
         var menu = new ContextMenu();
         menu.AddSubMenu("Parent", subMenu);
         menu.AddItem("Other");
-        menu.ShowAt(owner, new Point(100, 100));
+        menu.Show(owner, new Point(100, 100));
         window.PerformLayout();
 
         Assert.AreEqual(1, PopupCount(window), "context menu opened");

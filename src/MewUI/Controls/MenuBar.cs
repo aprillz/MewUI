@@ -311,8 +311,10 @@ public sealed partial class MenuBar : Control, IPopupOwner
 
         _openPopup = popup;
 
+        popup.Placement = MenuPlacement.Below;
+        popup.PlacementOffset = new Point(0, 1);
         var b = _itemBounds.Count > index ? _itemBounds[index] : Rect.Empty;
-        popup.ShowAt(this, new Point(b.X, b.Bottom + 1), anchorTopY: b.Y - 1);
+        popup.Show(this, b);
     }
 
     private void CloseOpenMenu()

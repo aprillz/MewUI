@@ -40,7 +40,7 @@ internal static class TextContextMenu
 
         if (hasItems)
         {
-            menu.ShowAt(owner, positionInWindow);
+            menu.Show(owner, positionInWindow);
         }
     }
 

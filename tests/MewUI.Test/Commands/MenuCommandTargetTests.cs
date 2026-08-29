@@ -237,7 +237,7 @@ public sealed class MenuCommandTargetTests
 
         var menu = new ContextMenu();
         menu.AddEntry(new MenuItem(copyCommand));
-        menu.ShowAt(editor, new Point(100, 100));
+        menu.Show(editor, new Point(100, 100));
         window.PerformLayout();
 
         Assert.AreNotSame(editor, window.FocusManager.FocusedElement, "the open menu takes focus");
@@ -272,14 +272,14 @@ public sealed class MenuCommandTargetTests
         var menu = new ContextMenu();
         menu.AddEntry(item);
 
-        menu.ShowAt(editor, new Point(100, 100));
+        menu.Show(editor, new Point(100, 100));
         window.PerformLayout();
         Assert.IsTrue(item.IsEnabled, "command state does not replace the local enabled value");
         Assert.IsFalse(item.IsEffectivelyEnabled, "menu open queries CanExecute against the owner");
         menu.CloseTree(window);
 
         hasSelection = true;
-        menu.ShowAt(editor, new Point(100, 100));
+        menu.Show(editor, new Point(100, 100));
         window.PerformLayout();
         Assert.IsTrue(item.IsEffectivelyEnabled, "reopening re-queries current state");
     }
@@ -308,7 +308,7 @@ public sealed class MenuCommandTargetTests
         var item = new MenuItem(copyCommand);
         var menu = new ContextMenu();
         menu.AddEntry(item);
-        menu.ShowAt(editor, new Point(100, 100));
+        menu.Show(editor, new Point(100, 100));
         window.PerformLayout();
 
         Assert.AreEqual("Copy", item.GetParsedText().displayText, "Command.Text supplies the label");
@@ -338,7 +338,7 @@ public sealed class MenuCommandTargetTests
         var item = new MenuItem(copyCommand);
         var menu = new ContextMenu();
         menu.AddEntry(item);
-        menu.ShowAt(editor, new Point(100, 100));
+        menu.Show(editor, new Point(100, 100));
         window.PerformLayout();
         Assert.IsTrue(item.IsEnabled, "command evaluation preserves local enabled state");
         Assert.IsFalse(item.IsEffectivelyEnabled);
@@ -372,7 +372,7 @@ public sealed class MenuCommandTargetTests
         owner.Commands.Register(command, static () => { });
 
         var menu = new ContextMenu().Apply(x => x.AddItem(command));
-        menu.ShowAt(owner, new Point(100, 100));
+        menu.Show(owner, new Point(100, 100));
         window.PerformLayout();
 
         Assert.HasCount(1, built);
@@ -385,7 +385,7 @@ public sealed class MenuCommandTargetTests
         menu.CloseTree(window);
         Assert.IsNull(first.Parent, "closing the popup releases its materialized icon visual");
 
-        menu.ShowAt(owner, new Point(100, 100));
+        menu.Show(owner, new Point(100, 100));
         window.PerformLayout();
 
         Assert.HasCount(2, built);

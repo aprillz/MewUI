@@ -98,13 +98,13 @@ public sealed class CanClickTests
         var menu = new ContextMenu();
         menu.Menu.Items.Add(item);
 
-        menu.ShowAt(owner, new Point(10, 10));
+        menu.Show(owner, new Point(10, 10));
         window.PerformLayout();
         Assert.IsFalse(item.IsEffectivelyEnabled, "the row ignored a predicate that said no");
 
         menu.CloseTree(window);
         allowed = true;
-        menu.ShowAt(owner, new Point(10, 10));
+        menu.Show(owner, new Point(10, 10));
         window.PerformLayout();
         Assert.IsTrue(item.IsEffectivelyEnabled, "opening the menu again did not ask the predicate");
 
