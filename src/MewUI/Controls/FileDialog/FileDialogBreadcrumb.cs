@@ -96,7 +96,8 @@ internal sealed class FileDialogBreadcrumb : StackPanel
             }
 
             Button overflow = CreateCrumbButton("…", static () => { });
-            overflow.OnClick(() => menu.ShowAt(overflow, new Point(overflow.Bounds.X, overflow.Bounds.Bottom)));
+            menu.Placement = MenuPlacement.Below;
+            overflow.OnClick(() => menu.Show(overflow));
             Add(overflow);
         }
 

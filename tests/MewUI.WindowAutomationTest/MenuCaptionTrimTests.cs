@@ -75,7 +75,7 @@ public sealed class MenuCaptionTrimTests
                     window.InputMap.Map(print, new KeyGesture(Key.P, ModifierKeys.Control));
 
                     menu.LastCaptionWidth = double.PositiveInfinity;
-                    menu.ShowAt(owner, new Point(owner.Bounds.X, owner.Bounds.Bottom));
+                    menu.Show(owner, new Point(owner.Bounds.X, owner.Bounds.Bottom));
                     await Task.Delay(300);
 
                     double granted = menu.LastCaptionWidth;

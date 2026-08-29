@@ -129,7 +129,7 @@ public sealed class StyleUnsetTests
         menu.Item("A");
         menu.Item("B");
         menu.StyleName = "menu-like";
-        menu.ShowAt(container, new Point(0, 0));
+        menu.Show(container, new Point(0, 0));
         window.PerformLayout();
 
         Assert.AreEqual(18.0, menu.FontSize, "The Unset menu style lets the popup inherit the owner's ambient FontSize");
