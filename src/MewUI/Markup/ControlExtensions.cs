@@ -166,40 +166,40 @@ public static class ControlExtensions
     /// <summary>
     /// Sets the tooltip text.
     /// </summary>
-    /// <typeparam name="T">Control type.</typeparam>
-    /// <param name="control">Target control.</param>
+    /// <typeparam name="T">Element type.</typeparam>
+    /// <param name="element">Target element.</param>
     /// <param name="text">Tooltip text.</param>
-    /// <returns>The control for chaining.</returns>
-    public static T ToolTip<T>(this T control, string? text) where T : Control
+    /// <returns>The element for chaining.</returns>
+    public static T ToolTip<T>(this T element, string? text) where T : FrameworkElement
     {
-        control.ToolTip = string.IsNullOrEmpty(text) ? null : new TextBlock { Text = text };
-        return control;
+        element.ToolTip = string.IsNullOrEmpty(text) ? null : new TextBlock { Text = text };
+        return element;
     }
 
     /// <summary>
     /// Sets the tooltip content.
     /// </summary>
-    /// <typeparam name="T">Control type.</typeparam>
-    /// <param name="control">Target control.</param>
+    /// <typeparam name="T">Element type.</typeparam>
+    /// <param name="element">Target element.</param>
     /// <param name="content">Tooltip content.</param>
-    /// <returns>The control for chaining.</returns>
-    public static T ToolTip<T>(this T control, Element? content) where T : Control
+    /// <returns>The element for chaining.</returns>
+    public static T ToolTip<T>(this T element, Element? content) where T : FrameworkElement
     {
-        control.ToolTip = content;
-        return control;
+        element.ToolTip = content;
+        return element;
     }
 
     /// <summary>
     /// Sets the context menu.
     /// </summary>
-    /// <typeparam name="T">Control type.</typeparam>
-    /// <param name="control">Target control.</param>
+    /// <typeparam name="T">Element type.</typeparam>
+    /// <param name="element">Target element.</param>
     /// <param name="menu">Context menu.</param>
-    /// <returns>The control for chaining.</returns>
-    public static T ContextMenu<T>(this T control, ContextMenu? menu) where T : Control
+    /// <returns>The element for chaining.</returns>
+    public static T ContextMenu<T>(this T element, ContextMenu? menu) where T : FrameworkElement
     {
-        control.ContextMenu = menu;
-        return control;
+        element.ContextMenu = menu;
+        return element;
     }
 
     #endregion
