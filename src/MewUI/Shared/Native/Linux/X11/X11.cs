@@ -190,9 +190,6 @@ internal static partial class X11
     public static partial void XrmInitialize();
 
     [LibraryImport(LibraryName)]
-    public static partial nint XResourceManagerString(nint display);
-
-    [LibraryImport(LibraryName)]
     public static partial nint XrmGetStringDatabase(nint data);
 
     [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
