@@ -7,23 +7,7 @@ partial class GalleryView
 {
     private FrameworkElement ShapesPage() =>
         CardGrid(
-            Card(
-                "Rectangle",
-                new StackPanel()
-                    .Vertical()
-                    .Spacing(8)
-                    .Children(
-                        new Rectangle()
-                            .Width(120).Height(60)
-                            .Fill(Color.FromRgb(70, 130, 230))
-                            .Stroke(Color.FromRgb(40, 80, 180), 2),
-                        new Rectangle()
-                            .Width(120).Height(60)
-                            .CornerRadius(12)
-                            .Fill(Color.FromRgb(100, 200, 120))
-                            .Stroke(Color.FromRgb(60, 140, 80), 2)
-                    )
-            ),
+            RectangleCard(),
 
             Card(
                 "Ellipse",
@@ -164,6 +148,58 @@ partial class GalleryView
         g.Close();
         g.Freeze();
         return g;
+    }
+
+    private FrameworkElement RectangleCard()
+    {
+        var sharp = new Rectangle()
+            .Width(120).Height(60)
+            .Fill(Color.FromRgb(70, 130, 230))
+            .Stroke(Color.FromRgb(40, 80, 180), 2);
+
+        var rounded = new Rectangle()
+            .Width(120).Height(60)
+            .CornerRadius(12)
+            .Fill(Color.FromRgb(100, 200, 120))
+            .Stroke(Color.FromRgb(60, 140, 80), 2);
+
+        var panel = new StackPanel()
+            .Vertical()
+            .Spacing(8)
+            .Children(sharp, rounded);
+
+        AttachFillMenu(panel, sharp, "sharp", "Blue");
+        AttachFillMenu(panel, rounded, "rounded", "Green");
+
+        return Card("Rectangle", panel);
+    }
+
+    private static void AttachFillMenu(FrameworkElement scope, Rectangle target, string id, string initialFill)
+    {
+        (string Name, Color Value)[] fills =
+        [
+            ("Blue", Color.FromRgb(70, 130, 230)),
+            ("Green", Color.FromRgb(100, 200, 120)),
+            ("Amber", Color.FromRgb(230, 170, 60)),
+            ("Rose", Color.FromRgb(230, 100, 130)),
+        ];
+
+        var menu = new ContextMenu();
+        for (int i = 0; i < fills.Length; i++)
+        {
+            var fill = fills[i];
+            var command = new Command($"gallery.shapes.{id}.fill{i}", fill.Name);
+            scope.Commands.Register(command, () =>
+            {
+                target.Fill(fill.Value);
+                target.ToolTip($"Fill: {fill.Name}. Right-click to change it.");
+            });
+            menu.Item(command);
+        }
+
+        target
+            .ContextMenu(menu)
+            .ToolTip($"Fill: {initialFill}. Right-click to change it.");
     }
 }
 
