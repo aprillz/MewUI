@@ -784,7 +784,7 @@ public sealed class X11PlatformHost : IPlatformHost
         }
 
         _systemDpi = TryGetXSettingsDpi(Display, _xsettingsOwnerWindow, _xsettingsAtom)
-            ?? TryGetXftDpi(Display)
+            ?? TryGetXftDpi(Display, _rootWindow, _resourceManagerAtom)
             ?? 96u;
         _lastDpiPollTick = Environment.TickCount64;
 
@@ -1200,62 +1200,102 @@ public sealed class X11PlatformHost : IPlatformHost
         return type == 9;
     }
 
-    private static uint? TryGetXftDpi(nint display)
+    private static uint? TryGetXftDpi(nint display, nint rootWindow, nint resourceManagerAtom)
     {
+        if (display == 0 || rootWindow == 0 || resourceManagerAtom == 0)
+        {
+            return null;
+        }
+
         try
         {
-            // Xft.dpi from Xresources (XResourceManagerString + XrmGetResource)
-            NativeX11.XrmInitialize();
-            nint resourceString = NativeX11.XResourceManagerString(display);
-            if (resourceString == 0)
-            {
-                return null;
-            }
+            // XResourceManagerString returns the RESOURCE_MANAGER value cached at XOpenDisplay,
+            // so read the root window property each time to observe DPI changes made after startup.
+            const nint ANY_PROPERTY_TYPE = 0;
 
-            nint db = NativeX11.XrmGetStringDatabase(resourceString);
-            if (db == 0)
+            int status = NativeX11.XGetWindowProperty(
+                display,
+                rootWindow,
+                resourceManagerAtom,
+                long_offset: 0,
+                long_length: 64 * 1024,
+                delete: false,
+                req_type: ANY_PROPERTY_TYPE,
+                out _,
+                out int actualFormat,
+                out nuint nitems,
+                out _,
+                out nint prop);
+
+            if (status != 0 || prop == 0 || actualFormat != 8 || nitems == 0)
             {
+                if (prop != 0)
+                {
+                    NativeX11.XFree(prop);
+                }
+
                 return null;
             }
 
             try
             {
-                if (NativeX11.XrmGetResource(db, "Xft.dpi", "Xft.Dpi", out _, out var value) == 0)
+                NativeX11.XrmInitialize();
+
+                // XGetWindowProperty null-terminates the returned data, so prop is a valid C string.
+                nint db = NativeX11.XrmGetStringDatabase(prop);
+                if (db == 0)
                 {
                     return null;
                 }
 
-                if (value.addr == 0)
-                {
-                    return null;
-                }
-
-                string? dpiText = Marshal.PtrToStringUTF8(value.addr);
-                if (string.IsNullOrWhiteSpace(dpiText))
-                {
-                    return null;
-                }
-
-                if (!double.TryParse(dpiText.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var dpi))
-                {
-                    return null;
-                }
-
-                if (dpi <= 0)
-                {
-                    return null;
-                }
-
-                return (uint)Math.Clamp((int)Math.Round(dpi), 48, 480);
+                return ReadXftDpiFromDatabase(db);
             }
             finally
             {
-                NativeX11.XrmDestroyDatabase(db);
+                NativeX11.XFree(prop);
             }
         }
         catch
         {
             return null;
+        }
+    }
+
+    private static uint? ReadXftDpiFromDatabase(nint db)
+    {
+        try
+        {
+            if (NativeX11.XrmGetResource(db, "Xft.dpi", "Xft.Dpi", out _, out var value) == 0)
+            {
+                return null;
+            }
+
+            if (value.addr == 0)
+            {
+                return null;
+            }
+
+            string? dpiText = Marshal.PtrToStringUTF8(value.addr);
+            if (string.IsNullOrWhiteSpace(dpiText))
+            {
+                return null;
+            }
+
+            if (!double.TryParse(dpiText.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var dpi))
+            {
+                return null;
+            }
+
+            if (dpi <= 0)
+            {
+                return null;
+            }
+
+            return (uint)Math.Clamp((int)Math.Round(dpi), 48, 480);
+        }
+        finally
+        {
+            NativeX11.XrmDestroyDatabase(db);
         }
     }
 
@@ -1274,7 +1314,7 @@ public sealed class X11PlatformHost : IPlatformHost
         _lastDpiPollTick = now;
 
         uint? dpi = TryGetXSettingsDpi(Display, _xsettingsOwnerWindow, _xsettingsAtom);
-        dpi ??= TryGetXftDpi(Display);
+        dpi ??= TryGetXftDpi(Display, _rootWindow, _resourceManagerAtom);
         if (dpi == null || dpi.Value == _systemDpi)
         {
             return;
