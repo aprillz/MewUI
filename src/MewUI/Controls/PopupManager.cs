@@ -439,14 +439,16 @@ internal sealed class PopupManager
             popup.NotifyClosing(kind);
         }
 
+        // Restore focus before the detach: severing a focused popup's Parent trips the single-focus
+        // invariant (OnDetaching clears focus), which would leave nothing for the restore to act on.
+        EnsureFocusNotInClosedPopup(entry.Element, entry.Owner);
+
         entry.Host?.Detach(entry);
 
         if (entry.Owner is IPopupOwner owner)
         {
             owner.OnPopupClosed(entry.Element, kind);
         }
-
-        EnsureFocusNotInClosedPopup(entry.Element, entry.Owner);
 
         if (ReferenceEquals(entry.Element, _toolTip))
         {
