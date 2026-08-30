@@ -56,9 +56,12 @@ internal sealed class X11WindowBackend : IWindowBackend
     private bool _allowDrop;
     private long _lastRenderTick;
     private bool _resizeRenderPending;
+    // Pending configure size is kept in pixels: DpiScale can change between event arrival and
+    // ApplyPendingConfigure (compositor resizes windows on scale change), so DIP conversion is
+    // only valid at apply time.
     private bool _hasPendingConfigure;
-    private double _pendingConfigureWidthDip;
-    private double _pendingConfigureHeightDip;
+    private int _pendingConfigureWidthPx;
+    private int _pendingConfigureHeightPx;
     private nint _netWmSyncRequestAtom;
     private nint _netWmSyncRequestCounterAtom;
     // EWMH frame-sync counter (_NET_WM_SYNC_REQUEST). 0 when the SYNC extension is unavailable.
@@ -1382,19 +1385,27 @@ internal sealed class X11WindowBackend : IWindowBackend
 
             case ConfigureNotify:
                 var cfg = ev.xconfigure;
-                var widthDip = cfg.width / Window.DpiScale;
-                var heightDip = cfg.height / Window.DpiScale;
-                var compareSize = _hasPendingConfigure
-                    ? new Size(_pendingConfigureWidthDip, _pendingConfigureHeightDip)
-                    : Window.ClientSize;
-                if (Math.Abs(compareSize.Width - widthDip) < 0.01 &&
-                    Math.Abs(compareSize.Height - heightDip) < 0.01)
+                int comparePxWidth;
+                int comparePxHeight;
+                if (_hasPendingConfigure)
+                {
+                    comparePxWidth = _pendingConfigureWidthPx;
+                    comparePxHeight = _pendingConfigureHeightPx;
+                }
+                else
+                {
+                    var clientSize = Window.ClientSize;
+                    comparePxWidth = (int)Math.Round(clientSize.Width * Window.DpiScale);
+                    comparePxHeight = (int)Math.Round(clientSize.Height * Window.DpiScale);
+                }
+
+                if (cfg.width == comparePxWidth && cfg.height == comparePxHeight)
                 {
                     break;
                 }
 
-                _pendingConfigureWidthDip = widthDip;
-                _pendingConfigureHeightDip = heightDip;
+                _pendingConfigureWidthPx = cfg.width;
+                _pendingConfigureHeightPx = cfg.height;
                 _hasPendingConfigure = true;
                 NeedsRender = true;
                 _resizeRenderPending = true;
@@ -2564,8 +2575,9 @@ internal sealed class X11WindowBackend : IWindowBackend
         }
 
         _hasPendingConfigure = false;
-        double widthDip = _pendingConfigureWidthDip;
-        double heightDip = _pendingConfigureHeightDip;
+        double dpiScale = Window.DpiScale <= 0 ? 1.0 : Window.DpiScale;
+        double widthDip = _pendingConfigureWidthPx / dpiScale;
+        double heightDip = _pendingConfigureHeightPx / dpiScale;
 
         var oldClientSize = Window.ClientSize;
         if (Math.Abs(oldClientSize.Width - widthDip) < 0.01 &&
