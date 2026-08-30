@@ -422,9 +422,7 @@ internal sealed class PreviewSession : IDisposable
             return;
         }
 
-        uint oldDpi = window.Dpi;
         window.SetDpi(dpi);
-        window.RaiseDpiChanged(oldDpi, dpi);
     }
 
     /// <summary>

@@ -2458,7 +2458,18 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         GraphicsFactory.ResourceCache?.Maintain(RenderCacheMaintenanceMode.WindowClosed);
     }
 
-    internal void SetDpi(uint dpi) => Dpi = dpi;
+    /// <summary>Sets the window DPI and, when the value changes, runs the DpiChanged pass over attached content.</summary>
+    internal void SetDpi(uint dpi)
+    {
+        uint oldDpi = Dpi;
+        if (oldDpi == dpi)
+        {
+            return;
+        }
+
+        Dpi = dpi;
+        RaiseDpiChanged(oldDpi, dpi);
+    }
 
     /// <summary>
     /// Client size this window last asked the platform for, or null while no fit target stands.
@@ -3172,7 +3183,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         return false;
     }
 
-    internal void RaiseDpiChanged(uint oldDpi, uint newDpi)
+    private void RaiseDpiChanged(uint oldDpi, uint newDpi)
     {
         OnDpiChanged(oldDpi, newDpi);
         DpiChanged?.Invoke(oldDpi, newDpi);

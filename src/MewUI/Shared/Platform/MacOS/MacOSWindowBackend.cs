@@ -1236,7 +1236,6 @@ internal sealed class MacOSWindowBackend : IWindowBackend
         }
 
         _window.SetDpi(newDpi);
-        _window.RaiseDpiChanged(oldDpi, newDpi);
 
         // Ensure text/layout are recomputed at the new scale before the next frame.
         UpdateClientSizeIfNeeded(forceLayout: true);

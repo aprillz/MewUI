@@ -2440,7 +2440,6 @@ internal sealed class X11WindowBackend : IWindowBackend
         }
 
         Window.SetDpi(newDpi);
-        Window.RaiseDpiChanged(oldDpi, newDpi);
 
         if (NativeX11.XGetWindowAttributes(Display, Handle, out var attrs) != 0)
         {
