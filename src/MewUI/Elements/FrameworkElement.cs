@@ -384,7 +384,12 @@ public abstract class FrameworkElement : UIElement, IDisposable
             }
             else
             {
-                return ThemeManager.GetDefaultTheme(ThemeManager.ResolveVariantForStartup(ThemeManager.Default));
+                // Stamp the provisional pre-run resolution so Window.Show can reconcile it once Run decides the theme.
+                if (GetValue(ThemeProperty) is null)
+                {
+                    SetValue(ThemeProperty, ThemeManager.GetDefaultTheme(ThemeManager.ResolveVariantForStartup(ThemeManager.Default)));
+                }
+                return GetValue(ThemeProperty);
             }
         }
         set => SetValue(ThemeProperty, value);
@@ -435,6 +440,18 @@ public abstract class FrameworkElement : UIElement, IDisposable
             InvalidateMeasure();
             InvalidateVisual();
         }
+    }
+
+    /// <summary>Re-runs the theme pass when this element's stored theme differs from <paramref name="currentTheme"/>.</summary>
+    internal void ReconcileTheme(Theme currentTheme)
+    {
+        var stored = GetValue(ThemeProperty);
+        if (stored is null || stored == currentTheme)
+        {
+            return;
+        }
+
+        NotifyThemeChanged(stored, currentTheme);
     }
 
     internal void RegisterThemeCallback(Action<Theme, FrameworkElement> callback, bool invokeImmediately = true)
