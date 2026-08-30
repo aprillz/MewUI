@@ -116,9 +116,9 @@ internal sealed class LinuxClipboardService : IClipboardService
             return ClipboardBackend.External(
                 ClipboardBackendKind.X11Xclip,
                 setCommand: "xclip",
-                // Keep the selection owner alive for minimal X11 environments (no clipboard manager).
-                // xclip will remain until killed or until it has served one paste loop.
-                setArguments: "-selection clipboard -in -loops 1",
+                // No -loops cap: a clipboard manager's TARGETS query would consume the only loop and
+                // kill the owner before the data request. The forked owner exits on SelectionClear.
+                setArguments: "-selection clipboard -in",
                 getCommand: "xclip",
                 getArguments: "-selection clipboard -out");
         }
