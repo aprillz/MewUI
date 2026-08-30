@@ -1305,6 +1305,9 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         EnsureBackend();
         Application.Current.RegisterWindow(this);
 
+        // Elements built before Run resolved a provisional startup theme; the running application's theme is the decided one.
+        ReconcileTreeTheme(Application.Current.Theme);
+
         if (_lifetimeState == WindowLifetimeState.Shown)
         {
             return;
@@ -3030,6 +3033,23 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         }
 
         _adorners.Clear();
+    }
+
+    /// <summary>Re-runs the theme pass on elements whose stored theme differs from the decided application theme.</summary>
+    internal void ReconcileTreeTheme(Theme currentTheme)
+    {
+        ReconcileTheme(currentTheme);
+
+        if (EffectiveVisualRoot != null)
+        {
+            VisitVisualTree(EffectiveVisualRoot, element =>
+            {
+                if (element is FrameworkElement frameworkElement)
+                {
+                    frameworkElement.ReconcileTheme(currentTheme);
+                }
+            });
+        }
     }
 
     internal void BroadcastThemeChanged(Theme oldTheme, Theme newTheme)
