@@ -235,22 +235,45 @@ internal static class WindowInputRouter
         bool rightDown = false,
         bool middleDown = false,
         ModifierKeys modifiers = ModifierKeys.None)
+        => MouseWheel(window, positionInWindow, screenPosition, delta, leftDown, rightDown, middleDown, modifiers,
+            routeFrom: null);
+
+    /// <summary>
+    /// Routes wheel movement, starting the bubble at <paramref name="routeFrom"/> instead of the element
+    /// under the point, and returns the element that handled it.
+    /// </summary>
+    internal static UIElement? MouseWheel(
+        Window window,
+        Point positionInWindow,
+        Point screenPosition,
+        Vector delta,
+        bool leftDown,
+        bool rightDown,
+        bool middleDown,
+        ModifierKeys modifiers,
+        UIElement? routeFrom)
     {
         positionInWindow = window.SurfacePointToVisualTree(positionInWindow);
         window.UpdateLastMousePosition(positionInWindow, screenPosition);
 
-        var element = window.HitTest(positionInWindow);
+        var element = routeFrom ?? window.HitTest(positionInWindow);
         var args = new MouseWheelEventArgs(positionInWindow, screenPosition, delta, leftDown, rightDown, middleDown, modifiers)
         {
             OriginalSource = element,
             Source = element,
         };
 
-        for (var current = element; current != null && !args.Handled; current = GetInputBubbleParent(window, current))
+        for (var current = element; current != null; current = GetInputBubbleParent(window, current))
         {
             args.Source = current;
             current.RaiseMouseWheel(args);
+            if (args.Handled)
+            {
+                return current;
+            }
         }
+
+        return null;
     }
 
     /// <summary>
