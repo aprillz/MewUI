@@ -65,9 +65,19 @@ function clientPoint(event) {
 // slider, scroll bar or splitter captures to consume the movement and keeps it.
 const TOUCH_PAN_THRESHOLD_PX = 8;
 let touchGesture = null;
+const activePointers = new Set();
 
 function endTouchGesture(pointerId) {
     if (touchGesture !== null && (pointerId === undefined || touchGesture.pointerId === pointerId)) {
+        touchGesture = null;
+    }
+}
+
+// A gesture whose pointer is no longer down was stranded by a release the page never saw. Pointer
+// ids keep climbing, so without this the leftover would keep failing the "one finger at a time"
+// test and every later drag would be taken for a click.
+function dropStrandedTouchGesture() {
+    if (touchGesture !== null && !activePointers.has(touchGesture.pointerId)) {
         touchGesture = null;
     }
 }
@@ -104,20 +114,28 @@ canvas.addEventListener('pointermove', event => {
 canvas.addEventListener('pointerdown', event => {
     wake();
     const point = clientPoint(event);
+    activePointers.add(event.pointerId);
+    endTouchGesture(event.pointerId);
+    dropStrandedTouchGesture();
     canvas.setPointerCapture(event.pointerId);
     const captured = app.PointerButton(point.x, point.y, event.screenX, event.screenY,
         event.button, event.buttons, true, event.detail || 1, modifiersOf(event));
-    if (!captured) {
-        canvas.releasePointerCapture(event.pointerId);
-    }
 
     // The press decides what has focus, so the text field follows it rather than the other way
     // round. This still runs inside the gesture, which is what lets a phone raise its keyboard.
     syncTextInputFocus();
 
     // Only the first finger drives a scroll; a second one is left to the normal pointer path.
-    if (event.pointerType === 'touch' && !app.CaptureConsumesDrag() && touchGesture === null) {
+    const tracksTouch = event.pointerType === 'touch' && !app.CaptureConsumesDrag() && touchGesture === null;
+    if (tracksTouch) {
         touchGesture = { pointerId: event.pointerId, startX: point.x, startY: point.y, lastX: point.x, lastY: point.y, panning: false };
+    }
+
+    // Keeping the capture is what makes the release land on the canvas even when the finger ends
+    // up over the status overlay or past the edge of the window. Letting it go there would strand
+    // the gesture, and every later drag would be taken for a click.
+    if (!captured && !tracksTouch) {
+        canvas.releasePointerCapture(event.pointerId);
     }
 
     event.preventDefault();
@@ -145,6 +163,24 @@ canvas.addEventListener('pointerup', event => {
 });
 
 canvas.addEventListener('pointercancel', event => { wake(); endTouchGesture(event.pointerId); app.PointerCancel(); });
+
+// Last resort for a release the canvas never sees, so one stranded gesture cannot disable panning
+// for the rest of the session.
+function forgetPointer(pointerId) {
+    activePointers.delete(pointerId);
+    endTouchGesture(pointerId);
+}
+
+window.addEventListener('pointerup', event => forgetPointer(event.pointerId));
+window.addEventListener('pointercancel', event => forgetPointer(event.pointerId));
+
+// Leaving the page can end a touch without any release reaching it at all.
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+        activePointers.clear();
+        endTouchGesture();
+    }
+});
 canvas.addEventListener('pointerleave', () => { wake(); app.PointerLeave(); });
 
 // MewUI counts wheel movement in notches with +Y up and +X left, while the DOM reports pixels,
