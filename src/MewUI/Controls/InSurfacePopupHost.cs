@@ -26,16 +26,18 @@ internal sealed class InSurfacePopupHost : IPopupHost
         // owner surface.
         if (sizeToContent)
         {
-            entry.Bounds = PopupHostSupport.ResizeToContentWidth(entry.Element, entry.Bounds, _window.ClientSize.Width);
+            entry.PlacementBounds = PopupHostSupport.ResizeToContentWidth(entry.Element, entry.PlacementBounds, _window.ClientSize.Width);
+            entry.Bounds = entry.PlacementBounds;
         }
     }
 
     public void Layout(PopupEntry entry)
     {
+        var placement = entry.PlacementBounds;
         if (entry.Chrome != null)
         {
             // Chrome bounds include shadow padding around the content area.
-            var chromeBounds = entry.Bounds.Inflate(PopupChrome.ShadowPadding);
+            var chromeBounds = placement.Inflate(PopupChrome.ShadowPadding);
             entry.Chrome.Measure(new Size(chromeBounds.Width, chromeBounds.Height));
             entry.Chrome.Arrange(chromeBounds);
 
@@ -45,14 +47,15 @@ internal sealed class InSurfacePopupHost : IPopupHost
         }
         else
         {
-            entry.Element.Measure(new Size(entry.Bounds.Width, entry.Bounds.Height));
-            entry.Element.Arrange(entry.Bounds);
+            entry.Element.Measure(new Size(placement.Width, placement.Height));
+            entry.Element.Arrange(placement);
             entry.Bounds = entry.Element.Bounds;
         }
     }
 
     public void UpdateBounds(PopupEntry entry, Rect bounds)
     {
+        entry.PlacementBounds = bounds;
         entry.Bounds = bounds;
         Layout(entry);
     }

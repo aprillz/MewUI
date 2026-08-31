@@ -175,6 +175,7 @@ internal sealed class PopupManager
         // scrollbar, or a fallback font that clipped content.
         PopupHostSupport.AttachChrome(_window, entry);
         var measuredBounds = SnapPlacementToDevicePixels(measureBounds(_window));
+        entry.PlacementBounds = measuredBounds;
         entry.Bounds = measuredBounds;
         // Register before showing the native surface: when a sibling popup (submenu) shows and takes
         // the platform watch during ShowSurface, the parent's watch-transfer check scans _popups to
