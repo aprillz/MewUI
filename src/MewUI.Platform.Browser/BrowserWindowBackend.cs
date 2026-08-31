@@ -18,6 +18,9 @@ internal sealed class BrowserWindowBackend : IWindowBackend
     }
 
     internal Window Window { get; }
+
+    /// <summary>Set by invalidation, cleared once the frame is drawn.</summary>
+    internal bool NeedsRender { get; private set; } = true;
     internal uint Dpi => (uint)Math.Max(96, Math.Round(_surface.DpiScale * 96));
     public nint Handle => _disposed ? 0 : 1;
 
@@ -31,6 +34,7 @@ internal sealed class BrowserWindowBackend : IWindowBackend
     {
         ThrowIfDisposed();
         _shown = true;
+        NeedsRender = true;
         RenderNow();
     }
 
@@ -39,6 +43,8 @@ internal sealed class BrowserWindowBackend : IWindowBackend
     public void SetResizable(bool resizable) { }
     public void Invalidate(bool erase)
     {
+        // Coalesce invalidations; the host loop decides when the next frame runs.
+        NeedsRender = true;
         _host.RequestFrame();
     }
     public void SetTitle(string title) { }
@@ -208,7 +214,7 @@ internal sealed class BrowserWindowBackend : IWindowBackend
 
         if (resized)
         {
-            _host.RequestFrame();
+            NeedsRender = true;
         }
 
         RenderNow();
@@ -221,6 +227,7 @@ internal sealed class BrowserWindowBackend : IWindowBackend
             return;
         }
 
+        NeedsRender = false;
         Window.PerformLayout();
         Window.RenderFrame(_surface);
     }
