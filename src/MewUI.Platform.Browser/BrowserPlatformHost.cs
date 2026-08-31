@@ -37,7 +37,8 @@ internal sealed class BrowserPlatformHost : IPlatformHost
 
     public IDispatcher CreateDispatcher(nint windowHandle) => new BrowserDispatcher();
     public uint GetSystemDpi() => 96;
-    public ThemeVariant GetSystemThemeVariant() => ThemeVariant.Light;
+    public ThemeVariant GetSystemThemeVariant()
+        => BrowserPlatform.SystemIsDark ? ThemeVariant.Dark : ThemeVariant.Light;
     public uint GetDpiForWindow(nint windowHandle) => _window?.Dpi ?? 96;
     public bool EnablePerMonitorDpiAwareness() => true;
     public int GetSystemMetricsForDpi(int nIndex, uint dpi) => 0;

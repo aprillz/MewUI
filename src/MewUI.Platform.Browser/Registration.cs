@@ -4,6 +4,28 @@ namespace Aprillz.MewUI;
 
 public static class BrowserPlatform
 {
+    private static bool _systemIsDark;
+
+    internal static bool SystemIsDark => _systemIsDark;
+
+    /// <summary>
+    /// Reports the page's colour scheme. Call it before running the application so the first window
+    /// opens in the right theme; later calls re-resolve <see cref="ThemeVariant.System"/>.
+    /// </summary>
+    public static void SetSystemDarkMode(bool isDark)
+    {
+        if (_systemIsDark == isDark)
+        {
+            return;
+        }
+
+        _systemIsDark = isDark;
+        if (Application.IsRunning)
+        {
+            Application.Current.NotifySystemThemeChanged();
+        }
+    }
+
     public static void Register()
     {
         // The canvas is the only surface, so popups, menus and drag previews have to live inside it.
