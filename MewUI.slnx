@@ -7,6 +7,7 @@
     <File Path="build/MewUI.Meta.props" />
   </Folder>
   <Folder Name="/samples/">
+    <Project Path="samples/MewUI.Gallery.Browser/MewUI.Gallery.Browser.csproj" />
     <Project Path="samples/MewUI.Gallery/MewUI.Gallery.csproj" />
     <Project Path="samples/MewUI.MewDock.Sample/MewUI.MewDock.Sample.csproj" />
     <Project Path="samples/MewUI.MewvalonEdit.Sample/MewUI.MewvalonEdit.Sample.csproj" />
@@ -29,10 +30,12 @@
     <Project Path="src/MewUI.Analyzers/MewUI.Analyzers.csproj" />
     <Project Path="src/MewUI.Backend.Direct2D/MewUI.Backend.Direct2D.csproj" />
     <Project Path="src/MewUI.Backend.Gdi/MewUI.Backend.Gdi.csproj" />
+    <Project Path="src/MewUI.Backend.MewVG.Browser/MewUI.Backend.MewVG.Browser.csproj" />
     <Project Path="src/MewUI.Backend.MewVG.MacOS/MewUI.Backend.MewVG.MacOS.csproj" />
     <Project Path="src/MewUI.Backend.MewVG.Win32/MewUI.Backend.MewVG.Win32.csproj" />
     <Project Path="src/MewUI.Backend.MewVG.X11/MewUI.Backend.MewVG.X11.csproj" />
     <Project Path="src/MewUI.Generators/MewUI.Generators.csproj" />
+    <Project Path="src/MewUI.Platform.Browser/MewUI.Platform.Browser.csproj" />
     <Project Path="src/MewUI.Platform.MacOS/MewUI.Platform.MacOS.csproj" />
     <Project Path="src/MewUI.Platform.Win32/MewUI.Platform.Win32.csproj" />
     <Project Path="src/MewUI.Platform.X11/MewUI.Platform.X11.csproj" />
