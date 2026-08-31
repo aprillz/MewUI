@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="../../build/MewUI.Common.props" />
+
+  <PropertyGroup>
+    <TargetFrameworks>net10.0</TargetFrameworks>
+    <AssemblyName>$(MewUITitle).Platform.Browser</AssemblyName>
+    <PackageId>$(MewUITitle).Platform.Browser</PackageId>
+    <Description>Browser canvas platform host for $(MewUITitle)</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../MewUI/MewUI.csproj" AdditionalProperties="MewUITargetFrameworks=net10.0" />
+  </ItemGroup>
+
+</Project>
