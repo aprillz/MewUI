@@ -9,6 +9,8 @@ internal sealed class BrowserWindowBackend : IWindowBackend
     private bool _disposed;
     private bool _shown;
     private bool _mouseCaptured;
+    // Element that scrolled for the active touch pan, kept so the gesture cannot change owner.
+    private UIElement? _panTarget;
     private readonly BrowserWindowSurface _surface = new();
 
     internal BrowserWindowBackend(BrowserPlatformHost host, Window window)
@@ -86,6 +88,7 @@ internal sealed class BrowserWindowBackend : IWindowBackend
         bool isDown, int clickCount, ModifierKeys modifiers, PointerType pointerType)
     {
         if (!_shown || _disposed) return false;
+        _panTarget = null;
         var mappedButton = button switch
         {
             1 => MouseButton.Middle,
@@ -147,15 +150,26 @@ internal sealed class BrowserWindowBackend : IWindowBackend
 
         // A notch is worth ScrollWheelStep DIPs, and notches may be fractional, so dividing the
         // finger delta by the step makes the content track the finger one to one.
-        WindowInputRouter.MouseWheel(
-            Window,
-            new Point(x, y),
-            new Point(screenX, screenY),
-            new Vector(deltaXDip / step, deltaYDip / step),
-            leftDown: false,
-            rightDown: false,
-            middleDown: false,
-            modifiers);
+        var delta = new Vector(deltaXDip / step, deltaYDip / step);
+        var point = new Point(x, y);
+        var screenPoint = new Point(screenX, screenY);
+
+        // The gesture stays with whatever first scrolled for it. Hit-testing the start point again
+        // every move would hand the gesture to any other scrollable that the scrolling brought under
+        // it. A pinned target that stops handling (it ran out of room, or it was virtualized away)
+        // falls back to the point, which is also how the gesture reaches an outer scrollable.
+        var handler = WindowInputRouter.MouseWheel(
+            Window, point, screenPoint, delta, false, false, false, modifiers, _panTarget);
+        if (handler == null && _panTarget != null)
+        {
+            handler = WindowInputRouter.MouseWheel(
+                Window, point, screenPoint, delta, false, false, false, modifiers, routeFrom: null);
+        }
+
+        if (handler != null)
+        {
+            _panTarget = handler;
+        }
     }
 
     internal void PointerLeave()
@@ -170,6 +184,7 @@ internal sealed class BrowserWindowBackend : IWindowBackend
     {
         if (_disposed) return;
         _mouseCaptured = false;
+        _panTarget = null;
         Window.ReleaseMouseCapture();
         WindowInputRouter.UpdateMouseOver(Window, null);
     }
