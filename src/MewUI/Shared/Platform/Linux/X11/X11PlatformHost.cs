@@ -503,7 +503,7 @@ public sealed class X11PlatformHost : IPlatformHost
     // An override-redirect, transparent, app-raised window gives a no-activate always-on-top overlay; the
     // drag's pointer grab + the router skipping these windows cover click-through during a drag.
     // Transparency only works while a compositing manager owns the _NET_WM_CM_Sn selection; without one the
-    // ARGB visual is not composited and the overlay would render opaque, so we fall back instead.
+    // ARGB visual is not composited, so the overlay is created opaque instead.
     public bool SupportsTransparentOverlay =>
         Display != 0 && _netWmCmSelectionAtom != 0
         && NativeX11.XGetSelectionOwner(Display, _netWmCmSelectionAtom) != 0;

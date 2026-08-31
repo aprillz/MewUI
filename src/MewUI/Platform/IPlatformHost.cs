@@ -130,9 +130,9 @@ internal interface IPlatformHost : IDisposable
     Rect GetWorkAreaForPoint(Point screenPositionPx) => default;
 
     /// <summary>
-    /// Whether the platform supports a click-through, non-activating, transparent top-level overlay window.
-    /// When true, drag-and-drop uses a single such window that follows the cursor across windows and the desktop
-    /// (continuous preview); when false it falls back to a per-window overlay (hidden between windows).
+    /// Whether the platform can composite a click-through, non-activating, transparent top-level overlay window.
+    /// A cross-window drag preview follows the cursor in such a window either way; when false the window is
+    /// opaque, which keeps the preview continuous rather than dropping it between windows.
     /// </summary>
     bool SupportsTransparentOverlay => false;
 
