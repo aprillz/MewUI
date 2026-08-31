@@ -10,4 +10,5 @@ internal enum PlatformSurfaceKind
     Win32,
     X11,
     MacOS,
+    Browser,
 }

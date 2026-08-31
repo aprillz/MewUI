@@ -80,6 +80,16 @@ internal interface IPlatformHost : IDisposable
     void Run(Application app, Window? mainWindow);
 
     /// <summary>
+    /// Runs an asynchronous platform loop. Browser hosts override this because the browser event loop
+    /// cannot be blocked; desktop hosts retain their existing synchronous loop.
+    /// </summary>
+    Task RunAsync(Application app, Window? mainWindow, CancellationToken cancellationToken = default)
+    {
+        Run(app, mainWindow);
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
     /// Requests that the platform message loop terminates.
     /// </summary>
     /// <param name="app">Application instance.</param>
