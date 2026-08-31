@@ -96,6 +96,68 @@ public abstract partial class ScrollableItemsBase : Control, ISubtreeInvalidatio
 
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor) => VisitScrollChildren(visitor);
 
+    private PrepareContainerHandler<ItemContainer, object?>? _prepareContainer;
+    private PrepareContainerHandler<ItemContainer, object?>? _clearContainer;
+
+    /// <summary>
+    /// Sets the container-prepare hook and rebuilds the containers, since their shape depends on
+    /// whether a hook is registered. Use the typed <c>PrepareContainer</c> extension.
+    /// </summary>
+    internal void SetPrepareContainer(PrepareContainerHandler<ItemContainer, object?>? hook)
+    {
+        _prepareContainer = hook;
+        ReapplyItemTemplate();
+        InvalidateItemBindings();
+    }
+
+    /// <summary>
+    /// Sets the container-clear hook and rebuilds the containers. Use the typed
+    /// <c>ClearContainer</c> extension.
+    /// </summary>
+    internal void SetClearContainer(PrepareContainerHandler<ItemContainer, object?>? hook)
+    {
+        _clearContainer = hook;
+        ReapplyItemTemplate();
+        InvalidateItemBindings();
+    }
+
+    /// <summary>
+    /// Returns the template to hand the presenter: the caller's template as-is when no hook is
+    /// registered, so applications that do not use the hooks pay for no extra element per item.
+    /// </summary>
+    private protected IDataTemplate WrapItemTemplate(IDataTemplate template)
+        => _prepareContainer == null && _clearContainer == null
+            ? template
+            : new ItemContainerTemplate(template, IsItemSelectedForContainer, _prepareContainer, _clearContainer);
+
+    /// <summary>Whether the item at that index is selected, for <see cref="ItemContainer.IsSelected"/>.</summary>
+    private protected virtual bool IsItemSelectedForContainer(int index) => false;
+
+    /// <summary>Re-pushes the effective item template to the presenter. Override where hooks are supported.</summary>
+    private protected virtual void ReapplyItemTemplate()
+    {
+    }
+
+    /// <summary>
+    /// Brings every realized container's <see cref="ItemContainer.IsSelected"/> up to date. Call
+    /// from a selection change; it costs one pass over the containers on screen.
+    /// </summary>
+    private protected void RefreshContainerSelection(IItemsPresenter presenter)
+    {
+        if (_prepareContainer == null && _clearContainer == null)
+        {
+            return;
+        }
+
+        presenter.VisitRealized((index, element) =>
+        {
+            if (element is ItemContainer container)
+            {
+                container.SetIsSelected(IsItemSelectedForContainer(index));
+            }
+        });
+    }
+
     private protected void RequestScrollIntoView(ScrollIntoViewRequest request)
         => _scrollIntoViewRequest = request;
 

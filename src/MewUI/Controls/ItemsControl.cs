@@ -100,10 +100,12 @@ public sealed partial class ItemsControl : ScrollableItemsBase
         {
             ArgumentNullException.ThrowIfNull(value);
             _itemTemplate = value;
-            _presenter.ItemTemplate = value;
+            _presenter.ItemTemplate = WrapItemTemplate(value);
             InvalidateItemBindings();
         }
     }
+
+    private protected override void ReapplyItemTemplate() => _presenter.ItemTemplate = WrapItemTemplate(_itemTemplate);
 
     public ItemsControl()
     {
@@ -473,7 +475,7 @@ public sealed partial class ItemsControl : ScrollableItemsBase
     private void InitializePresenter(IItemsPresenter presenter)
     {
         presenter.ItemsSource = _itemsSource;
-        presenter.ItemTemplate = _itemTemplate;
+        presenter.ItemTemplate = WrapItemTemplate(_itemTemplate);
         presenter.BeforeItemRender = OnBeforeItemRender;
         presenter.ItemPadding = ItemPadding;
         presenter.ItemBindingGeneration = ItemBindingGeneration;

@@ -183,6 +183,13 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
     /// <summary>Returns whether the item at <paramref name="index"/> is selected.</summary>
     public bool IsSelected(int index) => _selection.IsSelected(index);
 
+    private protected override bool IsItemSelectedForContainer(int index) => _selection.IsSelected(index);
+
+    private protected override void ReapplyItemTemplate() => _presenter.ItemTemplate = WrapItemTemplate(_itemTemplate);
+
+    /// <summary>Visits the containers currently realized, with their item index.</summary>
+    internal void VisitRealizedContainers(Action<int, FrameworkElement> visitor) => _presenter.VisitRealized(visitor);
+
     /// <summary>
     /// Gets the currently selected item text.
     /// </summary>
@@ -230,7 +237,7 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
         {
             ArgumentNullException.ThrowIfNull(value);
             _itemTemplate = value;
-            _presenter.ItemTemplate = value;
+            _presenter.ItemTemplate = WrapItemTemplate(value);
             InvalidateItemBindings();
             InvalidateMeasure();
             InvalidateVisual();
@@ -372,7 +379,7 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
     private void InitializePresenter(IItemsPresenter presenter)
     {
         presenter.ItemsSource = _itemsSource;
-        presenter.ItemTemplate = _itemTemplate;
+        presenter.ItemTemplate = WrapItemTemplate(_itemTemplate);
         presenter.BeforeItemRender = OnBeforeItemRender;
         presenter.ItemPadding = ItemPadding;
         presenter.ItemHeightHint = ResolveItemHeight();
@@ -825,6 +832,7 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
         _selection.SyncFromModel();
         SelectionChanged?.Invoke(_itemsSource.SelectedItem);
         ScrollIntoView(index);
+        RefreshContainerSelection(_presenter);
         InvalidateVisual();
     }
 
@@ -900,6 +908,7 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
     {
         _selection.SyncFromModel();
         SelectedIndicesChanged?.Invoke();
+        RefreshContainerSelection(_presenter);
         InvalidateVisual();
     }
 }

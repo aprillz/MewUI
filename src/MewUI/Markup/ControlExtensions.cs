@@ -2669,6 +2669,47 @@ public static class ControlExtensions
         => ItemTemplate(listBox, new DelegateTemplate<TItem>(build, bind, unbind));
 
     /// <summary>
+    /// Configures the container of each item once its content is bound, so behavior can be attached
+    /// to the whole item rather than to the template. Registering a hook wraps each item in an
+    /// <see cref="ItemContainer"/>; without one no wrapper is created.
+    /// </summary>
+    /// <remarks>
+    /// The callback runs on every bind, which includes scrolling an item back into view, so keep it
+    /// cheap. Register event subscriptions through the supplied context and they are removed before
+    /// the next item is bound; properties assigned directly are reset by the framework instead.
+    /// </remarks>
+    /// <typeparam name="T">Item type.</typeparam>
+    /// <param name="listBox">Target list box.</param>
+    /// <param name="prepare">Container configuration callback.</param>
+    /// <returns>The list box for chaining.</returns>
+    public static ListBox PrepareContainer<T>(this ListBox listBox, PrepareContainerHandler<ItemContainer, T> prepare)
+    {
+        ArgumentNullException.ThrowIfNull(listBox);
+        ArgumentNullException.ThrowIfNull(prepare);
+
+        listBox.SetPrepareContainer((container, item, index, context) => prepare(container, (T)item!, index, context));
+        return listBox;
+    }
+
+    /// <summary>
+    /// Releases what <see cref="PrepareContainer{T}(ListBox, PrepareContainerHandler{ItemContainer, T})"/>
+    /// attached outside the template context, before the container takes another item. Most hooks
+    /// need no counterpart: context subscriptions and container properties are undone for you.
+    /// </summary>
+    /// <typeparam name="T">Item type.</typeparam>
+    /// <param name="listBox">Target list box.</param>
+    /// <param name="clear">Container release callback.</param>
+    /// <returns>The list box for chaining.</returns>
+    public static ListBox ClearContainer<T>(this ListBox listBox, PrepareContainerHandler<ItemContainer, T> clear)
+    {
+        ArgumentNullException.ThrowIfNull(listBox);
+        ArgumentNullException.ThrowIfNull(clear);
+
+        listBox.SetClearContainer((container, item, index, context) => clear(container, (T)item!, index, context));
+        return listBox;
+    }
+
+    /// <summary>
     /// Uses fixed-height row virtualization with theme default item height.
     /// </summary>
     /// <param name="listBox">Target list box.</param>
@@ -3364,6 +3405,40 @@ public static class ControlExtensions
     {
         ArgumentNullException.ThrowIfNull(itemsControl);
         itemsControl.ItemTemplate = itemTemplate;
+        return itemsControl;
+    }
+
+    /// <summary>
+    /// Configures the container of each item once its content is bound. Registering a hook wraps
+    /// each item in an <see cref="ItemContainer"/>; without one no wrapper is created.
+    /// </summary>
+    /// <typeparam name="T">Item type.</typeparam>
+    /// <param name="itemsControl">Target items control.</param>
+    /// <param name="prepare">Container configuration callback.</param>
+    /// <returns>The items control for chaining.</returns>
+    public static ItemsControl PrepareContainer<T>(this ItemsControl itemsControl, PrepareContainerHandler<ItemContainer, T> prepare)
+    {
+        ArgumentNullException.ThrowIfNull(itemsControl);
+        ArgumentNullException.ThrowIfNull(prepare);
+
+        itemsControl.SetPrepareContainer((container, item, index, context) => prepare(container, (T)item!, index, context));
+        return itemsControl;
+    }
+
+    /// <summary>
+    /// Releases what <see cref="PrepareContainer{T}(ItemsControl, PrepareContainerHandler{ItemContainer, T})"/>
+    /// attached outside the template context, before the container takes another item.
+    /// </summary>
+    /// <typeparam name="T">Item type.</typeparam>
+    /// <param name="itemsControl">Target items control.</param>
+    /// <param name="clear">Container release callback.</param>
+    /// <returns>The items control for chaining.</returns>
+    public static ItemsControl ClearContainer<T>(this ItemsControl itemsControl, PrepareContainerHandler<ItemContainer, T> clear)
+    {
+        ArgumentNullException.ThrowIfNull(itemsControl);
+        ArgumentNullException.ThrowIfNull(clear);
+
+        itemsControl.SetClearContainer((container, item, index, context) => clear(container, (T)item!, index, context));
         return itemsControl;
     }
 
