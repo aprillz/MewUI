@@ -40,6 +40,9 @@ internal static partial class BrowserExports
     internal static bool CaptureConsumesDrag() => BrowserPlatform.CaptureConsumesDrag();
 
     [JSExport]
+    internal static void SetSystemDarkMode(bool isDark) => BrowserPlatform.SetSystemDarkMode(isDark);
+
+    [JSExport]
     internal static bool WantsTextInput() => BrowserPlatform.WantsTextInput();
 
     [JSExport]
