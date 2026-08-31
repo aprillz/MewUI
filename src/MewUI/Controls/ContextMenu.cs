@@ -758,8 +758,13 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
         var contentBounds = LayoutRounding.SnapViewportRectToPixels(innerBounds.Deflate(Padding), dpiScale);
         _viewportHeight = Math.Max(0, contentBounds.Height);
 
-        double onePx = dpiScale > 0 ? 1.0 / dpiScale : 1;
-        bool needV = _extentHeight > _viewportHeight + onePx;
+        // The viewport was snapped outward to whole pixels while the extent is the raw measured sum,
+        // so the two have to be brought onto the same pixel grid before they are compared. Comparing
+        // across grids leaves a residue in DIPs that does not shrink as the scale factor grows, and
+        // past roughly 2x it exceeds the one pixel of slack and a menu that fits reports a scroll bar.
+        int extentPx = LayoutRounding.CeilToPixelInt(_extentHeight, dpiScale);
+        int viewportPx = LayoutRounding.CeilToPixelInt(_viewportHeight, dpiScale);
+        bool needV = extentPx > viewportPx + 1;
         _vBar.IsVisible = needV;
 
         if (!needV)
