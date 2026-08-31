@@ -7,9 +7,15 @@ namespace Aprillz.MewUI.Rendering.MewVG;
 /// </summary>
 internal static class BrowserTextMeasure
 {
-    // Measuring crosses into JS, and layout re-measures the same runs constantly.
-    private static readonly Dictionary<(string Text, string CssFont), double> _widths = new();
+    // Measuring crosses into JS, and layout re-measures the same runs constantly. The cache is keyed
+    // per font so a hit can be looked up straight from the span, without materialising the run.
+    private static readonly Dictionary<string, Dictionary<string, double>> _widths =
+        new(StringComparer.Ordinal);
 
+    private static int _widthCount;
+
+    // The managed text engine owns line breaking and hands this backend one run at a time, so the
+    // width limit never has to be honoured here.
     internal static Size Measure(ReadOnlySpan<char> text, IFont font, double maxWidth)
     {
         double lineHeight = Math.Max(1, font.Ascent + font.Descent);
@@ -18,24 +24,24 @@ internal static class BrowserTextMeasure
             return new Size(0, lineHeight);
         }
 
+        var cssFont = BrowserFont.CssFontFor(font);
         double widest = 0;
         int lines = 0;
-        foreach (var range in EnumerateLines(text))
+        int start = 0;
+        for (int index = 0; index <= text.Length; index++)
         {
-            double lineWidth = MeasureLine(text[range], BrowserFont.CssFontFor(font));
-            widest = Math.Max(widest, lineWidth);
+            if (index != text.Length && text[index] != '\n')
+            {
+                continue;
+            }
+
+            int end = index > start && text[index - 1] == '\r' ? index - 1 : index;
+            widest = Math.Max(widest, MeasureLine(text[start..end], cssFont));
             lines++;
+            start = index + 1;
         }
 
-        if (double.IsPositiveInfinity(maxWidth) || maxWidth <= 0 || widest <= maxWidth)
-        {
-            return new Size(widest, lineHeight * Math.Max(1, lines));
-        }
-
-        // Wrapped height is approximated from the total advance; the browser does the real
-        // line breaking when the run is rasterized.
-        int wrapped = Math.Max(1, (int)Math.Ceiling(widest / maxWidth));
-        return new Size(maxWidth, lineHeight * Math.Max(lines, wrapped));
+        return new Size(widest, lineHeight * Math.Max(1, lines));
     }
 
     internal static double MeasureLine(ReadOnlySpan<char> line, string cssFont)
@@ -45,38 +51,31 @@ internal static class BrowserTextMeasure
             return 0;
         }
 
-        var content = line.ToString();
-        var key = (content, cssFont);
-        if (_widths.TryGetValue(key, out var cached))
+        if (!_widths.TryGetValue(cssFont, out var forFont))
+        {
+            forFont = new Dictionary<string, double>(StringComparer.Ordinal);
+            _widths[cssFont] = forFont;
+        }
+
+        var lookup = forFont.GetAlternateLookup<ReadOnlySpan<char>>();
+        if (lookup.TryGetValue(line, out var cached))
         {
             return cached;
         }
 
+        var content = line.ToString();
         var width = BrowserNative.MeasureText(content, cssFont, out _, out _);
-        if (_widths.Count > 4096)
+        if (_widthCount > 4096)
         {
             _widths.Clear();
+            _widthCount = 0;
+            forFont = new Dictionary<string, double>(StringComparer.Ordinal);
+            _widths[cssFont] = forFont;
         }
 
-        _widths[key] = width;
+        forFont[content] = width;
+        _widthCount++;
         return width;
     }
 
-    private static List<Range> EnumerateLines(ReadOnlySpan<char> text)
-    {
-        var ranges = new List<Range>();
-        int start = 0;
-        for (int i = 0; i < text.Length; i++)
-        {
-            if (text[i] == '\n')
-            {
-                int end = i > start && text[i - 1] == '\r' ? i - 1 : i;
-                ranges.Add(new Range(start, end));
-                start = i + 1;
-            }
-        }
-
-        ranges.Add(new Range(start, text.Length));
-        return ranges;
-    }
 }

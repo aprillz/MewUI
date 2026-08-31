@@ -10,23 +10,24 @@ namespace Aprillz.MewUI.Rendering.MewVG;
 internal sealed class BrowserFont : FontBase
 {
     // Metrics cost a JS call and a text measurement, and depend only on the CSS font string.
-    private static readonly Dictionary<string, (double Ascent, double Descent)> _metrics = new(StringComparer.Ordinal);
+    private static readonly Dictionary<string, (double Ascent, double Descent, double CapHeight)> _metrics =
+        new(StringComparer.Ordinal);
 
     internal BrowserFont(string family, double size, FontWeight weight, bool italic, bool underline, bool strikethrough)
         : base(family, size, weight, italic, underline, strikethrough)
     {
         CssFont = BuildCssFont(family, size, weight, italic);
 
-        var (ascent, descent) = ResolveMetrics(CssFont);
+        var (ascent, descent, capHeight) = ResolveMetrics(CssFont);
         Ascent = ascent > 0 ? ascent : size;
         Descent = descent > 0 ? descent : size * 0.25;
-        CapHeight = Ascent * 0.7;
+        CapHeight = capHeight > 0 ? capHeight : Ascent * 0.7;
     }
 
     /// <summary>The CSS <c>font</c> shorthand this font maps to.</summary>
     internal string CssFont { get; }
 
-    private static (double Ascent, double Descent) ResolveMetrics(string cssFont)
+    private static (double Ascent, double Descent, double CapHeight) ResolveMetrics(string cssFont)
     {
         if (_metrics.TryGetValue(cssFont, out var cached))
         {
@@ -35,7 +36,9 @@ internal sealed class BrowserFont : FontBase
 
         // "Mg" covers a tall ascender and a descender so the browser reports the full box.
         BrowserNative.MeasureText("Mg", cssFont, out var ascent, out var descent);
-        var resolved = (ascent, descent);
+        // A flat capital's ink top sits exactly at the cap height.
+        BrowserNative.MeasureInkBox("H", cssFont, out var capHeight, out _);
+        var resolved = (ascent, descent, capHeight);
         _metrics[cssFont] = resolved;
         return resolved;
     }

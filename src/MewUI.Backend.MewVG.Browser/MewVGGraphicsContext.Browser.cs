@@ -207,8 +207,7 @@ internal sealed partial class MewVGWin32GraphicsContext
         // own because those images belong to the pooled renderer.
         var cache = _resources?.TextCache ?? (_ownedTextCache ??= new BrowserTextCache(_vg));
         int imageId = cache.GetOrCreateImage(
-            text, BrowserFont.CssFontFor(format.Font), widthPx, heightPx, DpiScale, color,
-            TextAlignment.Left, TextAlignment.Top, format.Wrapping);
+            text, layout, BrowserFont.CssFontFor(format.Font), widthPx, heightPx, DpiScale, color);
         if (imageId == 0)
         {
             return;

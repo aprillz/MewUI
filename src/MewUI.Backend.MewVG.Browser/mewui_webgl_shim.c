@@ -50,6 +50,7 @@ EM_JS(void, mewui_text_ensure_context, (), {
     {
         Module.mewuiTextCanvas = document.createElement("canvas");
         Module.mewuiTextCtx = Module.mewuiTextCanvas.getContext("2d", { willReadFrequently: true });
+        Module.mewuiTextFont = null;
     }
 });
 
@@ -57,15 +58,29 @@ EM_JS(void, mewui_text_ensure_context, (), {
 EM_JS(double, mewui_text_measure, (const char* utf8_text, const char* utf8_font, double* out_ascent, double* out_descent), {
     mewui_text_ensure_context();
     var ctx = Module.mewuiTextCtx;
-    ctx.font = UTF8ToString(utf8_font);
-    ctx.textBaseline = "alphabetic";
+    var f = UTF8ToString(utf8_font);
+    if (Module.mewuiTextFont !== f) { ctx.font = f; ctx.textBaseline = "alphabetic"; Module.mewuiTextFont = f; }
     var metrics = ctx.measureText(UTF8ToString(utf8_text));
     if (out_ascent) HEAPF64[out_ascent >> 3] = metrics.fontBoundingBoxAscent || 0;
     if (out_descent) HEAPF64[out_descent >> 3] = metrics.fontBoundingBoxDescent || 0;
     return metrics.width;
 });
 
-// Rasterizes wrapped, aligned text into straight-alpha RGBA. Returns the line count actually drawn.
+// Ink box of the given text, as opposed to the font box mewui_text_measure reports. Cap height is
+// not part of TextMetrics, but the ink ascent of a flat capital is exactly it. The parameter list
+// matches mewui_text_measure so both reuse one interop signature.
+EM_JS(double, mewui_text_ink_box, (const char* utf8_text, const char* utf8_font, double* out_ascent, double* out_descent), {
+    mewui_text_ensure_context();
+    var ctx = Module.mewuiTextCtx;
+    var f = UTF8ToString(utf8_font);
+    if (Module.mewuiTextFont !== f) { ctx.font = f; ctx.textBaseline = "alphabetic"; Module.mewuiTextFont = f; }
+    var metrics = ctx.measureText(UTF8ToString(utf8_text));
+    if (out_ascent) HEAPF64[out_ascent >> 3] = metrics.actualBoundingBoxAscent || 0;
+    if (out_descent) HEAPF64[out_descent >> 3] = metrics.actualBoundingBoxDescent || 0;
+    return metrics.width;
+});
+
+// Rasterizes one text run into straight-alpha RGBA. Returns the line count drawn.
 EM_JS(int, mewui_text_rasterize, (const char* utf8_text, const char* utf8_font, int width_px, int height_px,
     double scale, int red, int green, int blue, int alpha, int h_align, int v_align, int wrap,
     unsigned char* out_pixels), {
@@ -76,68 +91,25 @@ EM_JS(int, mewui_text_rasterize, (const char* utf8_text, const char* utf8_font, 
     {
         canvas.width = Math.max(canvas.width, width_px);
         canvas.height = Math.max(canvas.height, height_px);
+        // Resizing the backing store resets every context property, including the font.
+        Module.mewuiTextFont = null;
     }
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, width_px, height_px);
-    ctx.font = UTF8ToString(utf8_font);
-    ctx.textBaseline = "alphabetic";
+    var f = UTF8ToString(utf8_font);
+    if (Module.mewuiTextFont !== f) { ctx.font = f; ctx.textBaseline = "alphabetic"; Module.mewuiTextFont = f; }
     ctx.fillStyle = "rgba(" + red + "," + green + "," + blue + "," + (alpha / 255) + ")";
 
-    var text = UTF8ToString(utf8_text);
-    var metrics = ctx.measureText("Mg");
-    var ascent = metrics.fontBoundingBoxAscent || 0;
-    var descent = metrics.fontBoundingBoxDescent || 0;
-    var lineHeight = (ascent + descent) * scale;
-    var maxWidth = width_px;
-
-    var lines = [];
-    var paragraphs = text.split("\n");
-    for (var p = 0; p < paragraphs.length; p++)
-    {
-        if (wrap === 0 || paragraphs[p].length === 0)
-        {
-            lines.push(paragraphs[p]);
-            continue;
-        }
-
-        // Greedy word wrap; falls back to per-character breaks for words wider than the box.
-        var words = paragraphs[p].split(" ");
-        var current = "";
-        for (var w = 0; w < words.length; w++)
-        {
-            var candidate = current.length === 0 ? words[w] : current + " " + words[w];
-            if (ctx.measureText(candidate).width * scale <= maxWidth || current.length === 0)
-            {
-                current = candidate;
-            }
-            else
-            {
-                lines.push(current);
-                current = words[w];
-            }
-        }
-        lines.push(current);
-    }
-
-    var totalHeight = lines.length * lineHeight;
-    var originY = 0;
-    if (v_align === 1) originY = (height_px - totalHeight) / 2;
-    else if (v_align === 2) originY = height_px - totalHeight;
-
+    // The managed text engine breaks lines and positions every run, so one call draws one run at the
+    // top left of its own box. h_align, v_align and wrap stay in the signature but carry no work.
+    var ascent = ctx.measureText("Mg").fontBoundingBoxAscent || 0;
     ctx.scale(scale, scale);
-    for (var i = 0; i < lines.length; i++)
-    {
-        var lineWidth = ctx.measureText(lines[i]).width * scale;
-        var originX = 0;
-        if (h_align === 1) originX = (maxWidth - lineWidth) / 2;
-        else if (h_align === 2) originX = maxWidth - lineWidth;
-        ctx.fillText(lines[i], originX / scale, (originY + i * lineHeight) / scale + ascent);
-    }
+    ctx.fillText(UTF8ToString(utf8_text), 0, ascent);
 
     // Reading only the drawn band keeps the readback proportional to the text, not to the canvas
     // the browser grew to the widest run ever rasterized.
     var image = ctx.getImageData(0, 0, width_px, height_px);
     HEAPU8.set(image.data, out_pixels);
-    return lines.length;
+    return 1;
 });

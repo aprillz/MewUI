@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Runtime.InteropServices;
+using Aprillz.MewUI.Text;
 using Aprillz.MewVG;
 
 namespace Aprillz.MewUI.Rendering.MewVG;
@@ -12,65 +13,50 @@ internal sealed class BrowserTextCache : IDisposable
 {
     private const int MAX_ENTRIES = 512;
 
-    private readonly Dictionary<Key, Entry> _entries = new();
     private readonly NanoVG _vg;
-    private long _clock;
+    private readonly BoundedCache<Key, int> _images;
     private bool _disposed;
 
-    internal BrowserTextCache(NanoVG vg) => _vg = vg;
-
+    internal BrowserTextCache(NanoVG vg)
+    {
+        _vg = vg;
+        _images = new BoundedCache<Key, int>(MAX_ENTRIES, imageId => _vg.DeleteImage(imageId));
+    }
 
     internal int GetOrCreateImage(
         ReadOnlySpan<char> text,
+        BackendTextLayout layout,
         string cssFont,
         int widthPx,
         int heightPx,
         double scale,
-        Color color,
-        TextAlignment horizontalAlignment,
-        TextAlignment verticalAlignment,
-        TextWrapping wrapping)
+        Color color)
     {
         if (_disposed || widthPx <= 0 || heightPx <= 0)
         {
             return 0;
         }
 
-        var content = text.ToString();
-        var key = new Key(
-            content,
-            cssFont,
-            widthPx,
-            heightPx,
-            color.ToArgb(),
-            (int)horizontalAlignment,
-            (int)verticalAlignment,
-            wrapping == TextWrapping.NoWrap ? 0 : 1);
-
-        if (_entries.TryGetValue(key, out var cached))
+        // The managed text engine hands back the same layout for a realized run, so its identity plus
+        // the baked-in colour names the image. Keying on the run text instead would force it to be
+        // materialised on every lookup.
+        var key = new Key(layout, color.ToArgb(), widthPx, heightPx);
+        if (_images.TryGetValue(key, out var cached))
         {
-            cached.LastUsed = ++_clock;
-            return cached.ImageId;
+            return cached;
         }
 
-        var imageId = Rasterize(content, cssFont, widthPx, heightPx, scale, color, key.HorizontalAlignment,
-            key.VerticalAlignment, key.Wrap);
+        var imageId = Rasterize(text.ToString(), cssFont, widthPx, heightPx, scale, color);
         if (imageId == 0)
         {
             return 0;
         }
 
-        if (_entries.Count >= MAX_ENTRIES)
-        {
-            EvictOldest();
-        }
-
-        _entries[key] = new Entry(imageId) { LastUsed = ++_clock };
+        _images.Add(key, imageId);
         return imageId;
     }
 
-    private int Rasterize(string text, string cssFont, int widthPx, int heightPx, double scale, Color color,
-        int horizontalAlignment, int verticalAlignment, int wrap)
+    private int Rasterize(string text, string cssFont, int widthPx, int heightPx, double scale, Color color)
     {
         var byteCount = widthPx * heightPx * 4;
         var buffer = ArrayPool<byte>.Shared.Rent(byteCount);
@@ -82,7 +68,7 @@ internal sealed class BrowserTextCache : IDisposable
                 var lines = BrowserNative.RasterizeText(
                     text, cssFont, widthPx, heightPx, scale,
                     color.R, color.G, color.B, color.A,
-                    horizontalAlignment, verticalAlignment, wrap,
+                    0, 0, 0,
                     handle.AddrOfPinnedObject());
                 if (lines <= 0)
                 {
@@ -103,25 +89,6 @@ internal sealed class BrowserTextCache : IDisposable
         }
     }
 
-    private void EvictOldest()
-    {
-        Key? oldestKey = null;
-        var oldestUse = long.MaxValue;
-        foreach (var pair in _entries)
-        {
-            if (pair.Value.LastUsed < oldestUse)
-            {
-                oldestUse = pair.Value.LastUsed;
-                oldestKey = pair.Key;
-            }
-        }
-
-        if (oldestKey is Key key && _entries.Remove(key, out var evicted))
-        {
-            _vg.DeleteImage(evicted.ImageId);
-        }
-    }
-
     public void Dispose()
     {
         if (_disposed)
@@ -130,27 +97,8 @@ internal sealed class BrowserTextCache : IDisposable
         }
 
         _disposed = true;
-        foreach (var entry in _entries.Values)
-        {
-            _vg.DeleteImage(entry.ImageId);
-        }
-
-        _entries.Clear();
+        _images.Dispose();
     }
 
-    private readonly record struct Key(
-        string Text,
-        string CssFont,
-        int WidthPx,
-        int HeightPx,
-        uint Color,
-        int HorizontalAlignment,
-        int VerticalAlignment,
-        int Wrap);
-
-    private sealed class Entry(int imageId)
-    {
-        internal int ImageId { get; } = imageId;
-        internal long LastUsed { get; set; }
-    }
+    private readonly record struct Key(BackendTextLayout Layout, uint Color, int WidthPx, int HeightPx);
 }
