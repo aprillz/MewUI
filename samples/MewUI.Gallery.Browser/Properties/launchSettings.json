@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "MewUI.Gallery.Browser": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "applicationUrl": "http://localhost:5240;https://localhost:5241",
+      "inspectUri": "{wsProtocol}://{url.hostname}:{url.port}/_framework/debug/ws-proxy?browser={browserInspectUri}"
+    }
+  }
+}
