@@ -123,6 +123,17 @@ internal sealed class BrowserWindowBackend : IWindowBackend
             modifiers);
     }
 
+    internal bool CaptureConsumesDrag()
+    {
+        if (!_shown || _disposed) return false;
+
+        // A command source captures only to decide whether the release counts as a click, so a
+        // touch drag may take the gesture away from it. Everything else that captures (sliders,
+        // scroll bars, splitters, text selection, drag and drop, popup dismiss watches) captures
+        // to consume the movement itself and has to keep it.
+        return _mouseCaptured && Window.CapturedElement is not CommandSourceControl;
+    }
+
     internal bool WantsTextInput()
         => _shown && !_disposed && Window.FocusManager.FocusedElement is Input.ITextInputClient;
 

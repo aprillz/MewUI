@@ -163,6 +163,8 @@ internal sealed class BrowserPlatformHost : IPlatformHost
             return false;
         });
 
+    internal bool CaptureConsumesDrag() => _window?.CaptureConsumesDrag() == true;
+
     internal bool WantsTextInput() => _window?.WantsTextInput() == true;
 
     internal void PointerPan(double x, double y, double screenX, double screenY,
