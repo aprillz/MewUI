@@ -6,14 +6,19 @@ namespace Aprillz.MewUI.Gallery;
 [SupportedOSPlatform("browser")]
 internal static partial class BrowserExports
 {
+    /// <summary>Draws one frame; false means nothing changed and the page may stop scheduling.</summary>
     [JSExport]
-    internal static void RenderFrame(
+    internal static bool RenderFrame(
         double cssWidth,
         double cssHeight,
         double devicePixelRatio,
         int pixelWidth,
         int pixelHeight)
         => BrowserPlatform.RenderFrame(cssWidth, cssHeight, devicePixelRatio, pixelWidth, pixelHeight);
+
+    /// <summary>Milliseconds until a scheduled timer needs the loop again, or -1 when nothing is due.</summary>
+    [JSExport]
+    internal static int NextWakeDelayMs() => BrowserPlatform.NextWakeDelayMs();
 
     [JSExport]
     internal static bool PointerMove(double x, double y, double screenX, double screenY, int buttons, int modifiers)

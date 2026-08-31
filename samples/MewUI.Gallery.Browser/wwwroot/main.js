@@ -51,11 +51,13 @@ function clientPoint(event) {
 }
 
 canvas.addEventListener('pointermove', event => {
+    wake();
     const point = clientPoint(event);
     app.PointerMove(point.x, point.y, event.screenX, event.screenY, event.buttons, modifiersOf(event));
 });
 
 canvas.addEventListener('pointerdown', event => {
+    wake();
     const point = clientPoint(event);
     canvas.setPointerCapture(event.pointerId);
     focusInput();
@@ -68,6 +70,7 @@ canvas.addEventListener('pointerdown', event => {
 });
 
 canvas.addEventListener('pointerup', event => {
+    wake();
     const point = clientPoint(event);
     const captured = app.PointerButton(point.x, point.y, event.screenX, event.screenY,
         event.button, event.buttons, false, event.detail || 1, modifiersOf(event));
@@ -76,8 +79,8 @@ canvas.addEventListener('pointerup', event => {
     }
 });
 
-canvas.addEventListener('pointercancel', () => app.PointerCancel());
-canvas.addEventListener('pointerleave', () => app.PointerLeave());
+canvas.addEventListener('pointercancel', () => { wake(); app.PointerCancel(); });
+canvas.addEventListener('pointerleave', () => { wake(); app.PointerLeave(); });
 
 // MewUI counts wheel movement in notches with +Y up and +X left, while the DOM reports pixels,
 // lines or pages with +Y down and +X right.
@@ -97,6 +100,7 @@ function wheelNotches(delta, deltaMode) {
 }
 
 canvas.addEventListener('wheel', event => {
+    wake();
     const point = clientPoint(event);
     app.PointerWheel(point.x, point.y, event.screenX, event.screenY,
         wheelNotches(event.deltaX, event.deltaMode),
@@ -118,6 +122,7 @@ function focusInput() {
 let composing = false;
 
 textInput.addEventListener('keydown', event => {
+    wake();
     if (composing) {
         return;
     }
@@ -130,6 +135,7 @@ textInput.addEventListener('keydown', event => {
 });
 
 textInput.addEventListener('keyup', event => {
+    wake();
     if (!composing) {
         app.KeyUp(event.code, event.keyCode || 0, modifiersOf(event));
     }
@@ -137,6 +143,7 @@ textInput.addEventListener('keyup', event => {
 
 textInput.addEventListener('compositionstart', () => { composing = true; });
 textInput.addEventListener('compositionend', event => {
+    wake();
     composing = false;
     if (event.data) {
         app.TextInput(event.data);
@@ -145,6 +152,7 @@ textInput.addEventListener('compositionend', event => {
 });
 
 textInput.addEventListener('input', event => {
+    wake();
     if (composing || event.isComposing) {
         return;
     }
@@ -156,10 +164,10 @@ textInput.addEventListener('input', event => {
     textInput.value = '';
 });
 
-textInput.addEventListener('focus', () => app.FocusChanged(true));
-textInput.addEventListener('blur', () => app.FocusChanged(false));
+textInput.addEventListener('focus', () => { wake(); app.FocusChanged(true); });
+textInput.addEventListener('blur', () => { wake(); app.FocusChanged(false); });
 
-window.addEventListener('blur', () => app.FocusChanged(false));
+window.addEventListener('blur', () => { wake(); app.FocusChanged(false); });
 
 focusInput();
 
@@ -177,6 +185,7 @@ async function loadResources() {
             }
 
             app.ApplyResource(name, new Uint8Array(await response.arrayBuffer()));
+            wake();
         } catch (error) {
             console.warn(`MewUI Gallery resource ${name} failed.`, error);
         }
@@ -185,15 +194,50 @@ async function loadResources() {
 
 loadResources();
 
+// The loop idles instead of repainting at the display's refresh rate: a frame runs only while the
+// app reports work, and anything that can change the screen wakes it again.
+let frameScheduled = false;
+let idleFrames = 0;
+let wakeTimer = 0;
+const IDLE_FRAMES_BEFORE_SLEEP = 3;
+
+function wake() {
+    idleFrames = 0;
+    if (wakeTimer !== 0) {
+        clearTimeout(wakeTimer);
+        wakeTimer = 0;
+    }
+    if (!frameScheduled) {
+        frameScheduled = true;
+        requestAnimationFrame(frame);
+    }
+}
+
+// A sleeping loop still owes scheduled work: the app reports when its next timer is due, the same
+// value desktop hosts hand to their OS wait, and the timeout brings the loop back for it.
+function sleepUntilNextTimer() {
+    const delay = app.NextWakeDelayMs();
+    if (delay < 0 || wakeTimer !== 0) {
+        return;
+    }
+
+    wakeTimer = setTimeout(() => { wakeTimer = 0; wake(); }, delay);
+}
+
 function frame() {
+    frameScheduled = false;
     try {
         const dpr = syncCanvasSize();
-        app.RenderFrame(
+        const drew = app.RenderFrame(
             canvas.clientWidth,
             canvas.clientHeight,
             dpr,
             canvas.width,
             canvas.height);
+
+        // A few quiet frames in a row before sleeping, so a render that only queues more work
+        // (layout settling, a late resource) still gets its follow-up frame.
+        idleFrames = drew ? 0 : idleFrames + 1;
 
         if (!pixelConfirmed) {
             const gl = canvas.getContext('webgl2');
@@ -222,12 +266,19 @@ function frame() {
         if (frameErrorCount <= MAX_LOGGED_FRAME_ERRORS) {
             console.error('MewUI Gallery frame failed.', error);
         }
+        idleFrames = 0;
     }
 
-    requestAnimationFrame(frame);
+    if (idleFrames < IDLE_FRAMES_BEFORE_SLEEP) {
+        frameScheduled = true;
+        requestAnimationFrame(frame);
+    } else {
+        sleepUntilNextTimer();
+    }
 }
 
-requestAnimationFrame(frame);
+wake();
+window.addEventListener('resize', wake);
 runPromise.catch(error => {
     status.textContent = 'MewUI Gallery failed - see console';
     console.error('MewUI Gallery runtime failed.', error);

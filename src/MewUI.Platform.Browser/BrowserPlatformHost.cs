@@ -10,6 +10,10 @@ internal sealed class BrowserPlatformHost : IPlatformHost
     private BrowserWindowBackend? _window;
     private SynchronizationContext? _previousContext;
     private bool _running;
+    private bool _framePending = true;
+
+    // Matches the cap desktop hosts use for their OS wait; a longer sleep is reported as "no timer".
+    private const int MAX_WAKE_DELAY_MS = 1000;
 
     internal static BrowserPlatformHost? Active { get; private set; }
 
@@ -45,6 +49,7 @@ internal sealed class BrowserPlatformHost : IPlatformHost
         Active = this;
         _previousContext = SynchronizationContext.Current;
         _dispatcher = (BrowserDispatcher)CreateDispatcher(0);
+        _dispatcher.SetWake(RequestFrame);
         app.Dispatcher = _dispatcher;
         SynchronizationContext.SetSynchronizationContext(_dispatcher);
         app.OnHostLoopStarting(mainWindow);
@@ -71,16 +76,44 @@ internal sealed class BrowserPlatformHost : IPlatformHost
 
     public void DoEvents() => _dispatcher?.ProcessWorkItems();
 
-    internal void RequestFrame()
+    /// <summary>Asks for one more frame; the JS loop reads this through <see cref="RenderFrame"/>.</summary>
+    internal void RequestFrame() => _framePending = true;
+
+    /// <summary>
+    /// Whether the next animation frame has anything to do. Idling without this would repaint the
+    /// canvas at the display's refresh rate even when nothing changed.
+    /// </summary>
+    private bool ShouldRenderFrame()
+        => _framePending
+            || _window?.NeedsRender == true
+            || _dispatcher?.HasPendingWork == true
+            || (Application.IsRunning && Application.Current.RenderLoopSettings.IsContinuous);
+
+    /// <summary>
+    /// Milliseconds until the loop must run again for a scheduled timer, or -1 when nothing is
+    /// pending. Desktop hosts pass the same value to their OS wait; the page uses it to set a
+    /// timeout so a sleeping loop still fires DispatcherTimer on time.
+    /// </summary>
+    internal int NextWakeDelayMs()
     {
-        // First Boot uses a continuous JavaScript requestAnimationFrame loop.
+        if (_dispatcher == null)
+        {
+            return -1;
+        }
+
+        int timeout = _dispatcher.GetPollTimeoutMs(MAX_WAKE_DELAY_MS);
+        return timeout >= MAX_WAKE_DELAY_MS ? -1 : timeout;
     }
 
-    internal void RenderFrame(double cssWidth, double cssHeight, double devicePixelRatio, int pixelWidth, int pixelHeight)
+    /// <summary>
+    /// Runs one animation frame. Returns false when nothing needed drawing, so the host page can
+    /// stop scheduling frames until something asks for one.
+    /// </summary>
+    internal bool RenderFrame(double cssWidth, double cssHeight, double devicePixelRatio, int pixelWidth, int pixelHeight)
     {
         if (!_running || _window == null)
         {
-            return;
+            return false;
         }
 
         try
@@ -88,15 +121,29 @@ internal sealed class BrowserPlatformHost : IPlatformHost
             _dispatcher?.ClearWakeRequest();
             _dispatcher?.ProcessWorkItems();
 
+            if (!ShouldRenderFrame())
+            {
+                return false;
+            }
+
             // Advances every animation clock for this frame; without a pulse the clocks never
             // move and animated properties stay at their first value.
             var app = Application.Current;
             using var pulse = AnimationManager.Instance.BeginPulse(app.RenderLoopSettings);
+            bool wanted = _framePending || pulse.ShouldRender(_window.Window, _window.NeedsRender);
+            _framePending = false;
+            if (!wanted)
+            {
+                return false;
+            }
+
             _window.RenderFrame(cssWidth, cssHeight, devicePixelRatio, pixelWidth, pixelHeight);
+            return true;
         }
         catch (Exception ex)
         {
             Application.RouteLifecycleException(ex);
+            return true;
         }
     }
 
