@@ -234,6 +234,65 @@ public sealed class TemplateContextTests
             calls);
     }
 
+    [TestMethod]
+    public void Reset_RunsRemainingCleanup_WhenOneThrows()
+    {
+        var context = new TemplateContext();
+        var source = new EventSource();
+        var calls = new List<int>();
+
+        context.Subscribe(
+            source,
+            static (s, h) => s.Changed += h,
+            (s, h) => { calls.Add(1); s.Changed -= h; },
+            () => { });
+        context.Subscribe(
+            source,
+            static (s, h) => s.Changed += h,
+            (_, _) => throw new InvalidOperationException("cleanup failed"),
+            () => { });
+        context.Subscribe(
+            source,
+            static (s, h) => s.Changed += h,
+            (s, h) => { calls.Add(3); s.Changed -= h; },
+            () => { });
+
+        Assert.ThrowsExactly<InvalidOperationException>(context.Reset);
+
+        CollectionAssert.AreEqual(new[] { 3, 1 }, calls,
+            "A failing cleanup must not stop the ones registered before it.");
+
+        context.Reset();
+
+        CollectionAssert.AreEqual(new[] { 3, 1 }, calls,
+            "The cleanup list is cleared even when one entry threw.");
+    }
+
+    [TestMethod]
+    public void BindTemplate_RepeatedBinds_DoNotAccumulateHandlers()
+    {
+        var context = new TemplateContext();
+        var source = new EventSource();
+        var view = new TextBlock();
+        var template = new DelegateTemplate<string>(
+            build: _ => view,
+            bind: (_, _, _, ctx) => ctx.Subscribe(
+                source,
+                static (s, h) => s.Changed += h,
+                static (s, h) => s.Changed -= h,
+                () => { }));
+
+        for (int i = 0; i < 5; i++)
+        {
+            context.BindTemplate(view, template, "item" + i, i);
+            Assert.AreEqual(1, source.HandlerCount, $"after bind {i}");
+        }
+
+        context.UnbindTemplate(view);
+
+        Assert.AreEqual(0, source.HandlerCount);
+    }
+
     private sealed class EventSource
     {
         private Action? _changed;
@@ -243,6 +302,8 @@ public sealed class TemplateContextTests
             add => _changed += value;
             remove => _changed -= value;
         }
+
+        public int HandlerCount => _changed?.GetInvocationList().Length ?? 0;
     }
 
     private sealed class PathRoot
