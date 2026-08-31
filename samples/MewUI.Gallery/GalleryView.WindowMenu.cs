@@ -744,21 +744,26 @@ partial class GalleryView
             messageCount++;
             switch (args)
             {
-#if MEWUI_GALLERY_WIN || (!MEWUI_GALLERY_LINUX && !MEWUI_GALLERY_OSX)
+#if MEWUI_GALLERY_WIN || (!MEWUI_GALLERY_BROWSER && !MEWUI_GALLERY_LINUX && !MEWUI_GALLERY_OSX)
                 case Win32NativeMessageEventArgs win32:
                     hookLog.Value = $"Win32 #{messageCount}: msg=0x{win32.Msg:X4} wParam=0x{win32.WParam:X} lParam=0x{win32.LParam:X}";
                     break;
 #endif
 
-#if MEWUI_GALLERY_LINUX || (!MEWUI_GALLERY_WIN && !MEWUI_GALLERY_OSX)
+#if MEWUI_GALLERY_LINUX || (!MEWUI_GALLERY_BROWSER && !MEWUI_GALLERY_WIN && !MEWUI_GALLERY_OSX)
                 case X11NativeMessageEventArgs x11:
                     hookLog.Value = $"X11 #{messageCount}: type={x11.EventType}";
                     break;
 #endif
 
-#if MEWUI_GALLERY_OSX || (!MEWUI_GALLERY_WIN && !MEWUI_GALLERY_LINUX)
+#if MEWUI_GALLERY_OSX || (!MEWUI_GALLERY_BROWSER && !MEWUI_GALLERY_WIN && !MEWUI_GALLERY_LINUX)
                 case MacOSNativeMessageEventArgs macos:
                     hookLog.Value = $"macOS #{messageCount}: type={macos.EventType}";
+                    break;
+#endif
+#if MEWUI_GALLERY_BROWSER
+                default:
+                    hookLog.Value = $"Browser #{messageCount}: native message";
                     break;
 #endif
             }
