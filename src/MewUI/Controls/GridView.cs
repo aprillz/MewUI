@@ -49,7 +49,7 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
     public static readonly MewProperty<IReadOnlyList<object?>> SelectedItemsProperty = SelectedItemsPropertyKey.Property;
 
     private object? _itemTypeToken;
-    private readonly GridViewCore _core = new();
+    internal readonly GridViewCore _core = new();
     private readonly SelectionSync _selection;
 
     private readonly HeaderRow _header;
@@ -78,8 +78,9 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
         _header = new HeaderRow(this) { Parent = this };
 
         _rowTemplate = new DelegateTemplate<object?>(
-            build: _ => new Row(this),
-            bind: BindRowTemplate);
+            build: _ => new GridViewRow(this),
+            bind: BindRowTemplate,
+            unbind: UnbindRowTemplate);
 
         _presenter = CreateDefaultPresenter();
         InitializePresenter(_presenter);
@@ -96,6 +97,7 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
         {
             _selection.SyncFromModel();
             SelectedIndicesChanged?.Invoke();
+            RefreshRowSelection();
             InvalidateVisual();
         };
         _core.SortChanged += change =>
@@ -1050,7 +1052,7 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
         return total;
     }
 
-    private void ReportAutoDesiredWidth(int columnIndex, double desiredWidth)
+    internal void ReportAutoDesiredWidth(int columnIndex, double desiredWidth)
     {
         if (!_core.ReportAutoDesiredWidth(columnIndex, desiredWidth))
         {
@@ -1068,7 +1070,7 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
     {
         _presenter.VisitRealized((_, element) =>
         {
-            if (element is Row row)
+            if (element is GridViewRow row)
             {
                 row.MeasureAutoColumn(columnIndex);
             }
@@ -1086,13 +1088,68 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
         InvalidateVisual();
     }
 
-    private void BindRowTemplate(FrameworkElement element, object? item, int index, TemplateContext _)
+    private void BindRowTemplate(FrameworkElement element, object? item, int index, TemplateContext context)
     {
-        var row = (Row)element;
+        var row = (GridViewRow)element;
         row.EnsureDpi(GetDpi());
         row.EnsureColumns(_core.Columns, _core.ColumnsVersion);
         row.EnsureTheme(ThemeInternal);
+        row.ResetForItem();
         row.Bind(item, index);
+        row.SetIsSelected(_core.IsItemSelected(index));
+        _prepareRow?.Invoke(row, item, index, context);
+    }
+
+    private void UnbindRowTemplate(FrameworkElement element, object? item, int index, TemplateContext context)
+    {
+        var row = (GridViewRow)element;
+        _clearRow?.Invoke(row, item, index, context);
+        row.Recycle();
+        row.SetIsSelected(false);
+    }
+
+    private PrepareContainerHandler<GridViewRow, object?>? _prepareRow;
+    private PrepareContainerHandler<GridViewRow, object?>? _clearRow;
+
+    /// <summary>
+    /// Sets the row-prepare hook, invoked after a row's cells are bound. Use the typed
+    /// <c>PrepareContainer</c> extension.
+    /// </summary>
+    internal void SetPrepareRow(PrepareContainerHandler<GridViewRow, object?>? hook)
+    {
+        _prepareRow = hook;
+        InvalidateItemBindings();
+    }
+
+    /// <summary>
+    /// Sets the row-clear hook, invoked before a row takes another item. Use the typed
+    /// <c>ClearContainer</c> extension.
+    /// </summary>
+    internal void SetClearRow(PrepareContainerHandler<GridViewRow, object?>? hook)
+    {
+        _clearRow = hook;
+        InvalidateItemBindings();
+    }
+
+    /// <summary>Visits the rows currently realized, with their item index.</summary>
+    internal void VisitRealizedRows(Action<int, GridViewRow> visitor)
+        => _presenter.VisitRealized((index, element) =>
+        {
+            if (element is GridViewRow row)
+            {
+                visitor(index, row);
+            }
+        });
+
+    private void RefreshRowSelection()
+    {
+        _presenter.VisitRealized((index, element) =>
+        {
+            if (element is GridViewRow row)
+            {
+                row.SetIsSelected(_core.IsItemSelected(index));
+            }
+        });
     }
 
     private void OnItemsChanged(ItemsChange change)
@@ -1198,6 +1255,7 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
         _selection.SyncFromModel();
         SelectionChanged?.Invoke(_core.SelectedItem);
         ScrollSelectedIntoView();
+        RefreshRowSelection();
         InvalidateVisual();
     }
 
@@ -1288,7 +1346,7 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
         return itemBottom > offset && itemTop < offset + _rowsViewportHeight;
     }
 
-    private double ResolveRowHeight()
+    internal double ResolveRowHeight()
     {
         if (!double.IsNaN(RowHeight) && RowHeight > 0)
         {
@@ -1689,360 +1747,6 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
         }
     }
 
-    private sealed class Row : Panel
-    {
-        private readonly GridView _owner;
-        private readonly List<Cell> _cells = new();
-        private int _rowIndex;
-        private uint _lastDpi;
-        private int _lastColumnsVersion = -1;
-        private Theme? _lastTheme;
-
-        public Row(GridView owner)
-        {
-            _owner = owner;
-            IsHitTestVisible = true;
-        }
-
-        // OnRender reads IsMouseOver directly (no style trigger), so the framework's
-        // visual-state path doesn't invalidate for us. Schedule a render explicitly.
-        protected override void OnMouseEnter() => InvalidateVisual();
-
-        protected override void OnMouseLeave() => InvalidateVisual();
-
-        protected override void OnMouseDown(MouseEventArgs e)
-        {
-            base.OnMouseDown(e);
-
-            if (e.Handled || e.Button != MouseButton.Left)
-            {
-                return;
-            }
-
-            if (!_owner.IsEffectivelyEnabled)
-            {
-                return;
-            }
-
-            _owner.HandleRowPointerDown(_rowIndex, e);
-        }
-
-        public void EnsureDpi(uint dpi)
-        {
-            if (_lastDpi == dpi)
-            {
-                return;
-            }
-
-            var old = _lastDpi;
-            _lastDpi = dpi;
-
-            VisualTree.Visit(this, e =>
-            {
-                if (e is FrameworkElement fe)
-                {
-                    fe.NotifyDpiChanged(old, dpi);
-                }
-            });
-
-            InvalidateMeasure();
-        }
-
-        public void EnsureColumns(IReadOnlyList<GridViewCore.ColumnDefinition> columns, int columnsVersion)
-        {
-            if (_lastColumnsVersion == columnsVersion)
-            {
-                return;
-            }
-
-            _lastColumnsVersion = columnsVersion;
-
-            while (_cells.Count < columns.Count)
-            {
-                var ctx = new TemplateContext();
-                var cell = new Cell(this, ctx);
-                _cells.Add(cell);
-                Add(cell.View);
-            }
-
-            while (_cells.Count > columns.Count)
-            {
-                int idx = _cells.Count - 1;
-                _cells[idx].Unbind();
-                _cells[idx].Context.Dispose();
-                RemoveAt(idx);
-                _cells.RemoveAt(idx);
-            }
-
-            for (int i = 0; i < columns.Count; i++)
-            {
-                _cells[i].Template = columns[i].CellTemplate;
-                _cells[i].EnsureViewBuilt(this);
-            }
-
-            InvalidateMeasure();
-        }
-
-        public void EnsureTheme(Theme theme)
-        {
-            if (ReferenceEquals(_lastTheme, theme))
-            {
-                return;
-            }
-
-            // If this row was recycled during a theme change, it won't be in the window visual tree and will miss
-            // the broadcast. Sync the whole subtree on reuse so templates don't render with a stale cached ThemeInternal.
-            _lastTheme = theme;
-            VisualTree.Visit(this, e =>
-            {
-                if (e is FrameworkElement fe && !ReferenceEquals(fe.ThemeInternal, theme))
-                {
-                    fe.NotifyThemeChanged(fe.ThemeInternal, theme);
-                }
-            });
-        }
-
-        public void Bind(object? item, int index)
-        {
-            _rowIndex = index;
-            for (int i = 0; i < _cells.Count; i++)
-            {
-                _cells[i].Bind(item, index);
-            }
-
-            InvalidateMeasure();
-        }
-
-        public void Recycle()
-        {
-            for (int i = 0; i < _cells.Count; i++)
-            {
-                _cells[i].Unbind();
-            }
-
-            InvalidateMeasure();
-        }
-
-        protected override Size MeasureContent(Size availableSize)
-        {
-            var pad = _owner.CellPadding;
-            double padH = pad.HorizontalThickness;
-            double padV = pad.VerticalThickness;
-            double maxCellH = 0;
-            for (int i = 0; i < _cells.Count; i++)
-            {
-                double h = double.IsPositiveInfinity(availableSize.Height)
-                    ? double.PositiveInfinity
-                    : Math.Max(0, availableSize.Height - padV);
-
-                var column = _owner._core.Columns[i];
-                if (column.Width.IsAuto)
-                {
-                    _cells[i].View.Measure(new Size(double.PositiveInfinity, h));
-                    _owner.ReportAutoDesiredWidth(i, _cells[i].View.DesiredSize.Width + padH);
-                }
-
-                double w = Math.Max(0, column.ActualWidth - padH);
-                _cells[i].View.Measure(new Size(w, h));
-                if (_cells[i].View.DesiredSize.Height > maxCellH)
-                {
-                    maxCellH = _cells[i].View.DesiredSize.Height;
-                }
-            }
-
-            // Report measured max cell height + padding. FixedHeightItemsPresenter ignores
-            // this and uses its own ItemHeight; VariableHeightItemsPresenter uses it as the
-            // actual row height for prefix-sum bookkeeping and viewport layout.
-            double rowH = double.IsPositiveInfinity(availableSize.Height)
-                ? maxCellH + padV
-                : availableSize.Height;
-            return new Size(availableSize.Width, rowH);
-        }
-
-        public void MeasureAutoColumn(int columnIndex)
-        {
-            if ((uint)columnIndex >= (uint)_cells.Count)
-            {
-                return;
-            }
-
-            var pad = _owner.CellPadding;
-            double rowHeight = Bounds.Height > 0 ? Bounds.Height : _owner.ResolveRowHeight();
-            double availableHeight = Math.Max(0, rowHeight - pad.VerticalThickness);
-            var view = _cells[columnIndex].View;
-            view.Measure(new Size(double.PositiveInfinity, availableHeight));
-            _owner._core.ReportAutoDesiredWidth(
-                columnIndex,
-                view.DesiredSize.Width + pad.HorizontalThickness);
-        }
-
-        protected override void ArrangeContent(Rect bounds)
-        {
-            double x = bounds.X;
-            var pad = _owner.CellPadding;
-            for (int i = 0; i < _cells.Count; i++)
-            {
-                double w = Math.Max(0, _owner._core.Columns[i].ActualWidth);
-                var cellRect = new Rect(
-                    x + pad.Left,
-                    bounds.Y + pad.Top,
-                    Math.Max(0, w - pad.HorizontalThickness),
-                    Math.Max(0, bounds.Height - pad.VerticalThickness));
-                _cells[i].View.Arrange(cellRect);
-                x += w;
-            }
-        }
-
-        protected override void OnRender(IGraphicsContext context)
-        {
-            var theme = Theme;
-            var snapped = GetSnappedBorderBounds(Bounds);
-            var isSelected = _owner._core.IsItemSelected(_rowIndex);
-
-            var r = theme.Metrics.ControlCornerRadius - 2;
-            if (isSelected)
-            {
-                if (r > 0)
-                {
-                    context.FillRoundedRectangle(snapped, r, r, theme.Palette.SelectionBackground);
-                }
-                else
-                {
-                    context.FillRectangle(snapped, theme.Palette.SelectionBackground);
-                }
-            }
-            else if (IsMouseOver && _owner.IsEffectivelyEnabled)
-            {
-                var hoverBg = theme.Palette.ControlBackground.Lerp(theme.Palette.Accent, 0.15);
-
-                if (r > 0)
-                {
-                    context.FillRoundedRectangle(snapped, r, r, hoverBg);
-                }
-                else
-                {
-                    context.FillRectangle(snapped, hoverBg);
-                }
-            }
-
-            if (_owner.ShowGridLines)
-            {
-                var stroke = theme.Palette.ControlBorder;
-                context.DrawLine(new Point(snapped.X, snapped.Bottom - 1), new Point(snapped.Right, snapped.Bottom - 1), stroke, 1, pixelSnap: true);
-
-                double x = snapped.X;
-                for (int i = 0; i < _owner._core.Columns.Count; i++)
-                {
-                    x += Math.Max(0, _owner._core.Columns[i].ActualWidth);
-                    if (x >= snapped.Right - 0.5)
-                    {
-                        break;
-                    }
-
-                    context.DrawLine(new Point(x, snapped.Y), new Point(x, snapped.Bottom), stroke, 1, pixelSnap: true);
-                }
-            }
-        }
-
-        protected override void RenderSubtree(IGraphicsContext context)
-        {
-            for (int i = 0; i < _cells.Count; i++)
-            {
-                // Keep collapsed cells realized and bound so their column can be restored,
-                // but do not render controls into a zero-width slot. Bordered controls would
-                // otherwise collapse both edges into a visible vertical line.
-                if (_owner._core.Columns[i].ActualWidth <= 0.01)
-                {
-                    continue;
-                }
-
-                _cells[i].View.Render(context);
-            }
-        }
-
-        private sealed class Cell
-        {
-            private readonly Row _row;
-            private bool _built;
-
-            public Cell(Row row, TemplateContext context)
-            {
-                _row = row;
-                Context = context;
-                View = new TextBlock();
-            }
-
-            public TemplateContext Context { get; }
-
-            public IDataTemplate? Template { get; set; }
-
-            public FrameworkElement View { get; private set; }
-
-            public void Bind(object? item, int index)
-            {
-                Context.BindTemplate(View, Template!, item, index);
-            }
-
-            public void Unbind()
-            {
-                Context.UnbindTemplate(View);
-            }
-
-            public void EnsureViewBuilt(Row row)
-            {
-                if (_built || Template == null)
-                {
-                    return;
-                }
-
-                var built = Template.Build(Context);
-                built.Parent = row;
-
-                int idx = -1;
-                for (int i = 0; i < row.Children.Count; i++)
-                {
-                    if (ReferenceEquals(row.Children[i], View))
-                    {
-                        idx = i;
-                        break;
-                    }
-                }
-
-                if (idx >= 0)
-                {
-                    row.RemoveAt(idx);
-                    row.Insert(idx, built);
-                }
-
-                View = built;
-                _built = true;
-
-                // MouseDown bubbles up the visual tree, so a single handler
-                // on the root view catches clicks on all child elements.
-                View.MouseDown += OnCellMouseDown;
-            }
-
-            private void OnCellMouseDown(MouseEventArgs e)
-            {
-                if (e.Button != MouseButton.Left)
-                {
-                    return;
-                }
-
-                if (e.Handled)
-                {
-                    return;
-                }
-
-                if (!_row._owner.IsEffectivelyEnabled)
-                {
-                    return;
-                }
-
-                _row._owner.HandleRowPointerDown(_row._rowIndex, e);
-            }
-        }
-    }
 
     internal sealed class GridViewCore
     {
