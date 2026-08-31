@@ -28,6 +28,7 @@
     <!-- Served as static web assets so main.js can fetch them; there is no disk to preload from. -->
     <Content Include="../MewUI.Gallery/Resources/*.*" Link="wwwroot/Resources/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="../../assets/logo/logo_h-480.png" Link="wwwroot/Resources/logo_h-480.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../assets/logo/logo_c-256.png" Link="wwwroot/favicon-256.png" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="../../assets/images/april.jpg" Link="wwwroot/Resources/april.jpg" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="../../assets/images/soonduk.jpg" Link="wwwroot/Resources/soonduk.jpg" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
