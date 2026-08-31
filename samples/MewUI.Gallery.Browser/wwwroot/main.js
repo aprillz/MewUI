@@ -1,4 +1,8 @@
-import { dotnet } from './_framework/dotnet.js'
+// dotnet.js is the one asset the SDK leaves unfingerprinted, and it carries the hashed names of
+// every other asset. A host that caches it hands an old manifest to a new deploy, so the runtime
+// requests files that no longer exist. Pages offers no cache headers, so this file's own version
+// query is carried over to pin both halves of the loader to the same deploy.
+const { dotnet } = await import(`./_framework/dotnet.js${new URL(import.meta.url).search}`);
 
 const canvas = document.getElementById('canvas');
 const status = document.getElementById('status');
