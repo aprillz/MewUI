@@ -37,6 +37,13 @@ const { getAssemblyExports, getConfig, runMain } = await dotnet.create();
 const config = getConfig();
 const exports = await getAssemblyExports(config.mainAssemblyName);
 const app = exports.Aprillz.MewUI.Gallery.BrowserExports;
+
+// ThemeVariant.System resolves through the host, so the page's colour scheme has to be in place
+// before the first window is created, and a later change has to re-resolve it.
+const darkScheme = window.matchMedia('(prefers-color-scheme: dark)');
+app.SetSystemDarkMode(darkScheme.matches);
+darkScheme.addEventListener('change', event => { wake(); app.SetSystemDarkMode(event.matches); });
+
 const runPromise = runMain(config.mainAssemblyName, []);
 
 const MODIFIER_CONTROL = 1;
