@@ -2,6 +2,15 @@ using System.Runtime.ExceptionServices;
 
 namespace Aprillz.MewUI.Controls;
 
+/// <summary>
+/// Per-container companion to a template: names the elements built once, and owns the bindings and
+/// event subscriptions made each time an item is bound so they are undone when it is unbound.
+/// </summary>
+/// <remarks>
+/// A container gets one context for its lifetime. Registered names survive rebinding; bindings and
+/// subscriptions do not, so register them from <see cref="IDataTemplate.Bind"/> rather than
+/// <see cref="IDataTemplate.Build"/>.
+/// </remarks>
 public sealed class TemplateContext : IDisposable
 {
     private readonly Dictionary<string, UIElement> _namedElements = new(StringComparer.Ordinal);
@@ -10,6 +19,10 @@ public sealed class TemplateContext : IDisposable
     private object? _boundItem;
     private int _boundIndex = -1;
 
+    /// <summary>
+    /// Names an element for later <see cref="Get{T}"/>, replacing any element already under that
+    /// name. Names outlive <see cref="Reset"/>, so registering once from the build step is enough.
+    /// </summary>
     public void Register<T>(string name, T element) where T : UIElement
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
@@ -18,6 +31,11 @@ public sealed class TemplateContext : IDisposable
         _namedElements[name] = element;
     }
 
+    /// <summary>
+    /// Returns the element registered under <paramref name="name"/>.
+    /// </summary>
+    /// <exception cref="KeyNotFoundException">No element is registered under that name.</exception>
+    /// <exception cref="InvalidCastException">The registered element is not a <typeparamref name="T"/>.</exception>
     public T Get<T>(string name) where T : UIElement
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
@@ -35,6 +53,10 @@ public sealed class TemplateContext : IDisposable
         return typed;
     }
 
+    /// <summary>
+    /// Binds a property to an observable value and clears that binding on the next
+    /// <see cref="Reset"/>. Binding the same target property twice registers one cleanup.
+    /// </summary>
     public void Bind<T>(
         MewObject target,
         MewProperty<T> property,
@@ -49,6 +71,10 @@ public sealed class TemplateContext : IDisposable
         RegisterPropertyBinding(target, property);
     }
 
+    /// <summary>
+    /// Binds a property to a converted observable value and clears that binding on the next
+    /// <see cref="Reset"/>.
+    /// </summary>
     public void Bind<TProp, TSource>(
         MewObject target,
         MewProperty<TProp> property,
@@ -66,6 +92,10 @@ public sealed class TemplateContext : IDisposable
         RegisterPropertyBinding(target, property);
     }
 
+    /// <summary>
+    /// Binds a property along a path from a source root and clears the whole path on the next
+    /// <see cref="Reset"/>.
+    /// </summary>
     public void Bind<TRoot, T>(
         MewObject target,
         MewProperty<T> property,
@@ -84,6 +114,10 @@ public sealed class TemplateContext : IDisposable
         RegisterPropertyBinding(target, property);
     }
 
+    /// <summary>
+    /// Binds a property along a converted path from a source root and clears the whole path on the
+    /// next <see cref="Reset"/>.
+    /// </summary>
     public void Bind<TProp, TRoot, TSource>(
         MewObject target,
         MewProperty<TProp> property,
@@ -105,6 +139,11 @@ public sealed class TemplateContext : IDisposable
         RegisterPropertyBinding(target, property);
     }
 
+    /// <summary>
+    /// Runs <paramref name="add"/> now and <paramref name="remove"/> on the next <see cref="Reset"/>.
+    /// Subscribing from the bind step every time is correct: a rebind unsubscribes first, so
+    /// handlers do not accumulate.
+    /// </summary>
     public void Subscribe<TSource, THandler>(
         TSource source,
         Action<TSource, THandler> add,
@@ -122,6 +161,14 @@ public sealed class TemplateContext : IDisposable
         _cleanup.Add(new EventCleanup<TSource, THandler>(source, remove, handler));
     }
 
+    /// <summary>
+    /// Undoes every binding and subscription registered since the last reset, in reverse order of
+    /// registration, then forgets them. Registered names are kept.
+    /// </summary>
+    /// <remarks>
+    /// One failing cleanup does not stop the rest: the first exception is rethrown once every other
+    /// cleanup has run.
+    /// </remarks>
     public void Reset()
     {
         ExceptionDispatchInfo? firstError = null;
@@ -142,8 +189,13 @@ public sealed class TemplateContext : IDisposable
         firstError?.Throw();
     }
 
+    /// <summary>Equivalent to <see cref="Reset"/>; the context stays usable afterwards.</summary>
     public void Dispose() => Reset();
 
+    /// <summary>
+    /// Unbinds whatever this context currently holds, then binds the template to the item. A
+    /// failing bind leaves the context reset.
+    /// </summary>
     internal void BindTemplate(FrameworkElement view, IDataTemplate template, object? item, int index)
     {
         UnbindTemplate(view);
@@ -162,6 +214,10 @@ public sealed class TemplateContext : IDisposable
         }
     }
 
+    /// <summary>
+    /// Calls the bound template's unbind step and resets the context, even if that step throws.
+    /// With no template bound it only resets.
+    /// </summary>
     internal void UnbindTemplate(FrameworkElement view)
     {
         var template = _boundTemplate;
