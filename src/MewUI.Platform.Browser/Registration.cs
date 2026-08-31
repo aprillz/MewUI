@@ -32,7 +32,7 @@ public static class BrowserPlatform
     public static bool PointerMove(double x, double y, double screenX, double screenY, int buttons, ModifierKeys modifiers)
         => BrowserPlatformHost.Active?.PointerMove(x, y, screenX, screenY, buttons, modifiers) == true;
 
-    /// <param name="pointerType">0 for a mouse, 1 for touch, 2 for a pen.</param>
+    /// <summary>Routes a pointer press or release; pointerType is 0 for a mouse, 1 for touch, 2 for a pen.</summary>
     public static bool PointerButton(double x, double y, double screenX, double screenY, int button, int buttons,
         bool isDown, int clickCount, ModifierKeys modifiers, int pointerType)
         => BrowserPlatformHost.Active?.PointerButton(
