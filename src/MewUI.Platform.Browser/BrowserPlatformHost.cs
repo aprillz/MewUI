@@ -163,6 +163,16 @@ internal sealed class BrowserPlatformHost : IPlatformHost
             return false;
         });
 
+    internal bool WantsTextInput() => _window?.WantsTextInput() == true;
+
+    internal void PointerPan(double x, double y, double screenX, double screenY,
+        double deltaXDip, double deltaYDip, ModifierKeys modifiers)
+        => RoutePointer(() =>
+        {
+            _window?.PointerPan(x, y, screenX, screenY, deltaXDip, deltaYDip, modifiers);
+            return false;
+        });
+
     internal void PointerLeave() => RoutePointer(() => { _window?.PointerLeave(); return false; });
     internal void PointerCancel() => RoutePointer(() => { _window?.PointerCancel(); return false; });
 

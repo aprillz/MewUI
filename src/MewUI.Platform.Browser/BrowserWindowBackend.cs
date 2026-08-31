@@ -123,6 +123,29 @@ internal sealed class BrowserWindowBackend : IWindowBackend
             modifiers);
     }
 
+    internal bool WantsTextInput()
+        => _shown && !_disposed && Window.FocusManager.FocusedElement is Input.ITextInputClient;
+
+    internal void PointerPan(double x, double y, double screenX, double screenY,
+        double deltaXDip, double deltaYDip, ModifierKeys modifiers)
+    {
+        if (!_shown || _disposed) return;
+        double step = Application.Current.Theme.Metrics.ScrollWheelStep;
+        if (step <= 0) return;
+
+        // A notch is worth ScrollWheelStep DIPs, and notches may be fractional, so dividing the
+        // finger delta by the step makes the content track the finger one to one.
+        WindowInputRouter.MouseWheel(
+            Window,
+            new Point(x, y),
+            new Point(screenX, screenY),
+            new Vector(deltaXDip / step, deltaYDip / step),
+            leftDown: false,
+            rightDown: false,
+            middleDown: false,
+            modifiers);
+    }
+
     internal void PointerLeave()
     {
         if (!_mouseCaptured && !_disposed)

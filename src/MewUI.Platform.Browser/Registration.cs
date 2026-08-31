@@ -41,6 +41,14 @@ public static class BrowserPlatform
         double deltaX, double deltaY, int buttons, ModifierKeys modifiers)
         => BrowserPlatformHost.Active?.PointerWheel(x, y, screenX, screenY, deltaX, deltaY, buttons, modifiers);
 
+    /// <summary>True when the focused element consumes text input, so the host should present a text field.</summary>
+    public static bool WantsTextInput() => BrowserPlatformHost.Active?.WantsTextInput() == true;
+
+    /// <summary>Scrolls the element under the point by a finger delta in DIPs, tracking it one to one.</summary>
+    public static void PointerPan(double x, double y, double screenX, double screenY,
+        double deltaXDip, double deltaYDip, ModifierKeys modifiers)
+        => BrowserPlatformHost.Active?.PointerPan(x, y, screenX, screenY, deltaXDip, deltaYDip, modifiers);
+
     public static void PointerLeave() => BrowserPlatformHost.Active?.PointerLeave();
     public static void PointerCancel() => BrowserPlatformHost.Active?.PointerCancel();
 
