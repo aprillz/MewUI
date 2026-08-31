@@ -146,7 +146,6 @@ public sealed partial class TreeView : Control, ISubtreeInvalidationHost, IFocus
     {
         RefreshSelectedItems();
         SelectedIndicesChanged?.Invoke();
-        InvalidateItemBindings();
         InvalidateVisual();
     }
 
@@ -492,7 +491,7 @@ public sealed partial class TreeView : Control, ISubtreeInvalidationHost, IFocus
         _selectedNode = node;
         _selectedItem = item;
         SyncSelectionProperties(commit: !_syncingSelection);
-        InvalidateItemBindings();
+        InvalidateVisual();
 
         SelectedNodeChanged?.Invoke(node);
         SelectionChanged?.Invoke(item);

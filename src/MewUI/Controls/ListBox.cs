@@ -822,7 +822,6 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
             return;
         }
 
-        InvalidateItemBindings();
         _selection.SyncFromModel();
         SelectionChanged?.Invoke(_itemsSource.SelectedItem);
         ScrollIntoView(index);
@@ -901,7 +900,6 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
     {
         _selection.SyncFromModel();
         SelectedIndicesChanged?.Invoke();
-        InvalidateItemBindings();
         InvalidateVisual();
     }
 }
