@@ -66,6 +66,34 @@ public sealed class ApplicationBuilder
     }
 
     /// <summary>
+    /// Applies configured options and runs the application asynchronously.
+    /// </summary>
+    public Task RunAsync(CancellationToken cancellationToken = default)
+    {
+        if (Application.IsRunning)
+        {
+            throw new InvalidOperationException("ApplicationBuilder cannot be used after Application is running.");
+        }
+        if (MainWindowFactory == null && Startup == null)
+        {
+            throw new InvalidOperationException(
+                "Application startup is not configured. Use BuildMainWindow(...), OnStartup(...), or Run<TWindow>().");
+        }
+
+        _ = Application.DefaultPlatformHost;
+        ApplyOptions();
+
+        if (MainWindowFactory != null)
+        {
+            var mainWindow = MainWindowFactory();
+            ArgumentNullException.ThrowIfNull(mainWindow);
+            return Application.RunInternalAsync(mainWindow, Startup, Options.ShutdownMode, cancellationToken);
+        }
+
+        return Application.RunInternalAsync(null, Startup, Options.ShutdownMode, cancellationToken);
+    }
+
+    /// <summary>
     /// Applies configured options and runs the application with the given main window.
     /// </summary>
     public void Run(Window mainWindow)

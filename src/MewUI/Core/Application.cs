@@ -388,6 +388,16 @@ public sealed class Application
     }
 
     /// <summary>
+    /// Runs the application asynchronously. Browser platforms use this overload so the JavaScript
+    /// event loop remains active while the application is running.
+    /// </summary>
+    public static Task RunAsync(Window mainWindow, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(mainWindow);
+        return RunInternalAsync(mainWindow, startup: null, shutdownMode: null, cancellationToken);
+    }
+
+    /// <summary>
     /// Runs the application with the specified main window and invokes <paramref name="startup"/>
     /// on the UI thread after the dispatcher is installed and before the window is shown.
     /// </summary>
@@ -509,6 +519,67 @@ public sealed class Application
         }
     }
 
+    internal static async Task RunInternalAsync(
+        Window? mainWindow,
+        Action<string[]>? startup,
+        ShutdownMode? shutdownMode,
+        CancellationToken cancellationToken = default)
+    {
+        Application app;
+        lock (_syncLock)
+        {
+            if (_current != null)
+            {
+                throw new InvalidOperationException("Application is already running.");
+            }
+
+            Environment.ExitCode = 0;
+            var host = DefaultPlatformHost;
+            app = new Application(host);
+            _current = app;
+            app._runtime = new ApplicationRuntime(app.MaintainRenderCaches);
+            app._startup = startup;
+            if (shutdownMode != null)
+            {
+                app.ShutdownMode = shutdownMode.Value;
+            }
+            _ = app.Theme;
+            if (mainWindow != null)
+            {
+                app._runtime.MainWindow = mainWindow;
+                app.RegisterWindow(mainWindow);
+            }
+        }
+
+        try
+        {
+            await app.RunCoreAsync(mainWindow, cancellationToken);
+        }
+        finally
+        {
+            try
+            {
+                app._startup = null;
+                app._runtime?.Dispose();
+                app._runtime = null;
+                if (app.Dispatcher != null)
+                {
+                    app.Dispatcher = null;
+                }
+                else
+                {
+                    DispatcherChanged?.Invoke(null);
+                }
+            }
+            finally
+            {
+                _current = null;
+                var host = Interlocked.Exchange(ref _defaultPlatformHost, null);
+                host?.Dispose();
+            }
+        }
+    }
+
     public static ApplicationBuilder Create() => new ApplicationBuilder(new AppOptions());
 
     private Application(IPlatformHost platformHost)
@@ -591,6 +662,17 @@ public sealed class Application
     private void RunCore(Window? mainWindow)
     {
         PlatformHost.Run(this, mainWindow);
+
+        var fatal = Interlocked.Exchange(ref _pendingFatalException, null);
+        if (fatal != null)
+        {
+            throw new InvalidOperationException("Unhandled exception in UI loop.", fatal);
+        }
+    }
+
+    private async Task RunCoreAsync(Window? mainWindow, CancellationToken cancellationToken)
+    {
+        await PlatformHost.RunAsync(this, mainWindow, cancellationToken);
 
         var fatal = Interlocked.Exchange(ref _pendingFatalException, null);
         if (fatal != null)
