@@ -82,6 +82,11 @@ public class MouseEventArgs
     /// </summary>
     public ModifierKeys Modifiers { get; }
 
+    /// <summary>
+    /// Gets the device that produced this event. Defaults to <see cref="PointerType.Mouse"/>.
+    /// </summary>
+    internal PointerType PointerType { get; init; }
+
     /// <summary>Gets whether the Control key was held.</summary>
     public bool ControlKey => (Modifiers & ModifierKeys.Control) != 0;
 

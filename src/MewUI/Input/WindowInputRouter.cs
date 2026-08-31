@@ -96,6 +96,21 @@ internal static class WindowInputRouter
         bool middleDown,
         int clickCount,
         ModifierKeys modifiers = ModifierKeys.None)
+        => MouseButton(window, positionInWindow, screenPosition, button, isDown, leftDown, rightDown, middleDown,
+            clickCount, modifiers, PointerType.Mouse);
+
+    internal static void MouseButton(
+        Window window,
+        Point positionInWindow,
+        Point screenPosition,
+        MouseButton button,
+        bool isDown,
+        bool leftDown,
+        bool rightDown,
+        bool middleDown,
+        int clickCount,
+        ModifierKeys modifiers,
+        PointerType pointerType)
     {
         positionInWindow = window.SurfacePointToVisualTree(positionInWindow);
         window.UpdateLastMousePosition(positionInWindow, screenPosition);
@@ -131,6 +146,7 @@ internal static class WindowInputRouter
         {
             OriginalSource = element,
             Source = element,
+            PointerType = pointerType,
         };
         if (isDown)
         {
