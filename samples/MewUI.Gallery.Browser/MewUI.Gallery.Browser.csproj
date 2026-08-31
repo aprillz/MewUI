@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk.WebAssembly">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RuntimeIdentifier>browser-wasm</RuntimeIdentifier>
+    <RootNamespace>Aprillz.MewUI.Gallery</RootNamespace>
+    <AssemblyName>Aprillz.MewUI.Gallery.Browser</AssemblyName>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <DefineConstants>$(DefineConstants);MEWUI_GALLERY_BROWSER</DefineConstants>
+    <EmccExtraLDFlags>-sMIN_WEBGL_VERSION=2 -sMAX_WEBGL_VERSION=2 -sGL_ENABLE_GET_PROC_ADDRESS=1</EmccExtraLDFlags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/MewUI/MewUI.csproj" AdditionalProperties="MewUITargetFrameworks=net10.0" />
+    <ProjectReference Include="../../src/MewUI.Platform.Browser/MewUI.Platform.Browser.csproj" />
+    <ProjectReference Include="../../src/MewUI.Backend.MewVG.Browser/MewUI.Backend.MewVG.Browser.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="../MewUI.Gallery/*.cs" Link="%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Served as static web assets so main.js can fetch them; there is no disk to preload from. -->
+    <Content Include="../MewUI.Gallery/Resources/*.*" Link="wwwroot/Resources/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../assets/logo/logo_h-480.png" Link="wwwroot/Resources/logo_h-480.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../assets/images/april.jpg" Link="wwwroot/Resources/april.jpg" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../assets/images/soonduk.jpg" Link="wwwroot/Resources/soonduk.jpg" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <NativeFileReference Include="../../src/MewUI.Backend.MewVG.Browser/mewui_webgl_shim.c" />
+    <EmbeddedResource Include="../../assets/icon/appicon.ico" LogicalName="Aprillz.MewUI.Gallery.appicon.ico" />
+  </ItemGroup>
+
+  <Import Project="../../build/Aprillz.MewUI.targets" />
+
+</Project>

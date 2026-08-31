@@ -41,6 +41,11 @@ FillResources();
 
 static void FillResources()
 {
+    if (OperatingSystem.IsBrowser())
+    {
+        return;
+    }
+
     foreach (var name in GalleryResources.FileNames)
     {
         GalleryView.Resources.Apply(name, File.ReadAllBytes(GalleryView.CombineBaseDirectory("Resources", name)));
@@ -57,6 +62,9 @@ Application.DispatcherUnhandledException += e =>
     e.Handled = true;
 };
 
+#if MEWUI_GALLERY_BROWSER
+await
+#endif
 Application
     .Create()
     .UseAccent(Accent.Purple)
@@ -95,6 +103,10 @@ Application
             {
                 stopwatch.Stop();
                 Debug.WriteLine($"First: {stopwatch.Elapsed.TotalSeconds:0.00}s");
+                if (OperatingSystem.IsBrowser())
+                {
+                    Console.WriteLine("MewUI Gallery first frame rendered.");
+                }
             })
             .OnFrameRendered(() =>
             {
@@ -114,7 +126,11 @@ Application
             })
         )
     )
+#if MEWUI_GALLERY_BROWSER
+    .RunAsync();
+#else
     .Run();
+#endif
 
 
 bool CheckFPS(ref int fpsFrames)
@@ -285,7 +301,10 @@ static void Startup()
 {
     var args = Environment.GetCommandLineArgs();
 
-#if MEWUI_GALLERY_WIN
+#if MEWUI_GALLERY_BROWSER
+    BrowserPlatform.Register();
+    MewVGBrowserBackend.Register();
+#elif MEWUI_GALLERY_WIN
 #pragma warning disable CA1416
     Win32Platform.Register();
 

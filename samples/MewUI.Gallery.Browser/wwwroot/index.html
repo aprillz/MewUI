@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en" translate="no">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="google" content="notranslate">
+  <title>MewUI Gallery Browser First Boot</title>
+  <style>
+    html, body, canvas { width: 100%; height: 100%; margin: 0; overflow: hidden; display: block; }
+    body { background: #202124; }
+    #status { position: fixed; left: 8px; bottom: 8px; padding: 4px 7px; color: white;
+      background: rgba(0, 0, 0, .65); font: 12px sans-serif; pointer-events: none; }
+    /* Kept on-screen and sized so the browser still treats it as a live IME target. */
+    #textinput { position: fixed; top: 0; left: 0; width: 1px; height: 1px; opacity: 0;
+      border: 0; padding: 0; outline: none; background: transparent; color: transparent; }
+  </style>
+</head>
+<body class="notranslate">
+  <canvas id="canvas"></canvas>
+  <input id="textinput" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+  <div id="status">Starting MewUI WASM...</div>
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
