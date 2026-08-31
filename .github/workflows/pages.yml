@@ -45,6 +45,11 @@ jobs:
           # Pages runs Jekyll by default, which drops the _framework folder.
           touch site/.nojekyll
           printf '<!doctype html><meta http-equiv="refresh" content="0; url=./Gallery/">\n' > site/index.html
+          # The .NET assets carry a content hash in their file names, but main.js does not, and
+          # Pages serves it with a four hour max-age. Stamping the commit gives it a fresh URL
+          # per deploy, so a cached loader can never pair with newly published assets.
+          sed -i "s|\./main\.js|./main.js?v=${GITHUB_SHA::8}|" site/Gallery/index.html
+          grep -q 'main.js?v=' site/Gallery/index.html
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
