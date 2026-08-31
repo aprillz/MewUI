@@ -59,10 +59,10 @@ function clientPoint(event) {
 }
 
 // The canvas sets touch-action: none to keep the browser from zooming or panning it away, which
-// also means a finger drag over empty content would do nothing. A drag that no element grabbed is
-// turned into a scroll instead. Whether an element grabbed it is exactly what the pointer entry
-// points report back: they return the window's mouse capture state, which controls such as sliders,
-// scroll bars and splitters set on press, and plain content does not.
+// also means a finger drag over empty content would do nothing. Such a drag is turned into a
+// scroll instead. CaptureConsumesDrag decides who owns the gesture: a button captures the mouse
+// only to see whether the release counts as a click, so the scroll may take it over, while a
+// slider, scroll bar or splitter captures to consume the movement and keeps it.
 const TOUCH_PAN_THRESHOLD_PX = 8;
 let touchGesture = null;
 
@@ -95,8 +95,8 @@ canvas.addEventListener('pointermove', event => {
         return;
     }
 
-    const captured = app.PointerMove(point.x, point.y, event.screenX, event.screenY, event.buttons, modifiersOf(event));
-    if (captured) {
+    app.PointerMove(point.x, point.y, event.screenX, event.screenY, event.buttons, modifiersOf(event));
+    if (gesture !== null && app.CaptureConsumesDrag()) {
         endTouchGesture(event.pointerId);
     }
 });
@@ -116,7 +116,7 @@ canvas.addEventListener('pointerdown', event => {
     syncTextInputFocus();
 
     // Only the first finger drives a scroll; a second one is left to the normal pointer path.
-    if (event.pointerType === 'touch' && !captured && touchGesture === null) {
+    if (event.pointerType === 'touch' && !app.CaptureConsumesDrag() && touchGesture === null) {
         touchGesture = { pointerId: event.pointerId, startX: point.x, startY: point.y, lastX: point.x, lastY: point.y, panning: false };
     }
 

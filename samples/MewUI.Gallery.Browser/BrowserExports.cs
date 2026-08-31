@@ -37,6 +37,9 @@ internal static partial class BrowserExports
             x, y, screenX, screenY, deltaX, deltaY, buttons, (ModifierKeys)modifiers);
 
     [JSExport]
+    internal static bool CaptureConsumesDrag() => BrowserPlatform.CaptureConsumesDrag();
+
+    [JSExport]
     internal static bool WantsTextInput() => BrowserPlatform.WantsTextInput();
 
     [JSExport]
