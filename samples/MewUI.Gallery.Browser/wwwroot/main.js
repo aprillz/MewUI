@@ -6,6 +6,10 @@ const textInput = document.getElementById('textinput');
 let pixelConfirmed = false;
 let frameErrorCount = 0;
 const MAX_LOGGED_FRAME_ERRORS = 5;
+let frameScheduled = false;
+let idleFrames = 0;
+let wakeTimer = 0;
+const IDLE_FRAMES_BEFORE_SLEEP = 3;
 
 // Resizing the backing store clears the drawing buffer, and the context is created without
 // preserveDrawingBuffer, so the resize has to happen in the frame that redraws it. Doing this
@@ -196,11 +200,6 @@ loadResources();
 
 // The loop idles instead of repainting at the display's refresh rate: a frame runs only while the
 // app reports work, and anything that can change the screen wakes it again.
-let frameScheduled = false;
-let idleFrames = 0;
-let wakeTimer = 0;
-const IDLE_FRAMES_BEFORE_SLEEP = 3;
-
 function wake() {
     idleFrames = 0;
     if (wakeTimer !== 0) {
