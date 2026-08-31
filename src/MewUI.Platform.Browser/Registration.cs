@@ -32,10 +32,12 @@ public static class BrowserPlatform
     public static bool PointerMove(double x, double y, double screenX, double screenY, int buttons, ModifierKeys modifiers)
         => BrowserPlatformHost.Active?.PointerMove(x, y, screenX, screenY, buttons, modifiers) == true;
 
+    /// <param name="pointerType">0 for a mouse, 1 for touch, 2 for a pen.</param>
     public static bool PointerButton(double x, double y, double screenX, double screenY, int button, int buttons,
-        bool isDown, int clickCount, ModifierKeys modifiers)
+        bool isDown, int clickCount, ModifierKeys modifiers, int pointerType)
         => BrowserPlatformHost.Active?.PointerButton(
-            x, y, screenX, screenY, button, buttons, isDown, clickCount, modifiers) == true;
+            x, y, screenX, screenY, button, buttons, isDown, clickCount, modifiers,
+            pointerType switch { 1 => PointerType.Touch, 2 => PointerType.Pen, _ => PointerType.Mouse }) == true;
 
     public static void PointerWheel(double x, double y, double screenX, double screenY,
         double deltaX, double deltaY, int buttons, ModifierKeys modifiers)
