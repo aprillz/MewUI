@@ -37,6 +37,14 @@ internal static partial class BrowserExports
             x, y, screenX, screenY, deltaX, deltaY, buttons, (ModifierKeys)modifiers);
 
     [JSExport]
+    internal static bool WantsTextInput() => BrowserPlatform.WantsTextInput();
+
+    [JSExport]
+    internal static void PointerPan(double x, double y, double screenX, double screenY,
+        double deltaX, double deltaY, int modifiers)
+        => BrowserPlatform.PointerPan(x, y, screenX, screenY, deltaX, deltaY, (ModifierKeys)modifiers);
+
+    [JSExport]
     internal static void PointerLeave() => BrowserPlatform.PointerLeave();
 
     [JSExport]

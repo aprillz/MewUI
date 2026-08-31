@@ -58,27 +58,84 @@ function clientPoint(event) {
     return { x: event.clientX - rect.left, y: event.clientY - rect.top };
 }
 
+// The canvas sets touch-action: none to keep the browser from zooming or panning it away, which
+// also means a finger drag over empty content would do nothing. A drag that no element grabbed is
+// turned into a scroll instead. Whether an element grabbed it is exactly what the pointer entry
+// points report back: they return the window's mouse capture state, which controls such as sliders,
+// scroll bars and splitters set on press, and plain content does not.
+const TOUCH_PAN_THRESHOLD_PX = 8;
+let touchGesture = null;
+
+function endTouchGesture(pointerId) {
+    if (touchGesture !== null && (pointerId === undefined || touchGesture.pointerId === pointerId)) {
+        touchGesture = null;
+    }
+}
+
 canvas.addEventListener('pointermove', event => {
     wake();
     const point = clientPoint(event);
-    app.PointerMove(point.x, point.y, event.screenX, event.screenY, event.buttons, modifiersOf(event));
+    const gesture = touchGesture !== null && touchGesture.pointerId === event.pointerId ? touchGesture : null;
+
+    if (gesture !== null && gesture.panning) {
+        app.PointerPan(gesture.startX, gesture.startY, event.screenX, event.screenY,
+            point.x - gesture.lastX, point.y - gesture.lastY, modifiersOf(event));
+        gesture.lastX = point.x;
+        gesture.lastY = point.y;
+        return;
+    }
+
+    if (gesture !== null && Math.hypot(point.x - gesture.startX, point.y - gesture.startY) > TOUCH_PAN_THRESHOLD_PX) {
+        // Nothing took the press, so abandon it rather than leaving the control under the finger
+        // pressed, and spend the rest of the gesture scrolling.
+        gesture.panning = true;
+        gesture.lastX = point.x;
+        gesture.lastY = point.y;
+        app.PointerCancel();
+        return;
+    }
+
+    const captured = app.PointerMove(point.x, point.y, event.screenX, event.screenY, event.buttons, modifiersOf(event));
+    if (captured) {
+        endTouchGesture(event.pointerId);
+    }
 });
 
 canvas.addEventListener('pointerdown', event => {
     wake();
     const point = clientPoint(event);
     canvas.setPointerCapture(event.pointerId);
-    focusInput();
     const captured = app.PointerButton(point.x, point.y, event.screenX, event.screenY,
         event.button, event.buttons, true, event.detail || 1, modifiersOf(event));
     if (!captured) {
         canvas.releasePointerCapture(event.pointerId);
     }
+
+    // The press decides what has focus, so the text field follows it rather than the other way
+    // round. This still runs inside the gesture, which is what lets a phone raise its keyboard.
+    syncTextInputFocus();
+
+    // Only the first finger drives a scroll; a second one is left to the normal pointer path.
+    if (event.pointerType === 'touch' && !captured && touchGesture === null) {
+        touchGesture = { pointerId: event.pointerId, startX: point.x, startY: point.y, lastX: point.x, lastY: point.y, panning: false };
+    }
+
     event.preventDefault();
 });
 
 canvas.addEventListener('pointerup', event => {
     wake();
+    const panned = touchGesture !== null && touchGesture.pointerId === event.pointerId && touchGesture.panning;
+    endTouchGesture(event.pointerId);
+
+    // The press was already cancelled when the scroll began, so releasing would report a click.
+    if (panned) {
+        if (canvas.hasPointerCapture(event.pointerId)) {
+            canvas.releasePointerCapture(event.pointerId);
+        }
+        return;
+    }
+
     const point = clientPoint(event);
     const captured = app.PointerButton(point.x, point.y, event.screenX, event.screenY,
         event.button, event.buttons, false, event.detail || 1, modifiersOf(event));
@@ -87,7 +144,7 @@ canvas.addEventListener('pointerup', event => {
     }
 });
 
-canvas.addEventListener('pointercancel', () => { wake(); app.PointerCancel(); });
+canvas.addEventListener('pointercancel', event => { wake(); endTouchGesture(event.pointerId); app.PointerCancel(); });
 canvas.addEventListener('pointerleave', () => { wake(); app.PointerLeave(); });
 
 // MewUI counts wheel movement in notches with +Y up and +X left, while the DOM reports pixels,
@@ -119,17 +176,22 @@ canvas.addEventListener('wheel', event => {
 
 canvas.addEventListener('contextmenu', event => event.preventDefault());
 
-// Keyboard and text input run through a visually hidden input so the browser keeps producing
-// composition and text events; the canvas itself never receives text.
-function focusInput() {
-    if (document.activeElement !== textInput) {
+// Text and composition run through a visually hidden input, because the canvas itself never
+// receives them. Focusing that input is what raises the on-screen keyboard on a phone, so it is
+// held only while a text control has focus; keys are taken from the window so they arrive either
+// way. Composition state has to settle before the focus moves, or the commit is lost.
+function syncTextInputFocus() {
+    const wanted = app.WantsTextInput();
+    if (wanted && document.activeElement !== textInput) {
         textInput.focus({ preventScroll: true });
+    } else if (!wanted && !composing && document.activeElement === textInput) {
+        textInput.blur();
     }
 }
 
 let composing = false;
 
-textInput.addEventListener('keydown', event => {
+window.addEventListener('keydown', event => {
     wake();
     if (composing) {
         return;
@@ -140,9 +202,12 @@ textInput.addEventListener('keydown', event => {
     if (handled || event.code === 'Tab' || event.code === 'Space' || event.code.startsWith('Arrow')) {
         event.preventDefault();
     }
+
+    // A key can move focus onto or off a text control.
+    syncTextInputFocus();
 });
 
-textInput.addEventListener('keyup', event => {
+window.addEventListener('keyup', event => {
     wake();
     if (!composing) {
         app.KeyUp(event.code, event.keyCode || 0, modifiersOf(event));
@@ -172,12 +237,11 @@ textInput.addEventListener('input', event => {
     textInput.value = '';
 });
 
-textInput.addEventListener('focus', () => { wake(); app.FocusChanged(true); });
-textInput.addEventListener('blur', () => { wake(); app.FocusChanged(false); });
-
+// Window activation is the page's own, not the hidden input's, which comes and goes with text focus.
+window.addEventListener('focus', () => { wake(); app.FocusChanged(true); });
 window.addEventListener('blur', () => { wake(); app.FocusChanged(false); });
 
-focusInput();
+app.FocusChanged(document.hasFocus());
 
 // The gallery binds its images and icon dictionary to values a host fills. There is no disk here,
 // so they are fetched alongside the first frames and arrive through the same late-binding path the
