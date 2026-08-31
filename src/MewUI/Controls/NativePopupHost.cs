@@ -31,7 +31,8 @@ internal sealed class NativePopupHost : IPopupHost
 
         if (sizeToContent)
         {
-            entry.Bounds = PopupHostSupport.ResizeToContentWidth(entry.Element, entry.Bounds, MAX_POPUP_EXTENT);
+            entry.PlacementBounds = PopupHostSupport.ResizeToContentWidth(entry.Element, entry.PlacementBounds, MAX_POPUP_EXTENT);
+            entry.Bounds = entry.PlacementBounds;
         }
 
         var initialChromeBounds = SnapRectToDevice(entry.Bounds.Inflate(PopupChrome.ShadowPadding));
@@ -133,6 +134,7 @@ internal sealed class NativePopupHost : IPopupHost
 
     public void UpdateBounds(PopupEntry entry, Rect bounds)
     {
+        entry.PlacementBounds = bounds;
         entry.Bounds = bounds;
         Layout(entry);
     }

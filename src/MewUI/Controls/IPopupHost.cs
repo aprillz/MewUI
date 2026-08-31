@@ -13,7 +13,18 @@ internal sealed class PopupEntry
 
     public required UIElement Owner { get; set; }
 
+    /// <summary>
+    /// Where the popup was arranged, in owner-client DIPs. Hit testing reads this, so it carries the
+    /// layout-rounded result rather than the requested rectangle.
+    /// </summary>
     public Rect Bounds { get; set; }
+
+    /// <summary>
+    /// The rectangle placement asked for. Every layout pass starts from this, never from the arranged
+    /// result: feeding the result back would let each pass lose the rounding of the one before it and
+    /// shrink the popup a little more every time.
+    /// </summary>
+    public Rect PlacementBounds { get; set; }
 
     public bool StaysOpen { get; set; }
 
