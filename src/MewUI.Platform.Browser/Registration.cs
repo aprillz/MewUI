@@ -41,6 +41,9 @@ public static class BrowserPlatform
         double deltaX, double deltaY, int buttons, ModifierKeys modifiers)
         => BrowserPlatformHost.Active?.PointerWheel(x, y, screenX, screenY, deltaX, deltaY, buttons, modifiers);
 
+    /// <summary>True while the captured element consumes pointer movement rather than tracking a press.</summary>
+    public static bool CaptureConsumesDrag() => BrowserPlatformHost.Active?.CaptureConsumesDrag() == true;
+
     /// <summary>True when the focused element consumes text input, so the host should present a text field.</summary>
     public static bool WantsTextInput() => BrowserPlatformHost.Active?.WantsTextInput() == true;
 
