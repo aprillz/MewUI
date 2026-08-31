@@ -3582,6 +3582,46 @@ public static class ControlExtensions
     #region GridView presenters
 
     /// <summary>
+    /// Configures each row once its cells are bound, so behavior can be attached to the whole row
+    /// instead of being repeated in every cell template. The row is the container the grid already
+    /// realizes, so no extra element is created.
+    /// </summary>
+    /// <remarks>
+    /// The callback runs on every bind, which includes scrolling a row back into view, so keep it
+    /// cheap. Register event subscriptions through the supplied context and they are removed before
+    /// the next item is bound; properties assigned directly are reset by the framework instead.
+    /// </remarks>
+    /// <typeparam name="T">Item type.</typeparam>
+    /// <param name="grid">Target grid view.</param>
+    /// <param name="prepare">Row configuration callback.</param>
+    /// <returns>The grid view for chaining.</returns>
+    public static GridView PrepareContainer<T>(this GridView grid, PrepareContainerHandler<GridViewRow, T> prepare)
+    {
+        ArgumentNullException.ThrowIfNull(grid);
+        ArgumentNullException.ThrowIfNull(prepare);
+
+        grid.SetPrepareRow((row, item, index, context) => prepare(row, (T)item!, index, context));
+        return grid;
+    }
+
+    /// <summary>
+    /// Releases what <see cref="PrepareContainer{T}(GridView, PrepareContainerHandler{GridViewRow, T})"/>
+    /// attached outside the template context, before the row takes another item.
+    /// </summary>
+    /// <typeparam name="T">Item type.</typeparam>
+    /// <param name="grid">Target grid view.</param>
+    /// <param name="clear">Row release callback.</param>
+    /// <returns>The grid view for chaining.</returns>
+    public static GridView ClearContainer<T>(this GridView grid, PrepareContainerHandler<GridViewRow, T> clear)
+    {
+        ArgumentNullException.ThrowIfNull(grid);
+        ArgumentNullException.ThrowIfNull(clear);
+
+        grid.SetClearRow((row, item, index, context) => clear(row, (T)item!, index, context));
+        return grid;
+    }
+
+    /// <summary>
     /// Uses fixed-height row virtualization (default). Rows assume <see cref="GridView.RowHeight"/>
     /// or the theme default; cell content taller than that clips.
     /// </summary>
