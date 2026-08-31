@@ -6,8 +6,9 @@ public static class BrowserPlatform
 {
     public static void Register()
     {
-        // The canvas is the only surface, so popups and menus have to live inside it.
+        // The canvas is the only surface, so popups, menus and drag previews have to live inside it.
         PopupManager.PreferNativePopups = false;
+        Input.WindowDragDropRouter.PreferNativePreviewWindow = false;
         Application.RegisterPlatformHost(
             static () => new BrowserPlatformHost(),
             Platform.PlatformSurfaceKind.Browser,
