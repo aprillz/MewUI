@@ -25,6 +25,12 @@ internal static class WindowDragDropRouter
     private static ExternalDragSession? _externalSession;
     private static int _routingDepth;
 
+    /// <summary>
+    /// Host a cross-window drag preview in its own OS window instead of the owner surface; a platform
+    /// with a single surface sets it false and the preview renders as the per-window overlay.
+    /// </summary>
+    internal static bool PreferNativePreviewWindow = true;
+
     internal static bool IsActive => _activeSession != null;
 
     internal static DragSession? ActiveSession => _activeSession;
@@ -454,7 +460,7 @@ internal static class WindowDragDropRouter
     {
         if (session.Preview == null) return;
 
-        if (session.Preview.Scope == DragPreviewScope.CrossWindow)
+        if (session.Preview.Scope == DragPreviewScope.CrossWindow && PreferNativePreviewWindow)
         {
             // A single top-level overlay window that follows the cursor in screen coordinates, so the preview
             // stays visible across windows and the desktop gap. Transparent when the platform composites it,
