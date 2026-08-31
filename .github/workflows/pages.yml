@@ -1,0 +1,56 @@
+name: Deploy browser Gallery (GitHub Pages)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Install wasm-tools workload
+        run: dotnet workload install wasm-tools
+
+      - name: Publish browser Gallery
+        run: >
+          dotnet publish samples/MewUI.Gallery.Browser/MewUI.Gallery.Browser.csproj
+          -c Release
+          -p:RunAOTCompilation=true
+          -p:MewUITargetFrameworks=net10.0
+
+      # Served from a subfolder, so the app is reachable at <pages root>/Gallery.
+      - name: Stage the site
+        run: |
+          mkdir -p site/Gallery
+          cp -r samples/MewUI.Gallery.Browser/bin/Release/net10.0/publish/wwwroot/. site/Gallery/
+          # Pages runs Jekyll by default, which drops the _framework folder.
+          touch site/.nojekyll
+          printf '<!doctype html><meta http-equiv="refresh" content="0; url=./Gallery/">\n' > site/index.html
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
