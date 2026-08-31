@@ -96,7 +96,6 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
         {
             _selection.SyncFromModel();
             SelectedIndicesChanged?.Invoke();
-            InvalidateItemBindings();
             InvalidateVisual();
         };
         _core.SortChanged += change =>
@@ -1198,7 +1197,6 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
     {
         _selection.SyncFromModel();
         SelectionChanged?.Invoke(_core.SelectedItem);
-        InvalidateItemBindings();
         ScrollSelectedIntoView();
         InvalidateVisual();
     }

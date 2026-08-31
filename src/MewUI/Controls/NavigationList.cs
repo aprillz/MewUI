@@ -533,7 +533,6 @@ public class NavigationList : ScrollableItemsBase, ISelector, IIndexedSelector
 
     private void OnItemsSelectionChanged(int index)
     {
-        InvalidateItemBindings();
         _selection.SyncFromModel();
         SelectionChanged?.Invoke(_itemsSource.SelectedItem);
         // Bring the selection fully into view (covers click / keyboard / programmatic paths), so selecting
