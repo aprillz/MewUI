@@ -11,6 +11,8 @@ internal sealed class BrowserPlatformHost : IPlatformHost
     private SynchronizationContext? _previousContext;
     private bool _running;
     private bool _framePending = true;
+    private int _lastPixelWidth;
+    private int _lastPixelHeight;
 
     // Matches the cap desktop hosts use for their OS wait; a longer sleep is reported as "no timer".
     private const int MAX_WAKE_DELAY_MS = 1000;
@@ -120,6 +122,15 @@ internal sealed class BrowserPlatformHost : IPlatformHost
         {
             _dispatcher?.ClearWakeRequest();
             _dispatcher?.ProcessWorkItems();
+
+            // Sizing the drawing buffer discards its contents, so a frame that resized it must
+            // paint: returning without drawing would leave the cleared buffer on screen.
+            if (pixelWidth != _lastPixelWidth || pixelHeight != _lastPixelHeight)
+            {
+                _lastPixelWidth = pixelWidth;
+                _lastPixelHeight = pixelHeight;
+                _framePending = true;
+            }
 
             if (!ShouldRenderFrame())
             {
