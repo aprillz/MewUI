@@ -38,6 +38,8 @@ public class NavigationList : ScrollableItemsBase, ISelector, IIndexedSelector
 
     private int _hoverIndex = -1;
     private bool _hasLastMousePosition;
+    // Item a finger pressed, held until the release decides between a tap and a scroll.
+    private int _touchPressIndex = -1;
     private Point _lastMousePosition;
     private readonly SelectionSync _selection;
 
@@ -373,11 +375,44 @@ public class NavigationList : ScrollableItemsBase, ISelector, IIndexedSelector
 
         if (e.Button == MouseButton.Left && TryGetItemIndexAt(e, out int index) && KindAt(index) == NavigationItemKind.Item)
         {
-            CommitTargetValue(SelectedIndexProperty, index);
-            ItemInvoked?.Invoke(_itemsSource.GetItem(index));
-            InvalidateVisual();
+            // A finger press may still turn into a scroll, so touch waits for the release to commit.
+            // Mouse keeps committing here, where a drag selection has to start.
+            if (e.PointerType == PointerType.Touch)
+            {
+                _touchPressIndex = index;
+                e.Handled = true;
+                return;
+            }
+
+            InvokeItem(index);
             e.Handled = true;
         }
+    }
+
+    protected override void OnMouseUp(MouseEventArgs e)
+    {
+        base.OnMouseUp(e);
+
+        int pressed = _touchPressIndex;
+        _touchPressIndex = -1;
+        if (e.Handled || !IsEffectivelyEnabled || pressed < 0 || e.PointerType != PointerType.Touch)
+        {
+            return;
+        }
+
+        if (e.Button == MouseButton.Left && TryGetItemIndexAt(e, out int index) && index == pressed
+            && KindAt(index) == NavigationItemKind.Item)
+        {
+            InvokeItem(index);
+            e.Handled = true;
+        }
+    }
+
+    private void InvokeItem(int index)
+    {
+        CommitTargetValue(SelectedIndexProperty, index);
+        ItemInvoked?.Invoke(_itemsSource.GetItem(index));
+        InvalidateVisual();
     }
 
     protected override void OnKeyDown(KeyEventArgs e)

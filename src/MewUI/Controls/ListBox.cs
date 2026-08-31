@@ -41,6 +41,8 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
 
     private int _hoverIndex = -1;
     private bool _hasLastMousePosition;
+    // Item a finger pressed, held until the release decides between a tap and a scroll.
+    private int _touchPressIndex = -1;
     private Point _lastMousePosition;
     private readonly SelectionSync _selection;
     private bool _suppressItemsSelectionChanged;
@@ -595,20 +597,52 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
 
         if (TryGetItemIndexAt(e, out int index))
         {
-            var multi = MultiView;
-            if (multi != null && multi.SelectionMode != ItemsSelectionMode.Single)
+            // A finger press may still turn into a scroll, so touch waits for the release to commit.
+            // Mouse keeps committing here, where a drag selection has to start.
+            if (e.PointerType == PointerType.Touch)
             {
-                ItemsSelectionInput.HandleClick(multi, index, e.Modifiers);
-            }
-            else
-            {
-                CommitTargetValue(SelectedIndexProperty, index);
+                _touchPressIndex = index;
+                e.Handled = true;
+                return;
             }
 
-            ItemActivated?.Invoke(index);
-            InvalidateVisual();
+            SelectItem(index, e.Modifiers);
             e.Handled = true;
         }
+    }
+
+    protected override void OnMouseUp(MouseEventArgs e)
+    {
+        base.OnMouseUp(e);
+
+        int pressed = _touchPressIndex;
+        _touchPressIndex = -1;
+        if (e.Handled || !IsEffectivelyEnabled || pressed < 0 || e.PointerType != PointerType.Touch)
+        {
+            return;
+        }
+
+        if (TryGetItemIndexAt(e, out int index) && index == pressed)
+        {
+            SelectItem(index, e.Modifiers);
+            e.Handled = true;
+        }
+    }
+
+    private void SelectItem(int index, ModifierKeys modifiers)
+    {
+        var multi = MultiView;
+        if (multi != null && multi.SelectionMode != ItemsSelectionMode.Single)
+        {
+            ItemsSelectionInput.HandleClick(multi, index, modifiers);
+        }
+        else
+        {
+            CommitTargetValue(SelectedIndexProperty, index);
+        }
+
+        ItemActivated?.Invoke(index);
+        InvalidateVisual();
     }
 
     protected override void OnKeyDown(KeyEventArgs e)
