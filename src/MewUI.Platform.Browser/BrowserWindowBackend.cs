@@ -83,7 +83,7 @@ internal sealed class BrowserWindowBackend : IWindowBackend
     }
 
     internal bool PointerButton(double x, double y, double screenX, double screenY, int button, int buttons,
-        bool isDown, int clickCount, ModifierKeys modifiers)
+        bool isDown, int clickCount, ModifierKeys modifiers, PointerType pointerType)
     {
         if (!_shown || _disposed) return false;
         var mappedButton = button switch
@@ -104,7 +104,8 @@ internal sealed class BrowserWindowBackend : IWindowBackend
             rightDown: (buttons & 2) != 0,
             middleDown: (buttons & 4) != 0,
             Math.Max(1, clickCount),
-            modifiers);
+            modifiers,
+            pointerType);
         return _mouseCaptured;
     }
 

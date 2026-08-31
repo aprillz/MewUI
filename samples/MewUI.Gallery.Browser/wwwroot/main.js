@@ -64,6 +64,20 @@ function clientPoint(event) {
 // only to see whether the release counts as a click, so the scroll may take it over, while a
 // slider, scroll bar or splitter captures to consume the movement and keeps it.
 const TOUCH_PAN_THRESHOLD_PX = 8;
+
+// Selection waits for the release on touch, so the press has to say which device sent it.
+function pointerTypeOf(event) {
+    if (event.pointerType === 'touch') {
+        return 1;
+    }
+
+    if (event.pointerType === 'pen') {
+        return 2;
+    }
+
+    return 0;
+}
+
 let touchGesture = null;
 const activePointers = new Set();
 
@@ -119,7 +133,7 @@ canvas.addEventListener('pointerdown', event => {
     dropStrandedTouchGesture();
     canvas.setPointerCapture(event.pointerId);
     const captured = app.PointerButton(point.x, point.y, event.screenX, event.screenY,
-        event.button, event.buttons, true, event.detail || 1, modifiersOf(event));
+        event.button, event.buttons, true, event.detail || 1, modifiersOf(event), pointerTypeOf(event));
 
     // The press decides what has focus, so the text field follows it rather than the other way
     // round. This still runs inside the gesture, which is what lets a phone raise its keyboard.
@@ -156,7 +170,7 @@ canvas.addEventListener('pointerup', event => {
 
     const point = clientPoint(event);
     const captured = app.PointerButton(point.x, point.y, event.screenX, event.screenY,
-        event.button, event.buttons, false, event.detail || 1, modifiersOf(event));
+        event.button, event.buttons, false, event.detail || 1, modifiersOf(event), pointerTypeOf(event));
     if (!captured && canvas.hasPointerCapture(event.pointerId)) {
         canvas.releasePointerCapture(event.pointerId);
     }
