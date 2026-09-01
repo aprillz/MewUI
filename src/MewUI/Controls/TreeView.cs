@@ -16,6 +16,9 @@ public sealed partial class TreeView : Control, ISubtreeInvalidationHost, IFocus
     private readonly ScrollViewer _scrollViewer;
     private uint _itemBindingGeneration;
     private ITreeItemsView _itemsSource = TreeItemsView.Empty;
+    // Row a finger pressed, held until the release decides between a tap and a scroll.
+    private int _touchPressIndex = -1;
+    private bool _touchPressOnGlyph;
     private TreeViewNode? _selectedNode;
     private object? _selectedItem;
     private bool _syncingSelection;
@@ -903,10 +906,45 @@ public sealed partial class TreeView : Control, ISubtreeInvalidationHost, IFocus
             return;
         }
 
+        // A finger press may still turn into a scroll, so touch waits for the release to commit.
+        // Mouse keeps committing here, where a drag selection has to start.
+        if (e.PointerType == PointerType.Touch)
+        {
+            _touchPressIndex = index;
+            _touchPressOnGlyph = onGlyph;
+            e.Handled = true;
+            return;
+        }
+
+        SelectRow(index, onGlyph, e.Modifiers);
+        e.Handled = true;
+    }
+
+    protected override void OnMouseUp(MouseEventArgs e)
+    {
+        base.OnMouseUp(e);
+
+        int pressed = _touchPressIndex;
+        bool onGlyph = _touchPressOnGlyph;
+        _touchPressIndex = -1;
+        if (e.Handled || !IsEffectivelyEnabled || pressed < 0 || e.PointerType != PointerType.Touch)
+        {
+            return;
+        }
+
+        if (TryHitRow(e.GetPosition(this), out int index, out _) && index == pressed)
+        {
+            SelectRow(index, onGlyph, e.Modifiers);
+            e.Handled = true;
+        }
+    }
+
+    private void SelectRow(int index, bool onGlyph, ModifierKeys modifiers)
+    {
         var multi = MultiView;
         if (multi != null && multi.SelectionMode != ItemsSelectionMode.Single)
         {
-            ItemsSelectionInput.HandleClick(multi, index, e.Modifiers);
+            ItemsSelectionInput.HandleClick(multi, index, modifiers);
         }
         else
         {
@@ -918,8 +956,6 @@ public sealed partial class TreeView : Control, ISubtreeInvalidationHost, IFocus
         {
             TryToggleExpanded(index);
         }
-
-        e.Handled = true;
     }
 
     protected override void OnMouseDoubleClick(MouseEventArgs e)
