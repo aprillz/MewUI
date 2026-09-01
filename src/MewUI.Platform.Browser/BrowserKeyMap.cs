@@ -16,7 +16,7 @@ internal static class BrowserKeyMap
             return Key.None;
         }
 
-        if (code.Length == 5 && code.StartsWith("Key", StringComparison.Ordinal))
+        if (code.Length == 4 && code.StartsWith("Key", StringComparison.Ordinal))
         {
             char letter = char.ToUpperInvariant(code[3]);
             return letter is >= 'A' and <= 'Z' ? Key.A + (letter - 'A') : Key.None;
