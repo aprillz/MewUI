@@ -52,6 +52,7 @@ internal sealed class BrowserWindowBackend : IWindowBackend
     private double _flingDirectionY;
     private double _flingSentDistance;
     private long _flingStartTicks;
+    private bool _advancingFling;
     private bool _swallowTouchRelease;
 
     private readonly BrowserWindowSurface _surface = new();
@@ -419,13 +420,35 @@ internal sealed class BrowserWindowBackend : IWindowBackend
     /// <summary>Moves an active coast on for this frame; false means it is over.</summary>
     internal bool AdvanceFling()
     {
-        if (!_flinging) return false;
+        // Driving the scroll runs application code, and a frame started from inside that would read
+        // the distance already sent before this call finishes writing it.
+        if (!_flinging || _advancingFling) return false;
         if (!_shown || _disposed)
         {
             StopFling();
             return false;
         }
 
+        _advancingFling = true;
+        try
+        {
+            return AdvanceFlingStep();
+        }
+        catch
+        {
+            // A throw out of the scroll would otherwise be repeated every frame for the rest of the
+            // coast, which turns one failure into a stuck loop.
+            StopFling();
+            throw;
+        }
+        finally
+        {
+            _advancingFling = false;
+        }
+    }
+
+    private bool AdvanceFlingStep()
+    {
         double elapsed = (Stopwatch.GetTimestamp() - _flingStartTicks) / (double)Stopwatch.Frequency;
         double remaining = Math.Pow(FLING_DECAY_PER_SECOND, elapsed);
         if (_flingSpeed * remaining < FLING_END_SPEED_DIP)
