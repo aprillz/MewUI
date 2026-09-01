@@ -221,6 +221,8 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
     // here with the same args instance; comparing it deduplicates without marking the event
     // Handled, which would suppress interactive cell content (e.g. a ComboBox opening its popup).
     private MouseEventArgs? _lastSelectionAppliedEvent;
+    // Row a finger pressed, held until the release decides between a tap and a scroll.
+    private int _touchPressRow = -1;
 
     // Shared selection entry for row/cell pointer-down. Selection observes the click, it does not consume it.
     internal void HandleRowPointerDown(int rowIndex, MouseEventArgs e)
@@ -236,6 +238,31 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
         }
         _lastSelectionAppliedEvent = e;
 
+        // A finger press may still turn into a scroll, so touch waits for the release to commit.
+        // Mouse keeps committing here, where a drag selection has to start.
+        if (e.PointerType == PointerType.Touch)
+        {
+            _touchPressRow = rowIndex;
+            return;
+        }
+
+        SelectRow(rowIndex, e);
+    }
+
+    internal void HandleRowPointerUp(int rowIndex, MouseEventArgs e)
+    {
+        int pressed = _touchPressRow;
+        _touchPressRow = -1;
+        if (!IsEffectivelyEnabled || pressed != rowIndex || e.PointerType != PointerType.Touch)
+        {
+            return;
+        }
+
+        SelectRow(rowIndex, e);
+    }
+
+    private void SelectRow(int rowIndex, MouseEventArgs e)
+    {
         var multi = _core.MultiView;
         if (multi != null && multi.SelectionMode != ItemsSelectionMode.Single)
         {

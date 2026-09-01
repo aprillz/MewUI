@@ -82,6 +82,18 @@ public sealed class GridViewRow : Panel
         _owner.HandleRowPointerDown(_rowIndex, e);
     }
 
+    protected override void OnMouseUp(MouseEventArgs e)
+    {
+        base.OnMouseUp(e);
+
+        if (e.Handled || e.Button != MouseButton.Left || !_owner.IsEffectivelyEnabled)
+        {
+            return;
+        }
+
+        _owner.HandleRowPointerUp(_rowIndex, e);
+    }
+
     internal void EnsureDpi(uint dpi)
     {
         if (_lastDpi == dpi)
