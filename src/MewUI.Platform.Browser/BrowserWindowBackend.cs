@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using Aprillz.MewUI.Controls;
 using Aprillz.MewUI.Input;
 
@@ -16,8 +15,6 @@ internal sealed class BrowserWindowBackend : IWindowBackend
     // Stand-in line height for a text control that has not been laid out yet.
     private const double DEFAULT_CARET_HEIGHT_DIP = 16;
 
-    // Movement too small for the scroll controller to act on, held over to the next pan event.
-    private const double MIN_PAN_STEP_DIP = 0.5;
     private double _panBankX;
     private double _panBankY;
 
@@ -34,7 +31,9 @@ internal sealed class BrowserWindowBackend : IWindowBackend
     // ScrollGestureRecognizer and UIScrollView use halves the distance while the coast still leaves
     // the finger at the speed the finger had.
     private const double FLING_DECAY_PER_SECOND = 0.0225;
-    private const double FLING_END_SPEED_DIP = 5;
+    // Below one device pixel per frame the content moves every second or third frame instead of
+    // every one, so the coast ends where that would begin rather than ratcheting to a halt.
+    private const double FLING_END_FRAME_RATE = 60;
     private const double FLING_MAX_SPEED_DIP = 4000;
     private const double FLING_SAMPLE_WINDOW_SECONDS = 0.1;
     private const int FLING_SAMPLE_CAPACITY = 8;
@@ -46,7 +45,7 @@ internal sealed class BrowserWindowBackend : IWindowBackend
     private readonly PanSample[] _panSamples = new PanSample[FLING_SAMPLE_CAPACITY];
     private int _panSampleCount;
     private int _panSampleNext;
-    private long _panSampleTicks;
+    private double _panSampleTimeMs = double.NaN;
 
     private bool _flinging;
     private double _flingSpeed;
@@ -66,6 +65,13 @@ internal sealed class BrowserWindowBackend : IWindowBackend
     }
 
     internal Window Window { get; }
+
+    // One device pixel, the smallest movement that can change what is on screen. Movement under it
+    // is banked rather than sent, so a slow drag or a high refresh rate does not lose it a little
+    // at a time.
+    private double MinPanStepDip => 96.0 / Dpi;
+
+    private double FlingEndSpeedDip => MinPanStepDip * FLING_END_FRAME_RATE;
 
     /// <summary>Set by invalidation, cleared once the frame is drawn.</summary>
     internal bool NeedsRender { get; private set; } = true;
@@ -270,7 +276,7 @@ internal sealed class BrowserWindowBackend : IWindowBackend
     }
 
     internal void PointerPan(double x, double y, double screenX, double screenY,
-        double deltaXDip, double deltaYDip, ModifierKeys modifiers)
+        double deltaXDip, double deltaYDip, ModifierKeys modifiers, double timeStampMs)
     {
         if (!_shown || _disposed) return;
 
@@ -278,7 +284,7 @@ internal sealed class BrowserWindowBackend : IWindowBackend
         _panPoint = new Point(x, y);
         _panScreenPoint = new Point(screenX, screenY);
         _panModifiers = modifiers;
-        RecordPanSample(deltaXDip, deltaYDip);
+        RecordPanSample(deltaXDip, deltaYDip, timeStampMs);
         SendPan(deltaXDip, deltaYDip);
     }
 
@@ -293,8 +299,8 @@ internal sealed class BrowserWindowBackend : IWindowBackend
         // it is worth forwarding, and only the part actually sent is taken out of the bank.
         _panBankX += deltaXDip;
         _panBankY += deltaYDip;
-        double sendX = Math.Abs(_panBankX) >= MIN_PAN_STEP_DIP ? _panBankX : 0;
-        double sendY = Math.Abs(_panBankY) >= MIN_PAN_STEP_DIP ? _panBankY : 0;
+        double sendX = Math.Abs(_panBankX) >= MinPanStepDip ? _panBankX : 0;
+        double sendY = Math.Abs(_panBankY) >= MinPanStepDip ? _panBankY : 0;
         if (sendX == 0 && sendY == 0)
         {
             // Banked, not refused: the movement is still owed and the next call carries it.
@@ -328,11 +334,10 @@ internal sealed class BrowserWindowBackend : IWindowBackend
         return handler != null;
     }
 
-    private void RecordPanSample(double deltaXDip, double deltaYDip)
+    private void RecordPanSample(double deltaXDip, double deltaYDip, double timeStampMs)
     {
-        long now = Stopwatch.GetTimestamp();
-        double seconds = _panSampleTicks == 0 ? 0 : (now - _panSampleTicks) / (double)Stopwatch.Frequency;
-        _panSampleTicks = now;
+        double seconds = double.IsNaN(_panSampleTimeMs) ? 0 : Math.Max(0, timeStampMs - _panSampleTimeMs) / 1000.0;
+        _panSampleTimeMs = timeStampMs;
         _panSamples[_panSampleNext] = new PanSample(deltaXDip, deltaYDip, seconds);
         _panSampleNext = (_panSampleNext + 1) % FLING_SAMPLE_CAPACITY;
         if (_panSampleCount < FLING_SAMPLE_CAPACITY)
@@ -345,18 +350,18 @@ internal sealed class BrowserWindowBackend : IWindowBackend
     {
         _panSampleCount = 0;
         _panSampleNext = 0;
-        _panSampleTicks = 0;
+        _panSampleTimeMs = double.NaN;
     }
 
     /// <summary>True while a released pan is still coasting.</summary>
     internal bool IsFlinging => _flinging;
 
     /// <summary>Lets a finished pan coast, from the speed the finger left it with.</summary>
-    internal void StartFling()
+    internal void StartFling(double nowMs)
     {
         if (!_shown || _disposed) return;
 
-        bool estimated = TryEstimateVelocity(out double velocityX, out double velocityY);
+        bool estimated = TryEstimateVelocity(nowMs, out double velocityX, out double velocityY);
         ClearPanSamples();
         if (!estimated)
         {
@@ -364,7 +369,7 @@ internal sealed class BrowserWindowBackend : IWindowBackend
         }
 
         double speed = Math.Sqrt((velocityX * velocityX) + (velocityY * velocityY));
-        if (speed < FLING_END_SPEED_DIP)
+        if (speed < FlingEndSpeedDip)
         {
             return;
         }
@@ -381,7 +386,7 @@ internal sealed class BrowserWindowBackend : IWindowBackend
         _host.RequestFrame();
     }
 
-    private bool TryEstimateVelocity(out double velocityX, out double velocityY)
+    private bool TryEstimateVelocity(double nowMs, out double velocityX, out double velocityY)
     {
         velocityX = 0;
         velocityY = 0;
@@ -392,7 +397,7 @@ internal sealed class BrowserWindowBackend : IWindowBackend
 
         // A finger that came to rest before lifting leaves nothing but stale samples. That is a
         // hold, and reading the earlier movement would throw content the user had already parked.
-        double idle = (Stopwatch.GetTimestamp() - _panSampleTicks) / (double)Stopwatch.Frequency;
+        double idle = Math.Max(0, nowMs - _panSampleTimeMs) / 1000.0;
         if (idle > FLING_SAMPLE_WINDOW_SECONDS)
         {
             return false;
@@ -468,7 +473,7 @@ internal sealed class BrowserWindowBackend : IWindowBackend
     {
         double elapsed = Math.Max(0, frameTimeMs - _flingStartMs) / 1000.0;
         double remaining = Math.Pow(FLING_DECAY_PER_SECOND, elapsed);
-        if (_flingSpeed * remaining < FLING_END_SPEED_DIP)
+        if (_flingSpeed * remaining < FlingEndSpeedDip)
         {
             StopFling();
             return false;

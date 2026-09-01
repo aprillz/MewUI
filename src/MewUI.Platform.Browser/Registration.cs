@@ -97,11 +97,11 @@ public static class BrowserPlatform
 
     /// <summary>Scrolls the element under the point by a finger delta in DIPs, tracking it one to one.</summary>
     public static void PointerPan(double x, double y, double screenX, double screenY,
-        double deltaXDip, double deltaYDip, ModifierKeys modifiers)
-        => BrowserPlatformHost.Active?.PointerPan(x, y, screenX, screenY, deltaXDip, deltaYDip, modifiers);
+        double deltaXDip, double deltaYDip, ModifierKeys modifiers, double timeStampMs)
+        => BrowserPlatformHost.Active?.PointerPan(x, y, screenX, screenY, deltaXDip, deltaYDip, modifiers, timeStampMs);
 
     /// <summary>Lets a finished touch pan coast, from the speed the finger left it with.</summary>
-    public static void PointerPanRelease() => BrowserPlatformHost.Active?.PointerPanRelease();
+    public static void PointerPanRelease(double timeStampMs) => BrowserPlatformHost.Active?.PointerPanRelease(timeStampMs);
 
     public static void PointerLeave() => BrowserPlatformHost.Active?.PointerLeave();
     public static void PointerCancel() => BrowserPlatformHost.Active?.PointerCancel();
