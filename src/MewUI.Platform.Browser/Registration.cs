@@ -98,6 +98,15 @@ public static class BrowserPlatform
     public static bool KeyUp(string code, int platformKey, ModifierKeys modifiers)
         => BrowserPlatformHost.Active?.KeyUp(code, platformKey, modifiers) == true;
 
+    /// <summary>Starts an IME composition; the control shows the pre-edit until it ends.</summary>
+    public static void CompositionStart() => BrowserPlatformHost.Active?.CompositionStart();
+
+    /// <summary>Replaces the pre-edit text of the running composition.</summary>
+    public static void CompositionUpdate(string text) => BrowserPlatformHost.Active?.CompositionUpdate(text);
+
+    /// <summary>Ends the composition, committing the text it carries.</summary>
+    public static void CompositionEnd(string text) => BrowserPlatformHost.Active?.CompositionEnd(text);
+
     public static bool TextInput(string text)
         => BrowserPlatformHost.Active?.TextInput(text) == true;
 

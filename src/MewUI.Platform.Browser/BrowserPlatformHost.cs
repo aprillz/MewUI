@@ -200,6 +200,12 @@ internal sealed class BrowserPlatformHost : IPlatformHost
     internal bool KeyUp(string code, int platformKey, ModifierKeys modifiers)
         => RoutePointer(() => _window?.KeyUp(code, platformKey, modifiers) == true);
 
+    internal void CompositionStart() => RoutePointer(() => { _window?.CompositionStart(); return false; });
+
+    internal void CompositionUpdate(string text) => RoutePointer(() => { _window?.CompositionUpdate(text); return false; });
+
+    internal void CompositionEnd(string text) => RoutePointer(() => { _window?.CompositionEnd(text); return false; });
+
     internal bool TextInput(string text)
         => RoutePointer(() => _window?.TextInput(text) == true);
 

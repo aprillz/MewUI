@@ -68,7 +68,42 @@ internal sealed class BrowserWindowBackend : IWindowBackend
     public void SetAllowsTransparency(bool allowsTransparency) { }
     public void SetCursor(CursorType cursorType) { }
     public void SetImeMode(Input.ImeMode mode) { }
-    public void CancelImeComposition() { }
+    // The page cancels its own composition on the hidden field; the host clears what the control
+    // is showing so a discarded pre-edit does not stay on screen.
+    public void CancelImeComposition() => CompositionEnd(string.Empty);
+
+    internal void CompositionStart()
+    {
+        if (!_shown || _disposed) return;
+        var args = new TextCompositionEventArgs();
+        Window.RaisePreviewTextCompositionStart(args);
+        if (!args.Handled && Window.FocusManager.FocusedElement is ITextCompositionClient client)
+        {
+            client.HandleTextCompositionStart(args);
+        }
+    }
+
+    internal void CompositionUpdate(string text)
+    {
+        if (!_shown || _disposed) return;
+        var args = new TextCompositionEventArgs(text);
+        Window.RaisePreviewTextCompositionUpdate(args);
+        if (!args.Handled && Window.FocusManager.FocusedElement is ITextCompositionClient client)
+        {
+            client.HandleTextCompositionUpdate(args);
+        }
+    }
+
+    internal void CompositionEnd(string text)
+    {
+        if (!_shown || _disposed) return;
+        var args = new TextCompositionEventArgs(text);
+        Window.RaisePreviewTextCompositionEnd(args);
+        if (!args.Handled && Window.FocusManager.FocusedElement is ITextCompositionClient client)
+        {
+            client.HandleTextCompositionEnd(args);
+        }
+    }
 
     internal bool PointerMove(double x, double y, double screenX, double screenY, int buttons, ModifierKeys modifiers)
     {
