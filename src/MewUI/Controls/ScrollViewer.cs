@@ -598,7 +598,12 @@ public sealed class ScrollViewer : ContentControl
     private void ScrollAxisByNotches(int axis, double notches)
     {
         double dip = notches * Theme.Metrics.ScrollWheelStep;
-        if (Math.Abs(dip) < 0.5)
+
+        // A movement smaller than one device pixel cannot change what is on screen. Measuring that
+        // in DIPs instead would be right only at 200% scale: at 300% it discards movement worth one
+        // and a half pixels, which a slow drag or a coasting scroll does show.
+        double dpiScale = DpiScale > 0 ? DpiScale : 1;
+        if (Math.Abs(dip) * dpiScale < 1)
         {
             return;
         }
