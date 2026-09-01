@@ -21,9 +21,13 @@
     @media (prefers-color-scheme: dark) { body { background: #202124; } }
     #status { position: fixed; right: 8px; bottom: 8px; padding: 4px 7px; color: white;
       background: rgba(0, 0, 0, .65); font: 12px sans-serif; pointer-events: none; }
-    /* Kept on-screen and sized so the browser still treats it as a live IME target. */
-    #textinput { position: fixed; top: 0; left: 0; width: 1px; height: 1px; opacity: 0;
-      border: 0; padding: 0; outline: none; background: transparent; color: transparent; }
+    /* Kept on-screen and sized so the browser still treats it as a live IME target, and moved onto
+       the caret by main.js so the IME draws its candidates there. A width the pre-edit fits in is
+       what lets the browser lay its own composition UI out; pointer-events keeps the box, which
+       covers part of the canvas, from taking a click meant for the app. */
+    #textinput { position: fixed; top: 0; left: 0; width: 200px; height: 1px; opacity: 0;
+      pointer-events: none; border: 0; padding: 0; outline: none; background: transparent;
+      color: transparent; }
   </style>
 </head>
 <body class="notranslate">

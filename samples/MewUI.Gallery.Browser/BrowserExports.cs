@@ -9,7 +9,14 @@ internal static partial class BrowserExports
     [JSImport("writeClipboard", "main.js")]
     internal static partial void WriteClipboard(string text);
 
-    static BrowserExports() => BrowserPlatform.ClipboardWriter = WriteClipboard;
+    [JSImport("moveTextInput", "main.js")]
+    internal static partial void MoveTextInput(double x, double y, double height);
+
+    static BrowserExports()
+    {
+        BrowserPlatform.ClipboardWriter = WriteClipboard;
+        BrowserPlatform.CaretReporter = MoveTextInput;
+    }
 
 
     /// <summary>Draws one frame; false means nothing changed and the page may stop scheduling.</summary>
@@ -59,6 +66,9 @@ internal static partial class BrowserExports
     internal static void PointerPan(double x, double y, double screenX, double screenY,
         double deltaX, double deltaY, int modifiers)
         => BrowserPlatform.PointerPan(x, y, screenX, screenY, deltaX, deltaY, (ModifierKeys)modifiers);
+
+    [JSExport]
+    internal static void SyncTextCaret() => BrowserPlatform.SyncTextCaret();
 
     [JSExport]
     internal static void PointerPanRelease() => BrowserPlatform.PointerPanRelease();
