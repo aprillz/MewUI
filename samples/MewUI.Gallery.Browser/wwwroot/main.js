@@ -252,6 +252,10 @@ function syncTextInputFocus() {
 
 let composing = false;
 
+// A soft keyboard reports 229 or no code at all, which is how an edit intent is told apart from a
+// hardware key that already delivered itself.
+let softKeyboardKey = false;
+
 // Set by a held-back paste shortcut, so the replay carries the modifier the user actually pressed.
 // A paste from the operating system menu leaves it null and falls back to the primary modifier.
 let pendingPasteModifiers = null;
@@ -274,6 +278,7 @@ textInput.addEventListener('paste', event => {
 
 window.addEventListener('keydown', event => {
     wake();
+    softKeyboardKey = !event.code || event.code === 'Unidentified' || event.keyCode === 229;
     if (composing) {
         return;
     }
@@ -302,14 +307,42 @@ window.addEventListener('keyup', event => {
     }
 });
 
-textInput.addEventListener('compositionstart', () => { composing = true; });
+// The pre-edit is routed rather than only its result, so a composing control shows the text being
+// built. Ending the composition commits what it carries, which is why no text input follows it.
+textInput.addEventListener('compositionstart', () => { wake(); composing = true; app.CompositionStart(); });
+textInput.addEventListener('compositionupdate', event => { wake(); app.CompositionUpdate(event.data ?? ''); });
 textInput.addEventListener('compositionend', event => {
     wake();
     composing = false;
-    if (event.data) {
-        app.TextInput(event.data);
-    }
+    app.CompositionEnd(event.data ?? '');
     textInput.value = '';
+});
+
+// A soft keyboard reports edits by intent rather than by key: it sends no usable key code, so the
+// editing ones are turned back into the key the control expects. A hardware key already delivered
+// its own keydown, and re-sending it here would apply the edit twice.
+const EDIT_INTENT_KEYS = {
+    deleteContentBackward: 'Backspace',
+    deleteContentForward: 'Delete',
+    deleteWordBackward: 'Backspace',
+    insertLineBreak: 'Enter',
+    insertParagraph: 'Enter',
+};
+
+textInput.addEventListener('beforeinput', event => {
+    if (event.isComposing || !softKeyboardKey) {
+        return;
+    }
+
+    const key = EDIT_INTENT_KEYS[event.inputType];
+    if (key === undefined) {
+        return;
+    }
+
+    wake();
+    app.KeyDown(key, 0, 0, false);
+    app.KeyUp(key, 0, 0);
+    event.preventDefault();
 });
 
 textInput.addEventListener('input', event => {
