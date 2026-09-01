@@ -128,6 +128,13 @@ internal sealed class BrowserPlatformHost : IPlatformHost
             _dispatcher?.ClearWakeRequest();
             _dispatcher?.ProcessWorkItems();
 
+            // A coasting scroll has to move before the frame is drawn, and it keeps the loop awake
+            // for as long as it lasts: a step small enough to be banked draws nothing by itself.
+            if (_window.AdvanceFling())
+            {
+                _framePending = true;
+            }
+
             // Sizing the drawing buffer discards its contents, so a frame that resized it must
             // paint: returning without drawing would leave the cleared buffer on screen.
             if (pixelWidth != _lastPixelWidth || pixelHeight != _lastPixelHeight)
@@ -190,6 +197,8 @@ internal sealed class BrowserPlatformHost : IPlatformHost
             _window?.PointerPan(x, y, screenX, screenY, deltaXDip, deltaYDip, modifiers);
             return false;
         });
+
+    internal void PointerPanRelease() => RoutePointer(() => { _window?.StartFling(); return false; });
 
     internal void PointerLeave() => RoutePointer(() => { _window?.PointerLeave(); return false; });
     internal void PointerCancel() => RoutePointer(() => { _window?.PointerCancel(); return false; });
