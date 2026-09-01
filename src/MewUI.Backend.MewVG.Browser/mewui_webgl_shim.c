@@ -113,3 +113,48 @@ EM_JS(int, mewui_text_rasterize, (const char* utf8_text, const char* utf8_font, 
     HEAPU8.set(image.data, out_pixels);
     return 1;
 });
+
+// Draws one run straight into the given GL texture: the canvas is handed to texSubImage2D as the
+// pixel source, so the readback and both copies the pixels used to make on their way back to the
+// GPU do not happen. The parameter list matches mewui_text_rasterize exactly, unused arguments
+// included, so both share one interop signature; a shape without a trampoline aborts the runtime.
+EM_JS(int, mewui_text_draw_to_texture, (const char* utf8_text, const char* utf8_font, int width_px, int height_px,
+    double scale, int red, int green, int blue, int alpha, int h_align, int v_align, int wrap,
+    unsigned int texture), {
+    mewui_text_ensure_context();
+    var canvas = Module.mewuiTextCanvas;
+    var ctx = Module.mewuiTextCtx;
+    if (canvas.width < width_px || canvas.height < height_px)
+    {
+        canvas.width = Math.max(canvas.width, width_px);
+        canvas.height = Math.max(canvas.height, height_px);
+        Module.mewuiTextFont = null;
+    }
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, width_px, height_px);
+    var f = UTF8ToString(utf8_font);
+    if (Module.mewuiTextFont !== f) { ctx.font = f; ctx.textBaseline = "alphabetic"; Module.mewuiTextFont = f; }
+    ctx.fillStyle = "rgba(" + red + "," + green + "," + blue + "," + (alpha / 255) + ")";
+    var ascent = ctx.measureText("Mg").fontBoundingBoxAscent || 0;
+    ctx.scale(scale, scale);
+    ctx.fillText(UTF8ToString(utf8_text), 0, ascent);
+
+    var handle = GL.textures[texture];
+    if (!handle) { return 0; }
+
+    // The renderer sets the unpack rows and alignment it needs before each of its own uploads, so
+    // nothing has to be saved here; the two WebGL-only parameters apply to uploads from a DOM
+    // source alone, which the renderer never does, and are stated so nothing is inherited. Not
+    // premultiplying keeps the straight alpha the readback used to produce, so the image flags on
+    // the managed side stay as they were.
+    GLctx.pixelStorei(GLctx.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    GLctx.pixelStorei(GLctx.UNPACK_FLIP_Y_WEBGL, false);
+    GLctx.bindTexture(GLctx.TEXTURE_2D, handle);
+
+    // Only the band the run occupies, not the whole canvas the widest run so far grew it to.
+    GLctx.texSubImage2D(GLctx.TEXTURE_2D, 0, 0, 0, width_px, height_px,
+        GLctx.RGBA, GLctx.UNSIGNED_BYTE, canvas);
+    GLctx.bindTexture(GLctx.TEXTURE_2D, null);
+    return 1;
+});
