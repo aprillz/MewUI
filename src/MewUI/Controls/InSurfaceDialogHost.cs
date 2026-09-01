@@ -18,6 +18,10 @@ internal sealed class InSurfaceDialogHost : UIElement, IVisualTreeHost
     private const double SHADOW_BLUR = 16;
     private const double SHADOW_OFFSET_Y = 4;
 
+    // Without a static constructor the type is beforefieldinit, and nothing reads the field below,
+    // so the registration can still be pending when the caption button resolves its style name.
+    static InSurfaceDialogHost() { }
+
     private static readonly bool _closeButtonStyleRegistered =
         FrameworkNamedStyles.Register(CLOSE_BUTTON_STYLE, CreateCloseButtonStyle);
 
