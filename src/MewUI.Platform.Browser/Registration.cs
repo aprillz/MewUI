@@ -47,8 +47,8 @@ public static class BrowserPlatform
     }
 
     /// <summary>Draws one frame; false means nothing changed and the caller may idle.</summary>
-    public static bool RenderFrame(double cssWidth, double cssHeight, double devicePixelRatio, int pixelWidth, int pixelHeight)
-        => BrowserPlatformHost.Active?.RenderFrame(cssWidth, cssHeight, devicePixelRatio, pixelWidth, pixelHeight) == true;
+    public static bool RenderFrame(double cssWidth, double cssHeight, double devicePixelRatio, int pixelWidth, int pixelHeight, double frameTimeMs)
+        => BrowserPlatformHost.Active?.RenderFrame(cssWidth, cssHeight, devicePixelRatio, pixelWidth, pixelHeight, frameTimeMs) == true;
 
     /// <summary>Milliseconds until a scheduled timer needs the loop again, or -1 when nothing is due.</summary>
     public static int NextWakeDelayMs() => BrowserPlatformHost.Active?.NextWakeDelayMs() ?? -1;

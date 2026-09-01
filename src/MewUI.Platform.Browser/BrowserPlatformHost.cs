@@ -108,6 +108,13 @@ internal sealed class BrowserPlatformHost : IPlatformHost
             return -1;
         }
 
+        // A coast has no dispatcher timer behind it, so a frame that drew nothing would let the loop
+        // sleep with nothing scheduled to bring it back and leave the content stopped mid-flight.
+        if (_window?.IsFlinging == true)
+        {
+            return 0;
+        }
+
         int timeout = _dispatcher.GetPollTimeoutMs(MAX_WAKE_DELAY_MS);
         return timeout >= MAX_WAKE_DELAY_MS ? -1 : timeout;
     }
@@ -116,7 +123,7 @@ internal sealed class BrowserPlatformHost : IPlatformHost
     /// Runs one animation frame. Returns false when nothing needed drawing, so the host page can
     /// stop scheduling frames until something asks for one.
     /// </summary>
-    internal bool RenderFrame(double cssWidth, double cssHeight, double devicePixelRatio, int pixelWidth, int pixelHeight)
+    internal bool RenderFrame(double cssWidth, double cssHeight, double devicePixelRatio, int pixelWidth, int pixelHeight, double frameTimeMs)
     {
         if (!_running || _window == null)
         {
@@ -130,7 +137,7 @@ internal sealed class BrowserPlatformHost : IPlatformHost
 
             // A coasting scroll has to move before the frame is drawn, and it keeps the loop awake
             // for as long as it lasts: a step small enough to be banked draws nothing by itself.
-            if (_window.AdvanceFling())
+            if (_window.AdvanceFling(frameTimeMs))
             {
                 _framePending = true;
             }

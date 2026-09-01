@@ -53,7 +53,7 @@ internal sealed class BrowserWindowBackend : IWindowBackend
     private double _flingDirectionX;
     private double _flingDirectionY;
     private double _flingSentDistance;
-    private long _flingStartTicks;
+    private double _flingStartMs;
     private bool _advancingFling;
     private bool _swallowTouchRelease;
 
@@ -348,6 +348,9 @@ internal sealed class BrowserWindowBackend : IWindowBackend
         _panSampleTicks = 0;
     }
 
+    /// <summary>True while a released pan is still coasting.</summary>
+    internal bool IsFlinging => _flinging;
+
     /// <summary>Lets a finished pan coast, from the speed the finger left it with.</summary>
     internal void StartFling()
     {
@@ -371,7 +374,10 @@ internal sealed class BrowserWindowBackend : IWindowBackend
         _flingDirectionX = velocityX / speed;
         _flingDirectionY = velocityY / speed;
         _flingSentDistance = 0;
-        _flingStartTicks = Stopwatch.GetTimestamp();
+
+        // The curve is timed off the frame clock, which the release is not on, so the first frame
+        // stamps the start. Dropping the wait between the two costs nothing and keeps one clock.
+        _flingStartMs = double.NaN;
         _host.RequestFrame();
     }
 
@@ -419,8 +425,12 @@ internal sealed class BrowserWindowBackend : IWindowBackend
         return true;
     }
 
-    /// <summary>Moves an active coast on for this frame; false means it is over.</summary>
-    internal bool AdvanceFling()
+    /// <summary>
+    /// Moves an active coast on for this frame, timed by <paramref name="frameTimeMs"/>; false means
+    /// it is over. The frame clock is what the page will present, so reading a wall clock here
+    /// instead would let the step jitter with however long the frame took to reach this point.
+    /// </summary>
+    internal bool AdvanceFling(double frameTimeMs)
     {
         // Driving the scroll runs application code, and a frame started from inside that would read
         // the distance already sent before this call finishes writing it.
@@ -431,10 +441,15 @@ internal sealed class BrowserWindowBackend : IWindowBackend
             return false;
         }
 
+        if (double.IsNaN(_flingStartMs))
+        {
+            _flingStartMs = frameTimeMs;
+        }
+
         _advancingFling = true;
         try
         {
-            return AdvanceFlingStep();
+            return AdvanceFlingStep(frameTimeMs);
         }
         catch
         {
@@ -449,9 +464,9 @@ internal sealed class BrowserWindowBackend : IWindowBackend
         }
     }
 
-    private bool AdvanceFlingStep()
+    private bool AdvanceFlingStep(double frameTimeMs)
     {
-        double elapsed = (Stopwatch.GetTimestamp() - _flingStartTicks) / (double)Stopwatch.Frequency;
+        double elapsed = Math.Max(0, frameTimeMs - _flingStartMs) / 1000.0;
         double remaining = Math.Pow(FLING_DECAY_PER_SECOND, elapsed);
         if (_flingSpeed * remaining < FLING_END_SPEED_DIP)
         {
