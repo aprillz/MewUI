@@ -20,14 +20,44 @@ internal sealed class InSurfaceDialogHost : UIElement, IVisualTreeHost
         _dialog = dialog;
 
         // The chrome draws a shadow and expects its child to paint itself, which a dialog's content
-        // never had to do while its window painted behind it.
-        var surface = new Border { Child = content, Background = dialog.EffectiveOpaqueBackground };
+        // never had to do while its window painted behind it. A caption stands in for the title bar
+        // the dialog would have had, so it still reads as a window and can be dismissed without a
+        // button of its own.
+        var surface = new Border { Child = BuildSurface(dialog, content) }
+            .WithTheme((_, border) => border.Background = dialog.EffectiveOpaqueBackground);
         _chrome = new PopupChrome(surface);
         Parent = owner;
         _chrome.Parent = this;
     }
 
     internal Window Dialog => _dialog;
+
+    private static UIElement BuildSurface(Window dialog, UIElement content)
+    {
+        if (string.IsNullOrEmpty(dialog.Title))
+        {
+            return content;
+        }
+
+        var title = new TextBlock()
+            .Text(dialog.Title!)
+            .Bold()
+            .CenterVertical()
+            .Margin(new Thickness(12, 8, 8, 8));
+
+        var close = new Button()
+            .Content("✕")
+            .CenterVertical()
+            .Margin(new Thickness(0, 4, 4, 4))
+            .OnClick(dialog.Close);
+
+        var caption = new Border
+        {
+            Child = new DockPanel().Children(close.DockRight(), title),
+        }.WithTheme((theme, border) => border.Background = theme.Palette.ControlBackground);
+
+        return new DockPanel().Children(caption.DockTop(), content);
+    }
 
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor) => visitor(_chrome);
 
