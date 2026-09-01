@@ -1,12 +1,27 @@
+const canvas = document.getElementById('canvas');
+const status = document.getElementById('status');
+const textInput = document.getElementById('textinput');
+
+// A device that cannot boot at all (an old WebAssembly engine, WebGL2 refused, a fetch that never
+// arrives) otherwise dies with nothing but a devtools console it may not have. The hooks go in
+// before the first await so even the runtime import failing lands on the label.
+function reportFatal(stage, error) {
+    const detail = error && (error.message || error.reason && error.reason.message || error.reason) || error;
+    status.textContent = `${stage} failed: ${String(detail).slice(0, 400)}`;
+    status.style.background = 'rgba(150, 18, 34, .92)';
+}
+
+let bootStage = 'Loading .NET runtime';
+status.textContent = bootStage + '...';
+window.addEventListener('error', event => reportFatal(bootStage, event.error ?? event.message));
+window.addEventListener('unhandledrejection', event => reportFatal(bootStage, event.reason));
+
 // dotnet.js is the one asset the SDK leaves unfingerprinted, and it carries the hashed names of
 // every other asset. A host that caches it hands an old manifest to a new deploy, so the runtime
 // requests files that no longer exist. Pages offers no cache headers, so this file's own version
 // query is carried over to pin both halves of the loader to the same deploy.
 const { dotnet } = await import(`./_framework/dotnet.js${new URL(import.meta.url).search}`);
-
-const canvas = document.getElementById('canvas');
-const status = document.getElementById('status');
-const textInput = document.getElementById('textinput');
+bootStage = 'Starting runtime';
 let pixelConfirmed = false;
 let frameErrorCount = 0;
 const MAX_LOGGED_FRAME_ERRORS = 5;
@@ -65,7 +80,12 @@ const darkScheme = window.matchMedia('(prefers-color-scheme: dark)');
 app.SetSystemDarkMode(darkScheme.matches);
 darkScheme.addEventListener('change', event => { wake(); app.SetSystemDarkMode(event.matches); });
 
-const runPromise = runMain(config.mainAssemblyName, []);
+bootStage = 'Starting app';
+status.textContent = bootStage + '...';
+
+// A managed startup failure (WebGL2 refused, an unsupported wasm feature) surfaces here rather
+// than as an unobserved rejection.
+const runPromise = runMain(config.mainAssemblyName, []).catch(error => reportFatal(bootStage, error));
 
 const MODIFIER_CONTROL = 1;
 const MODIFIER_SHIFT = 2;
