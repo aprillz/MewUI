@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Rendering.OpenGL;
 
@@ -12,7 +13,12 @@ internal sealed partial class MewVGWin32GraphicsContext
     private readonly MewVGGLOffscreenSurface? _offscreen;
     private readonly IMewVGOffscreenSurfaceProvider? _offscreenProvider;
     private readonly OpenGLPixelRenderSurface? _pixelSurface;
-    private BrowserTextCache? _ownedTextCache;
+
+    // Offscreen surfaces are pooled and handed out again, but a context is built for each pass. A
+    // cache owned by the context is therefore thrown away while the surface it drew into lives on,
+    // so every pass re-rasterizes text the previous one already had. Keying the cache off the
+    // surface is what the desktop backends do, where the pooled surface carries the cache itself.
+    private static readonly ConditionalWeakTable<MewVGGLOffscreenSurface, BrowserTextCache> _offscreenTextCaches = new();
 
     internal MewVGWin32GraphicsContext(BrowserWindowResources resources)
     {
@@ -126,8 +132,6 @@ internal sealed partial class MewVGWin32GraphicsContext
 
     partial void DestroyPlatform()
     {
-        _ownedTextCache?.Dispose();
-        _ownedTextCache = null;
         if (_pixelSurface != null)
         {
             _offscreenProvider!.ReturnSurface(_offscreen!);
@@ -203,9 +207,10 @@ internal sealed partial class MewVGWin32GraphicsContext
             return;
         }
 
-        // The window path shares one cache across context recreations; an offscreen pass keeps its
-        // own because those images belong to the pooled renderer.
-        var cache = _resources?.TextCache ?? (_ownedTextCache ??= new BrowserTextCache(_vg));
+        // The window path shares one cache across context recreations; an offscreen pass shares the
+        // one its pooled surface carries.
+        var cache = _resources?.TextCache
+            ?? _offscreenTextCaches.GetValue(_offscreen!, surface => new BrowserTextCache(surface.Vg));
         int imageId = cache.GetOrCreateImage(
             text, layout, BrowserFont.CssFontFor(format.Font), widthPx, heightPx, DpiScale, color);
         if (imageId == 0)
