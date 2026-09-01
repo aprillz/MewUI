@@ -120,14 +120,26 @@ canvas.addEventListener('pointermove', event => {
         return;
     }
 
-    if (gesture !== null && Math.hypot(point.x - gesture.startX, point.y - gesture.startY) > TOUCH_PAN_THRESHOLD_PX) {
-        // Nothing took the press, so abandon it rather than leaving the control under the finger
-        // pressed, and spend the rest of the gesture scrolling.
-        gesture.panning = true;
-        gesture.lastX = point.x;
-        gesture.lastY = point.y;
-        app.PointerCancel();
-        return;
+    if (gesture !== null) {
+        const travelX = point.x - gesture.startX;
+        const travelY = point.y - gesture.startY;
+        const travel = Math.hypot(travelX, travelY);
+        if (travel > TOUCH_PAN_THRESHOLD_PX) {
+            // Nothing took the press, so abandon it rather than leaving the control under the finger
+            // pressed, and spend the rest of the gesture scrolling. Only the threshold itself is
+            // given up: anchoring at the crossing point instead would drop this whole move, which
+            // is what made a gesture travel less than the finger did.
+            const consumed = TOUCH_PAN_THRESHOLD_PX / travel;
+            gesture.panning = true;
+            gesture.lastX = gesture.startX + travelX * consumed;
+            gesture.lastY = gesture.startY + travelY * consumed;
+            app.PointerCancel();
+            app.PointerPan(gesture.startX, gesture.startY, event.screenX, event.screenY,
+                point.x - gesture.lastX, point.y - gesture.lastY, modifiersOf(event));
+            gesture.lastX = point.x;
+            gesture.lastY = point.y;
+            return;
+        }
     }
 
     app.PointerMove(point.x, point.y, event.screenX, event.screenY, event.buttons, modifiersOf(event));
