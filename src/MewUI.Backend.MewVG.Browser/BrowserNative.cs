@@ -28,6 +28,11 @@ internal static partial class BrowserNative
         int red, int green, int blue, int alpha, int horizontalAlignment, int verticalAlignment, int wrap,
         nint pixels);
 
+    [LibraryImport(LibraryName, EntryPoint = "mewui_text_draw_to_texture", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int DrawTextToTexture(string text, string cssFont, int widthPx, int heightPx, double scale,
+        int red, int green, int blue, int alpha, int horizontalAlignment, int verticalAlignment, int wrap,
+        nint texture);
+
     [LibraryImport(LibraryName)]
     internal static partial void mewui_sig_viiiiiiiii(int arg0, int arg1, int arg2, int arg3, int arg4, int arg5, int arg6, int arg7, int arg8);
 

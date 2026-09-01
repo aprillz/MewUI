@@ -1,5 +1,3 @@
-using System.Buffers;
-using System.Runtime.InteropServices;
 using Aprillz.MewUI.Text;
 using Aprillz.MewVG;
 
@@ -61,35 +59,30 @@ internal sealed class BrowserTextCache : IDisposable
 
     private int Rasterize(string text, string cssFont, int widthPx, int heightPx, double scale, Color color)
     {
-        var byteCount = widthPx * heightPx * 4;
-        var buffer = ArrayPool<byte>.Shared.Rent(byteCount);
-        try
+        // Storage only: the run is drawn straight into the texture on the JS side, so the pixels
+        // never visit a managed buffer. Canvas2D content stays straight alpha across that upload,
+        // so the flag stays off and the shader premultiplies, as it did for the readback path.
+        var imageId = _vg.CreateImageRGBA(widthPx, heightPx, NVGimageFlags.None, ReadOnlySpan<byte>.Empty);
+        if (imageId == 0)
         {
-            var handle = GCHandle.Alloc(buffer, GCHandleType.Pinned);
-            try
-            {
-                var lines = BrowserNative.RasterizeText(
-                    text, cssFont, widthPx, heightPx, scale,
-                    color.R, color.G, color.B, color.A,
-                    0, 0, 0,
-                    handle.AddrOfPinnedObject());
-                if (lines <= 0)
-                {
-                    return 0;
-                }
-            }
-            finally
-            {
-                handle.Free();
-            }
+            return 0;
+        }
 
-            // Canvas2D hands back straight alpha, so the flag stays off and the shader premultiplies.
-            return _vg.CreateImageRGBA(widthPx, heightPx, NVGimageFlags.None, buffer.AsSpan(0, byteCount));
-        }
-        finally
+        int texture = _vg.ImageHandle(imageId);
+        int drawn = texture == 0
+            ? 0
+            : BrowserNative.DrawTextToTexture(
+                text, cssFont, widthPx, heightPx, scale,
+                color.R, color.G, color.B, color.A,
+                0, 0, 0,
+                texture);
+        if (drawn <= 0)
         {
-            ArrayPool<byte>.Shared.Return(buffer);
+            _vg.DeleteImage(imageId);
+            return 0;
         }
+
+        return imageId;
     }
 
     public void Dispose()
