@@ -1,3 +1,4 @@
+using Aprillz.MewUI.Animation;
 using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
@@ -21,10 +22,13 @@ internal sealed class InSurfaceDialogHost : UIElement, IVisualTreeHost
         FrameworkNamedStyles.Register(CLOSE_BUTTON_STYLE, CreateCloseButtonStyle);
 
     // Dimming behind a modal is not a themed colour anywhere else, so it is stated here.
-    private static readonly Color _scrim = Color.FromArgb(96, 0, 0, 0);
+    private const byte SCRIM_ALPHA = 96;
+    private const int SCRIM_FADE_MS = 140;
 
     private readonly Window _dialog;
     private readonly ShadowDecorator _shadow;
+    private readonly AnimationClock _scrimClock;
+    private double _scrimProgress;
 
     internal InSurfaceDialogHost(Window dialog, UIElement content, Window owner)
     {
@@ -32,7 +36,25 @@ internal sealed class InSurfaceDialogHost : UIElement, IVisualTreeHost
         _shadow = BuildChrome(dialog, content);
         Parent = owner;
         _shadow.Parent = this;
+
+        // The owner does not move or dim on its own here the way a disabled window does, so the
+        // dimming appearing in one frame reads as the whole page having been repainted.
+        _scrimClock = new AnimationClock(TimeSpan.FromMilliseconds(SCRIM_FADE_MS), Easing.Default).AttachTo(this);
+        _scrimClock.TickCallback = OnScrimTick;
+        _scrimClock.Start();
     }
+
+    private void OnScrimTick(double easedProgress)
+    {
+        _scrimProgress = easedProgress;
+        InvalidateVisual();
+    }
+
+    /// <summary>
+    /// Releases the fade before the host leaves the overlay. A running clock holds the render loop
+    /// awake and keeps invalidating an element nothing draws any more.
+    /// </summary>
+    internal void Detach() => _scrimClock.Stop();
 
     internal Window Dialog => _dialog;
 
@@ -185,7 +207,7 @@ internal sealed class InSurfaceDialogHost : UIElement, IVisualTreeHost
 
     protected override void OnRender(IGraphicsContext context)
     {
-        context.FillRectangle(Bounds, _scrim);
+        context.FillRectangle(Bounds, Color.FromArgb((byte)(SCRIM_ALPHA * _scrimProgress), 0, 0, 0));
         _shadow.Render(context);
     }
 }
