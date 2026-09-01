@@ -6,6 +6,12 @@ namespace Aprillz.MewUI.Gallery;
 [SupportedOSPlatform("browser")]
 internal static partial class BrowserExports
 {
+    [JSImport("writeClipboard", "main.js")]
+    internal static partial void WriteClipboard(string text);
+
+    static BrowserExports() => BrowserPlatform.ClipboardWriter = WriteClipboard;
+
+
     /// <summary>Draws one frame; false means nothing changed and the page may stop scheduling.</summary>
     [JSExport]
     internal static bool RenderFrame(
@@ -41,6 +47,10 @@ internal static partial class BrowserExports
 
     [JSExport]
     internal static void SetSystemDarkMode(bool isDark) => BrowserPlatform.SetSystemDarkMode(isDark);
+
+    /// <summary>Records the text a paste gesture carried, before the paste is routed on.</summary>
+    [JSExport]
+    internal static void SetClipboardText(string text) => BrowserPlatform.SetClipboardText(text);
 
     [JSExport]
     internal static bool WantsTextInput() => BrowserPlatform.WantsTextInput();
