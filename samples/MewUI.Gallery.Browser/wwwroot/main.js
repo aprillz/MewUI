@@ -10,6 +10,9 @@ const textInput = document.getElementById('textinput');
 let pixelConfirmed = false;
 let frameErrorCount = 0;
 const MAX_LOGGED_FRAME_ERRORS = 5;
+
+// Floor for the IME field, so a caret near the right edge still has a box a pre-edit fits in.
+const MIN_TEXT_INPUT_WIDTH_PX = 200;
 let frameScheduled = false;
 let idleFrames = 0;
 let wakeTimer = 0;
@@ -37,6 +40,20 @@ const { getAssemblyExports, getConfig, runMain, setModuleImports } = await dotne
 // Writing needs a user gesture, which a copy or cut always is, and nothing waits on the result.
 setModuleImports('main.js', {
     writeClipboard: text => { navigator.clipboard?.writeText(text).catch(() => {}); },
+    // The browser hangs the IME candidate list off the focused field, so the field has to sit on
+    // the caret. Left where it starts, the candidates appear in the top left corner of the page.
+    moveTextInput: (x, y, height) => {
+        const rect = canvas.getBoundingClientRect();
+        textInput.style.left = `${rect.left + x}px`;
+        textInput.style.top = `${rect.top + y}px`;
+        textInput.style.height = `${Math.max(1, height)}px`;
+
+        // The browser lays the pre-edit out inside this field and reports those bounds to the IME.
+        // A field too narrow for the pre-edit scrolls it instead, which walks the reported start
+        // leftward as the text grows and drags the candidate window along with it, so the field is
+        // given the room the text on screen has.
+        textInput.style.width = `${Math.max(MIN_TEXT_INPUT_WIDTH_PX, rect.width - x)}px`;
+    },
 });
 const config = getConfig();
 const exports = await getAssemblyExports(config.mainAssemblyName);
@@ -256,12 +273,31 @@ canvas.addEventListener('contextmenu', event => event.preventDefault());
 // receives them. Focusing that input is what raises the on-screen keyboard on a phone, so it is
 // held only while a text control has focus; keys are taken from the window so they arrive either
 // way. Composition state has to settle before the focus moves, or the commit is lost.
+// Focusing and blurring raise their events while this is still running, and the handlers that
+// deliver text call back into here, so one pass has to finish before another starts.
+let syncingTextInput = false;
+
 function syncTextInputFocus() {
-    const wanted = app.WantsTextInput();
-    if (wanted && document.activeElement !== textInput) {
-        textInput.focus({ preventScroll: true });
-    } else if (!wanted && !composing && document.activeElement === textInput) {
-        textInput.blur();
+    if (syncingTextInput) {
+        return;
+    }
+
+    syncingTextInput = true;
+    try {
+        const wanted = app.WantsTextInput();
+        if (wanted && document.activeElement !== textInput) {
+            textInput.focus({ preventScroll: true });
+        } else if (!wanted && !composing && document.activeElement === textInput) {
+            textInput.blur();
+        }
+
+        // The caret moves with every keystroke and every click inside the text, and the candidate
+        // list is placed when composition starts, so the field has to already be there.
+        if (wanted) {
+            app.SyncTextCaret();
+        }
+    } finally {
+        syncingTextInput = false;
     }
 }
 
@@ -331,6 +367,7 @@ textInput.addEventListener('compositionend', event => {
     composing = false;
     app.CompositionEnd(event.data ?? '');
     textInput.value = '';
+    syncTextInputFocus();
 });
 
 // A soft keyboard reports edits by intent rather than by key: it sends no usable key code, so the
@@ -368,6 +405,9 @@ textInput.addEventListener('input', event => {
 
     if (event.inputType === 'insertText' && event.data) {
         app.TextInput(event.data);
+        // keydown syncs before the text arrives, so without this the field trails the caret by a
+        // character and the next composition opens its candidates there.
+        syncTextInputFocus();
     }
 
     textInput.value = '';
