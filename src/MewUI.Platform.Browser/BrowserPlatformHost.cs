@@ -21,7 +21,11 @@ internal sealed class BrowserPlatformHost : IPlatformHost
 
     public IMessageBoxService MessageBox { get; } = new UnsupportedMessageBoxService();
     public IFileDialogService FileDialog { get; } = new UnsupportedFileDialogService();
-    public IClipboardService Clipboard { get; } = new UnsupportedClipboardService();
+    public IClipboardService Clipboard => _clipboard;
+
+    private readonly BrowserClipboardService _clipboard = new();
+
+    internal void SetClipboardText(string text) => _clipboard.SetCachedText(text);
     public string DefaultFontFamily => "sans-serif";
     public IReadOnlyList<string> DefaultFontFallbacks => Array.Empty<string>();
 
@@ -255,13 +259,30 @@ internal sealed class BrowserPlatformHost : IPlatformHost
             => throw new NotSupportedException("File dialogs are not implemented in Browser First Boot.");
     }
 
-    private sealed class UnsupportedClipboardService : IClipboardService
+    /// <summary>
+    /// Reads are answered from what the page last copied or pasted. A browser hands the clipboard over
+    /// only inside a paste gesture, so the host feeds that text in through
+    /// <see cref="BrowserPlatform.SetClipboardText"/> before the paste reaches a control.
+    /// </summary>
+    private sealed class BrowserClipboardService : IClipboardService
     {
-        public bool TrySetText(string text) => false;
+        private string _text = string.Empty;
+
+        internal void SetCachedText(string text) => _text = text ?? string.Empty;
+
+        public bool TrySetText(string text)
+        {
+            _text = text ?? string.Empty;
+            BrowserPlatform.ClipboardWriter?.Invoke(_text);
+            return true;
+        }
+
         public bool TryGetText(out string text)
         {
-            text = string.Empty;
-            return false;
+            text = _text;
+            return text.Length > 0;
         }
+
+        public bool HasText() => _text.Length > 0;
     }
 }

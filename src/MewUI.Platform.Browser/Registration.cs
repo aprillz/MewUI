@@ -66,6 +66,18 @@ public static class BrowserPlatform
         double deltaX, double deltaY, int buttons, ModifierKeys modifiers)
         => BrowserPlatformHost.Active?.PointerWheel(x, y, screenX, screenY, deltaX, deltaY, buttons, modifiers);
 
+    /// <summary>
+    /// Hands copied text to the page. A browser only writes the clipboard from a user gesture, which
+    /// a copy or cut always is, so the host can post it and not wait for the result.
+    /// </summary>
+    public static Action<string>? ClipboardWriter { get; set; }
+
+    /// <summary>
+    /// Records the text a paste gesture carried. A browser reveals the clipboard only inside that
+    /// gesture, so this has to run before the paste reaches a control.
+    /// </summary>
+    public static void SetClipboardText(string text) => BrowserPlatformHost.Active?.SetClipboardText(text);
+
     /// <summary>True while the captured element consumes pointer movement rather than tracking a press.</summary>
     public static bool CaptureConsumesDrag() => BrowserPlatformHost.Active?.CaptureConsumesDrag() == true;
 
