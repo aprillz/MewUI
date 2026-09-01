@@ -27,11 +27,13 @@ internal sealed class BrowserWindowBackend : IWindowBackend
     private Point _panScreenPoint;
     private ModifierKeys _panModifiers;
 
-    // Coasting after the finger lifts. Speed decays as v0 * DECAY^seconds, which is what Avalonia's
-    // ScrollGestureRecognizer and UIScrollView both settle on. The distance covered by a given time
-    // has a closed form, so each frame sends the gap between that and what it has already sent;
-    // integrating per frame instead would make the travel depend on the frame interval.
-    private const double FLING_DECAY_PER_SECOND = 0.15;
+    // Coasting after the finger lifts. Speed decays as v0 * DECAY^seconds, and the distance covered
+    // by a given time has a closed form, so each frame sends the gap between that and what it has
+    // already sent; integrating per frame instead would make the travel depend on the frame
+    // interval. Total travel is v0 / -ln(DECAY), so squaring the 0.15 that Avalonia's
+    // ScrollGestureRecognizer and UIScrollView use halves the distance while the coast still leaves
+    // the finger at the speed the finger had.
+    private const double FLING_DECAY_PER_SECOND = 0.0225;
     private const double FLING_END_SPEED_DIP = 5;
     private const double FLING_MAX_SPEED_DIP = 4000;
     private const double FLING_SAMPLE_WINDOW_SECONDS = 0.1;
