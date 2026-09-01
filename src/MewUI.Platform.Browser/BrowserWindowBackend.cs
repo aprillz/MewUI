@@ -11,6 +11,11 @@ internal sealed class BrowserWindowBackend : IWindowBackend
     private bool _mouseCaptured;
     // Element that scrolled for the active touch pan, kept so the gesture cannot change owner.
     private UIElement? _panTarget;
+
+    // Movement too small for the scroll controller to act on, held over to the next pan event.
+    private const double MIN_PAN_STEP_DIP = 0.5;
+    private double _panBankX;
+    private double _panBankY;
     private readonly BrowserWindowSurface _surface = new();
 
     internal BrowserWindowBackend(BrowserPlatformHost host, Window window)
@@ -124,6 +129,8 @@ internal sealed class BrowserWindowBackend : IWindowBackend
     {
         if (!_shown || _disposed) return false;
         _panTarget = null;
+        _panBankX = 0;
+        _panBankY = 0;
         var mappedButton = button switch
         {
             1 => MouseButton.Middle,
@@ -183,9 +190,24 @@ internal sealed class BrowserWindowBackend : IWindowBackend
         double step = Application.Current.Theme.Metrics.ScrollWheelStep;
         if (step <= 0) return;
 
+        // Scrolling ignores a step worth less than half a DIP, so a slow drag or a high refresh rate
+        // would have most of its movement thrown away one event at a time. Movement is banked until
+        // it is worth forwarding, and only the part actually sent is taken out of the bank.
+        _panBankX += deltaXDip;
+        _panBankY += deltaYDip;
+        double sendX = Math.Abs(_panBankX) >= MIN_PAN_STEP_DIP ? _panBankX : 0;
+        double sendY = Math.Abs(_panBankY) >= MIN_PAN_STEP_DIP ? _panBankY : 0;
+        if (sendX == 0 && sendY == 0)
+        {
+            return;
+        }
+
+        _panBankX -= sendX;
+        _panBankY -= sendY;
+
         // A notch is worth ScrollWheelStep DIPs, and notches may be fractional, so dividing the
         // finger delta by the step makes the content track the finger one to one.
-        var delta = new Vector(deltaXDip / step, deltaYDip / step);
+        var delta = new Vector(sendX / step, sendY / step);
         var point = new Point(x, y);
         var screenPoint = new Point(screenX, screenY);
 
@@ -220,6 +242,8 @@ internal sealed class BrowserWindowBackend : IWindowBackend
         if (_disposed) return;
         _mouseCaptured = false;
         _panTarget = null;
+        _panBankX = 0;
+        _panBankY = 0;
         Window.ReleaseMouseCapture();
         WindowInputRouter.UpdateMouseOver(Window, null);
     }
