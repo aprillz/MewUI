@@ -198,10 +198,10 @@ internal sealed class BrowserPlatformHost : IPlatformHost
     internal bool WantsTextInput() => _window?.WantsTextInput() == true;
 
     internal void PointerPan(double x, double y, double screenX, double screenY,
-        double deltaXDip, double deltaYDip, ModifierKeys modifiers)
+        double deltaXDip, double deltaYDip, ModifierKeys modifiers, double timeStampMs)
         => RoutePointer(() =>
         {
-            _window?.PointerPan(x, y, screenX, screenY, deltaXDip, deltaYDip, modifiers);
+            _window?.PointerPan(x, y, screenX, screenY, deltaXDip, deltaYDip, modifiers, timeStampMs);
             return false;
         });
 
@@ -213,7 +213,7 @@ internal sealed class BrowserPlatformHost : IPlatformHost
         }
     }
 
-    internal void PointerPanRelease() => RoutePointer(() => { _window?.StartFling(); return false; });
+    internal void PointerPanRelease(double timeStampMs) => RoutePointer(() => { _window?.StartFling(timeStampMs); return false; });
 
     internal void PointerLeave() => RoutePointer(() => { _window?.PointerLeave(); return false; });
     internal void PointerCancel() => RoutePointer(() => { _window?.PointerCancel(); return false; });
