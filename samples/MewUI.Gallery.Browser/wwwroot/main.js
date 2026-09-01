@@ -33,7 +33,11 @@ function syncCanvasSize() {
 
 syncCanvasSize();
 
-const { getAssemblyExports, getConfig, runMain } = await dotnet.create();
+const { getAssemblyExports, getConfig, runMain, setModuleImports } = await dotnet.create();
+// Writing needs a user gesture, which a copy or cut always is, and nothing waits on the result.
+setModuleImports('main.js', {
+    writeClipboard: text => { navigator.clipboard?.writeText(text).catch(() => {}); },
+});
 const config = getConfig();
 const exports = await getAssemblyExports(config.mainAssemblyName);
 const app = exports.Aprillz.MewUI.Gallery.BrowserExports;
@@ -248,9 +252,36 @@ function syncTextInputFocus() {
 
 let composing = false;
 
+// Set by a held-back paste shortcut, so the replay carries the modifier the user actually pressed.
+// A paste from the operating system menu leaves it null and falls back to the primary modifier.
+let pendingPasteModifiers = null;
+const APPLE_PLATFORM = /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent || '');
+
+textInput.addEventListener('paste', event => {
+    const text = event.clipboardData?.getData('text/plain') ?? '';
+    const modifiers = pendingPasteModifiers ?? (APPLE_PLATFORM ? MODIFIER_META : MODIFIER_CONTROL);
+    pendingPasteModifiers = null;
+    event.preventDefault();
+    if (text.length === 0) {
+        return;
+    }
+
+    wake();
+    app.SetClipboardText(text);
+    app.KeyDown('KeyV', 86, modifiers, false);
+    app.KeyUp('KeyV', 86, modifiers);
+});
+
 window.addEventListener('keydown', event => {
     wake();
     if (composing) {
+        return;
+    }
+
+    // A browser reveals the clipboard only inside the paste event, which arrives after this keydown.
+    // Holding the key back and replaying it from there lets the paste command read real text.
+    if (event.code === 'KeyV' && (event.ctrlKey || event.metaKey) && !event.altKey) {
+        pendingPasteModifiers = modifiersOf(event);
         return;
     }
 
