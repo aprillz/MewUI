@@ -27,12 +27,15 @@ internal sealed class InSurfaceDialogHost : UIElement, IVisualTreeHost
 
     // Dimming behind a modal is not a themed colour anywhere else, so it is stated here.
     private const byte SCRIM_ALPHA = 96;
-    private const int SCRIM_FADE_MS = 140;
+    // Long enough to be seen. The default ease-out front-loads a fade, so at a short duration the
+    // scrim reaches full strength almost at once and reads as no fade at all.
+    private const int SCRIM_FADE_MS = 300;
 
     private readonly Window _dialog;
     private readonly ShadowDecorator _shadow;
     private readonly AnimationClock _scrimClock;
     private double _scrimProgress;
+    private bool _fadingOut;
 
     internal InSurfaceDialogHost(Window dialog, UIElement content, Window owner)
     {
@@ -43,22 +46,40 @@ internal sealed class InSurfaceDialogHost : UIElement, IVisualTreeHost
 
         // The owner does not move or dim on its own here the way a disabled window does, so the
         // dimming appearing in one frame reads as the whole page having been repainted.
-        _scrimClock = new AnimationClock(TimeSpan.FromMilliseconds(SCRIM_FADE_MS), Easing.Default).AttachTo(this);
+        _scrimClock = new AnimationClock(TimeSpan.FromMilliseconds(SCRIM_FADE_MS), Easing.EaseInOutCubic).AttachTo(this);
         _scrimClock.TickCallback = OnScrimTick;
         _scrimClock.Start();
     }
 
     private void OnScrimTick(double easedProgress)
     {
-        _scrimProgress = easedProgress;
+        _scrimProgress = _fadingOut ? 1 - easedProgress : easedProgress;
         InvalidateVisual();
+    }
+
+    /// <summary>
+    /// Fades the dialog back out and calls <paramref name="remove"/> once it is gone. The owner is
+    /// live again from the moment this starts, so the host stops taking pointers even though it is
+    /// still on screen.
+    /// </summary>
+    internal void FadeOutAndRemove(Action remove)
+    {
+        IsHitTestVisible = false;
+        _fadingOut = true;
+        _scrimClock.CompletedCallback = remove;
+        _scrimClock.Stop();
+        _scrimClock.Start();
     }
 
     /// <summary>
     /// Releases the fade before the host leaves the overlay. A running clock holds the render loop
     /// awake and keeps invalidating an element nothing draws any more.
     /// </summary>
-    internal void Detach() => _scrimClock.Stop();
+    internal void Detach()
+    {
+        _scrimClock.CompletedCallback = null;
+        _scrimClock.Stop();
+    }
 
     internal Window Dialog => _dialog;
 

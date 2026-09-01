@@ -1719,10 +1719,18 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             Owner.ActiveInSurfaceDialog = null;
         }
 
-        _inSurfaceHost.Detach();
-        Owner?.OverlayLayer.Remove(_inSurfaceHost);
-        Owner?.Invalidate();
+        // The dialog is closed as far as its caller is concerned; the host only stays on screen long
+        // enough to fade, and takes no input while it does.
+        var host = _inSurfaceHost;
+        var owner = Owner;
         _inSurfaceHost = null;
+        host.FadeOutAndRemove(() =>
+        {
+            host.Detach();
+            owner?.OverlayLayer.Remove(host);
+            owner?.Invalidate();
+        });
+        owner?.Invalidate();
     }
 
     /// <summary>
