@@ -9,57 +9,134 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 internal sealed class InSurfaceDialogHost : UIElement, IVisualTreeHost
 {
+    private const string CLOSE_BUTTON_STYLE = "in-surface-dialog-close";
+    private const double CAPTION_HEIGHT = 28;
+    private const double CLOSE_BUTTON_WIDTH = 32;
+    private const double CLOSE_GLYPH_SIZE = 4;
+    private const double CORNER_RADIUS = 8;
+    private const double SHADOW_BLUR = 16;
+    private const double SHADOW_OFFSET_Y = 4;
+
+    private static readonly bool _closeButtonStyleRegistered =
+        FrameworkNamedStyles.Register(CLOSE_BUTTON_STYLE, CreateCloseButtonStyle);
+
     // Dimming behind a modal is not a themed colour anywhere else, so it is stated here.
     private static readonly Color _scrim = Color.FromArgb(96, 0, 0, 0);
 
     private readonly Window _dialog;
-    private readonly PopupChrome _chrome;
+    private readonly ShadowDecorator _shadow;
 
     internal InSurfaceDialogHost(Window dialog, UIElement content, Window owner)
     {
         _dialog = dialog;
-
-        // The chrome draws a shadow and expects its child to paint itself, which a dialog's content
-        // never had to do while its window painted behind it. A caption stands in for the title bar
-        // the dialog would have had, so it still reads as a window and can be dismissed without a
-        // button of its own.
-        var surface = new Border { Child = BuildSurface(dialog, content) }
-            .WithTheme((_, border) => border.Background = dialog.EffectiveOpaqueBackground);
-        _chrome = new PopupChrome(surface);
+        _shadow = BuildChrome(dialog, content);
         Parent = owner;
-        _chrome.Parent = this;
+        _shadow.Parent = this;
     }
 
     internal Window Dialog => _dialog;
 
-    private static UIElement BuildSurface(Window dialog, UIElement content)
+    // Nothing paints behind the dialog here, so the frame has to supply what the window would have
+    // had: an opaque surface, a border, rounded corners and a shadow to lift it off the owner.
+    private static ShadowDecorator BuildChrome(Window dialog, UIElement content)
+    {
+        var body = new Border { Padding = dialog.Padding, Child = content };
+        var stack = new DockPanel();
+        if (BuildCaption(dialog) is UIElement caption)
+        {
+            stack.Add(caption.DockTop());
+        }
+
+        stack.Add(body);
+
+        var frame = new Border
+        {
+            CornerRadius = CORNER_RADIUS,
+            BorderThickness = 1,
+            ClipToBounds = true,
+            Child = stack,
+        }.WithTheme((theme, border) =>
+        {
+            border.Background = dialog.EffectiveOpaqueBackground;
+            border.BorderBrush = theme.Palette.ControlBorder;
+        });
+
+        return new ShadowDecorator
+        {
+            BlurRadius = SHADOW_BLUR,
+            OffsetY = SHADOW_OFFSET_Y,
+            CornerRadius = CORNER_RADIUS,
+            Child = frame,
+        }.WithTheme((theme, shadow) =>
+            shadow.ShadowColor = Color.FromArgb((byte)(theme.IsDark ? 128 : 56), 0, 0, 0));
+    }
+
+    private static UIElement? BuildCaption(Window dialog)
     {
         if (string.IsNullOrEmpty(dialog.Title))
         {
-            return content;
+            return null;
         }
 
         var title = new TextBlock()
             .Text(dialog.Title!)
-            .Bold()
+            .FontWeight(FontWeight.SemiBold)
             .CenterVertical()
-            .Margin(new Thickness(12, 8, 8, 8));
+            .Margin(new Thickness(12, 0, 12, 0));
 
-        var close = new Button()
-            .Content("✕")
-            .CenterVertical()
-            .Margin(new Thickness(0, 4, 4, 4))
-            .OnClick(dialog.Close);
-
-        var caption = new Border
+        var bar = new DockPanel();
+        if (dialog.CanClose)
         {
-            Child = new DockPanel().Children(close.DockRight(), title),
-        }.WithTheme((theme, border) => border.Background = theme.Palette.ControlBackground);
+            bar.Add(new Button
+            {
+                Content = new GlyphElement().Kind(GlyphKind.Cross).GlyphSize(CLOSE_GLYPH_SIZE),
+                MinWidth = CLOSE_BUTTON_WIDTH,
+                MinHeight = CAPTION_HEIGHT,
+                StyleName = CLOSE_BUTTON_STYLE,
+            }.OnClick(dialog.Close).DockRight());
+        }
 
-        return new DockPanel().Children(caption.DockTop(), content);
+        bar.Add(title);
+
+        return new Border { MinHeight = CAPTION_HEIGHT, Child = bar }
+            .WithTheme((theme, border) => border.Background = theme.Palette.ControlBackground);
     }
 
-    bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor) => visitor(_chrome);
+    private static Style CreateCloseButtonStyle()
+        => new(typeof(Button))
+        {
+            Transitions = [Transition.Create(Control.BackgroundProperty)],
+            Setters =
+            [
+                Setter.Create(Control.BackgroundProperty, Color.Transparent),
+                Setter.Create(Control.BorderThicknessProperty, 0.0),
+                Setter.Create(Control.CornerRadiusProperty, 0.0),
+                Setter.Create(Control.PaddingProperty, new Thickness(0)),
+            ],
+            Triggers =
+            [
+                new StateTrigger
+                {
+                    Match = VisualStateFlags.Hot,
+                    Setters =
+                    [
+                        Setter.Create(Control.BackgroundProperty, Color.FromRgb(232, 17, 35)),
+                        Setter.Create(Control.ForegroundProperty, Color.White),
+                    ],
+                },
+                new StateTrigger
+                {
+                    Match = VisualStateFlags.Pressed,
+                    Setters =
+                    [
+                        Setter.Create(Control.BackgroundProperty, Color.FromRgb(200, 12, 28)),
+                        Setter.Create(Control.ForegroundProperty, Color.White),
+                    ],
+                },
+            ],
+        };
+
+    bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor) => visitor(_shadow);
 
     // Keys reach the owner window, not the dialog, because the dialog has no surface of its own to
     // route through. Bubbling passes through this host on its way out, which is where the dialog is
@@ -84,16 +161,16 @@ internal sealed class InSurfaceDialogHost : UIElement, IVisualTreeHost
 
     protected override Size MeasureOverride(Size availableSize)
     {
-        _chrome.Measure(availableSize);
+        _shadow.Measure(availableSize);
         return availableSize;
     }
 
     protected override Size ArrangeOverride(Size finalSize)
     {
-        var desired = _chrome.DesiredSize;
+        var desired = _shadow.DesiredSize;
         double width = Math.Min(desired.Width, finalSize.Width);
         double height = Math.Min(desired.Height, finalSize.Height);
-        _chrome.Arrange(new Rect(
+        _shadow.Arrange(new Rect(
             (finalSize.Width - width) / 2,
             (finalSize.Height - height) / 2,
             width,
@@ -104,11 +181,11 @@ internal sealed class InSurfaceDialogHost : UIElement, IVisualTreeHost
     // A pointer that misses the dialog is absorbed rather than passed through, so the owner stays
     // untouchable for as long as the dialog is up.
     protected override UIElement? OnHitTest(Point point)
-        => _chrome.HitTest(point) ?? (Bounds.Contains(point) ? this : null);
+        => _shadow.HitTest(point) ?? (Bounds.Contains(point) ? this : null);
 
     protected override void OnRender(IGraphicsContext context)
     {
         context.FillRectangle(Bounds, _scrim);
-        _chrome.Render(context);
+        _shadow.Render(context);
     }
 }
