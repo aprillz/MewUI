@@ -289,6 +289,10 @@ internal static class WindowInputRouter
             return;
         }
 
+        // A dialog living in this window's surface is not the routed window, so it would never see
+        // the preview it relies on for Escape and default-button handling.
+        window.ActiveInSurfaceDialog?.RaisePreviewKeyDown(args);
+
         for (var current = ResolveKeyRoutingStart(window); current != null && !args.Handled; current = GetInputBubbleParent(window, current))
         {
             current.RaiseKeyDown(args);
