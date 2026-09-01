@@ -1616,9 +1616,26 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     /// Applies modal state and shows the window: marks it as a dialog, disables and parents to the owner,
     /// inherits the owner icon, then shows and activates. Shared by <see cref="ShowDialog"/> and <see cref="ShowDialogAsync"/>.
     /// </summary>
+    /// <summary>
+    /// Host a modal dialog in its own OS window instead of the owner surface; a platform with a
+    /// single surface sets it false and the dialog renders inside its owner.
+    /// </summary>
+    internal static bool PreferNativeDialogWindows = true;
+
+    private InSurfaceDialogHost? _inSurfaceHost;
+
     private void BeginModal(Window? owner)
     {
         _isDialogWindow = true;
+
+        // A single-surface host has one window to live in, so a dialog opened without an owner
+        // still has somewhere to go; the active-window search finds nothing while the page is
+        // unfocused, and failing over to a native window is not an option there.
+        if (!PreferNativeDialogWindows)
+        {
+            owner ??= ResolveSingleSurfaceOwner();
+        }
+
         if (owner != null)
         {
             owner.AcquireModalDisable();
@@ -1627,9 +1644,67 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
         if (owner != null && Icon == null && owner.Icon != null)
             Icon = owner.Icon;
+        if (!PreferNativeDialogWindows && owner != null)
+        {
+            ShowInSurface(owner);
+            return;
+        }
 
         Show(owner);
         Activate();
+    }
+
+    // The dialog never gets a backend here, which is also what lets Close take the backend-less
+    // path and raise Closed so an awaiting caller resumes.
+    private void ShowInSurface(Window owner)
+    {
+        Owner = owner;
+        owner.RegisterOwnedChild(this);
+        RunBuildHookBeforeShow();
+        Application.Current.RegisterWindow(this);
+        ReconcileTreeTheme(Application.Current.Theme);
+        if (Content is not UIElement content)
+        {
+            return;
+        }
+
+        _inSurfaceHost = new InSurfaceDialogHost(this, content, owner);
+        owner.OverlayLayer.Add(_inSurfaceHost);
+        _lifetimeState = WindowLifetimeState.Shown;
+        Closed += RemoveInSurfaceHost;
+        owner.Invalidate();
+    }
+
+    private Window? ResolveSingleSurfaceOwner()
+    {
+        if (!Application.IsRunning)
+        {
+            return null;
+        }
+
+        var windows = Application.Current.AllWindows;
+        for (int i = 0; i < windows.Count; i++)
+        {
+            if (!ReferenceEquals(windows[i], this))
+            {
+                return windows[i];
+            }
+        }
+
+        return null;
+    }
+
+    private void RemoveInSurfaceHost()
+    {
+        Closed -= RemoveInSurfaceHost;
+        if (_inSurfaceHost == null)
+        {
+            return;
+        }
+
+        Owner?.OverlayLayer.Remove(_inSurfaceHost);
+        Owner?.Invalidate();
+        _inSurfaceHost = null;
     }
 
     /// <summary>
