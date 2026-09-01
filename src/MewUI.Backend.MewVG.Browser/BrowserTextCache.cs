@@ -14,13 +14,13 @@ internal sealed class BrowserTextCache : IDisposable
     private const int MAX_ENTRIES = 512;
 
     private readonly NanoVG _vg;
-    private readonly BoundedCache<Key, int> _images;
+    private readonly BoundedCache<Key, Entry> _images;
     private bool _disposed;
 
     internal BrowserTextCache(NanoVG vg)
     {
         _vg = vg;
-        _images = new BoundedCache<Key, int>(MAX_ENTRIES, imageId => _vg.DeleteImage(imageId));
+        _images = new BoundedCache<Key, Entry>(MAX_ENTRIES, entry => _vg.DeleteImage(entry.ImageId));
     }
 
     internal int GetOrCreateImage(
@@ -37,22 +37,25 @@ internal sealed class BrowserTextCache : IDisposable
             return 0;
         }
 
-        // The managed text engine hands back the same layout for a realized run, so its identity plus
-        // the baked-in colour names the image. Keying on the run text instead would force it to be
-        // materialised on every lookup.
-        var key = new Key(layout, color.ToArgb(), widthPx, heightPx);
-        if (_images.TryGetValue(key, out var cached))
+        // What the run says, not which object said it. A layout is built fresh for every draw, so
+        // keying on its identity never matched and the cache rasterized the same text again each
+        // frame. The desktop caches key on the text and its font for the same reason.
+        var key = new Key(string.GetHashCode(text), cssFont, color.ToArgb(), widthPx, heightPx);
+        if (_images.TryGetValue(key, out var cached) && text.SequenceEqual(cached.Text))
         {
-            return cached;
+            return cached.ImageId;
         }
 
-        var imageId = Rasterize(text.ToString(), cssFont, widthPx, heightPx, scale, color);
+        // The key carries a hash, so an entry that disagrees on the text is a collision and the
+        // image it holds belongs to different text; it is replaced rather than returned.
+        var content = text.ToString();
+        var imageId = Rasterize(content, cssFont, widthPx, heightPx, scale, color);
         if (imageId == 0)
         {
             return 0;
         }
 
-        _images.Add(key, imageId);
+        _images.Add(key, new Entry(imageId, content));
         return imageId;
     }
 
@@ -100,5 +103,8 @@ internal sealed class BrowserTextCache : IDisposable
         _images.Dispose();
     }
 
-    private readonly record struct Key(BackendTextLayout Layout, uint Color, int WidthPx, int HeightPx);
+    private readonly record struct Key(int TextHash, string CssFont, uint Color, int WidthPx, int HeightPx);
+
+    // The text is kept so a hash collision can be told from a hit.
+    private readonly record struct Entry(int ImageId, string Text);
 }
