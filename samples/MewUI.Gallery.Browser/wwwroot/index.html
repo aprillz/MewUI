@@ -19,8 +19,10 @@
     /* Only visible until the first frame; matching the scheme avoids a dark flash on a light page. */
     body { background: #ffffff; }
     @media (prefers-color-scheme: dark) { body { background: #202124; } }
+    /* Sized so a boot failure's message stays readable on a phone instead of one clipped line. */
     #status { position: fixed; right: 8px; bottom: 8px; padding: 4px 7px; color: white;
-      background: rgba(0, 0, 0, .65); font: 12px sans-serif; pointer-events: none; }
+      background: rgba(0, 0, 0, .65); font: 12px sans-serif; pointer-events: none;
+      max-width: min(80vw, 640px); white-space: pre-wrap; word-break: break-word; }
     /* Kept on-screen and sized so the browser still treats it as a live IME target, and moved onto
        the caret by main.js so the IME draws its candidates there. A width the pre-edit fits in is
        what lets the browser lay its own composition UI out; pointer-events keeps the box, which
