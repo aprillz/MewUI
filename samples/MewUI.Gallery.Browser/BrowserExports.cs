@@ -65,14 +65,14 @@ internal static partial class BrowserExports
 
     [JSExport]
     internal static void PointerPan(double x, double y, double screenX, double screenY,
-        double deltaX, double deltaY, int modifiers)
-        => BrowserPlatform.PointerPan(x, y, screenX, screenY, deltaX, deltaY, (ModifierKeys)modifiers);
+        double deltaX, double deltaY, int modifiers, double timeStampMs)
+        => BrowserPlatform.PointerPan(x, y, screenX, screenY, deltaX, deltaY, (ModifierKeys)modifiers, timeStampMs);
 
     [JSExport]
     internal static void SyncTextCaret() => BrowserPlatform.SyncTextCaret();
 
     [JSExport]
-    internal static void PointerPanRelease() => BrowserPlatform.PointerPanRelease();
+    internal static void PointerPanRelease(double timeStampMs) => BrowserPlatform.PointerPanRelease(timeStampMs);
 
     [JSExport]
     internal static void PointerLeave() => BrowserPlatform.PointerLeave();

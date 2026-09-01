@@ -131,7 +131,7 @@ canvas.addEventListener('pointermove', event => {
 
     if (gesture !== null && gesture.panning) {
         app.PointerPan(gesture.startX, gesture.startY, event.screenX, event.screenY,
-            point.x - gesture.lastX, point.y - gesture.lastY, modifiersOf(event));
+            point.x - gesture.lastX, point.y - gesture.lastY, modifiersOf(event), event.timeStamp);
         gesture.lastX = point.x;
         gesture.lastY = point.y;
         return;
@@ -152,7 +152,7 @@ canvas.addEventListener('pointermove', event => {
             gesture.lastY = gesture.startY + travelY * consumed;
             app.PointerCancel();
             app.PointerPan(gesture.startX, gesture.startY, event.screenX, event.screenY,
-                point.x - gesture.lastX, point.y - gesture.lastY, modifiersOf(event));
+                point.x - gesture.lastX, point.y - gesture.lastY, modifiersOf(event), event.timeStamp);
             gesture.lastX = point.x;
             gesture.lastY = point.y;
             return;
@@ -204,7 +204,7 @@ canvas.addEventListener('pointerup', event => {
     if (panned) {
         // A finger let go mid-scroll leaves the content moving; the app reads the speed it was
         // tracking and coasts from there.
-        app.PointerPanRelease();
+        app.PointerPanRelease(event.timeStamp);
         if (canvas.hasPointerCapture(event.pointerId)) {
             canvas.releasePointerCapture(event.pointerId);
         }
