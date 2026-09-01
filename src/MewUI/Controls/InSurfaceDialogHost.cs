@@ -31,6 +31,27 @@ internal sealed class InSurfaceDialogHost : UIElement, IVisualTreeHost
 
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor) => visitor(_chrome);
 
+    // Keys reach the owner window, not the dialog, because the dialog has no surface of its own to
+    // route through. Bubbling passes through this host on its way out, which is where the dialog is
+    // given the preview it would have received as a window.
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+        if (!e.Handled)
+        {
+            _dialog.RaisePreviewKeyDown(e);
+        }
+    }
+
+    protected override void OnKeyUp(KeyEventArgs e)
+    {
+        base.OnKeyUp(e);
+        if (!e.Handled)
+        {
+            _dialog.RaisePreviewKeyUp(e);
+        }
+    }
+
     protected override Size MeasureOverride(Size availableSize)
     {
         _chrome.Measure(availableSize);

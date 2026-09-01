@@ -1624,6 +1624,9 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
     private InSurfaceDialogHost? _inSurfaceHost;
 
+    /// <summary>The modal dialog living in this window's surface, if one is open.</summary>
+    internal Window? ActiveInSurfaceDialog { get; private set; }
+
     private void BeginModal(Window? owner)
     {
         _isDialogWindow = true;
@@ -1671,7 +1674,16 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         _inSurfaceHost = new InSurfaceDialogHost(this, content, owner);
         owner.OverlayLayer.Add(_inSurfaceHost);
         _lifetimeState = WindowLifetimeState.Shown;
+        owner.ActiveInSurfaceDialog = this;
         Closed += RemoveInSurfaceHost;
+
+        // The dialog shares its owner's focus manager, so keys would keep going to whatever the
+        // owner had focused; moving focus inside is what makes the dialog answer them.
+        if (Input.FocusManager.FindFirstFocusable(content) is UIElement first)
+        {
+            owner.FocusManager.SetFocus(first);
+        }
+
         owner.Invalidate();
     }
 
@@ -1700,6 +1712,11 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         if (_inSurfaceHost == null)
         {
             return;
+        }
+
+        if (Owner != null && ReferenceEquals(Owner.ActiveInSurfaceDialog, this))
+        {
+            Owner.ActiveInSurfaceDialog = null;
         }
 
         Owner?.OverlayLayer.Remove(_inSurfaceHost);
