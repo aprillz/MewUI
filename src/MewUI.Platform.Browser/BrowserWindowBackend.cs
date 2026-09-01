@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Aprillz.MewUI.Controls;
 using Aprillz.MewUI.Input;
 
@@ -16,6 +17,40 @@ internal sealed class BrowserWindowBackend : IWindowBackend
     private const double MIN_PAN_STEP_DIP = 0.5;
     private double _panBankX;
     private double _panBankY;
+
+    // Where the pan routes and what it carries, kept so coasting can keep sending after the finger
+    // is gone.
+    private Point _panPoint;
+    private Point _panScreenPoint;
+    private ModifierKeys _panModifiers;
+
+    // Coasting after the finger lifts. Speed decays as v0 * DECAY^seconds, which is what Avalonia's
+    // ScrollGestureRecognizer and UIScrollView both settle on. The distance covered by a given time
+    // has a closed form, so each frame sends the gap between that and what it has already sent;
+    // integrating per frame instead would make the travel depend on the frame interval.
+    private const double FLING_DECAY_PER_SECOND = 0.15;
+    private const double FLING_END_SPEED_DIP = 5;
+    private const double FLING_MAX_SPEED_DIP = 4000;
+    private const double FLING_SAMPLE_WINDOW_SECONDS = 0.1;
+    private const int FLING_SAMPLE_CAPACITY = 8;
+
+    // One finger movement and the interval it covered. A single last delta is too noisy on a touch
+    // screen to read a throw from, so the release averages the trailing window of these.
+    private readonly record struct PanSample(double DeltaX, double DeltaY, double Seconds);
+
+    private readonly PanSample[] _panSamples = new PanSample[FLING_SAMPLE_CAPACITY];
+    private int _panSampleCount;
+    private int _panSampleNext;
+    private long _panSampleTicks;
+
+    private bool _flinging;
+    private double _flingSpeed;
+    private double _flingDirectionX;
+    private double _flingDirectionY;
+    private double _flingSentDistance;
+    private long _flingStartTicks;
+    private bool _swallowTouchRelease;
+
     private readonly BrowserWindowSurface _surface = new();
 
     internal BrowserWindowBackend(BrowserPlatformHost host, Window window)
@@ -128,9 +163,32 @@ internal sealed class BrowserWindowBackend : IWindowBackend
         bool isDown, int clickCount, ModifierKeys modifiers, PointerType pointerType)
     {
         if (!_shown || _disposed) return false;
+
+        if (isDown)
+        {
+            if (_flinging)
+            {
+                // A press during coasting is spent stopping it. Letting the same tap through would
+                // also activate whatever it landed on, which no touch platform does.
+                StopFling();
+                _swallowTouchRelease = true;
+                return false;
+            }
+
+            _swallowTouchRelease = false;
+        }
+        else if (_swallowTouchRelease)
+        {
+            // Its press never reached a control, so a release on its own would be read against
+            // whatever the previous gesture pressed.
+            _swallowTouchRelease = false;
+            return false;
+        }
+
         _panTarget = null;
         _panBankX = 0;
         _panBankY = 0;
+        ClearPanSamples();
         var mappedButton = button switch
         {
             1 => MouseButton.Middle,
@@ -187,8 +245,20 @@ internal sealed class BrowserWindowBackend : IWindowBackend
         double deltaXDip, double deltaYDip, ModifierKeys modifiers)
     {
         if (!_shown || _disposed) return;
+
+        StopFling();
+        _panPoint = new Point(x, y);
+        _panScreenPoint = new Point(screenX, screenY);
+        _panModifiers = modifiers;
+        RecordPanSample(deltaXDip, deltaYDip);
+        SendPan(deltaXDip, deltaYDip);
+    }
+
+    /// <summary>Scrolls by a finger movement; false means nothing took it and there is no room left.</summary>
+    private bool SendPan(double deltaXDip, double deltaYDip)
+    {
         double step = Application.Current.Theme.Metrics.ScrollWheelStep;
-        if (step <= 0) return;
+        if (step <= 0) return false;
 
         // Scrolling ignores a step worth less than half a DIP, so a slow drag or a high refresh rate
         // would have most of its movement thrown away one event at a time. Movement is banked until
@@ -199,7 +269,8 @@ internal sealed class BrowserWindowBackend : IWindowBackend
         double sendY = Math.Abs(_panBankY) >= MIN_PAN_STEP_DIP ? _panBankY : 0;
         if (sendX == 0 && sendY == 0)
         {
-            return;
+            // Banked, not refused: the movement is still owed and the next call carries it.
+            return true;
         }
 
         _panBankX -= sendX;
@@ -208,25 +279,164 @@ internal sealed class BrowserWindowBackend : IWindowBackend
         // A notch is worth ScrollWheelStep DIPs, and notches may be fractional, so dividing the
         // finger delta by the step makes the content track the finger one to one.
         var delta = new Vector(sendX / step, sendY / step);
-        var point = new Point(x, y);
-        var screenPoint = new Point(screenX, screenY);
 
         // The gesture stays with whatever first scrolled for it. Hit-testing the start point again
         // every move would hand the gesture to any other scrollable that the scrolling brought under
         // it. A pinned target that stops handling (it ran out of room, or it was virtualized away)
         // falls back to the point, which is also how the gesture reaches an outer scrollable.
         var handler = WindowInputRouter.MouseWheel(
-            Window, point, screenPoint, delta, false, false, false, modifiers, _panTarget);
+            Window, _panPoint, _panScreenPoint, delta, false, false, false, _panModifiers, _panTarget);
         if (handler == null && _panTarget != null)
         {
             handler = WindowInputRouter.MouseWheel(
-                Window, point, screenPoint, delta, false, false, false, modifiers, routeFrom: null);
+                Window, _panPoint, _panScreenPoint, delta, false, false, false, _panModifiers, routeFrom: null);
         }
 
         if (handler != null)
         {
             _panTarget = handler;
         }
+
+        return handler != null;
+    }
+
+    private void RecordPanSample(double deltaXDip, double deltaYDip)
+    {
+        long now = Stopwatch.GetTimestamp();
+        double seconds = _panSampleTicks == 0 ? 0 : (now - _panSampleTicks) / (double)Stopwatch.Frequency;
+        _panSampleTicks = now;
+        _panSamples[_panSampleNext] = new PanSample(deltaXDip, deltaYDip, seconds);
+        _panSampleNext = (_panSampleNext + 1) % FLING_SAMPLE_CAPACITY;
+        if (_panSampleCount < FLING_SAMPLE_CAPACITY)
+        {
+            _panSampleCount++;
+        }
+    }
+
+    private void ClearPanSamples()
+    {
+        _panSampleCount = 0;
+        _panSampleNext = 0;
+        _panSampleTicks = 0;
+    }
+
+    /// <summary>Lets a finished pan coast, from the speed the finger left it with.</summary>
+    internal void StartFling()
+    {
+        if (!_shown || _disposed) return;
+
+        bool estimated = TryEstimateVelocity(out double velocityX, out double velocityY);
+        ClearPanSamples();
+        if (!estimated)
+        {
+            return;
+        }
+
+        double speed = Math.Sqrt((velocityX * velocityX) + (velocityY * velocityY));
+        if (speed < FLING_END_SPEED_DIP)
+        {
+            return;
+        }
+
+        _flinging = true;
+        _flingSpeed = Math.Min(speed, FLING_MAX_SPEED_DIP);
+        _flingDirectionX = velocityX / speed;
+        _flingDirectionY = velocityY / speed;
+        _flingSentDistance = 0;
+        _flingStartTicks = Stopwatch.GetTimestamp();
+        _host.RequestFrame();
+    }
+
+    private bool TryEstimateVelocity(out double velocityX, out double velocityY)
+    {
+        velocityX = 0;
+        velocityY = 0;
+        if (_panSampleCount < 2)
+        {
+            return false;
+        }
+
+        // A finger that came to rest before lifting leaves nothing but stale samples. That is a
+        // hold, and reading the earlier movement would throw content the user had already parked.
+        double idle = (Stopwatch.GetTimestamp() - _panSampleTicks) / (double)Stopwatch.Frequency;
+        if (idle > FLING_SAMPLE_WINDOW_SECONDS)
+        {
+            return false;
+        }
+
+        double sumX = 0;
+        double sumY = 0;
+        double seconds = 0;
+        for (int i = 0; i < _panSampleCount && seconds < FLING_SAMPLE_WINDOW_SECONDS; i++)
+        {
+            int index = ((_panSampleNext - 1 - i) % FLING_SAMPLE_CAPACITY + FLING_SAMPLE_CAPACITY) % FLING_SAMPLE_CAPACITY;
+            var sample = _panSamples[index];
+            if (sample.Seconds <= 0)
+            {
+                break;
+            }
+
+            sumX += sample.DeltaX;
+            sumY += sample.DeltaY;
+            seconds += sample.Seconds;
+        }
+
+        if (seconds <= 0)
+        {
+            return false;
+        }
+
+        velocityX = sumX / seconds;
+        velocityY = sumY / seconds;
+        return true;
+    }
+
+    /// <summary>Moves an active coast on for this frame; false means it is over.</summary>
+    internal bool AdvanceFling()
+    {
+        if (!_flinging) return false;
+        if (!_shown || _disposed)
+        {
+            StopFling();
+            return false;
+        }
+
+        double elapsed = (Stopwatch.GetTimestamp() - _flingStartTicks) / (double)Stopwatch.Frequency;
+        double remaining = Math.Pow(FLING_DECAY_PER_SECOND, elapsed);
+        if (_flingSpeed * remaining < FLING_END_SPEED_DIP)
+        {
+            StopFling();
+            return false;
+        }
+
+        // The integral of the decay curve, so a long frame and two short ones cover the same ground
+        // and a dropped frame loses no movement.
+        double travelled = _flingSpeed * (remaining - 1) / Math.Log(FLING_DECAY_PER_SECOND);
+        double step = travelled - _flingSentDistance;
+        _flingSentDistance = travelled;
+        if (step <= 0)
+        {
+            return true;
+        }
+
+        if (!SendPan(_flingDirectionX * step, _flingDirectionY * step))
+        {
+            // Nothing scrolled, so the content hit its end and there is nowhere left to coast.
+            StopFling();
+            return false;
+        }
+
+        return true;
+    }
+
+    private void StopFling()
+    {
+        if (!_flinging) return;
+
+        _flinging = false;
+        _flingSentDistance = 0;
+        _panBankX = 0;
+        _panBankY = 0;
     }
 
     internal void PointerLeave()
@@ -240,6 +450,8 @@ internal sealed class BrowserWindowBackend : IWindowBackend
     internal void PointerCancel()
     {
         if (_disposed) return;
+        StopFling();
+        ClearPanSamples();
         _mouseCaptured = false;
         _panTarget = null;
         _panBankX = 0;

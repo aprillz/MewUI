@@ -90,6 +90,9 @@ public static class BrowserPlatform
         double deltaXDip, double deltaYDip, ModifierKeys modifiers)
         => BrowserPlatformHost.Active?.PointerPan(x, y, screenX, screenY, deltaXDip, deltaYDip, modifiers);
 
+    /// <summary>Lets a finished touch pan coast, from the speed the finger left it with.</summary>
+    public static void PointerPanRelease() => BrowserPlatformHost.Active?.PointerPanRelease();
+
     public static void PointerLeave() => BrowserPlatformHost.Active?.PointerLeave();
     public static void PointerCancel() => BrowserPlatformHost.Active?.PointerCancel();
 
