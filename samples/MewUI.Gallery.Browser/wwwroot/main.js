@@ -467,7 +467,10 @@ function sleepUntilNextTimer() {
     wakeTimer = setTimeout(() => { wakeTimer = 0; wake(); }, delay);
 }
 
-function frame() {
+// The timestamp is the one the frame will be presented at. Anything animating off a clock read
+// inside the frame instead moves by however long the frame took to get there, which is what makes
+// a smooth curve step.
+function frame(frameTimeMs) {
     frameScheduled = false;
     try {
         const dpr = syncCanvasSize();
@@ -476,7 +479,8 @@ function frame() {
             canvas.clientHeight,
             dpr,
             canvas.width,
-            canvas.height);
+            canvas.height,
+            frameTimeMs ?? performance.now());
 
         // A few quiet frames in a row before sleeping, so a render that only queues more work
         // (layout settling, a late resource) still gets its follow-up frame.
