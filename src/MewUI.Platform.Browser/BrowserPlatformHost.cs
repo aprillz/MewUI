@@ -198,6 +198,14 @@ internal sealed class BrowserPlatformHost : IPlatformHost
             return false;
         });
 
+    internal void SyncTextCaret()
+    {
+        if (_window?.TryGetCaretRect(out double x, out double y, out double height) == true)
+        {
+            BrowserPlatform.CaretReporter?.Invoke(x, y, height);
+        }
+    }
+
     internal void PointerPanRelease() => RoutePointer(() => { _window?.StartFling(); return false; });
 
     internal void PointerLeave() => RoutePointer(() => { _window?.PointerLeave(); return false; });

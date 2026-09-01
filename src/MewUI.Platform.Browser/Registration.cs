@@ -85,6 +85,16 @@ public static class BrowserPlatform
     /// <summary>True when the focused element consumes text input, so the host should present a text field.</summary>
     public static bool WantsTextInput() => BrowserPlatformHost.Active?.WantsTextInput() == true;
 
+    /// <summary>
+    /// Places the page's text field over the caret, given its position and line height in DIPs. A
+    /// browser draws the IME candidate list against the focused field, so a field parked in a corner
+    /// puts the candidates there too.
+    /// </summary>
+    public static Action<double, double, double>? CaretReporter { get; set; }
+
+    /// <summary>Reports the caret through <see cref="CaretReporter"/>, if a text control holds one.</summary>
+    public static void SyncTextCaret() => BrowserPlatformHost.Active?.SyncTextCaret();
+
     /// <summary>Scrolls the element under the point by a finger delta in DIPs, tracking it one to one.</summary>
     public static void PointerPan(double x, double y, double screenX, double screenY,
         double deltaXDip, double deltaYDip, ModifierKeys modifiers)

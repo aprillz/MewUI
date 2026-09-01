@@ -13,6 +13,9 @@ internal sealed class BrowserWindowBackend : IWindowBackend
     // Element that scrolled for the active touch pan, kept so the gesture cannot change owner.
     private UIElement? _panTarget;
 
+    // Stand-in line height for a text control that has not been laid out yet.
+    private const double DEFAULT_CARET_HEIGHT_DIP = 16;
+
     // Movement too small for the scroll controller to act on, held over to the next pan event.
     private const double MIN_PAN_STEP_DIP = 0.5;
     private double _panBankX;
@@ -240,6 +243,28 @@ internal sealed class BrowserWindowBackend : IWindowBackend
 
     internal bool WantsTextInput()
         => _shown && !_disposed && Window.FocusManager.FocusedElement is Input.ITextInputClient;
+
+    /// <summary>Reports the caret in surface coordinates (DIPs); false when nothing holds one.</summary>
+    internal bool TryGetCaretRect(out double x, out double y, out double height)
+    {
+        x = 0;
+        y = 0;
+        height = 0;
+        if (!_shown || _disposed || Window.FocusManager.FocusedElement is not ITextCompositionClient client)
+        {
+            return false;
+        }
+
+        int caretIndex = client is ITextCompositionEditor editor ? editor.CaretPosition : client.CompositionStartIndex;
+        var rect = client.GetCharRectInWindow(caretIndex);
+        x = rect.X;
+        y = rect.Y;
+
+        // Layout may not have run for the control yet, and a target with no height would let the
+        // candidate list land on top of the line it belongs to instead of below it.
+        height = rect.Height > 0 ? rect.Height : DEFAULT_CARET_HEIGHT_DIP;
+        return true;
+    }
 
     internal void PointerPan(double x, double y, double screenX, double screenY,
         double deltaXDip, double deltaYDip, ModifierKeys modifiers)
