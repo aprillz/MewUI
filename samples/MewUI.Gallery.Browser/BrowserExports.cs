@@ -61,6 +61,9 @@ internal static partial class BrowserExports
         => BrowserPlatform.PointerPan(x, y, screenX, screenY, deltaX, deltaY, (ModifierKeys)modifiers);
 
     [JSExport]
+    internal static void PointerPanRelease() => BrowserPlatform.PointerPanRelease();
+
+    [JSExport]
     internal static void PointerLeave() => BrowserPlatform.PointerLeave();
 
     [JSExport]

@@ -185,6 +185,9 @@ canvas.addEventListener('pointerup', event => {
 
     // The press was already cancelled when the scroll began, so releasing would report a click.
     if (panned) {
+        // A finger let go mid-scroll leaves the content moving; the app reads the speed it was
+        // tracking and coasts from there.
+        app.PointerPanRelease();
         if (canvas.hasPointerCapture(event.pointerId)) {
             canvas.releasePointerCapture(event.pointerId);
         }
