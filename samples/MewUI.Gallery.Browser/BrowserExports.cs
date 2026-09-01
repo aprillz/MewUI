@@ -26,8 +26,9 @@ internal static partial class BrowserExports
         double cssHeight,
         double devicePixelRatio,
         int pixelWidth,
-        int pixelHeight)
-        => BrowserPlatform.RenderFrame(cssWidth, cssHeight, devicePixelRatio, pixelWidth, pixelHeight);
+        int pixelHeight,
+        double frameTimeMs)
+        => BrowserPlatform.RenderFrame(cssWidth, cssHeight, devicePixelRatio, pixelWidth, pixelHeight, frameTimeMs);
 
     /// <summary>Milliseconds until a scheduled timer needs the loop again, or -1 when nothing is due.</summary>
     [JSExport]
