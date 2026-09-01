@@ -27,13 +27,18 @@ internal sealed class InSurfaceDialogHost : UIElement, IVisualTreeHost
 
     // Dimming behind a modal is not a themed colour anywhere else, so it is stated here.
     private const byte SCRIM_ALPHA = 96;
-    // Long enough to be seen. The default ease-out front-loads a fade, so at a short duration the
-    // scrim reaches full strength almost at once and reads as no fade at all.
-    private const int SCRIM_FADE_MS = 300;
+    // Zero on either side means the scrim gets there in one frame. Where it does fade the shape has
+    // to stay ease-in-out: the default ease-out front-loads a fade badly enough that a short one
+    // reaches full strength almost at once and reads as no fade at all.
+    private const int SCRIM_FADE_IN_MS = 150;
+    private const int SCRIM_FADE_OUT_MS = 0;
+
+    private static readonly TimeSpan _scrimFadeIn = TimeSpan.FromMilliseconds(SCRIM_FADE_IN_MS);
+    private static readonly TimeSpan _scrimFadeOut = TimeSpan.FromMilliseconds(SCRIM_FADE_OUT_MS);
 
     private readonly Window _dialog;
     private readonly ShadowDecorator _shadow;
-    private readonly AnimationClock _scrimClock;
+    private AnimationClock? _scrimClock;
     private double _scrimProgress;
     private bool _fadingOut;
 
@@ -46,9 +51,23 @@ internal sealed class InSurfaceDialogHost : UIElement, IVisualTreeHost
 
         // The owner does not move or dim on its own here the way a disabled window does, so the
         // dimming appearing in one frame reads as the whole page having been repainted.
-        _scrimClock = new AnimationClock(TimeSpan.FromMilliseconds(SCRIM_FADE_MS), Easing.EaseInOutCubic).AttachTo(this);
+        if (_scrimFadeIn <= TimeSpan.Zero)
+        {
+            _scrimProgress = 1;
+        }
+        else
+        {
+            EnsureScrimClock(_scrimFadeIn).Start();
+        }
+    }
+
+    // A clock rejects a duration of zero, so one is made only for a side that actually fades.
+    private AnimationClock EnsureScrimClock(TimeSpan duration)
+    {
+        _scrimClock ??= new AnimationClock(duration, Easing.EaseInOutCubic).AttachTo(this);
         _scrimClock.TickCallback = OnScrimTick;
-        _scrimClock.Start();
+        _scrimClock.Duration = duration;
+        return _scrimClock;
     }
 
     private void OnScrimTick(double easedProgress)
@@ -66,9 +85,18 @@ internal sealed class InSurfaceDialogHost : UIElement, IVisualTreeHost
     {
         IsHitTestVisible = false;
         _fadingOut = true;
-        _scrimClock.CompletedCallback = remove;
-        _scrimClock.Stop();
-        _scrimClock.Start();
+
+        if (_scrimFadeOut <= TimeSpan.Zero)
+        {
+            _scrimProgress = 0;
+            remove();
+            return;
+        }
+
+        var clock = EnsureScrimClock(_scrimFadeOut);
+        clock.CompletedCallback = remove;
+        clock.Stop();
+        clock.Start();
     }
 
     /// <summary>
@@ -77,6 +105,11 @@ internal sealed class InSurfaceDialogHost : UIElement, IVisualTreeHost
     /// </summary>
     internal void Detach()
     {
+        if (_scrimClock == null)
+        {
+            return;
+        }
+
         _scrimClock.CompletedCallback = null;
         _scrimClock.Stop();
     }
