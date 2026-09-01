@@ -1719,6 +1719,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             Owner.ActiveInSurfaceDialog = null;
         }
 
+        _inSurfaceHost.Detach();
         Owner?.OverlayLayer.Remove(_inSurfaceHost);
         Owner?.Invalidate();
         _inSurfaceHost = null;
