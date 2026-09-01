@@ -75,6 +75,15 @@ internal static partial class BrowserExports
         => BrowserPlatform.KeyUp(code, platformKey, (ModifierKeys)modifiers);
 
     [JSExport]
+    internal static void CompositionStart() => BrowserPlatform.CompositionStart();
+
+    [JSExport]
+    internal static void CompositionUpdate(string text) => BrowserPlatform.CompositionUpdate(text);
+
+    [JSExport]
+    internal static void CompositionEnd(string text) => BrowserPlatform.CompositionEnd(text);
+
+    [JSExport]
     internal static bool TextInput(string text) => BrowserPlatform.TextInput(text);
 
     [JSExport]
