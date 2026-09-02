@@ -36,6 +36,11 @@ internal sealed class InSurfaceDialogHost : UIElement, IVisualTreeHost
     private static readonly TimeSpan _scrimFadeIn = TimeSpan.FromMilliseconds(SCRIM_FADE_IN_MS);
     private static readonly TimeSpan _scrimFadeOut = TimeSpan.FromMilliseconds(SCRIM_FADE_OUT_MS);
 
+    // The accent applied raw reads harsher than on a real title bar, so the active border sits
+    // halfway between the plain border and the accent.
+    private const double ACTIVE_BORDER_ACCENT_BLEND = 0.5;
+    private const int BORDER_FADE_MS = 150;
+
     private readonly Window _dialog;
     private readonly Window _rootOwner;
     private readonly ShadowDecorator _shadow;
@@ -43,6 +48,7 @@ internal sealed class InSurfaceDialogHost : UIElement, IVisualTreeHost
     private AnimationClock? _scrimClock;
     private double _scrimProgress;
     private bool _fadingOut;
+    private bool _borderActive;
 
     internal InSurfaceDialogHost(Window dialog, UIElement content, Window owner)
     {
@@ -126,28 +132,23 @@ internal sealed class InSurfaceDialogHost : UIElement, IVisualTreeHost
 
     internal Window Dialog => _dialog;
 
-    /// <summary>Reapplies the border colour after the dialog's front-most or focused state changed.</summary>
+    /// <summary>Retargets the border colour after the dialog's front-most or focused state changed.</summary>
     internal void RefreshActiveBorder()
     {
+        // The dialog has no window of its own to be activated, so the chrome borrows the custom
+        // chrome rule: accented while it is the front dialog on a focused surface. The border
+        // carries a colour transition, so retargeting here fades instead of snapping.
+        _borderActive = _dialog.ActiveInSurfaceDialog == null && _rootOwner.IsActive;
         if (_frame is Border frame)
         {
-            frame.BorderBrush = ChromeBorderColor(frame.ThemeInternal);
+            frame.BorderBrush = BorderColorFor(frame.ThemeInternal);
         }
     }
 
-    // The dialog has no window of its own to be activated, so the chrome borrows the custom chrome
-    // rule: accent while it is the front dialog on a focused surface, the plain border otherwise.
-    private Color ChromeBorderColor(Theme theme)
-    {
-        if (_dialog.ActiveInSurfaceDialog == null && _rootOwner.IsActive)
-        {
-            return theme.Palette.Accent;
-        }
-        else
-        {
-            return theme.Palette.ControlBorder;
-        }
-    }
+    private Color BorderColorFor(Theme theme)
+        => _borderActive
+            ? theme.Palette.ControlBorder.Lerp(theme.Palette.Accent, ACTIVE_BORDER_ACCENT_BLEND)
+            : theme.Palette.ControlBorder;
 
     // Nothing paints behind the dialog here, so the frame has to supply what the window would have
     // had: an opaque surface, a border, rounded corners and a shadow to lift it off the owner.
@@ -171,8 +172,9 @@ internal sealed class InSurfaceDialogHost : UIElement, IVisualTreeHost
         }.WithTheme((theme, border) =>
         {
             border.Background = dialog.EffectiveOpaqueBackground;
-            border.BorderBrush = ChromeBorderColor(theme);
+            border.BorderBrush = BorderColorFor(theme);
         });
+        frame.Transitions = [Transition.Create(Control.BorderBrushProperty, BORDER_FADE_MS)];
         _frame = frame;
 
         return new ShadowDecorator
