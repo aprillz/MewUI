@@ -150,6 +150,36 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
         }
     }
 
+    /// <summary>
+    /// Moves a live entry to a new key without retiring it, so a surface repainted in place keeps
+    /// its registration named after the content it now holds. False when the old key is gone.
+    /// </summary>
+    internal bool TryRekey(RenderCacheKey oldKey, RenderCacheKey newKey)
+    {
+        if (oldKey == newKey)
+        {
+            return true;
+        }
+
+        lock (_gate)
+        {
+            ThrowIfDisposed();
+            if (!_entries.Remove(oldKey, out var entry))
+            {
+                return false;
+            }
+
+            if (_entries.Remove(newKey, out var occupant))
+            {
+                RetireEntry_NoLock(occupant);
+            }
+
+            entry.Rekey(newKey);
+            _entries[newKey] = entry;
+            return true;
+        }
+    }
+
     public void Release(RenderCacheKey key)
     {
         lock (_gate)
@@ -836,7 +866,7 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
             RenderResourceMetrics.PersistentResourceAdded(AccountedBytes);
         }
 
-        public RenderCacheKey Key { get; }
+        public RenderCacheKey Key { get; private set; }
 
         public IRenderSurface Surface { get; }
 
@@ -873,6 +903,8 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
         }
 
         public void Retire() => IsRetired = true;
+
+        public void Rekey(RenderCacheKey key) => Key = key;
 
         public void Dispose()
         {
