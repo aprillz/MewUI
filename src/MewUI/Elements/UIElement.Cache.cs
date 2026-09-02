@@ -145,12 +145,41 @@ public abstract partial class UIElement
     /// Renders this element by serving its cached bitmap, (re)building the cache first if missing
     /// or stale. Falls back to live rendering when the cache cannot be produced (e.g. zero size).
     /// </summary>
+    // Two content changes closer than this are a stream (a scroll, an animation inside the cache),
+    // not an isolated repaint.
+    private const double RAPID_CONTENT_CHANGE_MS = 100;
+
+    private long _lastRenderedCacheVersion;
+    private long _lastCacheContentChangeTicks;
+
     private void RenderCached(IGraphicsContext context)
     {
         var window = FindVisualRoot() as Window;
         var factory = window?.GraphicsFactory ?? Application.DefaultGraphicsFactory;
         int deviceGeneration = window?.DeviceGeneration ?? 0;
         var bitmapCache = (BitmapCache)CacheMode!;
+
+        // Content changing on consecutive frames makes a capture per frame, which costs more than
+        // not caching at all: the subtree renders in full either way and the capture adds a target
+        // switch, a second flush and the blit. A stream of changes therefore renders live, and the
+        // first frame whose content held still captures once and goes back to serving the bitmap.
+        long version = _contentVersion;
+        bool liveStream = false;
+        if (version != _lastRenderedCacheVersion)
+        {
+            long now = System.Diagnostics.Stopwatch.GetTimestamp();
+            double sinceMs = (now - _lastCacheContentChangeTicks) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+            liveStream = sinceMs <= RAPID_CONTENT_CHANGE_MS && bitmapCache.RenderAtScale == 1.0;
+            _lastCacheContentChangeTicks = now;
+            _lastRenderedCacheVersion = version;
+        }
+
+        if (liveStream)
+        {
+            OnRender(context);
+            RenderSubtree(context);
+            return;
+        }
 
         bool cacheRebuilt = EnsureCache(factory, context.DpiScale, deviceGeneration, bitmapCache);
 
