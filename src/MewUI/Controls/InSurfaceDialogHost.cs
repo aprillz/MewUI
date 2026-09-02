@@ -39,10 +39,6 @@ internal sealed class InSurfaceDialogHost : UIElement, IVisualTreeHost
     // The accent applied raw reads harsher than on a real title bar, so the active border sits
     // halfway between the plain border and the accent.
     private const double ACTIVE_BORDER_ACCENT_BLEND = 0.5;
-    private const int BORDER_FADE_MS = 150;
-
-    // The chrome enters and leaves the way a toast does, so the two overlay surfaces read as one family.
-    private const int CHROME_SLIDE_MS = 300;
 
     private readonly Window _dialog;
     private readonly Window _rootOwner;
@@ -69,7 +65,7 @@ internal sealed class InSurfaceDialogHost : UIElement, IVisualTreeHost
         _shadow = BuildChrome(dialog, content);
         _transition = new TransitionContentControl
         {
-            Transition = ContentTransition.CreateSlide(SlideDirection.Down, CHROME_SLIDE_MS),
+            Transition = ContentTransition.CreateFade(SCRIM_FADE_IN_MS),
         };
         _transition.TransitionCompleted += () =>
         {
@@ -196,8 +192,8 @@ internal sealed class InSurfaceDialogHost : UIElement, IVisualTreeHost
         {
             border.Background = dialog.EffectiveOpaqueBackground;
             border.BorderBrush = BorderColorFor(theme);
-        });
-        frame.Transitions = [Transition.Create(Control.BorderBrushProperty, BORDER_FADE_MS)];
+        }).Cached();
+        frame.Transitions = [Transition.Create(Control.BorderBrushProperty, SCRIM_FADE_IN_MS)];
         _frame = frame;
 
         return new ShadowDecorator
