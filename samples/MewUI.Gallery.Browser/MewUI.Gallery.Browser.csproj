@@ -25,6 +25,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The platform's own page-side module, imported by main.js. -->
+    <Content Include="../../src/MewUI.Platform.Browser/wwwroot/mewui-text-input.js" Link="wwwroot/mewui-text-input.js" CopyToOutputDirectory="PreserveNewest" />
     <!-- Served as static web assets so main.js can fetch them; there is no disk to preload from. -->
     <Content Include="../MewUI.Gallery/Resources/*.*" Link="wwwroot/Resources/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="../../assets/logo/logo_h-480.png" Link="wwwroot/Resources/logo_h-480.png" CopyToOutputDirectory="PreserveNewest" />

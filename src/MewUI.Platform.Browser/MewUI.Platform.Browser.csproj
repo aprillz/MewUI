@@ -13,4 +13,9 @@
     <ProjectReference Include="../MewUI/MewUI.csproj" AdditionalProperties="MewUITargetFrameworks=net10.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The page-side half of the platform: a host copies these next to its own loader. -->
+    <None Include="wwwroot/**" Pack="true" PackagePath="staticwebassets/" />
+  </ItemGroup>
+
 </Project>
