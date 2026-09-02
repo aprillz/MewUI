@@ -421,6 +421,11 @@ public sealed partial class NavigationView : Control, IVisualTreeHost
                 {
                     IsPaneOpen = false;
                 }
+
+                // The slide fraction parked by an earlier stay in this placement would otherwise
+                // leave the overlay sitting fully slid in.
+                _overlayProgress = 0;
+                _overlayClock?.Stop();
             }
             else
             {
