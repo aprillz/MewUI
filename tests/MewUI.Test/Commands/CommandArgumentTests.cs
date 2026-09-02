@@ -178,6 +178,59 @@ public sealed class CommandArgumentTests
         Assert.AreEqual("b", received, "an anchor inside the container resolves to the container's item");
     }
 
+    [TestMethod]
+    public void GridViewRow_ContextMenuCommandReceivesTheRowItem()
+    {
+        if (!OperatingSystem.IsWindows()) { Assert.Inconclusive("GDI backend is Windows-only."); return; }
+
+        var window = HeadlessWindow.Create();
+        var grid = new GridView { Width = 400, Height = 300 };
+        grid.ItemsSource = ItemsView.Create(Enumerable.Range(0, 20).Select(i => "Item " + i).ToArray());
+        grid.SetColumns(
+        [
+            new GridViewColumn<string>
+            {
+                Header = "Text",
+                Width = 200,
+                CellTemplate = new DelegateTemplate<string>(
+                    build: _ => new TextBlock(),
+                    bind: (view, item, _, _) => ((TextBlock)view).Text = item),
+            },
+        ]);
+
+        var command = new Command("test.row", "Row");
+        string? received = null;
+        window.Commands.Register(command, (string item) => received = item);
+        var menu = new ContextMenu();
+        menu.AddEntry(new MenuItem(command));
+        grid.PrepareContainer<string>((row, _, _, _) => row.ContextMenu = menu);
+
+        window.Content = grid;
+        window.PerformLayout();
+
+        GridViewRow? third = null;
+        grid.VisitRealizedRows((index, row) =>
+        {
+            if (index == 2)
+            {
+                third = row;
+            }
+        });
+        Assert.IsNotNull(third);
+
+        // Right-click inside the cell text rather than the row itself, so the event has to bubble
+        // through the cell to the row that carries the menu.
+        var cellBounds = ((FrameworkElement)third.Children[0]).Bounds;
+        window.SendClick(new Point(cellBounds.X + 5, cellBounds.Y + cellBounds.Height / 2), MouseButton.Right);
+        window.PerformLayout();
+        Assert.IsGreaterThan(0.0, menu.Bounds.Width, "the row's menu opened from a right-click on its cell");
+
+        var bounds = menu.Bounds;
+        window.SendClick(new Point(bounds.X + bounds.Width / 2, bounds.Y + 12));
+
+        Assert.AreEqual("Item 2", received, "the row's item reaches the handler as the operand");
+    }
+
     private static ArgumentHost MakeHost(object? argument)
         => new()
         {
