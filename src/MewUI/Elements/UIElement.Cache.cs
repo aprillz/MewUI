@@ -254,33 +254,47 @@ public abstract partial class UIElement
         long version = _contentVersion;
         Color? opaqueFill = ResolveOpaqueCacheFill();
 
+        var cacheKey = new RenderCacheKey(
+            RenderCacheEntryKind.ViewportSnapshot,
+            pixelWidth,
+            pixelHeight,
+            effectiveDpiScale,
+            opaqueFill is null ? RenderPixelFormat.Bgra8888Premultiplied : RenderPixelFormat.Bgra8888,
+            unchecked((ulong)version),
+            DeviceId: 0,
+            Scope: _bitmapCacheScope).ForDevice(factory);
+
         var entry = _cache;
         bool canReuse = entry != null
             && entry.PixelWidth == pixelWidth
             && entry.PixelHeight == pixelHeight
             && entry.DpiScale == effectiveDpiScale
             && entry.DeviceGeneration == deviceGeneration
-            && entry.OpaqueFill == opaqueFill
-            && (entry.PersistentLease == null || entry.Version == version);
+            && entry.OpaqueFill == opaqueFill;
 
         if (canReuse && entry!.Version == version)
         {
             return false;
         }
 
+        // Same surface, same image, same texture: only the content is stale, so it is repainted in
+        // place and the persistent registration moves to the key naming the new content. Retiring
+        // and re-acquiring here instead made every content change rebuild the lease, the image
+        // wrapper and the renderer image id, which during a scroll inside a cache is every frame.
+        if (canReuse && entry!.PersistentLease != null)
+        {
+            canReuse = factory.ResourceCache is RenderResourceCache resourceCache
+                && resourceCache.TryRekey(entry.PersistentKey, cacheKey);
+            if (canReuse)
+            {
+                entry.PersistentKey = cacheKey;
+            }
+        }
+
+
         if (!canReuse)
         {
             DisposeCacheEntry();
-
-            var cacheKey = new RenderCacheKey(
-                RenderCacheEntryKind.ViewportSnapshot,
-                pixelWidth,
-                pixelHeight,
-                effectiveDpiScale,
-                opaqueFill is null ? RenderPixelFormat.Bgra8888Premultiplied : RenderPixelFormat.Bgra8888,
-                unchecked((ulong)version),
-                DeviceId: 0,
-                Scope: _bitmapCacheScope).ForDevice(factory);
             if (factory.ResourceCache?.TryGet(cacheKey, out var cached) == true)
             {
                 entry = new CacheEntry
@@ -400,12 +414,13 @@ public abstract partial class UIElement
         }
     }
 
+
     private sealed class CacheEntry
     {
         public required IRenderSurface Surface { get; set; }
         public required IImage Image { get; set; }
         public IRenderCacheEntry? PersistentLease { get; set; }
-        public required RenderCacheKey PersistentKey { get; init; }
+        public required RenderCacheKey PersistentKey { get; set; }
         public required int PixelWidth { get; init; }
         public required int PixelHeight { get; init; }
         public required double DpiScale { get; init; }
