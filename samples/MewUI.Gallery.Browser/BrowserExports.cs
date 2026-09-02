@@ -101,6 +101,13 @@ internal static partial class BrowserExports
     internal static bool TextInput(string text) => BrowserPlatform.TextInput(text);
 
     [JSExport]
+    internal static string GetTextInputState() => BrowserPlatform.GetTextInputState();
+
+    [JSExport]
+    internal static void ReplaceText(int replacePrevious, int replaceNext, string text)
+        => BrowserPlatform.ReplaceText(replacePrevious, replaceNext, text);
+
+    [JSExport]
     internal static void FocusChanged(bool focused) => BrowserPlatform.FocusChanged(focused);
 
     /// <summary>File names the host should fetch, in the order the pages need them.</summary>
