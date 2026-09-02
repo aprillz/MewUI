@@ -241,6 +241,11 @@ internal sealed class BrowserPlatformHost : IPlatformHost
     internal bool TextInput(string text)
         => RoutePointer(() => _window?.TextInput(text) == true);
 
+    internal string GetTextInputState() => _window?.GetTextInputState() ?? string.Empty;
+
+    internal void ReplaceText(int replacePrevious, int replaceNext, string text)
+        => RoutePointer(() => { _window?.ReplaceText(replacePrevious, replaceNext, text); return false; });
+
     internal void FocusChanged(bool focused)
     {
         _pageFocused = focused;

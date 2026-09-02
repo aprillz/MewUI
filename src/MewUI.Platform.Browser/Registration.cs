@@ -1,3 +1,4 @@
+using Aprillz.MewUI.Input;
 using Aprillz.MewUI.Platform.Browser;
 
 namespace Aprillz.MewUI;
@@ -30,8 +31,9 @@ public static class BrowserPlatform
     {
         // The canvas is the only surface, so popups, menus and drag previews have to live inside it.
         PopupManager.PreferNativePopups = false;
-        Input.WindowDragDropRouter.PreferNativePreviewWindow = false;
+        WindowDragDropRouter.PreferNativePreviewWindow = false;
         Window.PreferNativeDialogWindows = false;
+        
         Application.RegisterPlatformHost(
             static () => new BrowserPlatformHost(),
             Platform.PlatformSurfaceKind.Browser,
@@ -126,6 +128,16 @@ public static class BrowserPlatform
 
     public static bool TextInput(string text)
         => BrowserPlatformHost.Active?.TextInput(text) == true;
+
+    /// <summary>
+    /// Text around the caret for the page to mirror into its IME field, as "start:end:text" over
+    /// that text; empty when nothing editable holds focus.
+    /// </summary>
+    public static string GetTextInputState() => BrowserPlatformHost.Active?.GetTextInputState() ?? string.Empty;
+
+    /// <summary>Replaces the given number of characters around the caret with <paramref name="text"/>.</summary>
+    public static void ReplaceText(int replacePrevious, int replaceNext, string text)
+        => BrowserPlatformHost.Active?.ReplaceText(replacePrevious, replaceNext, text);
 
     public static void FocusChanged(bool focused)
     {

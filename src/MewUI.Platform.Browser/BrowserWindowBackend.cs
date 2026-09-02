@@ -15,6 +15,10 @@ internal sealed class BrowserWindowBackend : IWindowBackend
     // Stand-in line height for a text control that has not been laid out yet.
     private const double DEFAULT_CARET_HEIGHT_DIP = 16;
 
+    // Cap on either side of the caret for the text mirrored into the page's IME field. A paragraph
+    // is the natural unit for reconversion; the cap keeps a single long one off the DOM.
+    private const int MIRROR_MAX_CHARS = 1024;
+
     private double _panBankX;
     private double _panBankY;
 
@@ -592,6 +596,100 @@ internal sealed class BrowserWindowBackend : IWindowBackend
         }
 
         return args.Handled;
+    }
+
+    /// <summary>
+    /// Returns the text around the caret for the page to mirror into its IME field, as
+    /// "start:end:text" over that text; empty when nothing editable holds focus.
+    /// </summary>
+    // The mirror is what an IME can revise: a browser IME reads and edits the DOM field, not the
+    // app, so text it may reconvert has to be sitting there with the caret in the same place.
+    internal string GetTextInputState()
+    {
+        if (!_shown || _disposed || Window.FocusManager.FocusedElement is not ITextCompositionEditor editor)
+        {
+            return string.Empty;
+        }
+
+        var (selectionStart, selectionEnd) = editor.SelectionRange;
+        int start = Math.Clamp(Math.Min(selectionStart, selectionEnd), 0, editor.TextLength);
+        int end = Math.Clamp(Math.Max(selectionStart, selectionEnd), start, editor.TextLength);
+
+        // Only the caret's own paragraph is mirrored, bounded on both sides: a whole document would
+        // be copied into the DOM on every caret move, and no IME revises across a line break.
+        int mirrorStart = editor.TextLength == 0 ? 0 : FindParagraphStart(editor, start);
+        int mirrorEnd = editor.TextLength == 0 ? 0 : FindParagraphEnd(editor, end);
+        string mirror = mirrorEnd > mirrorStart ? editor.GetTextSubstring(mirrorStart, mirrorEnd - mirrorStart) : string.Empty;
+        return $"{start - mirrorStart}:{end - mirrorStart}:{mirror}";
+    }
+
+    private static int FindParagraphStart(ITextCompositionEditor editor, int caret)
+    {
+        int limit = Math.Max(0, caret - MIRROR_MAX_CHARS);
+        for (int index = caret; index > limit; index--)
+        {
+            if (editor.GetTextSubstring(index - 1, 1)[0] == '\n')
+            {
+                return index;
+            }
+        }
+
+        return limit;
+    }
+
+    private static int FindParagraphEnd(ITextCompositionEditor editor, int caret)
+    {
+        int limit = Math.Min(editor.TextLength, caret + MIRROR_MAX_CHARS);
+        for (int index = caret; index < limit; index++)
+        {
+            if (editor.GetTextSubstring(index, 1)[0] == '\n')
+            {
+                return index;
+            }
+        }
+
+        return limit;
+    }
+
+    /// <summary>
+    /// Replaces <paramref name="replacePrevious"/> characters before and <paramref name="replaceNext"/>
+    /// after the caret with <paramref name="text"/>, the way the page's IME field was just edited.
+    /// </summary>
+    internal void ReplaceText(int replacePrevious, int replaceNext, string text)
+    {
+        if (!_shown || _disposed)
+        {
+            return;
+        }
+
+        bool replaces = replacePrevious > 0 || replaceNext > 0;
+        if (Window.FocusManager.FocusedElement is ITextCompositionEditor editor)
+        {
+            if (replaces)
+            {
+                var (selectionStart, selectionEnd) = editor.SelectionRange;
+                int start = Math.Clamp(Math.Min(selectionStart, selectionEnd) - replacePrevious, 0, editor.TextLength);
+                int end = Math.Clamp(Math.Max(selectionStart, selectionEnd) + replaceNext, start, editor.TextLength);
+                editor.SetSelectionRangeForPlatform(start, end);
+            }
+        }
+        else if (replaces)
+        {
+            // Nothing to align the replacement against, and inserting alone would duplicate text.
+            return;
+        }
+
+        if (text.Length != 0)
+        {
+            TextInput(text);
+        }
+        else if (replaces)
+        {
+            // A replacement by nothing is a deletion of what was just selected, which is what the
+            // control does for a backspace over a selection.
+            KeyDown("Backspace", 0, ModifierKeys.None, isRepeat: false);
+            KeyUp("Backspace", 0, ModifierKeys.None);
+        }
     }
 
     internal void SetFocus(bool focused)
