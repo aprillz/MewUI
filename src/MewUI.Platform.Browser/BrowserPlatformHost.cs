@@ -8,6 +8,8 @@ internal sealed class BrowserPlatformHost : IPlatformHost
     private readonly TaskCompletionSource _completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private BrowserDispatcher? _dispatcher;
     private BrowserWindowBackend? _window;
+    // Focus state the page reported last; the window backend is created after the first report.
+    private bool _pageFocused;
     private SynchronizationContext? _previousContext;
     private bool _running;
     private bool _framePending = true;
@@ -36,7 +38,12 @@ internal sealed class BrowserPlatformHost : IPlatformHost
             throw new NotSupportedException("MewUI Browser First Boot supports one top-level Window.");
         }
 
-        return _window = new BrowserWindowBackend(this, window);
+        _window = new BrowserWindowBackend(this, window);
+
+        // The page reports its focus once at boot, before this window exists; without replaying the
+        // cached state here the window stays inactive until the next real focus change.
+        _window.SetFocus(_pageFocused);
+        return _window;
     }
 
     public IDispatcher CreateDispatcher(nint windowHandle) => new BrowserDispatcher();
@@ -234,7 +241,10 @@ internal sealed class BrowserPlatformHost : IPlatformHost
         => RoutePointer(() => _window?.TextInput(text) == true);
 
     internal void FocusChanged(bool focused)
-        => RoutePointer(() => { _window?.SetFocus(focused); return false; });
+    {
+        _pageFocused = focused;
+        RoutePointer(() => { _window?.SetFocus(focused); return false; });
+    }
 
     private static bool RoutePointer(Func<bool> route)
     {
