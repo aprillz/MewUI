@@ -152,8 +152,21 @@ partial class GalleryView
             r.IsActive.Changed += TriggerApply;
         }
 
+        var toggleActive = new Command("gallery.grid.toggleActive", "Toggle _Active");
+        var clearError = new Command("gallery.grid.clearError", "Clear _Error");
+        var removeRow = new Command("gallery.grid.remove", "_Remove Row");
+
+        // One menu for every row: the row it opened over reaches the card's handlers as the typed
+        // argument, and Clear Error is enabled only on rows that have one.
+        var rowMenu = new ContextMenu()
+            .Item(toggleActive)
+            .Item(clearError)
+            .Separator()
+            .Item(removeRow);
+
         grid = new GridView()
             .ItemsSource(all)
+            .PrepareContainer<ComplexGridRow>((row, _, _, _) => row.ContextMenu = rowMenu)
             .OnSelectionChanged(obj =>
             {
                 if (obj is ComplexGridRow row)
@@ -231,6 +244,16 @@ partial class GalleryView
             new DockPanel()
                 .Height(270)
                 .Spacing(8)
+                .Apply(card =>
+                {
+                    card.Commands.Register(toggleActive, (ComplexGridRow row) => row.IsActive.Value = !row.IsActive.Value);
+                    card.Commands.Register(clearError, (ComplexGridRow row) => row.HasError.Value = false, (ComplexGridRow row) => row.HasError.Value);
+                    card.Commands.Register(removeRow, (ComplexGridRow row) =>
+                    {
+                        all.Remove(row);
+                        ApplyView();
+                    });
+                })
                 .Children(
                     new StackPanel()
                         .DockTop()
