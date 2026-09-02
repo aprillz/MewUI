@@ -148,6 +148,21 @@ public sealed partial class Border : Control, IVisualTreeHost, ILogicalTreeHost
             var bounds = metrics.Bounds;
             var radius = metrics.UniformRadius;
 
+            // The background stops at the stroke's centre line, the way WPF draws its simple
+            // border: filled to the outer contour it would sit under the stroke's outer
+            // antialiased fringe and bleed past the border.
+            if (metrics.UniformThickness > 0 && borderBrush.A > 0)
+            {
+                double inset = metrics.UniformThickness / 2;
+                bounds = bounds.Inflate(-inset, -inset);
+                radius = Math.Max(0, radius - inset);
+            }
+
+            if (bounds.Width <= 0 || bounds.Height <= 0)
+            {
+                return;
+            }
+
             if (radius > 0)
             {
                 context.FillRoundedRectangle(bounds, radius, radius, bg);
