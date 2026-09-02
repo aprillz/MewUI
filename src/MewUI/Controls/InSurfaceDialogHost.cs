@@ -37,7 +37,9 @@ internal sealed class InSurfaceDialogHost : UIElement, IVisualTreeHost
     private static readonly TimeSpan _scrimFadeOut = TimeSpan.FromMilliseconds(SCRIM_FADE_OUT_MS);
 
     private readonly Window _dialog;
+    private readonly Window _rootOwner;
     private readonly ShadowDecorator _shadow;
+    private Border? _frame;
     private AnimationClock? _scrimClock;
     private double _scrimProgress;
     private bool _fadingOut;
@@ -45,6 +47,14 @@ internal sealed class InSurfaceDialogHost : UIElement, IVisualTreeHost
     internal InSurfaceDialogHost(Window dialog, UIElement content, Window owner)
     {
         _dialog = dialog;
+
+        var root = owner;
+        while (root.Owner != null)
+        {
+            root = root.Owner;
+        }
+
+        _rootOwner = root;
         _shadow = BuildChrome(dialog, content);
         Parent = owner;
         _shadow.Parent = this;
@@ -116,9 +126,32 @@ internal sealed class InSurfaceDialogHost : UIElement, IVisualTreeHost
 
     internal Window Dialog => _dialog;
 
+    /// <summary>Reapplies the border colour after the dialog's front-most or focused state changed.</summary>
+    internal void RefreshActiveBorder()
+    {
+        if (_frame is Border frame)
+        {
+            frame.BorderBrush = ChromeBorderColor(frame.ThemeInternal);
+        }
+    }
+
+    // The dialog has no window of its own to be activated, so the chrome borrows the custom chrome
+    // rule: accent while it is the front dialog on a focused surface, the plain border otherwise.
+    private Color ChromeBorderColor(Theme theme)
+    {
+        if (_dialog.ActiveInSurfaceDialog == null && _rootOwner.IsActive)
+        {
+            return theme.Palette.Accent;
+        }
+        else
+        {
+            return theme.Palette.ControlBorder;
+        }
+    }
+
     // Nothing paints behind the dialog here, so the frame has to supply what the window would have
     // had: an opaque surface, a border, rounded corners and a shadow to lift it off the owner.
-    private static ShadowDecorator BuildChrome(Window dialog, UIElement content)
+    private ShadowDecorator BuildChrome(Window dialog, UIElement content)
     {
         var body = new Border { Padding = dialog.Padding, Child = content };
         var stack = new DockPanel();
@@ -138,8 +171,9 @@ internal sealed class InSurfaceDialogHost : UIElement, IVisualTreeHost
         }.WithTheme((theme, border) =>
         {
             border.Background = dialog.EffectiveOpaqueBackground;
-            border.BorderBrush = theme.Palette.ControlBorder;
+            border.BorderBrush = ChromeBorderColor(theme);
         });
+        _frame = frame;
 
         return new ShadowDecorator
         {

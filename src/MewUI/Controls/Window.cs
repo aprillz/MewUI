@@ -1675,6 +1675,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         owner.OverlayLayer.Add(_inSurfaceHost);
         _lifetimeState = WindowLifetimeState.Shown;
         owner.ActiveInSurfaceDialog = this;
+        owner._inSurfaceHost?.RefreshActiveBorder();
         Closed += RemoveInSurfaceHost;
 
         // The dialog shares its owner's focus manager, so keys would keep going to whatever the
@@ -1717,6 +1718,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         if (Owner != null && ReferenceEquals(Owner.ActiveInSurfaceDialog, this))
         {
             Owner.ActiveInSurfaceDialog = null;
+            Owner._inSurfaceHost?.RefreshActiveBorder();
         }
 
         // The dialog is closed as far as its caller is concerned; the host only stays on screen long
@@ -2601,6 +2603,12 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
         IsActive = isActive;
         FocusManager.InvalidateFocusVisualStates();
+
+        // Dialogs living in this surface have no backend of their own to hear about the change.
+        for (var dialog = ActiveInSurfaceDialog; dialog != null; dialog = dialog.ActiveInSurfaceDialog)
+        {
+            dialog._inSurfaceHost?.RefreshActiveBorder();
+        }
     }
 
     internal void RaiseLoaded()
