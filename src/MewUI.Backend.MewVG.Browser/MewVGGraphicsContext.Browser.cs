@@ -234,14 +234,43 @@ internal sealed partial class MewVGWin32GraphicsContext
             _ => 0,
         };
 
+        double destX = bounds.X + offsetX;
+        double destY = bounds.Y + offsetY;
+
+        // Snapped on the DEVICE grid, translation included, the way the desktop backends snap
+        // text: the run's texture then maps texel-for-pixel instead of being bilinearly smeared
+        // at a fractional offset, and a cache capture (which differs from the window pass by an
+        // integer-pixel translate) lands its rows on the same grid as live rendering.
+        if (_textPixelSnap && _transform.M12 == 0f && _transform.M21 == 0f)
+        {
+            double worldX = destX * _transform.M11 + _transform.M31;
+            double worldY = destY * _transform.M22 + _transform.M32;
+            double snappedX = SnapTextDevicePx(worldX * DpiScale) / DpiScale;
+            double snappedY = SnapTextDevicePx(worldY * DpiScale) / DpiScale;
+            if (_transform.M11 != 0f)
+            {
+                destX = (snappedX - _transform.M31) / _transform.M11;
+            }
+
+            if (_transform.M22 != 0f)
+            {
+                destY = (snappedY - _transform.M32) / _transform.M22;
+            }
+        }
+
         DrawImagePattern(
             imageId,
-            new Rect(bounds.X + offsetX, bounds.Y + offsetY, drawWidth, drawHeight),
+            new Rect(destX, destY, drawWidth, drawHeight),
             1f,
             sourceRect: null,
             widthPx,
             heightPx);
     }
+
+    // Quantized to the 1/64 px font grid before the half-pixel round, so the float translate a
+    // cache capture carries cannot flip a midpoint row to a different pixel than the window pass.
+    private static double SnapTextDevicePx(double valuePx)
+        => Math.Round(Math.Round(valuePx * 64) / 64, MidpointRounding.AwayFromZero);
 
     public override void DrawImage(IImage image, Point location)
     {
