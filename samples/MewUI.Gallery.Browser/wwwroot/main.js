@@ -113,6 +113,10 @@ function clientPoint(event) {
 // slider, scroll bar or splitter captures to consume the movement and keeps it.
 const TOUCH_PAN_THRESHOLD_PX = 8;
 
+// A finger held still this long asks for the context menu, the way a platform long press maps to a
+// right click. Movement past the pan threshold or an early release calls it off.
+const LONG_PRESS_MS = 500;
+
 // Selection waits for the release on touch, so the press has to say which device sent it.
 function pointerTypeOf(event) {
     if (event.pointerType === 'touch') {
@@ -131,6 +135,7 @@ const activePointers = new Set();
 
 function endTouchGesture(pointerId) {
     if (touchGesture !== null && (pointerId === undefined || touchGesture.pointerId === pointerId)) {
+        clearTimeout(touchGesture.longPressTimer);
         touchGesture = null;
     }
 }
@@ -158,6 +163,11 @@ canvas.addEventListener('pointermove', event => {
     }
 
     if (gesture !== null) {
+        // The press already became a right click; the rest of this touch means nothing.
+        if (gesture.longPressed) {
+            return;
+        }
+
         const travelX = point.x - gesture.startX;
         const travelY = point.y - gesture.startY;
         const travel = Math.hypot(travelX, travelY);
@@ -166,6 +176,7 @@ canvas.addEventListener('pointermove', event => {
             // pressed, and spend the rest of the gesture scrolling. Only the threshold itself is
             // given up: anchoring at the crossing point instead would drop this whole move, which
             // is what made a gesture travel less than the finger did.
+            clearTimeout(gesture.longPressTimer);
             const consumed = TOUCH_PAN_THRESHOLD_PX / travel;
             gesture.panning = true;
             gesture.lastX = gesture.startX + travelX * consumed;
@@ -202,7 +213,24 @@ canvas.addEventListener('pointerdown', event => {
     // Only the first finger drives a scroll; a second one is left to the normal pointer path.
     const tracksTouch = event.pointerType === 'touch' && !app.CaptureConsumesDrag() && touchGesture === null;
     if (tracksTouch) {
-        touchGesture = { pointerId: event.pointerId, startX: point.x, startY: point.y, lastX: point.x, lastY: point.y, panning: false };
+        const gesture = touchGesture = { pointerId: event.pointerId, startX: point.x, startY: point.y,
+            lastX: point.x, lastY: point.y, screenX: event.screenX, screenY: event.screenY,
+            panning: false, longPressed: false, longPressTimer: 0 };
+        gesture.longPressTimer = setTimeout(() => {
+            if (touchGesture !== gesture || gesture.panning) {
+                return;
+            }
+
+            // The left press is spent: what was pressed must let go before the right click lands,
+            // or the menu opens over a control still holding a touch press.
+            gesture.longPressed = true;
+            wake();
+            app.PointerCancel();
+            app.PointerButton(gesture.startX, gesture.startY, gesture.screenX, gesture.screenY,
+                2, 2, true, performance.now(), 0, 1);
+            app.PointerButton(gesture.startX, gesture.startY, gesture.screenX, gesture.screenY,
+                2, 0, false, performance.now(), 0, 1);
+        }, LONG_PRESS_MS);
     }
 
     // Keeping the capture is what makes the release land on the canvas even when the finger ends
@@ -218,7 +246,16 @@ canvas.addEventListener('pointerdown', event => {
 canvas.addEventListener('pointerup', event => {
     wake();
     const panned = touchGesture !== null && touchGesture.pointerId === event.pointerId && touchGesture.panning;
+    const longPressed = touchGesture !== null && touchGesture.pointerId === event.pointerId && touchGesture.longPressed;
     endTouchGesture(event.pointerId);
+
+    // The press was already replaced by a right click, so this release has nothing left to say.
+    if (longPressed) {
+        if (canvas.hasPointerCapture(event.pointerId)) {
+            canvas.releasePointerCapture(event.pointerId);
+        }
+        return;
+    }
 
     // The press was already cancelled when the scroll began, so releasing would report a click.
     if (panned) {
