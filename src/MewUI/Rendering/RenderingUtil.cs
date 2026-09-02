@@ -3,7 +3,13 @@ namespace Aprillz.MewUI.Rendering;
 internal static class RenderingUtil
 {
     public static int RoundToPixelInt(double value, double dpiScale)
-        => (int)Math.Round(value * dpiScale, MidpointRounding.AwayFromZero);
+    {
+        // Quantized to the 1/64 px font grid before rounding: a cache pass differs from the window
+        // pass only by a float-precision translation, and folding that error away keeps a midpoint
+        // coordinate from rounding to different pixels in the two passes.
+        double devicePx = Math.Round(value * dpiScale * 64) / 64;
+        return (int)Math.Round(devicePx, MidpointRounding.AwayFromZero);
+    }
 
     public static int CeilToPixelInt(double value, double dpiScale)
         => (int)Math.Ceiling(value * dpiScale);
