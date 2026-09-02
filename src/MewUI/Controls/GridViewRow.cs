@@ -9,9 +9,10 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 /// <remarks>
 /// Reachable from <c>PrepareContainer</c>, so an application can attach behavior to the whole row
-/// rather than repeating it in every cell template.
+/// rather than repeating it in every cell template. It also supplies <see cref="Item"/> as the
+/// operand of commands invoked from within it.
 /// </remarks>
-public sealed class GridViewRow : Panel
+public sealed class GridViewRow : Panel, ICommandArgumentSource
 {
     private readonly GridView _owner;
     private readonly List<Cell> _cells = new();
@@ -25,6 +26,12 @@ public sealed class GridViewRow : Panel
 
     /// <summary>Whether the item this row holds is selected.</summary>
     public static readonly MewProperty<bool> IsSelectedProperty = IsSelectedPropertyKey.Property;
+
+    private static readonly MewPropertyKey<object?> ItemPropertyKey =
+        MewProperty<object?>.RegisterReadOnly<GridViewRow>(nameof(Item), null);
+
+    /// <summary>The item this row currently holds.</summary>
+    public static readonly MewProperty<object?> ItemProperty = ItemPropertyKey.Property;
 
     internal GridViewRow(GridView owner)
     {
@@ -40,6 +47,13 @@ public sealed class GridViewRow : Panel
     /// the selection from the grid's own state, not from this property.
     /// </summary>
     public bool IsSelected => GetValue(IsSelectedProperty);
+
+    /// <summary>
+    /// Gets the item this row currently holds, or null when it holds none.
+    /// </summary>
+    public object? Item => GetValue(ItemProperty);
+
+    object? ICommandArgumentSource.CommandArgument => Item;
 
     internal void SetIsSelected(bool isSelected) => SetValue(IsSelectedPropertyKey, isSelected);
 
@@ -172,6 +186,7 @@ public sealed class GridViewRow : Panel
     internal void Bind(object? item, int index)
     {
         _rowIndex = index;
+        SetValue(ItemPropertyKey, item);
         for (int i = 0; i < _cells.Count; i++)
         {
             _cells[i].Bind(item, index);
@@ -187,6 +202,7 @@ public sealed class GridViewRow : Panel
             _cells[i].Unbind();
         }
 
+        SetValue(ItemPropertyKey, null);
         InvalidateMeasure();
     }
 

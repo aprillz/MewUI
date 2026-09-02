@@ -8,11 +8,12 @@ namespace Aprillz.MewUI;
 /// </summary>
 public readonly struct CommandContext
 {
-    internal CommandContext(Window window, Element? source, CancellationToken cancellationToken)
+    internal CommandContext(Window window, Element? source, CancellationToken cancellationToken, object? argument = null)
     {
         Window = window;
         Source = source;
         CancellationToken = cancellationToken;
+        Argument = argument;
     }
 
     /// <summary>
@@ -29,4 +30,10 @@ public readonly struct CommandContext
     /// Gets the cancellation token for asynchronous handlers.
     /// </summary>
     public CancellationToken CancellationToken { get; }
+
+    /// <summary>
+    /// Gets the invocation operand resolved from the nearest <see cref="ICommandArgumentSource"/>;
+    /// only typed handlers consume it, as their parameter.
+    /// </summary>
+    internal object? Argument { get; }
 }

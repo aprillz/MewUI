@@ -67,7 +67,22 @@ public sealed class CommandRouter
             return false;
         }
 
-        var context = new CommandContext(_window, source: null, CancellationToken.None);
+        var context = new CommandContext(_window, source: null, CancellationToken.None, ResolveArgument(handler, target));
+        return handler.CanExecute(in context);
+    }
+
+    /// <summary>
+    /// Queries with an operand captured earlier (a menu snapshots it when it opens) instead of
+    /// resolving one from the target now.
+    /// </summary>
+    internal bool CanExecute(Command command, CommandTarget target, object? argument)
+    {
+        if (!TryResolve(command, target, out var handler))
+        {
+            return false;
+        }
+
+        var context = new CommandContext(_window, source: null, CancellationToken.None, argument);
         return handler.CanExecute(in context);
     }
 
@@ -91,7 +106,7 @@ public sealed class CommandRouter
             return false;
         }
 
-        var context = new CommandContext(_window, source, cancellationToken);
+        var context = new CommandContext(_window, source, cancellationToken, ResolveArgument(handler, target));
         if (!handler.CanExecute(in context))
         {
             return false;
@@ -112,7 +127,25 @@ public sealed class CommandRouter
             return false;
         }
 
-        var context = new CommandContext(_window, source, CancellationToken.None);
+        return TryExecuteFromInput(handler, target, source, ResolveArgument(handler, target));
+    }
+
+    /// <summary>
+    /// Input dispatch with an operand captured earlier instead of one resolved from the target now.
+    /// </summary>
+    internal bool TryExecuteFromInput(Command command, CommandTarget target, Element? source, object? argument)
+    {
+        if (!TryResolve(command, target, out var handler))
+        {
+            return false;
+        }
+
+        return TryExecuteFromInput(handler, target, source, argument);
+    }
+
+    private bool TryExecuteFromInput(CommandHandler handler, CommandTarget target, Element? source, object? argument)
+    {
+        var context = new CommandContext(_window, source, CancellationToken.None, argument);
         if (!handler.CanExecute(in context))
         {
             return false;
@@ -190,6 +223,32 @@ public sealed class CommandRouter
 
         handler = null!;
         return false;
+    }
+
+    /// <summary>
+    /// Resolves the invocation operand: the value of the nearest <see cref="ICommandArgumentSource"/>
+    /// on the anchor's context chain, the anchor itself included, or null when there is none.
+    /// </summary>
+    internal static object? ResolveArgument(Element anchor)
+    {
+        int steps = 0;
+        for (Element? current = anchor; current != null && steps < MAX_CHAIN_LENGTH; current = current.ContextParent, steps++)
+        {
+            if (current is ICommandArgumentSource source)
+            {
+                return source.CommandArgument;
+            }
+        }
+
+        return null;
+    }
+
+    private static object? ResolveArgument(CommandHandler handler, CommandTarget target)
+    {
+        // Only typed handlers read the operand, so the chain walk is skipped for every other shape.
+        return handler.AcceptsArgument && target.OriginElement is Element anchor
+            ? ResolveArgument(anchor)
+            : null;
     }
 
     private static bool TryResolveScopeChain(CommandScope scope, Command command, out CommandHandler handler)

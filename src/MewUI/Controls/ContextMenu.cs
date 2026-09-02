@@ -12,11 +12,15 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
     private static readonly bool _defaultStyleRegistered =
         DefaultStyles.Register<ContextMenu>(DefaultStyles.CreateContextMenuStyle);
 
-    // Owner context captured at ShowAt (or inherited from the parent menu / preset by MenuBar):
+    // Owner context captured at Show (or inherited from the parent menu / preset by MenuBar):
     // command items resolve CanExecute, execution and shortcut labels against it so popup focus
     // never changes the semantic target.
     private CommandTarget _capturedCommandTarget;
     private CommandTarget? _presetCommandTarget;
+
+    // Operand captured with the target: typed handlers act on the item the menu opened over even
+    // after the container it came from is recycled to another item.
+    private object? _capturedCommandArgument;
 
     private const double SubMenuGlyphAreaWidth = 14;
     private const double ShortcutColumnGap = 12;
@@ -287,7 +291,7 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
 
             if (item.Command is Command command)
             {
-                bool enabled = window.CommandRouter.CanExecute(command, _capturedCommandTarget);
+                bool enabled = window.CommandRouter.CanExecute(command, _capturedCommandTarget, _capturedCommandArgument);
                 string? shortcutText = InputMapResolver.GetEffectiveGestureText(
                     window, command, _capturedCommandTarget.OriginElement);
                 item.ApplyCommandState(enabled, shortcutText);
@@ -422,6 +426,7 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
 
         SetValue(PlacementTargetPropertyKey, placementTarget);
         _capturedCommandTarget = _presetCommandTarget ?? CommandTarget.From(placementTarget);
+        _capturedCommandArgument = CommandRouter.ResolveArgument(placementTarget);
 
         UpdateCommandPresentation(window);
         PrepareMaterializedIcons();
@@ -561,7 +566,7 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
 
             if (item.Command is Command command)
             {
-                bool enabled = window.CommandRouter.CanExecute(command, _capturedCommandTarget);
+                bool enabled = window.CommandRouter.CanExecute(command, _capturedCommandTarget, _capturedCommandArgument);
                 string? shortcutText = InputMapResolver.GetEffectiveGestureText(
                     window, command, _capturedCommandTarget.OriginElement);
                 changed |= item.ApplyCommandState(enabled, shortcutText);
@@ -955,7 +960,7 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
         {
             if (FindVisualRoot() is Window window)
             {
-                window.CommandRouter.TryExecuteFromInput(command, _capturedCommandTarget, this);
+                window.CommandRouter.TryExecuteFromInput(command, _capturedCommandTarget, this, _capturedCommandArgument);
             }
 
         }
@@ -1078,6 +1083,7 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
 
         // Sub-menus inherit the same target snapshot so nesting never re-targets commands.
         subMenuPopup._capturedCommandTarget = _capturedCommandTarget;
+        subMenuPopup._capturedCommandArgument = _capturedCommandArgument;
         subMenuPopup.SetValue(PlacementTargetPropertyKey, PlacementTarget);
         subMenuPopup.UpdateCommandPresentation(window);
         subMenuPopup.PrepareMaterializedIcons();
