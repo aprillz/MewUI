@@ -537,6 +537,32 @@ partial class GalleryView
         var status = new ObservableValue<string>(string.Empty);
         void UpdateStatus() => status.Value = $"Messages: {messages.Count}   OffsetY: {list.VerticalOffset:0.#}";
 
+        var replyCommand = new Command("gallery.chat.reply", "Reply");
+        var deleteCommand = new Command("gallery.chat.delete", "Delete");
+        var copyCommand = new Command("gallery.chat.copy", "Copy");
+
+        // One menu instance for every row: it captures the message of the container it opens over,
+        // and the typed handlers on the card receive that message.
+        var messageMenu = new ContextMenu()
+            .Item("Reply", replyCommand)
+            .Item("Delete", deleteCommand)
+            .Separator()
+            .Item("Copy", copyCommand);
+
+        void Reply(ChatMessage msg)
+        {
+            input.Value = $"@{msg.Sender} ";
+            ScrollToBottom();
+        }
+
+        static void Copy(ChatMessage msg)
+        {
+            if (Application.IsRunning)
+            {
+                Application.Current.PlatformServices.Clipboard?.TrySetText(msg.Text);
+            }
+        }
+
         return Card(
             "ItemsControl (chat / variable height)",
             new DockPanel()
@@ -544,6 +570,12 @@ partial class GalleryView
                 .MaxWidth(960)
                 .Height(320)
                 .Spacing(6)
+                .Apply(card =>
+                {
+                    card.Commands.Register(replyCommand, (ChatMessage msg) => Reply(msg));
+                    card.Commands.Register(deleteCommand, (ChatMessage msg) => messages.Remove(msg), (ChatMessage msg) => msg.Mine);
+                    card.Commands.Register(copyCommand, (ChatMessage msg) => Copy(msg));
+                })
                 .Children(
                     new StackPanel()
                         .DockTop()
@@ -611,6 +643,7 @@ partial class GalleryView
                             .BorderThickness(t.Metrics.ControlBorderThickness))
                         .ItemsSource(view)
                         .ItemPadding(Thickness.Zero)
+                        .PrepareContainer<ChatMessage>((container, _, _, _) => container.ContextMenu = messageMenu)
                         .ItemTemplate(new DelegateTemplate<ChatMessage>(
                             build: ctx => new Border()
                                 .Register(ctx, "Bubble")
