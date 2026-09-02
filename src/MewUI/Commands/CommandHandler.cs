@@ -11,11 +11,44 @@ internal abstract class CommandHandler
     public Command Command { get; }
 
     /// <summary>
+    /// Whether the handler consumes the invocation operand; the router resolves one only for these.
+    /// </summary>
+    public virtual bool AcceptsArgument => false;
+
+    /// <summary>
     /// Queries current state; a handler without a can-execute predicate is always executable.
     /// </summary>
     public abstract bool CanExecute(in CommandContext context);
 
     public abstract ValueTask ExecuteAsync(in CommandContext context);
+}
+
+internal sealed class ArgumentCommandHandler<TArg> : CommandHandler
+{
+    private readonly Action<TArg> _execute;
+    private readonly Func<TArg, bool>? _canExecute;
+
+    public ArgumentCommandHandler(Command command, Action<TArg> execute, Func<TArg, bool>? canExecute)
+        : base(command)
+    {
+        _execute = execute;
+        _canExecute = canExecute;
+    }
+
+    public override bool AcceptsArgument => true;
+
+    public override bool CanExecute(in CommandContext context)
+        => context.Argument is TArg argument && (_canExecute?.Invoke(argument) ?? true);
+
+    public override ValueTask ExecuteAsync(in CommandContext context)
+    {
+        if (context.Argument is TArg argument)
+        {
+            _execute(argument);
+        }
+
+        return default;
+    }
 }
 
 internal sealed class SimpleCommandHandler : CommandHandler

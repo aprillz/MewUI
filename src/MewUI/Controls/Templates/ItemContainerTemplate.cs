@@ -40,6 +40,7 @@ internal sealed class ItemContainerTemplate : IDataTemplate
         var container = (ItemContainer)view;
         container.ResetForItem();
         container.SetIndex(index);
+        container.SetItem(item);
         container.SetIsSelected(_isSelected(index));
 
         _inner.Bind(ContentOf(container), item, index, context);
@@ -52,6 +53,7 @@ internal sealed class ItemContainerTemplate : IDataTemplate
         _clear?.Invoke(container, item, index, context);
         _inner.Unbind(ContentOf(container), item, index, context);
         container.SetIndex(-1);
+        container.SetItem(null);
         container.SetIsSelected(false);
     }
 

@@ -34,6 +34,21 @@ public sealed class GridViewRowTests
     }
 
     [TestMethod]
+    public void TheRowExposesTheItemItHolds()
+    {
+        var grid = MakeGrid();
+        grid.PrepareContainer<string>((row, item, _, _) => Assert.AreSame(item, row.Item));
+        Layout(grid);
+
+        grid.VisitRealizedRows((index, row) =>
+        {
+            Assert.AreEqual("Item " + index, row.Item);
+            Assert.AreEqual("Item " + index, ((ICommandArgumentSource)row).CommandArgument,
+                "the row supplies its item as the command operand");
+        });
+    }
+
+    [TestMethod]
     public void TheRowCarriesAContextMenu()
     {
         var menu = new ContextMenu();

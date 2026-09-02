@@ -50,6 +50,21 @@ public sealed class CommandScope : IDisposable
     }
 
     /// <summary>
+    /// Registers a handler that receives the invocation operand: the value of the nearest
+    /// <see cref="ICommandArgumentSource"/> above the invocation anchor. The handler cannot execute
+    /// while no operand of type <typeparamref name="TArg"/> is present.
+    /// </summary>
+    /// <remarks>
+    /// Write the lambda parameter type explicitly (<c>(Item item) => ...</c>); an untyped lambda
+    /// resolves to the <see cref="CommandContext"/> overload instead.
+    /// </remarks>
+    public CommandRegistration Register<TArg>(Command command, Action<TArg> execute, Func<TArg, bool>? canExecute = null)
+    {
+        ArgumentNullException.ThrowIfNull(execute);
+        return AddHandler(new ArgumentCommandHandler<TArg>(command, execute, canExecute));
+    }
+
+    /// <summary>
     /// Registers a handler invoked with the given target, enabling closure-free static lambdas.
     /// </summary>
     public CommandRegistration Register<T>(Command command, T target, Action<T> execute, Func<T, bool>? canExecute = null)
