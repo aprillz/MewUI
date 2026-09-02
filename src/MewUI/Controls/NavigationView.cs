@@ -41,6 +41,8 @@ public sealed partial class NavigationView : Control, IVisualTreeHost
 
     private PaneDisplayMode _effectiveMode = PaneDisplayMode.Inline;
     private bool _effectiveModeChangedPending;
+    // The inline pane's open state, parked while the placement is Overlay so it survives the round trip.
+    private bool _inlineOpenPreference = true;
     private Rect _paneRect;
     private Rect _contentRect;
 
@@ -408,11 +410,27 @@ public sealed partial class NavigationView : Control, IVisualTreeHost
             _effectiveMode = mode;
             _effectiveModeChangedPending = true;
 
-            // The overlay slide only means anything while overlaid; leaving that placement snaps it away
-            // so an inline pane never renders shifted. IsPaneOpen is deliberately untouched - it is the
-            // user's preference and outlives a width-driven placement change.
-            if (mode != PaneDisplayMode.Overlay)
+            if (mode == PaneDisplayMode.Overlay)
             {
+                // The overlay always enters closed. The open flag carried over from the inline pane
+                // would disagree with the collapsed overlay, and the first toggle would spend itself
+                // closing a pane that was never visible. The inline preference is parked and restored
+                // on the way back, so it still outlives a width-driven placement change.
+                _inlineOpenPreference = IsPaneOpen;
+                if (IsPaneOpen)
+                {
+                    IsPaneOpen = false;
+                }
+            }
+            else
+            {
+                if (IsPaneOpen != _inlineOpenPreference)
+                {
+                    IsPaneOpen = _inlineOpenPreference;
+                }
+
+                // The overlay slide only means anything while overlaid; leaving that placement snaps
+                // it away so an inline pane never renders shifted.
                 _overlayProgress = IsPaneOpen ? 1.0 : 0.0;
                 _overlayClock?.Stop();
             }
