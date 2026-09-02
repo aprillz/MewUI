@@ -227,12 +227,27 @@ internal sealed partial class MewVGX11GraphicsContext
         }
 
         // FreeType bakes alignment into the rasterized bitmap.
-        double drawX = _textPixelSnap
-            ? RenderingUtil.RoundToPixelInt(boundsPx.Left / DpiScale, DpiScale) / DpiScale
-            : boundsPx.Left / DpiScale;
-        double drawY = _textPixelSnap
-            ? RenderingUtil.RoundToPixelInt(boundsPx.Top / DpiScale, DpiScale) / DpiScale
-            : boundsPx.Top / DpiScale;
+        double drawX = boundsPx.Left / DpiScale;
+        double drawY = boundsPx.Top / DpiScale;
+        if (_textPixelSnap && _transform.M12 == 0f && _transform.M21 == 0f)
+        {
+            // Snapped on the DEVICE grid (translation included): a cache pass carries the capture
+            // translate, and snapping local coordinates would put its rows on a different grid
+            // than the window pass.
+            double worldX = bounds.X * _transform.M11 + _transform.M31;
+            double worldY = bounds.Y * _transform.M22 + _transform.M32;
+            double snappedX = RenderingUtil.RoundToPixelInt(worldX, DpiScale) / DpiScale;
+            double snappedY = RenderingUtil.RoundToPixelInt(worldY, DpiScale) / DpiScale;
+            if (_transform.M11 != 0f)
+            {
+                drawX = (snappedX - _transform.M31) / _transform.M11;
+            }
+
+            if (_transform.M22 != 0f)
+            {
+                drawY = (snappedY - _transform.M32) / _transform.M22;
+            }
+        }
         double widthDip = widthPx / DpiScale;
         double heightDip = heightPx / DpiScale;
 
