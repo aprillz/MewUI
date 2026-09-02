@@ -181,9 +181,9 @@ internal sealed class BrowserPlatformHost : IPlatformHost
         => RoutePointer(() => _window?.PointerMove(x, y, screenX, screenY, buttons, modifiers) == true);
 
     internal bool PointerButton(double x, double y, double screenX, double screenY, int button, int buttons,
-        bool isDown, int clickCount, ModifierKeys modifiers, PointerType pointerType)
+        bool isDown, double timeStampMs, ModifierKeys modifiers, PointerType pointerType)
         => RoutePointer(() => _window?.PointerButton(
-            x, y, screenX, screenY, button, buttons, isDown, clickCount, modifiers, pointerType) == true);
+            x, y, screenX, screenY, button, buttons, isDown, timeStampMs, modifiers, pointerType) == true);
 
     internal void PointerWheel(double x, double y, double screenX, double screenY,
         double deltaX, double deltaY, int buttons, ModifierKeys modifiers)

@@ -40,9 +40,9 @@ internal static partial class BrowserExports
 
     [JSExport]
     internal static bool PointerButton(double x, double y, double screenX, double screenY, int button, int buttons,
-        bool isDown, int clickCount, int modifiers, int pointerType)
+        bool isDown, double timeStampMs, int modifiers, int pointerType)
         => BrowserPlatform.PointerButton(
-            x, y, screenX, screenY, button, buttons, isDown, clickCount, (ModifierKeys)modifiers, pointerType);
+            x, y, screenX, screenY, button, buttons, isDown, timeStampMs, (ModifierKeys)modifiers, pointerType);
 
     [JSExport]
     internal static void PointerWheel(double x, double y, double screenX, double screenY,

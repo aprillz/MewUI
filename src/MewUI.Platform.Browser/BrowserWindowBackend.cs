@@ -56,6 +56,16 @@ internal sealed class BrowserWindowBackend : IWindowBackend
     private bool _advancingFling;
     private bool _swallowTouchRelease;
 
+    // Windows counts a double click inside 500ms and a few pixels; a finger is granted more room.
+    private const double MULTI_CLICK_WINDOW_MS = 500;
+    private const double MULTI_CLICK_SLOP_DIP = 4;
+    private const double MULTI_CLICK_SLOP_TOUCH_DIP = 24;
+
+    private double _lastPressMs = double.NegativeInfinity;
+    private Point _lastPressPoint;
+    private MouseButton _lastPressButton;
+    private int _clickCount;
+
     private readonly BrowserWindowSurface _surface = new();
 
     internal BrowserWindowBackend(BrowserPlatformHost host, Window window)
@@ -172,7 +182,7 @@ internal sealed class BrowserWindowBackend : IWindowBackend
     }
 
     internal bool PointerButton(double x, double y, double screenX, double screenY, int button, int buttons,
-        bool isDown, int clickCount, ModifierKeys modifiers, PointerType pointerType)
+        bool isDown, double timeStampMs, ModifierKeys modifiers, PointerType pointerType)
     {
         if (!_shown || _disposed) return false;
 
@@ -184,6 +194,8 @@ internal sealed class BrowserWindowBackend : IWindowBackend
                 // also activate whatever it landed on, which no touch platform does.
                 StopFling();
                 _swallowTouchRelease = true;
+                // The tap was spent stopping the coast, so the next press starts a fresh click chain.
+                _lastPressMs = double.NegativeInfinity;
                 return false;
             }
 
@@ -209,6 +221,21 @@ internal sealed class BrowserWindowBackend : IWindowBackend
             4 => MouseButton.XButton2,
             _ => MouseButton.Left,
         };
+
+        // The DOM does not count clicks (the Pointer Events spec pins detail to 0), so presses close
+        // enough in time and place chain up here, the way a platform message loop would report them.
+        if (isDown)
+        {
+            double slop = pointerType == PointerType.Touch ? MULTI_CLICK_SLOP_TOUCH_DIP : MULTI_CLICK_SLOP_DIP;
+            bool chained = mappedButton == _lastPressButton
+                && timeStampMs - _lastPressMs <= MULTI_CLICK_WINDOW_MS
+                && Math.Abs(x - _lastPressPoint.X) <= slop
+                && Math.Abs(y - _lastPressPoint.Y) <= slop;
+            _clickCount = chained ? _clickCount + 1 : 1;
+            _lastPressMs = timeStampMs;
+            _lastPressPoint = new Point(x, y);
+            _lastPressButton = mappedButton;
+        }
         WindowInputRouter.MouseButton(
             Window,
             new Point(x, y),
@@ -218,7 +245,7 @@ internal sealed class BrowserWindowBackend : IWindowBackend
             leftDown: (buttons & 1) != 0,
             rightDown: (buttons & 2) != 0,
             middleDown: (buttons & 4) != 0,
-            Math.Max(1, clickCount),
+            Math.Max(1, _clickCount),
             modifiers,
             pointerType);
         return _mouseCaptured;
@@ -522,6 +549,8 @@ internal sealed class BrowserWindowBackend : IWindowBackend
         if (_disposed) return;
         StopFling();
         ClearPanSamples();
+        // A press that became a scroll is not part of a click chain.
+        _lastPressMs = double.NegativeInfinity;
         _mouseCaptured = false;
         _panTarget = null;
         _panBankX = 0;
