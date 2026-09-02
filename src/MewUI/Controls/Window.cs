@@ -1673,8 +1673,8 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
         _inSurfaceHost = new InSurfaceDialogHost(this, content, owner);
         owner.OverlayLayer.Add(_inSurfaceHost);
-        // Retargeted after the host is attached so the accent fades in with the dialog instead of
-        // landing as the initial value.
+        // Started after the host is attached so the chrome plays its entrance instead of landing.
+        _inSurfaceHost.PlayEntrance();
         _inSurfaceHost.RefreshActiveBorder();
         _lifetimeState = WindowLifetimeState.Shown;
         owner.ActiveInSurfaceDialog = this;
