@@ -1,0 +1,4 @@
+interface:
+  display_name: "MewUI"
+  short_description: "Create complete MewUI apps from NuGet packages"
+  default_prompt: "Use $mewui to build this application with public MewUI packages and C# Markup."

@@ -56,6 +56,11 @@
   > Design and implementation were performed through **iterative prompting without direct manual code edits**,  
   > with each step reviewed and refined by the developer.
 
+### 🧠 MewUI Agent Skill
+
+Build package-based MewUI applications with Codex, Claude Code, or GitHub
+Copilot using the [MewUI agent skill](skills/README.md).
+
 ---
 
 ## 🚀 Try It Out
