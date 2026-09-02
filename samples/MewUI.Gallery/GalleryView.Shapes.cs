@@ -168,14 +168,9 @@ partial class GalleryView
             .Spacing(8)
             .Children(sharp, rounded);
 
-        AttachFillMenu(panel, sharp, "sharp", "Blue");
-        AttachFillMenu(panel, rounded, "rounded", "Green");
-
-        return Card("Rectangle", panel);
-    }
-
-    private static void AttachFillMenu(FrameworkElement scope, Rectangle target, string id, string initialFill)
-    {
+        // One command and one menu serve both shapes: each item carries its fill as command data, and
+        // the handler on the shape the menu opened over receives it.
+        var setFill = new Command("gallery.shapes.fill", "Fill");
         (string Name, Color Value)[] fills =
         [
             ("Blue", Color.FromRgb(70, 130, 230)),
@@ -184,18 +179,25 @@ partial class GalleryView
             ("Rose", Color.FromRgb(230, 100, 130)),
         ];
 
-        var menu = new ContextMenu();
-        for (int i = 0; i < fills.Length; i++)
+        var fillMenu = new ContextMenu();
+        foreach (var fill in fills)
         {
-            var fill = fills[i];
-            var command = new Command($"gallery.shapes.{id}.fill{i}", fill.Name);
-            scope.Commands.Register(command, () =>
-            {
-                target.Fill(fill.Value);
-                target.ToolTip($"Fill: {fill.Name}. Right-click to change it.");
-            });
-            menu.Item(command);
+            fillMenu.Item(fill.Name, setFill, fill);
         }
+
+        AttachFillMenu(sharp, setFill, fillMenu, "Blue");
+        AttachFillMenu(rounded, setFill, fillMenu, "Green");
+
+        return Card("Rectangle", panel);
+    }
+
+    private static void AttachFillMenu(Rectangle target, Command setFill, ContextMenu menu, string initialFill)
+    {
+        target.Commands.Register(setFill, ((string Name, Color Value) fill) =>
+        {
+            target.Fill(fill.Value);
+            target.ToolTip($"Fill: {fill.Name}. Right-click to change it.");
+        });
 
         target
             .ContextMenu(menu)
