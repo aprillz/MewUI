@@ -163,6 +163,14 @@ public static class MenuExtensions
         return item;
     }
 
+    /// <summary>Sets the value the item hands its command as the invocation argument.</summary>
+    public static MenuItem CommandData(this MenuItem item, object? data)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        item.CommandData = data;
+        return item;
+    }
+
     /// <summary>Binds this placement's icon override to an observable source.</summary>
     public static MenuItem BindIcon(this MenuItem item, ObservableValue<IconTemplate?> source)
     {
@@ -274,6 +282,18 @@ public static class MenuExtensions
         ArgumentNullException.ThrowIfNull(menu);
         ArgumentNullException.ThrowIfNull(command);
         menu.Items.Add(new MenuItem(text, command));
+        return menu;
+    }
+
+    /// <summary>
+    /// Adds a command item that passes <paramref name="data"/> as the invocation argument, so several
+    /// items can share one command and differ only in the value they pass.
+    /// </summary>
+    public static Menu Item(this Menu menu, string text, Command command, object? data)
+    {
+        ArgumentNullException.ThrowIfNull(menu);
+        ArgumentNullException.ThrowIfNull(command);
+        menu.Items.Add(new MenuItem(text, command, data));
         return menu;
     }
 

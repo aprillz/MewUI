@@ -1444,6 +1444,17 @@ public static class ControlExtensions
     }
 
     /// <summary>
+    /// Sets the value the control hands its command as the invocation argument.
+    /// </summary>
+    public static T CommandData<T>(this T control, object? data)
+        where T : CommandSourceControl
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        control.CommandData = data;
+        return control;
+    }
+
+    /// <summary>
     /// Sets what the control builds a tooltip from when it has no tooltip of its own.
     /// </summary>
     /// <param name="control">Target command source.</param>
@@ -3959,6 +3970,17 @@ public static class ControlExtensions
     {
         ArgumentNullException.ThrowIfNull(menu);
         menu.AddItem(text, command);
+        return menu;
+    }
+
+    /// <summary>
+    /// Adds a command item that passes <paramref name="data"/> as the invocation argument, so several
+    /// items can share one command and differ only in the value they pass.
+    /// </summary>
+    public static ContextMenu Item(this ContextMenu menu, string text, Command command, object? data)
+    {
+        ArgumentNullException.ThrowIfNull(menu);
+        menu.AddItem(text, command, data);
         return menu;
     }
 
