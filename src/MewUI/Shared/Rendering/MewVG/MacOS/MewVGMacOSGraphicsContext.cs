@@ -549,10 +549,24 @@ internal sealed partial class MewVGMacOSGraphicsContext
             };
         }
 
-        if (_textPixelSnap)
+        if (_textPixelSnap && _transform.M12 == 0f && _transform.M21 == 0f)
         {
-            drawX = LayoutRounding.RoundToPixel(drawX, DpiScale);
-            drawY = LayoutRounding.RoundToPixel(drawY, DpiScale);
+            // Snapped on the DEVICE grid (translation included): a cache pass carries the capture
+            // translate, and snapping local coordinates would put its rows on a different grid
+            // than the window pass.
+            double worldX = drawX * _transform.M11 + _transform.M31;
+            double worldY = drawY * _transform.M22 + _transform.M32;
+            double snappedX = RenderingUtil.RoundToPixelInt(worldX, DpiScale) / DpiScale;
+            double snappedY = RenderingUtil.RoundToPixelInt(worldY, DpiScale) / DpiScale;
+            if (_transform.M11 != 0f)
+            {
+                drawX = (snappedX - _transform.M31) / _transform.M11;
+            }
+
+            if (_transform.M22 != 0f)
+            {
+                drawY = (snappedY - _transform.M32) / _transform.M22;
+            }
         }
 
         int imageId;
