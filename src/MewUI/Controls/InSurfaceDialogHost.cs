@@ -41,14 +41,19 @@ internal sealed class InSurfaceDialogHost : UIElement, IVisualTreeHost
     private const double ACTIVE_BORDER_ACCENT_BLEND = 0.5;
     private const int BORDER_FADE_MS = 150;
 
+    // The chrome enters and leaves the way a toast does, so the two overlay surfaces read as one family.
+    private const int CHROME_SLIDE_MS = 300;
+
     private readonly Window _dialog;
     private readonly Window _rootOwner;
     private readonly ShadowDecorator _shadow;
+    private readonly TransitionContentControl _transition;
     private Border? _frame;
     private AnimationClock? _scrimClock;
     private double _scrimProgress;
     private bool _fadingOut;
     private bool _borderActive;
+    private Action? _pendingRemove;
 
     internal InSurfaceDialogHost(Window dialog, UIElement content, Window owner)
     {
@@ -62,8 +67,20 @@ internal sealed class InSurfaceDialogHost : UIElement, IVisualTreeHost
 
         _rootOwner = root;
         _shadow = BuildChrome(dialog, content);
+        _transition = new TransitionContentControl
+        {
+            Transition = ContentTransition.CreateSlide(SlideDirection.Down, CHROME_SLIDE_MS),
+        };
+        _transition.TransitionCompleted += () =>
+        {
+            if (_transition.Content == null && _pendingRemove is Action remove)
+            {
+                _pendingRemove = null;
+                remove();
+            }
+        };
         Parent = owner;
-        _shadow.Parent = this;
+        _transition.Parent = this;
 
         // The owner does not move or dim on its own here the way a disabled window does, so the
         // dimming appearing in one frame reads as the whole page having been repainted.
@@ -102,18 +119,24 @@ internal sealed class InSurfaceDialogHost : UIElement, IVisualTreeHost
         IsHitTestVisible = false;
         _fadingOut = true;
 
+        // Clearing the content plays the chrome's run out; the host leaves the overlay when the
+        // transition reports it is gone, which is the same contract the toast presenter uses.
+        _pendingRemove = remove;
+        _transition.Content = null;
+
         if (_scrimFadeOut <= TimeSpan.Zero)
         {
             _scrimProgress = 0;
-            remove();
-            return;
+            InvalidateVisual();
         }
-
-        var clock = EnsureScrimClock(_scrimFadeOut);
-        clock.CompletedCallback = remove;
-        clock.Stop();
-        clock.Start();
+        else
+        {
+            EnsureScrimClock(_scrimFadeOut).Start();
+        }
     }
+
+    /// <summary>Starts the chrome's entrance once the host sits in the overlay, like a toast being shown.</summary>
+    internal void PlayEntrance() => _transition.Content = _shadow;
 
     /// <summary>
     /// Releases the fade before the host leaves the overlay. A running clock holds the render loop
@@ -252,7 +275,7 @@ internal sealed class InSurfaceDialogHost : UIElement, IVisualTreeHost
             ],
         };
 
-    bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor) => visitor(_shadow);
+    bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor) => visitor(_transition);
 
     // Keys reach the owner window, not the dialog, because the dialog has no surface of its own to
     // route through. Bubbling passes through this host on its way out, which is where the dialog is
@@ -277,16 +300,16 @@ internal sealed class InSurfaceDialogHost : UIElement, IVisualTreeHost
 
     protected override Size MeasureOverride(Size availableSize)
     {
-        _shadow.Measure(availableSize);
+        _transition.Measure(availableSize);
         return availableSize;
     }
 
     protected override Size ArrangeOverride(Size finalSize)
     {
-        var desired = _shadow.DesiredSize;
+        var desired = _transition.DesiredSize;
         double width = Math.Min(desired.Width, finalSize.Width);
         double height = Math.Min(desired.Height, finalSize.Height);
-        _shadow.Arrange(new Rect(
+        _transition.Arrange(new Rect(
             (finalSize.Width - width) / 2,
             (finalSize.Height - height) / 2,
             width,
@@ -297,11 +320,11 @@ internal sealed class InSurfaceDialogHost : UIElement, IVisualTreeHost
     // A pointer that misses the dialog is absorbed rather than passed through, so the owner stays
     // untouchable for as long as the dialog is up.
     protected override UIElement? OnHitTest(Point point)
-        => _shadow.HitTest(point) ?? (Bounds.Contains(point) ? this : null);
+        => _transition.HitTest(point) ?? (Bounds.Contains(point) ? this : null);
 
     protected override void OnRender(IGraphicsContext context)
     {
         context.FillRectangle(Bounds, Color.FromArgb((byte)(SCRIM_ALPHA * _scrimProgress), 0, 0, 0));
-        _shadow.Render(context);
+        _transition.Render(context);
     }
 }
