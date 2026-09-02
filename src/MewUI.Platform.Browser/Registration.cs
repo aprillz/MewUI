@@ -127,5 +127,13 @@ public static class BrowserPlatform
     public static bool TextInput(string text)
         => BrowserPlatformHost.Active?.TextInput(text) == true;
 
-    public static void FocusChanged(bool focused) => BrowserPlatformHost.Active?.FocusChanged(focused);
+    public static void FocusChanged(bool focused)
+    {
+        // The page reports its focus once while the runtime is still booting, before a host exists;
+        // the host picks this value up when it starts so the report is not lost.
+        LastReportedFocus = focused;
+        BrowserPlatformHost.Active?.FocusChanged(focused);
+    }
+
+    internal static bool LastReportedFocus { get; private set; }
 }

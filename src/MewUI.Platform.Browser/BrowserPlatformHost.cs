@@ -61,6 +61,7 @@ internal sealed class BrowserPlatformHost : IPlatformHost
     {
         _running = true;
         Active = this;
+        _pageFocused = BrowserPlatform.LastReportedFocus;
         _previousContext = SynchronizationContext.Current;
         _dispatcher = (BrowserDispatcher)CreateDispatcher(0);
         _dispatcher.SetWake(RequestFrame);
