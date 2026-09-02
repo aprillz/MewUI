@@ -104,6 +104,22 @@ public static class ToolBarExtensions
     }
 
     /// <summary>
+    /// Adds an entry that runs a command with <paramref name="data"/> as the invocation argument, so
+    /// several entries can share one command and differ only in the value they pass.
+    /// </summary>
+    /// <param name="group">Target group.</param>
+    /// <param name="command">Command the entry runs.</param>
+    /// <param name="data">Value passed to the command.</param>
+    /// <param name="icon">Icon shown instead of the command's own, or null to show the command's.</param>
+    /// <returns>The group for chaining.</returns>
+    public static ToolBarGroup Item(this ToolBarGroup group, Command command, object? data, IconTemplate? icon = null)
+    {
+        ArgumentNullException.ThrowIfNull(group);
+        group.Items.Add(new ToolBarItem(command) { CommandData = data, Icon = icon });
+        return group;
+    }
+
+    /// <summary>
     /// Adds an entry that stays visibly pressed while its state is on.
     /// </summary>
     /// <param name="group">Target group.</param>
@@ -114,6 +130,22 @@ public static class ToolBarExtensions
     {
         ArgumentNullException.ThrowIfNull(group);
         group.Items.Add(new ToolBarToggleItem(command) { IsChecked = isChecked });
+        return group;
+    }
+
+    /// <summary>
+    /// Adds a toggle entry that runs a command with <paramref name="data"/> as the invocation argument.
+    /// </summary>
+    /// <param name="group">Target group.</param>
+    /// <param name="command">Command the entry runs.</param>
+    /// <param name="data">Value passed to the command.</param>
+    /// <param name="icon">Icon shown instead of the command's own, or null to show the command's.</param>
+    /// <returns>The group for chaining.</returns>
+    public static ToolBarGroup Toggle(this ToolBarGroup group, Command command, object data, IconTemplate? icon = null)
+    {
+        ArgumentNullException.ThrowIfNull(group);
+        ArgumentNullException.ThrowIfNull(data);
+        group.Items.Add(new ToolBarToggleItem(command) { CommandData = data, Icon = icon });
         return group;
     }
 
@@ -239,6 +271,33 @@ public static class ToolBarExtensions
     {
         ArgumentNullException.ThrowIfNull(item);
         item.Presentation = presentation;
+        return item;
+    }
+
+    /// <summary>Sets the value this entry hands its command as the invocation argument.</summary>
+    public static T CommandData<T>(this T item, object? data)
+        where T : ToolBarItem
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        item.CommandData = data;
+        return item;
+    }
+
+    /// <summary>Sets the text this entry shows instead of the command's own.</summary>
+    public static T Text<T>(this T item, string? text)
+        where T : ToolBarItem
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        item.Text = text;
+        return item;
+    }
+
+    /// <summary>Sets the icon this entry shows instead of the command's own.</summary>
+    public static T Icon<T>(this T item, IconTemplate? icon)
+        where T : ToolBarItem
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        item.Icon = icon;
         return item;
     }
 

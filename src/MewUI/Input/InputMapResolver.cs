@@ -50,7 +50,11 @@ internal static class InputMapResolver
         }
 
         var router = window.CommandRouter;
-        if (router.TryExecuteFromInput(entry.Command!, router.CaptureTarget(), origin))
+        var target = router.CaptureTarget();
+        bool executed = entry.Data is object data
+            ? router.TryExecuteFromInput(entry.Command!, target, origin, data)
+            : router.TryExecuteFromInput(entry.Command!, target, origin);
+        if (executed)
         {
             args.Handled = true;
             return true;
@@ -62,16 +66,23 @@ internal static class InputMapResolver
     /// <summary>
     /// The display string for the gesture the given command would actually respond to, or
     /// <see langword="null"/> when it answers to none. Every surface that labels a shortcut reads it from
-    /// here, so a menu row and a tooltip never disagree about what the key is.
+    /// here, so a menu row and a tooltip never disagree about what the key is. A surface that passes
+    /// data finds the gesture mapped with that same data.
     /// </summary>
-    public static string? GetEffectiveGestureText(Window window, Command command, Element? origin)
-        => TryGetEffectiveGesture(window, command, origin, out var gesture) ? gesture.ToDisplayString() : null;
+    public static string? GetEffectiveGestureText(Window window, Command command, Element? origin, object? data = null)
+        => TryGetEffectiveGesture(window, command, origin, data, out var gesture) ? gesture.ToDisplayString() : null;
 
     /// <summary>
     /// Finds the gesture the given command would actually respond to for the origin context,
     /// consistent with forward key resolution; used for menu shortcut labels.
     /// </summary>
     public static bool TryGetEffectiveGesture(Window window, Command command, Element? origin, out KeyGesture gesture)
+        => TryGetEffectiveGesture(window, command, origin, data: null, out gesture);
+
+    /// <summary>
+    /// Finds the gesture the command mapped with <paramref name="data"/> would actually respond to.
+    /// </summary>
+    public static bool TryGetEffectiveGesture(Window window, Command command, Element? origin, object? data, out KeyGesture gesture)
     {
         var maps = _effectiveLookupScratch;
         maps.Clear();
@@ -104,7 +115,8 @@ internal static class InputMapResolver
             foreach (var candidate in gestures)
             {
                 if (TryResolveEntry(window, origin, candidate.Resolve(), out var entry) &&
-                    ReferenceEquals(entry.Command, command))
+                    ReferenceEquals(entry.Command, command) &&
+                    Equals(entry.Data, data))
                 {
                     maps.Clear();
                     gesture = candidate;

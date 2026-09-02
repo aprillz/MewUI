@@ -76,6 +76,28 @@ public class ToolBarItem : ToolBarEntry
             MewPropertyOptions.None,
             static (self, _, _) => self.NotifyChanged());
 
+    /// <summary>
+    /// The value the entry hands its command as the invocation argument, or null to let the nearest
+    /// argument source supply one. Entries that share a command and differ only in this value show
+    /// their own <see cref="Text"/> and <see cref="Icon"/>.
+    /// </summary>
+    public static readonly MewProperty<object?> CommandDataProperty =
+        MewProperty<object?>.Register<ToolBarItem>(nameof(CommandData), null,
+            MewPropertyOptions.None,
+            static (self, _, _) => self.NotifyChanged());
+
+    /// <summary>Text shown instead of the command's own, or null to show the command's.</summary>
+    public static readonly MewProperty<string?> TextProperty =
+        MewProperty<string?>.Register<ToolBarItem>(nameof(Text), null,
+            MewPropertyOptions.None,
+            static (self, _, _) => self.NotifyChanged());
+
+    /// <summary>Icon shown instead of the command's own, or null to show the command's.</summary>
+    public static readonly MewProperty<IconTemplate?> IconProperty =
+        MewProperty<IconTemplate?>.Register<ToolBarItem>(nameof(Icon), null,
+            MewPropertyOptions.None,
+            static (self, _, _) => self.NotifyChanged());
+
     public ToolBarItem() { }
 
     public ToolBarItem(Command command) => Command = command ?? throw new ArgumentNullException(nameof(command));
@@ -92,6 +114,27 @@ public class ToolBarItem : ToolBarEntry
     {
         get => GetValue(PresentationProperty);
         set => SetValue(PresentationProperty, value);
+    }
+
+    /// <inheritdoc cref="CommandDataProperty"/>
+    public object? CommandData
+    {
+        get => GetValue(CommandDataProperty);
+        set => SetValue(CommandDataProperty, value);
+    }
+
+    /// <inheritdoc cref="TextProperty"/>
+    public string? Text
+    {
+        get => GetValue(TextProperty);
+        set => SetValue(TextProperty, value);
+    }
+
+    /// <inheritdoc cref="IconProperty"/>
+    public IconTemplate? Icon
+    {
+        get => GetValue(IconProperty);
+        set => SetValue(IconProperty, value);
     }
 }
 

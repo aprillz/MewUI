@@ -229,6 +229,18 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
         InvalidateVisual();
     }
 
+    /// <summary>
+    /// Adds a command item that passes <paramref name="data"/> as the invocation argument.
+    /// </summary>
+    public void AddItem(string text, Command command, object? data)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        Menu.Items.Add(new MenuItem(text, command, data));
+        _textLayouts.Invalidate();
+        InvalidateMeasure();
+        InvalidateVisual();
+    }
+
     public void AddSubMenu(string text, Menu subMenu, bool isEnabled = true)
     {
         ArgumentNullException.ThrowIfNull(subMenu);
@@ -291,13 +303,19 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
 
             if (item.Command is Command command)
             {
-                bool enabled = window.CommandRouter.CanExecute(command, _capturedCommandTarget, _capturedCommandArgument);
+                bool enabled = window.CommandRouter.CanExecute(command, _capturedCommandTarget, ArgumentFor(item));
                 string? shortcutText = InputMapResolver.GetEffectiveGestureText(
-                    window, command, _capturedCommandTarget.OriginElement);
+                    window, command, _capturedCommandTarget.OriginElement, item.CommandData);
                 item.ApplyCommandState(enabled, shortcutText);
             }
         }
     }
+
+    /// <summary>
+    /// The argument an item invokes with: the value it declares, else the one captured when the
+    /// menu opened.
+    /// </summary>
+    private object? ArgumentFor(MenuItem item) => item.CommandData ?? _capturedCommandArgument;
 
     private bool HasCommandItems()
     {
@@ -566,9 +584,9 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
 
             if (item.Command is Command command)
             {
-                bool enabled = window.CommandRouter.CanExecute(command, _capturedCommandTarget, _capturedCommandArgument);
+                bool enabled = window.CommandRouter.CanExecute(command, _capturedCommandTarget, ArgumentFor(item));
                 string? shortcutText = InputMapResolver.GetEffectiveGestureText(
-                    window, command, _capturedCommandTarget.OriginElement);
+                    window, command, _capturedCommandTarget.OriginElement, item.CommandData);
                 changed |= item.ApplyCommandState(enabled, shortcutText);
             }
         }
@@ -960,7 +978,7 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
         {
             if (FindVisualRoot() is Window window)
             {
-                window.CommandRouter.TryExecuteFromInput(command, _capturedCommandTarget, this, _capturedCommandArgument);
+                window.CommandRouter.TryExecuteFromInput(command, _capturedCommandTarget, this, ArgumentFor(item));
             }
 
         }

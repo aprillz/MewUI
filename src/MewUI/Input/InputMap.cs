@@ -6,9 +6,9 @@ namespace Aprillz.MewUI;
 /// </summary>
 /// <remarks>
 /// A command's first mapped gesture is its primary/display gesture; the rest are alternative
-/// execution gestures. Mapping a command again replaces its previous gestures, and mapping a
-/// gesture already claimed by another entry moves that gesture to the new entry (runtime remap
-/// semantics). Mutation is a UI-thread operation.
+/// execution gestures. Mapping a command again with the same data replaces those gestures, and
+/// mapping a gesture already claimed by another entry moves that gesture to the new entry (runtime
+/// remap semantics). Mutation is a UI-thread operation.
 /// </remarks>
 public sealed class InputMap
 {
@@ -24,6 +24,13 @@ public sealed class InputMap
     /// Maps the given gestures to a command; the first gesture becomes the primary/display gesture.
     /// </summary>
     public InputMap Map(Command command, KeyGesture primaryGesture, params KeyGesture[] alternativeGestures)
+        => Map(command, data: null, primaryGesture, alternativeGestures);
+
+    /// <summary>
+    /// Maps the given gestures to a command invoked with <paramref name="data"/> as its argument, so
+    /// one command can answer to several gestures that differ only in the value they pass.
+    /// </summary>
+    public InputMap Map(Command command, object? data, KeyGesture primaryGesture, params KeyGesture[] alternativeGestures)
     {
         ArgumentNullException.ThrowIfNull(command);
         ArgumentNullException.ThrowIfNull(alternativeGestures);
@@ -33,7 +40,7 @@ public sealed class InputMap
             ValidateGesture(gesture);
         }
 
-        RemoveCommandCore(command);
+        RemoveCommandCore(command, data);
 
         var gestures = new List<KeyGesture>(1 + alternativeGestures.Length) { primaryGesture };
         foreach (var gesture in alternativeGestures)
@@ -47,14 +54,23 @@ public sealed class InputMap
         var byGesture = _byResolvedGesture ??= new Dictionary<KeyGesture, InputMapEntry>(capacity: 4);
         var byCommand = _gesturesByCommand ??= new Dictionary<Command, List<KeyGesture>>(capacity: 4);
 
-        var entry = new InputMapEntry(command);
+        var entry = new InputMapEntry(command, data);
         foreach (var gesture in gestures)
         {
             ClaimGesture(gesture);
             byGesture[gesture.Resolve()] = entry;
         }
 
-        byCommand[command] = gestures;
+        // Gestures mapped with other data stay, so the command's list accumulates across values.
+        if (byCommand.TryGetValue(command, out var existing))
+        {
+            existing.AddRange(gestures);
+        }
+        else
+        {
+            byCommand[command] = gestures;
+        }
+
         Changed?.Invoke();
         return this;
     }
@@ -109,15 +125,25 @@ public sealed class InputMap
     /// Gets the command's primary gesture in this map only (no hierarchy resolution).
     /// </summary>
     public bool TryGetPrimaryGesture(Command command, out KeyGesture gesture)
+        => TryGetPrimaryGesture(command, data: null, out gesture);
+
+    /// <summary>
+    /// Gets the primary gesture of the command's mapping for <paramref name="data"/> in this map only.
+    /// </summary>
+    public bool TryGetPrimaryGesture(Command command, object? data, out KeyGesture gesture)
     {
         ArgumentNullException.ThrowIfNull(command);
 
-        if (_gesturesByCommand != null &&
-            _gesturesByCommand.TryGetValue(command, out var gestures) &&
-            gestures.Count > 0)
+        if (_gesturesByCommand != null && _gesturesByCommand.TryGetValue(command, out var gestures))
         {
-            gesture = gestures[0];
-            return true;
+            foreach (var candidate in gestures)
+            {
+                if (TryGetEntry(candidate.Resolve(), out var entry) && Equals(entry.Data, data))
+                {
+                    gesture = candidate;
+                    return true;
+                }
+            }
         }
 
         gesture = default;
@@ -204,6 +230,38 @@ public sealed class InputMap
         return true;
     }
 
+    /// <summary>
+    /// Removes only the command's gestures mapped with <paramref name="data"/>; returns whether any were.
+    /// </summary>
+    private bool RemoveCommandCore(Command command, object? data)
+    {
+        if (_gesturesByCommand == null || !_gesturesByCommand.TryGetValue(command, out var gestures))
+        {
+            return false;
+        }
+
+        bool removed = false;
+        for (int i = gestures.Count - 1; i >= 0; i--)
+        {
+            var resolved = gestures[i].Resolve();
+            if (_byResolvedGesture != null &&
+                _byResolvedGesture.TryGetValue(resolved, out var entry) &&
+                Equals(entry.Data, data))
+            {
+                _byResolvedGesture.Remove(resolved);
+                gestures.RemoveAt(i);
+                removed = true;
+            }
+        }
+
+        if (gestures.Count == 0)
+        {
+            _gesturesByCommand.Remove(command);
+        }
+
+        return removed;
+    }
+
     private static void ValidateGesture(KeyGesture gesture)
     {
         if (gesture.Key == Key.None)
@@ -218,7 +276,11 @@ public sealed class InputMap
 /// </summary>
 internal sealed class InputMapEntry
 {
-    public InputMapEntry(Command command) => Command = command;
+    public InputMapEntry(Command command, object? data)
+    {
+        Command = command;
+        Data = data;
+    }
 
     public InputMapEntry(Action callback, Func<bool>? canExecute)
     {
@@ -227,6 +289,9 @@ internal sealed class InputMapEntry
     }
 
     public Command? Command { get; }
+
+    /// <summary>The argument the command is invoked with, or null to resolve one from the focus chain.</summary>
+    public object? Data { get; }
 
     public Action? Callback { get; }
 

@@ -57,6 +57,16 @@ public sealed class MenuItem : MenuEntry
             MewPropertyOptions.None,
             static (self, _, _) => self.Changed?.Invoke(self, MenuModelChange.SubMenu));
 
+    /// <summary>
+    /// The value this placement hands its command as the invocation argument, so several items can
+    /// share one command and differ only in what they pass. Null lets the argument the menu captured
+    /// when it opened (the item it opened over) stand in.
+    /// </summary>
+    public static readonly MewProperty<object?> CommandDataProperty =
+        MewProperty<object?>.Register<MenuItem>(nameof(CommandData), null,
+            MewPropertyOptions.None,
+            static (self, _, _) => self.Changed?.Invoke(self, MenuModelChange.Command));
+
     private string? _cachedDisplayText;
     private char _cachedAccessKey;
     private int _cachedUnderlineIndex = -1;
@@ -87,12 +97,28 @@ public sealed class MenuItem : MenuEntry
     }
 
     /// <summary>
+    /// Creates a command item that passes <paramref name="data"/> as the invocation argument.
+    /// </summary>
+    public MenuItem(string text, Command command, object? data)
+        : this(text, command)
+    {
+        CommandData = data;
+    }
+
+    /// <summary>
     /// Gets or sets the semantic command this item invokes.
     /// </summary>
     public Command? Command
     {
         get => GetValue(CommandProperty);
         set => SetValue(CommandProperty, value);
+    }
+
+    /// <inheritdoc cref="CommandDataProperty"/>
+    public object? CommandData
+    {
+        get => GetValue(CommandDataProperty);
+        set => SetValue(CommandDataProperty, value);
     }
 
     /// <summary>

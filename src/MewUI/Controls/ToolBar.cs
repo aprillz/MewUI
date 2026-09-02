@@ -250,7 +250,8 @@ public sealed partial class ToolBar : Control, IVisualTreeHost
                 {
                     StyleName = BuiltInStyles.ToolBarToggleButton,
                     Command = toggle.Command,
-                    Content = BuildCommandContent(toggle.Command, ResolvePresentation(toggle)),
+                    CommandData = toggle.CommandData,
+                    Content = BuildCommandContent(toggle),
                     IsChecked = toggle.IsChecked,
                 };
                 toggleButton.CheckedChanged += isChecked => toggle.IsChecked = isChecked;
@@ -260,7 +261,8 @@ public sealed partial class ToolBar : Control, IVisualTreeHost
                 return new SplitButton
                 {
                     Command = split.Command,
-                    Content = BuildCommandContent(split.Command, ResolvePresentation(split)),
+                    CommandData = split.CommandData,
+                    Content = BuildCommandContent(split),
                     DropDownMenu = split.DropDownMenu,
                 };
 
@@ -278,7 +280,8 @@ public sealed partial class ToolBar : Control, IVisualTreeHost
                 {
                     StyleName = BuiltInStyles.ToolBarButton,
                     Command = item.Command,
-                    Content = BuildCommandContent(item.Command, ResolvePresentation(item)),
+                    CommandData = item.CommandData,
+                    Content = BuildCommandContent(item),
                 };
 
             case ToolBarSeparator:
@@ -303,23 +306,30 @@ public sealed partial class ToolBar : Control, IVisualTreeHost
         }
     }
 
-    private Element? BuildCommandContent(Command? command, CommandPresentationMode presentation)
+    private Element? BuildCommandContent(ToolBarItem item)
     {
+        var command = item.Command;
+        var presentation = ResolvePresentation(item);
         if (command == null || presentation == CommandPresentationMode.None)
         {
             return null;
         }
 
+        // The entry's own text and icon win over the command's: entries that share a command and
+        // differ by data have nothing else to tell them apart.
+        var icon = item.Icon ?? command.Icon;
+        var text = item.Text ?? command.Text;
+
         bool showIcon = presentation is CommandPresentationMode.Icon or CommandPresentationMode.TextAndIcon;
         bool showText = presentation is CommandPresentationMode.Text or CommandPresentationMode.TextAndIcon;
 
-        // An icon-only entry whose command has no icon would render empty, so it falls back to text.
-        if (showIcon && command.Icon == null)
+        // An icon-only entry with no icon would render empty, so it falls back to text.
+        if (showIcon && icon == null)
         {
             showText = true;
         }
 
-        return BuildIconTextContent(showIcon ? command.Icon : null, showText ? command.Text : null);
+        return BuildIconTextContent(showIcon ? icon : null, showText ? text : null);
     }
 
     private Element BuildIconTextContent(IconTemplate? icon, string? text)
