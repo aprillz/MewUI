@@ -189,7 +189,16 @@ public abstract partial class UIElement
             {
                 entry.InvalidationOverlayColor = window.NextBitmapCacheInvalidationOverlayColor();
             }
-            context.DrawImage(entry.Image, Bounds, new Rect(0, 0, entry.PixelWidth, entry.PixelHeight));
+            // Pixel-snapped 1:1 blit: the destination starts on the same snapped origin the capture
+            // used and spans exactly the painted pixels, so nothing is resampled at a fractional
+            // offset or squeezed by the ceil-sized snapshot.
+            double blitScale = entry.DpiScale;
+            var blitDest = new Rect(
+                Math.Floor(Bounds.Left * blitScale) / blitScale,
+                Math.Floor(Bounds.Top * blitScale) / blitScale,
+                entry.PixelWidth / blitScale,
+                entry.PixelHeight / blitScale);
+            context.DrawImage(entry.Image, blitDest, new Rect(0, 0, entry.PixelWidth, entry.PixelHeight));
             if (!IsRenderingToCache &&
                 window?.DevToolsBitmapCacheInvalidationOverlayEnabled == true)
             {
@@ -268,6 +277,13 @@ public abstract partial class UIElement
         return _overlapFound;
     }
 
+    private static int QuantizePixelPhase(Rect bounds, double scale)
+    {
+        double xPhase = bounds.Left * scale - Math.Floor(bounds.Left * scale);
+        double yPhase = bounds.Top * scale - Math.Floor(bounds.Top * scale);
+        return ((int)Math.Round(xPhase * 64) & 63) | (((int)Math.Round(yPhase * 64) & 63) << 6);
+    }
+
     private bool EnsureCache(IGraphicsFactory factory, double dpiScale, int deviceGeneration, BitmapCache bitmapCache)
     {
         var bounds = Bounds;
@@ -278,8 +294,16 @@ public abstract partial class UIElement
         }
 
         double effectiveDpiScale = dpiScale * Math.Max(0.01, bitmapCache.RenderAtScale);
-        int pixelWidth = Math.Max(1, (int)Math.Ceiling(bounds.Width * effectiveDpiScale));
-        int pixelHeight = Math.Max(1, (int)Math.Ceiling(bounds.Height * effectiveDpiScale));
+
+        // The capture runs from the element origin snapped down to the pixel grid, keeping the
+        // fractional remainder inside the snapshot. Glyphs then rasterize at the same subpixel
+        // phase the live subtree uses, so swapping between the blit and direct rendering does not
+        // shift them; a capture anchored at the raw origin bakes a phase of zero instead.
+        double snappedLeft = Math.Floor(bounds.Left * effectiveDpiScale) / effectiveDpiScale;
+        double snappedTop = Math.Floor(bounds.Top * effectiveDpiScale) / effectiveDpiScale;
+        int phaseQuantized = QuantizePixelPhase(bounds, effectiveDpiScale);
+        int pixelWidth = Math.Max(1, (int)Math.Ceiling((bounds.Right - snappedLeft) * effectiveDpiScale));
+        int pixelHeight = Math.Max(1, (int)Math.Ceiling((bounds.Bottom - snappedTop) * effectiveDpiScale));
         long version = _contentVersion;
         Color? opaqueFill = ResolveOpaqueCacheFill();
 
@@ -289,7 +313,8 @@ public abstract partial class UIElement
             pixelHeight,
             effectiveDpiScale,
             opaqueFill is null ? RenderPixelFormat.Bgra8888Premultiplied : RenderPixelFormat.Bgra8888,
-            unchecked((ulong)version),
+            // The phase is baked into the pixels, so it keys the snapshot alongside the content.
+            unchecked((ulong)version ^ ((ulong)(uint)phaseQuantized << 52)),
             DeviceId: 0,
             Scope: _bitmapCacheScope).ForDevice(factory);
 
@@ -299,7 +324,8 @@ public abstract partial class UIElement
             && entry.PixelHeight == pixelHeight
             && entry.DpiScale == effectiveDpiScale
             && entry.DeviceGeneration == deviceGeneration
-            && entry.OpaqueFill == opaqueFill;
+            && entry.OpaqueFill == opaqueFill
+            && entry.PixelPhase == phaseQuantized;
 
         if (canReuse && entry!.Version == version)
         {
@@ -337,6 +363,7 @@ public abstract partial class UIElement
                     DpiScale = effectiveDpiScale,
                     DeviceGeneration = deviceGeneration,
                     OpaqueFill = opaqueFill,
+                    PixelPhase = phaseQuantized,
                     AccountedBytes = RenderResourceMetrics.ScratchBytes(cached.Surface.PixelWidth, cached.Surface.PixelHeight),
                     Version = version,
                 };
@@ -361,6 +388,7 @@ public abstract partial class UIElement
                     DpiScale = effectiveDpiScale,
                     DeviceGeneration = deviceGeneration,
                     OpaqueFill = opaqueFill,
+                    PixelPhase = phaseQuantized,
                     AccountedBytes = RenderResourceMetrics.ScratchBytes(surface.PixelWidth, surface.PixelHeight),
                 };
                 if (factory.ResourceCache is { } resourceCache)
@@ -383,7 +411,7 @@ public abstract partial class UIElement
         {
             cacheContext.BeginFrame(entry.Surface);
             cacheContext.Clear(opaqueFill ?? Color.Transparent);
-            cacheContext.Translate(-bounds.Left, -bounds.Top);
+            cacheContext.Translate(-snappedLeft, -snappedTop);
 
             _cacheSnapshotDepth++;
             try
@@ -455,6 +483,7 @@ public abstract partial class UIElement
         public required double DpiScale { get; init; }
         public required int DeviceGeneration { get; init; }
         public required Color? OpaqueFill { get; init; }
+        public required int PixelPhase { get; init; }
         public required long AccountedBytes { get; init; }
         public long Version { get; set; }
         public Color InvalidationOverlayColor { get; set; }
