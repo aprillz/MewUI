@@ -56,11 +56,14 @@ public static class BrowserPlatform
     public static bool PointerMove(double x, double y, double screenX, double screenY, int buttons, ModifierKeys modifiers)
         => BrowserPlatformHost.Active?.PointerMove(x, y, screenX, screenY, buttons, modifiers) == true;
 
-    /// <summary>Routes a pointer press or release; pointerType is 0 for a mouse, 1 for touch, 2 for a pen.</summary>
+    /// <summary>
+    /// Routes a pointer press or release; pointerType is 0 for a mouse, 1 for touch, 2 for a pen.
+    /// Clicks are counted from the event time and position, since the DOM reports no click count.
+    /// </summary>
     public static bool PointerButton(double x, double y, double screenX, double screenY, int button, int buttons,
-        bool isDown, int clickCount, ModifierKeys modifiers, int pointerType)
+        bool isDown, double timeStampMs, ModifierKeys modifiers, int pointerType)
         => BrowserPlatformHost.Active?.PointerButton(
-            x, y, screenX, screenY, button, buttons, isDown, clickCount, modifiers,
+            x, y, screenX, screenY, button, buttons, isDown, timeStampMs, modifiers,
             pointerType switch { 1 => PointerType.Touch, 2 => PointerType.Pen, _ => PointerType.Mouse }) == true;
 
     public static void PointerWheel(double x, double y, double screenX, double screenY,
