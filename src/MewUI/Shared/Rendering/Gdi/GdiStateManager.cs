@@ -103,18 +103,12 @@ internal sealed class GdiStateManager
     public void ResetTransform() => Transform = Matrix3x2.Identity;
 
     /// <summary>Converts a logical point to device coordinates (integer pixels).</summary>
-    // Quantized to the 1/64 px grid before rounding: the float transform carries a cache pass's
-    // translate with less precision than the coordinates, and folding that error away keeps a
-    // midpoint from rounding to different pixels in the window pass and the capture pass.
-    private static int RoundDevice(double value)
-        => (int)Math.Round(Math.Round(value * 64) / 64, MidpointRounding.AwayFromZero);
-
     public POINT ToDevicePoint(Point pt)
     {
         var v = Vector2.Transform(new Vector2((float)pt.X, (float)pt.Y), Transform);
         return new POINT(
-            RoundDevice(v.X * DpiScale),
-            RoundDevice(v.Y * DpiScale));
+            RenderingUtil.RoundDevicePixel(v.X * DpiScale),
+            RenderingUtil.RoundDevicePixel(v.Y * DpiScale));
     }
 
     /// <summary>Converts a logical rectangle to device coordinates (integer pixels).
@@ -132,10 +126,10 @@ internal sealed class GdiStateManager
         float maxY = Math.Max(Math.Max(tl.Y, tr.Y), Math.Max(bl.Y, br.Y));
 
         return new RECT(
-            RoundDevice(minX * DpiScale),
-            RoundDevice(minY * DpiScale),
-            RoundDevice(maxX * DpiScale),
-            RoundDevice(maxY * DpiScale));
+            RenderingUtil.RoundDevicePixel(minX * DpiScale),
+            RenderingUtil.RoundDevicePixel(minY * DpiScale),
+            RenderingUtil.RoundDevicePixel(maxX * DpiScale),
+            RenderingUtil.RoundDevicePixel(maxY * DpiScale));
     }
 
     /// <summary>Quantizes a stroke thickness to device pixels.</summary>
