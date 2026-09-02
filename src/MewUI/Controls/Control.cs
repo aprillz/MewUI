@@ -1242,13 +1242,28 @@ public abstract partial class Control : TextElement
 
         if (background.A > 0)
         {
-            if (radius > 0)
+            // The background stops at the stroke's centre line, the way WPF draws its simple
+            // border: filled to the outer contour it would sit under the stroke's outer
+            // antialiased fringe and bleed past the border.
+            var backgroundBounds = bounds;
+            double backgroundRadius = radius;
+            if (borderThickness > 0 && borderBrush.A > 0)
             {
-                context.FillRoundedRectangle(bounds, radius, radius, background);
+                double inset = borderThickness / 2;
+                backgroundBounds = bounds.Inflate(-inset, -inset);
+                backgroundRadius = Math.Max(0, radius - inset);
             }
-            else
+
+            if (backgroundBounds.Width > 0 && backgroundBounds.Height > 0)
             {
-                context.FillRectangle(bounds, background);
+                if (backgroundRadius > 0)
+                {
+                    context.FillRoundedRectangle(backgroundBounds, backgroundRadius, backgroundRadius, background);
+                }
+                else
+                {
+                    context.FillRectangle(backgroundBounds, background);
+                }
             }
         }
 
