@@ -38,14 +38,25 @@ const IDLE_FRAMES_BEFORE_SLEEP = 3;
 // Resizing the backing store clears the drawing buffer, and the context is created without
 // preserveDrawingBuffer, so the resize has to happen in the frame that redraws it. Doing this
 // from the resize event instead lets the browser composite a cleared buffer, which flickers.
+// CSS size of the canvas in its own box, kept for the frame that reports it to the app.
+let canvasCssWidth = 0;
+let canvasCssHeight = 0;
+
 function syncCanvasSize() {
     const dpr = window.devicePixelRatio || 1;
-    const width = Math.max(1, Math.round(canvas.clientWidth * dpr));
-    const height = Math.max(1, Math.round(canvas.clientHeight * dpr));
+
+    // The box is measured rather than read from clientWidth, which reports it rounded to whole CSS
+    // pixels. At a fractional display scale that rounding sizes the drawing buffer a pixel away
+    // from the box the browser composites it into, and the whole canvas is resampled to fit.
+    const rect = canvas.getBoundingClientRect();
+    canvasCssWidth = rect.width;
+    canvasCssHeight = rect.height;
+    const width = Math.max(1, Math.round(rect.width * dpr));
+    const height = Math.max(1, Math.round(rect.height * dpr));
     if (canvas.width !== width || canvas.height !== height) {
         canvas.width = width;
         canvas.height = height;
-        console.log(`[resize] css=${canvas.clientWidth}x${canvas.clientHeight} buffer=${width}x${height} dpr=${dpr}`);
+        console.log(`[resize] css=${rect.width}x${rect.height} buffer=${width}x${height} dpr=${dpr}`);
     }
 
     return dpr;
@@ -435,8 +446,8 @@ function frame(frameTimeMs) {
     try {
         const dpr = syncCanvasSize();
         const drew = app.RenderFrame(
-            canvas.clientWidth,
-            canvas.clientHeight,
+            canvasCssWidth,
+            canvasCssHeight,
             dpr,
             canvas.width,
             canvas.height,
