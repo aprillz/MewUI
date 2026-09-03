@@ -113,6 +113,8 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
 
     public string SelectedText => GetSelectedDocumentText();
 
+    private protected override bool SupportsClipboardCopy => true;
+
     private protected override string? GetClipboardCopyText() => SelectedText;
 
     public bool Wrap

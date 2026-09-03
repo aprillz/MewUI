@@ -217,10 +217,10 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextC
         // are resolved by InputMap; direct key handling is limited to caret/navigation mechanics.
         Commands.Register(StandardCommands.Copy, this,
             static textBase => textBase.Copy(),
-            static textBase => textBase._editor.Selection.Length > 0);
+            static textBase => textBase.SupportsClipboardCopy && textBase._editor.Selection.Length > 0);
         Commands.Register(StandardCommands.Cut, this,
             static textBase => textBase.Cut(),
-            static textBase => !textBase.IsReadOnly && textBase._editor.Selection.Length > 0);
+            static textBase => !textBase.IsReadOnly && textBase.SupportsClipboardCopy && textBase._editor.Selection.Length > 0);
         Commands.Register(StandardCommands.Paste, this,
             static textBase => textBase.Paste(),
             static textBase => !textBase.IsReadOnly && textBase.ClipboardHasText());
@@ -300,7 +300,7 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextC
 
     public void Copy()
     {
-        if (_editor.Selection.Length > 0)
+        if (SupportsClipboardCopy && _editor.Selection.Length > 0)
         {
             CopyToClipboardCore();
         }
@@ -308,7 +308,7 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextC
 
     public void Cut()
     {
-        if (IsReadOnly || _editor.Selection.Length == 0)
+        if (IsReadOnly || !SupportsClipboardCopy || _editor.Selection.Length == 0)
         {
             return;
         }
@@ -322,6 +322,10 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextC
             PasteFromClipboardCore(text);
         }
     }
+
+    /// <summary>Whether the control offers its selection to the clipboard at all.</summary>
+    // Off by default so a masking control never advertises a cut that would only delete.
+    private protected virtual bool SupportsClipboardCopy => false;
 
     /// <summary>
     /// The text a clipboard copy exposes. Null by default: only controls that surface their
