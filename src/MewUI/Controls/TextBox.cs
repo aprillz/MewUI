@@ -26,5 +26,7 @@ public sealed class TextBox : SingleLineTextBase
     /// </summary>
     public string SelectedText => GetSelectedDocumentText();
 
+    private protected override bool SupportsClipboardCopy => true;
+
     private protected override string? GetClipboardCopyText() => SelectedText;
 }
