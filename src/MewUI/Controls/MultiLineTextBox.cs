@@ -106,7 +106,7 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
     public string Text
     {
         get => GetTextSnapshot();
-        set => SetValue(TextProperty, value ?? string.Empty);
+        set => SetExternalText(TextProperty, value ?? string.Empty);
     }
 
     private protected override MewProperty<string>? TextSyncProperty => TextProperty;

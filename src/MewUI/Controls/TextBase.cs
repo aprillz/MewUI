@@ -459,11 +459,39 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextC
         {
             _editor.CommitComposition();
             string normalized = NormalizeExternalText(_document.Normalize(value));
+            long versionBefore = _document.Version;
             _document.SetText(normalized);
             _textSnapshot = normalized;
             _textSnapshotVersion = _document.Version;
-            _editor.ClearHistory();
-            _editor.SetCaret(Math.Min(_editor.CaretPosition, _document.TextLength));
+
+            // SetText is a no-op for equal content; assigning the text the document already holds must
+            // not throw the undo history away or move the caret.
+            if (_document.Version != versionBefore)
+            {
+                _editor.ClearHistory();
+                _editor.SetCaret(Math.Min(_editor.CaretPosition, _document.TextLength));
+            }
+        }
+        finally
+        {
+            _syncingText = false;
+        }
+    }
+
+    /// <summary>
+    /// Assigns <paramref name="value"/> through a control's text setter: the document is updated first
+    /// and the mirror property follows, so the assignment lands even when the stored mirror value is
+    /// stale and equal to <paramref name="value"/>.
+    /// </summary>
+    private protected void SetExternalText(MewProperty<string> mirror, string value)
+    {
+        // The mirror is only committed back on document changes when something observes it, so its
+        // stored value can lag the document; SetValue's change check would then drop a real assignment.
+        ApplyExternalTextCore(value);
+        _syncingText = true;
+        try
+        {
+            SetValue(mirror, value);
         }
         finally
         {

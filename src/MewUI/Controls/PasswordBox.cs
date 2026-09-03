@@ -44,7 +44,7 @@ public sealed class PasswordBox : SingleLineTextBase
     public string Password
     {
         get => GetTextSnapshot();
-        set => SetValue(PasswordProperty, value ?? string.Empty);
+        set => SetExternalText(PasswordProperty, value ?? string.Empty);
     }
 
     /// <summary>
