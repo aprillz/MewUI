@@ -11,10 +11,46 @@ partial class PerformanceTestView : UserControl
     private MultiLineTextBox _multiLineTextBox = null!;
     private MultiLineTextBox _emojiTextBox = null!;
     private MultiLineTextBox _logOutput = null!;
+    // Set by --auto: the log is also written to stderr so an unattended run can be captured.
+    private readonly bool _echoLog;
 
-    public PerformanceTestView()
+    public PerformanceTestView(bool echoLog = false)
     {
+        _echoLog = echoLog;
         Build();
+    }
+
+    /// <summary>
+    /// Runs every scenario the buttons expose, in tab order, without user input. Scenarios that
+    /// need a zip in Resources/ log an error and continue when it is missing.
+    /// </summary>
+    internal async Task RunAutoAsync()
+    {
+        Log("=== auto run: single-line ===");
+        OnLoadSingleLine();
+        OnClearSingleLine();
+        GenerateSingleLine(10_000);
+        OnClearSingleLine();
+        GenerateSingleLine(100_000);
+        OnClearSingleLine();
+        await TypeSimulationSingleLineAsync();
+
+        Log("=== auto run: multi-line ===");
+        OnLoadMultiLine();
+        OnClearMultiLine();
+        GenerateMultiLine(1_000_000);
+        OnClearMultiLine();
+        GenerateMultiLine(10_000_000);
+        OnClearMultiLine();
+        GenerateLongLogicalLine(10_000_000, wrap: false);
+        OnClearMultiLine();
+        GenerateLongLogicalLine(10_000_000, wrap: true);
+        OnClearMultiLine();
+        await TypeSimulationMultiLineAsync();
+
+        Log("=== auto run: emoji ===");
+        OnLoadEmoji();
+        Log("=== auto run: done ===");
     }
 
     protected override Element? OnBuild() =>
@@ -63,7 +99,7 @@ partial class PerformanceTestView : UserControl
                         new Button().Content("Clear").OnClick(OnClearSingleLine),
                         new Button().Content("Generate 10K chars").OnClick(() => GenerateSingleLine(10_000)),
                         new Button().Content("Generate 100K chars").OnClick(() => GenerateSingleLine(100_000)),
-                        new Button().Content("Type Simulation (1000)").OnClick(OnTypeSimulationSingleLine)
+                        new Button().Content("Type Simulation (1000)").OnClick(() => _ = TypeSimulationSingleLineAsync())
                     ),
                 new Label().Text("Place singleine-test.zip in Resources/").DockTop().Margin(0, 0, 0, 8),
                 new TextBox()
@@ -85,7 +121,7 @@ partial class PerformanceTestView : UserControl
                         new Button().Content("Generate 10MB").OnClick(() => GenerateMultiLine(10_000_000)),
                         new Button().Content("Generate 10MB single line (no wrap)").OnClick(() => GenerateLongLogicalLine(10_000_000, wrap: false)),
                         new Button().Content("Generate 10MB single line (wrap)").OnClick(() => GenerateLongLogicalLine(10_000_000, wrap: true)),
-                        new Button().Content("Type Simulation (1000)").OnClick(OnTypeSimulationMultiLine)
+                        new Button().Content("Type Simulation (1000)").OnClick(() => _ = TypeSimulationMultiLineAsync())
                     ),
                 new Label().Text("Place multiline-test.zip in Resources/").DockTop().Margin(0, 0, 0, 8),
                 new MultiLineTextBox()
@@ -115,6 +151,10 @@ partial class PerformanceTestView : UserControl
         var timestamp = DateTime.Now.ToString("HH:mm:ss.fff");
         var line = $"[{timestamp}] {message}{Environment.NewLine}";
         _logOutput.AppendText(line, true);
+        if (_echoLog)
+        {
+            Console.Error.Write(line);
+        }
     }
 
     private static string? LoadZipText(string zipName)
@@ -180,7 +220,7 @@ partial class PerformanceTestView : UserControl
         Log($"  TextBox.Text set: {sw.ElapsedMilliseconds}ms");
     }
 
-    private async void OnTypeSimulationSingleLine()
+    private async Task TypeSimulationSingleLineAsync()
     {
         const int count = 1000;
         Log($"Type simulation: {count} chars → TextBox...");
@@ -289,7 +329,7 @@ partial class PerformanceTestView : UserControl
         Log($"  New text engine Text set: {sw.ElapsedMilliseconds}ms");
     }
 
-    private async void OnTypeSimulationMultiLine()
+    private async Task TypeSimulationMultiLineAsync()
     {
         const int count = 1000;
         Log($"Type simulation: {count} chars → MultiLineTextBox...");

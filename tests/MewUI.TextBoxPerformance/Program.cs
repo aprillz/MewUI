@@ -37,10 +37,23 @@ static void Startup()
 
 Startup();
 
+bool autoRun = Environment.GetCommandLineArgs().Any(a => a is "--auto");
+
 var window = new Window()
     .Title("TextBox Performance Test")
     .Resizable(1000, 700);
 
-window.Content = new PerformanceTestView();
+var view = new PerformanceTestView(echoLog: autoRun);
+window.Content = view;
+
+if (autoRun)
+{
+    // Unattended mode: run every scenario once the window is up, then exit.
+    window.Loaded += async () =>
+    {
+        await view.RunAutoAsync();
+        window.Close();
+    };
+}
 
 Application.Run(window);
