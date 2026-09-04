@@ -171,7 +171,7 @@ internal sealed class BrowserWindowBackend : IWindowBackend
         }
     }
 
-    internal bool PointerMove(double x, double y, double screenX, double screenY, int buttons, ModifierKeys modifiers)
+    internal bool PointerMove(double x, double y, double screenX, double screenY, int buttons, ModifierKeys modifiers, PointerType pointerType)
     {
         if (!_shown || _disposed) return false;
         WindowInputRouter.MouseMove(
@@ -181,7 +181,8 @@ internal sealed class BrowserWindowBackend : IWindowBackend
             leftDown: (buttons & 1) != 0,
             rightDown: (buttons & 2) != 0,
             middleDown: (buttons & 4) != 0,
-            modifiers);
+            modifiers,
+            pointerType);
         return _mouseCaptured;
     }
 
@@ -312,6 +313,7 @@ internal sealed class BrowserWindowBackend : IWindowBackend
         if (!_shown || _disposed) return;
 
         StopFling();
+        Window.SetScrollGestureActive(true);
         _panPoint = new Point(x, y);
         _panScreenPoint = new Point(screenX, screenY);
         _panModifiers = modifiers;
@@ -396,12 +398,14 @@ internal sealed class BrowserWindowBackend : IWindowBackend
         ClearPanSamples();
         if (!estimated)
         {
+            Window.SetScrollGestureActive(false);
             return;
         }
 
         double speed = Math.Sqrt((velocityX * velocityX) + (velocityY * velocityY));
         if (speed < FlingEndSpeedDip)
         {
+            Window.SetScrollGestureActive(false);
             return;
         }
 
@@ -411,9 +415,10 @@ internal sealed class BrowserWindowBackend : IWindowBackend
         _flingDirectionY = velocityY / speed;
         _flingSentDistance = 0;
 
-        // The curve is timed off the frame clock, which the release is not on, so the first frame
-        // stamps the start. Dropping the wait between the two costs nothing and keeps one clock.
-        _flingStartMs = double.NaN;
+        // The release and the frame timestamps share one origin (DOMHighResTimeStamp), so the curve
+        // starts at the release itself and the first frame already moves. Stamping the first frame
+        // instead left the content parked for a frame or two after the finger lifted.
+        _flingStartMs = nowMs;
         _host.RequestFrame();
     }
 
@@ -477,11 +482,6 @@ internal sealed class BrowserWindowBackend : IWindowBackend
             return false;
         }
 
-        if (double.IsNaN(_flingStartMs))
-        {
-            _flingStartMs = frameTimeMs;
-        }
-
         _advancingFling = true;
         try
         {
@@ -538,6 +538,7 @@ internal sealed class BrowserWindowBackend : IWindowBackend
         _flingSentDistance = 0;
         _panBankX = 0;
         _panBankY = 0;
+        Window.SetScrollGestureActive(false);
     }
 
     internal void PointerLeave()
@@ -559,8 +560,8 @@ internal sealed class BrowserWindowBackend : IWindowBackend
         _panTarget = null;
         _panBankX = 0;
         _panBankY = 0;
-        Window.ReleaseMouseCapture();
-        WindowInputRouter.UpdateMouseOver(Window, null);
+        Window.SetScrollGestureActive(false);
+        WindowInputRouter.PointerCancel(Window);
     }
 
     internal bool KeyDown(string code, int platformKey, ModifierKeys modifiers, bool isRepeat)
