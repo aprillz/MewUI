@@ -356,6 +356,7 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
         {
             ThrowIfDisposed();
             SweepIdleScratchNoLock(NORMAL_MAINTENANCE_EVICTION_LIMIT);
+            DrainCompletedReleases_NoLock();
             if (TryRentFromBucketNoLock(key, out var exact))
             {
                 return exact;
@@ -365,6 +366,73 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
                 return null;
             }
 
+            var oversize = RentOversizeNoLock(key);
+            if (oversize != null)
+            {
+                return oversize;
+            }
+
+            // The pool runs dry while idle snapshots still hold surfaces that fit. Allocating then
+            // costs a texture and a framebuffer per capture, which on a phone is a dropped frame, so
+            // the least recently used idle snapshot gives its surface up instead.
+            if (TryReclaimIdlePersistentNoLock(key))
+            {
+                if (TryRentFromBucketNoLock(key, out var reclaimed))
+                {
+                    return reclaimed;
+                }
+
+                return RentOversizeNoLock(key);
+            }
+
+            return null;
+        }
+    }
+
+    private bool TryReclaimIdlePersistentNoLock(ScratchSurfaceKey key)
+    {
+        long requestedArea = (long)key.PixelWidth * key.PixelHeight;
+        CachedRenderResource? victim = null;
+        foreach (var candidate in _entries.Values)
+        {
+            if (candidate.LeaseCount != 0
+                || (candidate.SafeToDisposeAfter is { } operation && !operation.IsCompleted)
+                || candidate.Surface is not LeasedRenderSurfaceView lease
+                || lease.Allocation is not { } allocation
+                || lease.HasAlphaKey != key.HasAlpha
+                || lease.ResourceClass != key.ResourceClass
+                || allocation.DpiScale != key.DpiScale
+                || allocation.PixelWidth < key.PixelWidth
+                || allocation.PixelHeight < key.PixelHeight)
+            {
+                continue;
+            }
+
+            long area = (long)allocation.PixelWidth * allocation.PixelHeight;
+            if (area - requestedArea > requestedArea)
+            {
+                continue;
+            }
+
+            if (victim == null || candidate.LastUseSequence < victim.LastUseSequence)
+            {
+                victim = candidate;
+            }
+        }
+
+        if (victim == null)
+        {
+            return false;
+        }
+
+        _entries.Remove(victim.Key);
+        RetireEntry_NoLock(victim);
+        return true;
+    }
+
+    private IRenderSurface? RentOversizeNoLock(ScratchSurfaceKey key)
+    {
+        {
             long requestedArea = (long)key.PixelWidth * key.PixelHeight;
             long requestedBytes = RenderResourceMetrics.ScratchBytes(key.PixelWidth, key.PixelHeight);
             ScratchSurfaceKey selectedKey = default;

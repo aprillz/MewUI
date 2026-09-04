@@ -231,6 +231,62 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
     internal UIElement? MouseOverElement => _mouseOverElement;
 
+    // A bitmap-cache capture costs a render-target switch and a flush, which on a phone GPU is a
+    // dropped frame. While a scroll gesture runs no capture is taken (the subtree renders live), and
+    // for a short settle after it captures are rationed per frame so they do not all land at once.
+    private const int CAPTURES_PER_FRAME_WHILE_SETTLING = 1;
+    private const double SCROLL_SETTLE_MS = 500;
+    private bool _scrollGestureActive;
+    private long _scrollGestureEndedTicks = long.MinValue;
+    private int _captureBudgetRemaining = int.MaxValue;
+
+    /// <summary>Tells the window whether a finger-driven scroll (pan or its coast) is in progress.</summary>
+    internal void SetScrollGestureActive(bool active)
+    {
+        if (_scrollGestureActive == active)
+        {
+            return;
+        }
+
+        _scrollGestureActive = active;
+        if (!active)
+        {
+            _scrollGestureEndedTicks = System.Diagnostics.Stopwatch.GetTimestamp();
+        }
+    }
+
+    private void ResetCaptureBudgetForFrame()
+    {
+        if (_scrollGestureActive)
+        {
+            _captureBudgetRemaining = 0;
+        }
+        else if (System.Diagnostics.Stopwatch.GetElapsedTime(_scrollGestureEndedTicks).TotalMilliseconds < SCROLL_SETTLE_MS)
+        {
+            _captureBudgetRemaining = CAPTURES_PER_FRAME_WHILE_SETTLING;
+        }
+        else
+        {
+            _captureBudgetRemaining = int.MaxValue;
+        }
+    }
+
+    /// <summary>Claims one bitmap-cache capture for this frame; false means the element must render live and try again next frame.</summary>
+    internal bool TryTakeCaptureBudget()
+    {
+        if (_captureBudgetRemaining <= 0)
+        {
+            return false;
+        }
+
+        if (_captureBudgetRemaining != int.MaxValue)
+        {
+            _captureBudgetRemaining--;
+        }
+
+        return true;
+    }
+
     internal UIElement? CapturedElement => _capturedElement;
 
     internal bool HasMouseCapture => _capturedElement != null;
@@ -2781,6 +2837,8 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             RequestRender();
             return;
         }
+
+        ResetCaptureBudgetForFrame();
 
         // Some platforms can render before Loaded is raised due to Run/Show/Dispatcher ordering.
         // Ensure Loaded is raised as soon as the dispatcher is available, and always before FirstFrameRendered.

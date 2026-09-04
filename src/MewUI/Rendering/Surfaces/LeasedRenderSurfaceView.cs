@@ -28,6 +28,11 @@ internal sealed class LeasedRenderSurfaceView : IRenderSurface, IBackendSurfaceP
 
     public int PixelWidth { get; }
     public int PixelHeight { get; }
+
+    /// <summary>The pool attributes this lease was acquired under, so the pool can judge the allocation for reuse.</summary>
+    internal bool HasAlphaKey => _hasAlphaKey;
+    internal ScratchResourceClass ResourceClass => _resourceClass;
+    internal IRenderSurface? Allocation => Volatile.Read(ref _allocation);
     public double DpiScale => GetAllocation().DpiScale;
     public RenderPixelFormat Format => GetAllocation().Format;
     public SurfaceUsage Usage => GetAllocation().Usage;

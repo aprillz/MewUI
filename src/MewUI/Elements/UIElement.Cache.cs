@@ -181,6 +181,18 @@ public abstract partial class UIElement
             return;
         }
 
+        // A snapshot that would have to be painted this frame waits for the window's capture budget;
+        // until it is granted the subtree renders live and a frame is requested to try again. The
+        // request goes to the window, not InvalidateVisual, which would read as a content change.
+        bool wouldCapture = _cache == null || _cache.Version != version;
+        if (wouldCapture && window != null && !window.TryTakeCaptureBudget())
+        {
+            OnRender(context);
+            RenderSubtree(context);
+            window.RequestRender();
+            return;
+        }
+
         bool cacheRebuilt = EnsureCache(factory, context.DpiScale, deviceGeneration, bitmapCache);
 
         if (_cache is { } entry)
