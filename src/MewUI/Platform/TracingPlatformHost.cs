@@ -44,6 +44,8 @@ internal sealed class TracingPlatformHost : IPlatformHost
     public int GetSystemMetricsForDpi(int nIndex, uint dpi) => _inner.GetSystemMetricsForDpi(nIndex, dpi);
 
     public Point GetCursorScreenPosition() => _inner.GetCursorScreenPosition();
+    public uint GetDpiForPoint(Point point) => _inner.GetDpiForPoint(point);
+    public Rect GetWorkAreaForPoint(Point point) => _inner.GetWorkAreaForPoint(point);
 
     public bool SupportsTransparentOverlay => _inner.SupportsTransparentOverlay;
 

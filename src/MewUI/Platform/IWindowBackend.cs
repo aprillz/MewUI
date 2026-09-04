@@ -3,6 +3,12 @@ namespace Aprillz.MewUI.Platform;
 /// <summary>
 /// Platform-specific window backend responsible for native window lifetime, invalidation and input integration.
 /// </summary>
+/// <remarks>
+/// Screen pixels form a shared virtual-desktop coordinate space, independent of the consuming window.
+/// On macOS the reference screen's backing scale defines these units across all displays; they are
+/// not the local backing pixels of each display. Use the surface DPI only for rasterization, never
+/// to rescale an absolute screen position before passing it to another window.
+/// </remarks>
 public interface IWindowBackend : IDisposable
 {
     /// <summary>

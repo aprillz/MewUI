@@ -179,6 +179,8 @@ internal sealed class MacOSWindowBackend : IWindowBackend
             throw new InvalidOperationException("NSWindow creation failed.");
         }
 
+        ApplyResolvedStartupPlacement();
+
         // Resolve DPI before the framework lays out (step 2) so measure/arrange use the correct scale.
         UpdateDpiIfNeeded();
     }
@@ -598,20 +600,10 @@ internal sealed class MacOSWindowBackend : IWindowBackend
     // contract is top-left, Y-down (see IPlatformHost.GetCursorScreenPosition), matching Window.MoveTo. These
     // helpers convert between the two so all macOS screen pixels honor the top-down contract.
     private Point CocoaScreenPointToTopLeftPx(NSPoint cocoaPoint)
-    {
-        double scale = _lastDpiScale > 0 ? _lastDpiScale : 1.0;
-        var screenFrame = GetPositioningScreenFrame();
-        double topY = (screenFrame.origin.y + screenFrame.size.height) - cocoaPoint.y;
-        return new Point(cocoaPoint.x * scale, topY * scale);
-    }
+        => MacOSInterop.CocoaToScreenPixels(cocoaPoint);
 
     private NSPoint TopLeftPxToCocoaScreenPoint(Point topLeftPx)
-    {
-        double scale = _lastDpiScale > 0 ? _lastDpiScale : 1.0;
-        var screenFrame = GetPositioningScreenFrame();
-        double cocoaY = (screenFrame.origin.y + screenFrame.size.height) - (topLeftPx.Y / scale);
-        return new NSPoint(topLeftPx.X / scale, cocoaY);
-    }
+        => MacOSInterop.ScreenPixelsToCocoa(topLeftPx);
 
     public Point ClientToScreen(Point clientPointDip)
     {
@@ -1150,6 +1142,12 @@ internal sealed class MacOSWindowBackend : IWindowBackend
             return;
         }
 
+        if (_window.StartupPositionPx is { } positionPx)
+        {
+            SetPositionPx(positionPx.X, positionPx.Y);
+            return;
+        }
+
         switch (_window.EffectiveStartupLocation)
         {
             case WindowStartupLocation.CenterScreen:
@@ -1195,19 +1193,7 @@ internal sealed class MacOSWindowBackend : IWindowBackend
         }
     }
 
-    private NSRect GetPositioningScreenFrame()
-    {
-        if (_nsWindow != 0)
-        {
-            var screenFrame = MacOSWindowInterop.GetScreenFrame(_nsWindow);
-            if (screenFrame.size.width > 0 && screenFrame.size.height > 0)
-            {
-                return screenFrame;
-            }
-        }
-
-        return MacOSInterop.GetMainScreenFrame();
-    }
+    private NSRect GetPositioningScreenFrame() => MacOSInterop.GetReferenceScreenFrame();
 
     private void UpdateDpiIfNeeded(bool force = false)
     {

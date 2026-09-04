@@ -361,39 +361,43 @@ internal static unsafe class MacOSWindowInterop
         return ObjC.MsgSend_rect(window, SelFrame);
     }
 
-    /// <summary>
-    /// Returns the visibleFrame (work area) of the screen containing the given Cocoa point,
-    /// falling back to the main screen when no screen contains it.
-    /// </summary>
-    public static NSRect GetScreenVisibleFrameForCocoaPoint(NSPoint cocoaPoint)
+    /// <summary>Resolves the containing screen, or the nearest screen for a point in a desktop gap.</summary>
+    internal static nint GetScreenForCocoaPoint(NSPoint point)
     {
         EnsureInitialized();
-        var clsScreen = ObjC.GetClass("NSScreen");
-        if (clsScreen == 0)
-        {
-            return default;
-        }
-
-        var screens = ObjC.MsgSend_nint(clsScreen, ObjC.Sel("screens"));
+        var cls = ObjC.GetClass("NSScreen");
+        if (cls == 0) return 0;
+        var screens = ObjC.MsgSend_nint(cls, ObjC.Sel("screens"));
         long count = screens != 0 ? (long)ObjC.MsgSend_nint(screens, ObjC.Sel("count")) : 0;
+        nint nearest = 0;
+        double nearestDistance = double.PositiveInfinity;
         for (long i = 0; i < count; i++)
         {
             var screen = ObjC.MsgSend_nint_nint(screens, SelObjectAtIndex, (nint)i);
-            if (screen == 0)
-            {
-                continue;
-            }
-
+            if (screen == 0) continue;
             var frame = ObjC.MsgSend_rect(screen, ObjC.Sel("frame"));
-            if (cocoaPoint.x >= frame.origin.x && cocoaPoint.x < frame.origin.x + frame.size.width
-                && cocoaPoint.y >= frame.origin.y && cocoaPoint.y < frame.origin.y + frame.size.height)
-            {
-                return ObjC.MsgSend_rect(screen, ObjC.Sel("visibleFrame"));
-            }
+            if (point.x >= frame.origin.x && point.x < frame.origin.x + frame.size.width
+                && point.y >= frame.origin.y && point.y < frame.origin.y + frame.size.height)
+                return screen;
+            double dx = Math.Max(frame.origin.x - point.x, Math.Max(0, point.x - frame.origin.x - frame.size.width));
+            double dy = Math.Max(frame.origin.y - point.y, Math.Max(0, point.y - frame.origin.y - frame.size.height));
+            double distance = dx * dx + dy * dy;
+            if (distance < nearestDistance) { nearest = screen; nearestDistance = distance; }
         }
+        return nearest;
+    }
 
-        var mainScreen = ObjC.MsgSend_nint(clsScreen, ObjC.Sel("mainScreen"));
-        return mainScreen != 0 ? ObjC.MsgSend_rect(mainScreen, ObjC.Sel("visibleFrame")) : default;
+    public static NSRect GetScreenVisibleFrameForCocoaPoint(NSPoint point)
+    {
+        var screen = GetScreenForCocoaPoint(point);
+        return screen != 0 ? ObjC.MsgSend_rect(screen, ObjC.Sel("visibleFrame")) : default;
+    }
+
+    internal static double GetScreenScaleForCocoaPoint(NSPoint point)
+    {
+        var screen = GetScreenForCocoaPoint(point);
+        double scale = screen != 0 ? ObjC.MsgSend_double(screen, ObjC.Sel("backingScaleFactor")) : 1.0;
+        return scale > 0 ? scale : 1.0;
     }
 
     public static NSRect GetScreenFrame(nint window)
@@ -798,6 +802,17 @@ internal static unsafe class MacOSWindowInterop
     public static void ShowWindow(nint window)
     {
         EnsureInitialized();
+
+        // makeKeyAndOrderFront: only orders a window in front of other applications' windows
+        // while this application is active. A regular application is active by the time it
+        // shows anything, but an accessory one is never activated by its status item, so a
+        // window it opens lands behind the frontmost application, usually hidden entirely.
+        // Activating first gives it the result a regular application gets.
+        if (MacOSInterop.IsAccessoryApplication() && !MacOSInterop.IsApplicationActive())
+        {
+            MacOSInterop.ActivateApplication();
+        }
+
         ObjC.MsgSend_void_nint_nint(window, SelMakeKeyAndOrderFront, 0);
     }
 
