@@ -191,7 +191,7 @@ canvas.addEventListener('pointermove', event => {
         }
     }
 
-    app.PointerMove(point.x, point.y, event.screenX, event.screenY, event.buttons, modifiersOf(event));
+    app.PointerMove(point.x, point.y, event.screenX, event.screenY, event.buttons, modifiersOf(event), pointerTypeOf(event));
     if (gesture !== null && app.CaptureConsumesDrag()) {
         endTouchGesture(event.pointerId);
     }
