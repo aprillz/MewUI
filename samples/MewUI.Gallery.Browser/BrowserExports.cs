@@ -35,8 +35,8 @@ internal static partial class BrowserExports
     internal static int NextWakeDelayMs() => BrowserPlatform.NextWakeDelayMs();
 
     [JSExport]
-    internal static bool PointerMove(double x, double y, double screenX, double screenY, int buttons, int modifiers)
-        => BrowserPlatform.PointerMove(x, y, screenX, screenY, buttons, (ModifierKeys)modifiers);
+    internal static bool PointerMove(double x, double y, double screenX, double screenY, int buttons, int modifiers, int pointerType)
+        => BrowserPlatform.PointerMove(x, y, screenX, screenY, buttons, (ModifierKeys)modifiers, pointerType);
 
     [JSExport]
     internal static bool PointerButton(double x, double y, double screenX, double screenY, int button, int buttons,
