@@ -59,7 +59,7 @@ public abstract partial class UIElement : Element
             MewPropertyOptions.AffectsVisualState).Property;
 
     /// <summary>
-    /// Whether this element has mouse capture. Read-only; set via <see cref="Window.CaptureMouse"/>.
+    /// Whether this element has mouse capture. Read-only; set via <see cref="Window.CaptureMouse(UIElement)"/>.
     /// </summary>
     public static readonly MewProperty<bool> IsMouseCapturedProperty =
         MewProperty<bool>.RegisterReadOnly<UIElement>(nameof(IsMouseCaptured), false,

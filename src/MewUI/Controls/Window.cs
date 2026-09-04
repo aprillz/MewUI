@@ -242,6 +242,15 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             _capturedElement.SetMouseCaptured(false);
             _capturedElement = null;
         }
+
+        NotifyCaptureLost();
+    }
+
+    private void NotifyCaptureLost()
+    {
+        var onCaptureLost = _captureLostCallback;
+        _captureLostCallback = null;
+        onCaptureLost?.Invoke();
     }
 
     internal void ClearMouseOverState()
@@ -302,6 +311,13 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     {
         ApplicationDispatcher?.BeginInvoke(DispatcherPriority.Layout, () =>
         {
+            // A finger does not hover, so a scroll it drives must not light whatever passes under
+            // its last position. Only a device that reports an in-range position re-evaluates.
+            if (_lastPointerType == PointerType.Touch)
+            {
+                return;
+            }
+
             // When layout/scroll offsets change without an actual mouse move, the element under the cursor can change.
             // Re-run hit testing at the last known mouse position to keep IsMouseOver state accurate.
             // Use a real hit test: mouse-over must track the pointer's actual target even during capture.
@@ -309,6 +325,12 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             WindowInputRouter.UpdateMouseOver(this, leaf);
         });
     }
+
+    // The device behind the most recent pointer event, so scroll-driven hover re-evaluation can
+    // tell a finger from a mouse.
+    private PointerType _lastPointerType;
+
+    internal void NoteLastPointerType(PointerType pointerType) => _lastPointerType = pointerType;
 
     internal void UpdateMouseOverChain(UIElement? oldLeaf, UIElement? newLeaf)
     {
@@ -2442,7 +2464,14 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     /// Captures mouse input for the specified element until released.
     /// </summary>
     /// <param name="element">Element that should receive captured mouse events.</param>
-    public void CaptureMouse(UIElement element)
+    public void CaptureMouse(UIElement element) => CaptureMouse(element, null);
+
+    /// <summary>
+    /// Captures mouse input for the element and runs <paramref name="onCaptureLost"/> once when the
+    /// capture ends for any reason: release, another element capturing, pointer cancel, or the
+    /// platform revoking it.
+    /// </summary>
+    internal void CaptureMouse(UIElement element, Action? onCaptureLost)
     {
         if (_lifetimeState == WindowLifetimeState.Closed)
         {
@@ -2456,7 +2485,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         if (inputHost != null && !ReferenceEquals(inputHost, this))
         {
             _captureDelegatedTo = inputHost;
-            inputHost.CaptureMouse(element);
+            inputHost.CaptureMouse(element, onCaptureLost);
             return;
         }
 
@@ -2472,15 +2501,20 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         if (_capturedElement != null && !ReferenceEquals(_capturedElement, element))
         {
             _capturedElement.SetMouseCaptured(false);
+            NotifyCaptureLost();
         }
 
         _capturedElement = element;
+        _captureLostCallback = onCaptureLost;
         element.SetMouseCaptured(true);
     }
 
     // The popup surface a capture was delegated to, so a later ReleaseMouseCapture on this owner window
     // (callers resolve capture/release symmetrically through FindVisualRoot) reaches the same surface.
     private Window? _captureDelegatedTo;
+
+    // Runs once when the current capture ends; set together with _capturedElement.
+    private Action? _captureLostCallback;
 
     /// <summary>
     /// Releases any active mouse capture for this window.

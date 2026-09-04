@@ -34,6 +34,20 @@ internal static class WindowInputRouter
         window.UpdateCursorForElement(newLeaf);
     }
 
+    /// <summary>Whether the device reports an in-range position that drives mouse-over; a finger does not, a pen does.</summary>
+    private static bool ProducesHover(PointerType pointerType) => pointerType != PointerType.Touch;
+
+    /// <summary>
+    /// Ends the current pointer sequence without a release: drops any drag candidate or session,
+    /// releases capture (notifying its owner), and clears mouse-over.
+    /// </summary>
+    internal static void PointerCancel(Window window)
+    {
+        WindowDragDropRouter.OnPointerCancel();
+        window.ReleaseMouseCapture();
+        UpdateMouseOver(window, null);
+    }
+
     // Delivers events to the captured element regardless of pointer position. Callers that need
     // the true element under the pointer (mouse-over state, focus/popup-close policy) should call
     // window.HitTest directly instead, since capture must not affect those decisions.
@@ -51,12 +65,24 @@ internal static class WindowInputRouter
         bool rightDown,
         bool middleDown,
         ModifierKeys modifiers = ModifierKeys.None)
+        => MouseMove(window, positionInWindow, screenPosition, leftDown, rightDown, middleDown, modifiers, PointerType.Mouse);
+
+    internal static void MouseMove(
+        Window window,
+        Point positionInWindow,
+        Point screenPosition,
+        bool leftDown,
+        bool rightDown,
+        bool middleDown,
+        ModifierKeys modifiers,
+        PointerType pointerType)
     {
         // Popup surfaces arrange their hosted subtree in the owner's coordinate space; map the
         // surface-local position into that space once so hit tests and event positions agree
         // with element bounds everywhere downstream.
         positionInWindow = window.SurfacePointToVisualTree(positionInWindow);
         window.UpdateLastMousePosition(positionInWindow, screenPosition);
+        window.NoteLastPointerType(pointerType);
 
         // A drag in progress (or a gesture about to be promoted) consumes the move; skip normal routing.
         if (WindowDragDropRouter.OnMouseMove(window, positionInWindow, screenPosition))
@@ -68,12 +94,16 @@ internal static class WindowInputRouter
         // so IsMouseOver stops tracking a captured element once the pointer leaves it.
         var actualHit = window.HitTest(positionInWindow);
         var element = window.CapturedElement ?? actualHit;
-        UpdateMouseOver(window, actualHit);
+        if (ProducesHover(pointerType))
+        {
+            UpdateMouseOver(window, actualHit);
+        }
 
         var args = new MouseEventArgs(positionInWindow, screenPosition, MewUI.MouseButton.Left, leftDown, rightDown, middleDown, modifiers: modifiers)
         {
             OriginalSource = element,
             Source = element,
+            PointerType = pointerType,
         };
         for (var current = element; current != null && !args.Handled; current = GetInputBubbleParent(window, current))
         {
@@ -114,6 +144,7 @@ internal static class WindowInputRouter
     {
         positionInWindow = window.SurfacePointToVisualTree(positionInWindow);
         window.UpdateLastMousePosition(positionInWindow, screenPosition);
+        window.NoteLastPointerType(pointerType);
 
         // Focus and popup-close policy must react to the real element under the pointer, not the
         // capture target, so clicking elsewhere while capture is active does not re-focus/keep-open
@@ -140,7 +171,15 @@ internal static class WindowInputRouter
             }
         }
 
-        UpdateMouseOver(window, actualHit);
+        if (ProducesHover(pointerType))
+        {
+            UpdateMouseOver(window, actualHit);
+        }
+        else if (isDown)
+        {
+            // A finger does not hover, and whatever the mouse left lit must not stay lit under it.
+            window.ClearMouseOverState();
+        }
 
         var args = new MouseEventArgs(positionInWindow, screenPosition, button, leftDown, rightDown, middleDown, clickCount: clickCount, modifiers: modifiers)
         {
