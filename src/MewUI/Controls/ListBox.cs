@@ -554,6 +554,20 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
             return;
         }
 
+        // A finger does not hover, and a position it left behind must not seed the row hover
+        // that the next scroll re-derives from it.
+        if (e.PointerType == PointerType.Touch)
+        {
+            _hasLastMousePosition = false;
+            if (_hoverIndex != -1)
+            {
+                _hoverIndex = -1;
+                InvalidateVisual();
+            }
+
+            return;
+        }
+
         _hasLastMousePosition = true;
         _lastMousePosition = e.GetPosition(this);
 

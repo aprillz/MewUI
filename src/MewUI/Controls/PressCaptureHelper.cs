@@ -10,6 +10,10 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 internal sealed class PressCaptureHelper(UIElement owner, Action<bool> setPressed)
 {
+    // A capture taken away (pointer cancel, drag session, platform revoke) never delivers a mouse-up,
+    // so the pressed state is cleared from the capture-lost notification instead.
+    private readonly Action _onCaptureLost = () => setPressed(false);
+
     /// <summary>
     /// Sets the pressed state, optionally runs a focus callback, then captures the mouse via the
     /// owning window. Call from OnMouseDown once the control's own button/enabled guard passes.
@@ -21,7 +25,7 @@ internal sealed class PressCaptureHelper(UIElement owner, Action<bool> setPresse
 
         if (owner.FindVisualRoot() is Window window)
         {
-            window.CaptureMouse(owner);
+            window.CaptureMouse(owner, _onCaptureLost);
         }
     }
 

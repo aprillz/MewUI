@@ -130,6 +130,13 @@ internal static class WindowDragDropRouter
         }
     }
 
+    /// <summary>Drops the pending drag candidate and cancels any active session when the pointer sequence is cancelled.</summary>
+    internal static void OnPointerCancel()
+    {
+        _candidate = null;
+        CancelActive();
+    }
+
     /// <summary>Cancels any active drag session (Esc, source window closing, etc.).</summary>
     public static void CancelActive()
     {
