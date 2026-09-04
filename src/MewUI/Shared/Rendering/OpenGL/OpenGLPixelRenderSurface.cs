@@ -122,6 +122,9 @@ internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSu
     /// </summary>
     internal bool IsFboInitialized => _fboInitialized;
 
+    // Off where the attachment format is guaranteed complete and the query would block on the GPU.
+    internal static bool VerifyFramebufferCompleteness = true;
+
     /// <summary>HGLRC / GLXContext that owns the FBO + RB handles. The offscreen
     /// provider's deferred-disposal drain uses this to skip targets whose owning
     /// context is not currently active (FBOs/RBs are NOT shared across contexts
@@ -558,8 +561,11 @@ internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSu
         OpenGLExt.FramebufferTexture2D(OpenGLExt.GL_FRAMEBUFFER, OpenGLExt.GL_COLOR_ATTACHMENT0,
             GL.GL_TEXTURE_2D, _texture, 0);
 
-        // Check completeness
-        uint status = OpenGLExt.CheckFramebufferStatus(OpenGLExt.GL_FRAMEBUFFER);
+        // Check completeness. The query is a synchronous round trip on WebGL, so a backend that
+        // knows an RGBA8 color attachment is always complete opts out of it.
+        uint status = VerifyFramebufferCompleteness
+            ? OpenGLExt.CheckFramebufferStatus(OpenGLExt.GL_FRAMEBUFFER)
+            : OpenGLExt.GL_FRAMEBUFFER_COMPLETE;
         if (status != OpenGLExt.GL_FRAMEBUFFER_COMPLETE)
         {
             // Cleanup on failure

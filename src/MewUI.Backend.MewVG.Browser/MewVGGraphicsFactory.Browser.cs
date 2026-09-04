@@ -131,6 +131,9 @@ internal sealed class BrowserWindowResources : IDisposable, IMewVGWindowCacheMai
 
                     NanoVGGL.Initialize(BrowserNative.GetProcAddress, NanoVGGLProfile.Gles3);
                     Native.OpenGLExt.EnsureInitialized();
+                    // WebGL2 guarantees an RGBA8 color attachment is complete, and the status query
+                    // is a blocking round trip to the GPU process on every new offscreen surface.
+                    OpenGLPixelRenderSurface.VerifyFramebufferCompleteness = false;
                     _initialized = true;
                     Console.WriteLine("MewUI MewVG WebGL2 initialized.");
                 }
