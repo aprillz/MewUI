@@ -1048,6 +1048,14 @@ internal sealed class X11WindowBackend : IWindowBackend
             return;
         }
 
+        if (Window.StartupPositionPx is { } positionPx)
+        {
+            double scale = Window.DpiScale > 0 ? Window.DpiScale : 1.0;
+            ApplyStartupPositionHints(new Point(positionPx.X / scale, positionPx.Y / scale), true);
+            SetPositionPx(positionPx.X, positionPx.Y);
+            return;
+        }
+
         Point? targetPosition = Window.EffectiveStartupLocation switch
         {
             WindowStartupLocation.Manual => Window.ResolvedStartupPosition,

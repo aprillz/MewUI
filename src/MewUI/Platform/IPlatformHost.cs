@@ -3,6 +3,10 @@ namespace Aprillz.MewUI.Platform;
 /// <summary>
 /// Abstracts platform-specific services such as windowing, input, clipboard, dialogs, and UI dispatching.
 /// </summary>
+/// <remarks>
+/// Screen positions use the same virtual-desktop pixel space as IWindowBackend. On macOS its units
+/// use the reference screen's backing scale, independently of the per-window rendering DPI.
+/// </remarks>
 internal interface IPlatformHost : IDisposable
 {
     /// <summary>

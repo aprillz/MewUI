@@ -14,6 +14,8 @@ internal sealed class NativePopupHost : IPopupHost
     // Upper bound for the popup window's fit-to-content sizing; real work-area clamping is a placement refinement.
     private const double MAX_POPUP_EXTENT = 8192;
 
+    private bool _layingOut;
+    private bool _layoutAgain;
     private readonly Window _ownerWindow;
     private readonly List<PopupEntry> _popups;
 
@@ -46,6 +48,7 @@ internal sealed class NativePopupHost : IPopupHost
         popupWindow.IsInputTransparentSurface = !entry.Element.IsHitTestVisible;
         chrome.HostSurface = popupWindow;
         entry.NativeWindow = popupWindow;
+        popupWindow.RefreshPlacement = () => Layout(entry);
 
         // Platform dismiss watch: an outside press (or the watch being stolen by an unrelated window)
         // light-dismisses the whole transient chain via the owner's close policy. A transfer to a
@@ -110,26 +113,47 @@ internal sealed class NativePopupHost : IPopupHost
     public void Layout(PopupEntry entry)
     {
         var popupWindow = entry.NativeWindow;
-        if (popupWindow == null || _ownerWindow.Handle == 0)
+        if (popupWindow == null || popupWindow.Handle == 0 || _ownerWindow.Handle == 0)
         {
             return;
         }
 
-        // The popup content sits at entry.Bounds in owner-client DIPs; the chrome (with shadow padding)
-        // starts above-left of it. Size the popup window exactly to the chrome and place it so the
-        // content lands at the same screen position it would occupy in-surface; the portal layout
-        // arranges the chrome at that same owner-client position (HostedPortalOrigin).
-        var chromeBounds = SnapRectToDevice(entry.Bounds.Inflate(PopupChrome.ShadowPadding));
-        var origin = new Point(chromeBounds.X, chromeBounds.Y);
-        popupWindow.HostedPortalOrigin = origin;
-        var currentSize = popupWindow.WindowSize;
-        if (currentSize.Width != chromeBounds.Width || currentSize.Height != chromeBounds.Height)
+        if (_layingOut)
         {
-            popupWindow.WindowSize = WindowSize.Fixed(Math.Max(1, chromeBounds.Width), Math.Max(1, chromeBounds.Height));
+            _layoutAgain = true;
+            return;
         }
+        _layingOut = true;
+        try
+        {
+            // Moving across a DPI boundary can synchronously report a new surface DPI. Re-read
+            // the ratio after that move instead of dropping the reentrant placement request.
+            for (int pass = 0; pass < 3; pass++)
+            {
+                _layoutAgain = false;
+                var chromeBounds = SnapRectToDevice(entry.Bounds.Inflate(PopupChrome.ShadowPadding));
+                var origin = new Point(chromeBounds.X, chromeBounds.Y);
+                popupWindow.HostedPortalOrigin = origin;
+                double scale = _ownerWindow.ScreenUnitsPerDip / popupWindow.ScreenUnitsPerDip;
+                popupWindow.HostedPortalScale = scale;
+                double width = Math.Max(1, chromeBounds.Width * scale);
+                double height = Math.Max(1, chromeBounds.Height * scale);
+                var currentSize = popupWindow.WindowSize;
+                var appliedSize = popupWindow.ClientSize;
+                // A DPI transition can replace the applied size while leaving the requested size unchanged.
+                if (currentSize.Width != width || currentSize.Height != height ||
+                    Math.Abs(appliedSize.Width - width) * popupWindow.DpiScale > 0.51 ||
+                    Math.Abs(appliedSize.Height - height) * popupWindow.DpiScale > 0.51)
+                {
+                    popupWindow.WindowSize = WindowSize.Fixed(width, height);
+                }
 
-        var screenPx = _ownerWindow.ClientToScreen(origin);
-        popupWindow.MoveToPx((int)Math.Round(screenPx.X), (int)Math.Round(screenPx.Y));
+                var screenPx = _ownerWindow.ClientToScreen(origin);
+                popupWindow.MoveToPx((int)Math.Round(screenPx.X), (int)Math.Round(screenPx.Y));
+                if (!_layoutAgain) break;
+            }
+        }
+        finally { _layingOut = false; }
     }
 
     public void UpdateBounds(PopupEntry entry, Rect bounds)
@@ -245,6 +269,7 @@ internal sealed class NativePopupHost : IPopupHost
             }
 
             PopupHostSupport.ApplyDpiChange((UIElement?)entry.Chrome ?? entry.Element, oldDpi, newDpi);
+            Layout(entry);
         }
     }
 

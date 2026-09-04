@@ -3,9 +3,7 @@ using System.Runtime.InteropServices;
 namespace Aprillz.MewUI.Native;
 
 /// <summary>
-/// Minimal RandR surface used to read the screen's refresh rate. Callers must treat a zero rate as
-/// "unknown" and fall back, because the extension may be absent and a nested or virtual server can
-/// report no rate at all.
+/// Optional monitor geometry and refresh-rate queries; callers must handle unavailable extensions.
 /// </summary>
 internal static partial class XRandrExt
 {
@@ -22,4 +20,45 @@ internal static partial class XRandrExt
 
     [LibraryImport(LibraryName)]
     public static partial void XRRFreeScreenConfigInfo(nint config);
+
+    [LibraryImport(LibraryName)]
+    public static partial int XRRQueryVersion(nint display, out int major, out int minor);
+
+    [LibraryImport(LibraryName)]
+    public static partial nint XRRGetMonitors(nint display, nint window, int active, out int count);
+
+    [LibraryImport(LibraryName)]
+    public static partial void XRRFreeMonitors(nint monitors);
+
+    [LibraryImport("libXinerama.so.1")]
+    public static partial int XineramaIsActive(nint display);
+
+    [LibraryImport("libXinerama.so.1")]
+    public static partial nint XineramaQueryScreens(nint display, out int count);
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct MonitorInfo
+    {
+        public nuint Name;
+        public int Primary;
+        public int Automatic;
+        public int OutputCount;
+        public int X;
+        public int Y;
+        public int Width;
+        public int Height;
+        public int WidthMillimeters;
+        public int HeightMillimeters;
+        public nint Outputs;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct XineramaScreenInfo
+    {
+        public int ScreenNumber;
+        public short X;
+        public short Y;
+        public short Width;
+        public short Height;
+    }
 }

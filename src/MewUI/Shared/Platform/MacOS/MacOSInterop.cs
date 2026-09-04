@@ -56,9 +56,13 @@ internal static unsafe class MacOSInterop
     private static bool _finishedLaunching;
     private static int _mainThreadId = -1;
 
+    private const long NSApplicationActivationPolicyAccessory = 1;
+
     private static nint SelSharedApplication;
     private static nint SelSetActivationPolicy;
     private static nint SelActivateIgnoringOtherApps;
+    private static nint SelActivationPolicy;
+    private static nint SelIsActive;
     private static nint SelFinishLaunching;
     private static nint SelNextEvent;
     private static nint SelSendEvent;
@@ -140,6 +144,8 @@ internal static unsafe class MacOSInterop
         SelSharedApplication = ObjC.Sel("sharedApplication");
         SelSetActivationPolicy = ObjC.Sel("setActivationPolicy:");
         SelActivateIgnoringOtherApps = ObjC.Sel("activateIgnoringOtherApps:");
+        SelActivationPolicy = ObjC.Sel("activationPolicy");
+        SelIsActive = ObjC.Sel("isActive");
         SelFinishLaunching = ObjC.Sel("finishLaunching");
         SelNextEvent = ObjC.Sel("nextEventMatchingMask:untilDate:inMode:dequeue:");
         SelSendEvent = ObjC.Sel("sendEvent:");
@@ -234,6 +240,18 @@ internal static unsafe class MacOSInterop
             ObjC.MsgSend_void_nint_bool(_nsApp, SelActivateIgnoringOtherApps, true);
         }
     }
+
+    /// <summary>Whether this application is the active one ([NSApp isActive]).</summary>
+    public static bool IsApplicationActive()
+        => _nsApp != 0 && SelIsActive != 0 && ObjC.MsgSend_bool(_nsApp, SelIsActive);
+
+    /// <summary>
+    /// Whether the application runs with the accessory activation policy: no Dock icon, and
+    /// never activated by the system on its own (a menu bar utility, typically).
+    /// </summary>
+    public static bool IsAccessoryApplication()
+        => _nsApp != 0 && SelActivationPolicy != 0
+            && ObjC.MsgSend_long(_nsApp, SelActivationPolicy) == NSApplicationActivationPolicyAccessory;
 
     public static bool TryHandleSystemKeyEvent(nint ev)
     {
@@ -685,6 +703,45 @@ internal static unsafe class MacOSInterop
     {
         EnsureApplicationInitialized();
         return ObjC.MsgSend_point(ClsNSEvent, ObjC.Sel("mouseLocation"));
+    }
+
+    // Screen pixels use one reference backing scale across the entire virtual desktop. They are
+    // not the backing pixels of whichever window happens to consume them. Keeping the reference
+    // on screens[0] also avoids mainScreen changing when keyboard focus crosses monitors.
+    private static nint GetReferenceScreen()
+    {
+        EnsureApplicationInitialized();
+        var screens = ObjC.MsgSend_nint(ClsNSScreen, ObjC.Sel("screens"));
+        if (screens == 0 || ObjC.MsgSend_nint(screens, ObjC.Sel("count")) == 0)
+            return 0;
+        return ObjC.MsgSend_nint_nint(screens, ObjC.Sel("objectAtIndex:"), 0);
+    }
+
+    internal static NSRect GetReferenceScreenFrame()
+    {
+        var screen = GetReferenceScreen();
+        return screen != 0 ? ObjC.MsgSend_rect(screen, SelFrame) : default;
+    }
+
+    internal static double GetScreenCoordinateScale()
+    {
+        var screen = GetReferenceScreen();
+        double scale = screen != 0 ? ObjC.MsgSend_double(screen, SelBackingScaleFactor) : 1.0;
+        return scale > 0 ? scale : 1.0;
+    }
+
+    internal static Point CocoaToScreenPixels(NSPoint point)
+    {
+        var frame = GetReferenceScreenFrame();
+        double scale = GetScreenCoordinateScale();
+        return new Point(point.x * scale, (frame.origin.y + frame.size.height - point.y) * scale);
+    }
+
+    internal static NSPoint ScreenPixelsToCocoa(Point point)
+    {
+        var frame = GetReferenceScreenFrame();
+        double scale = GetScreenCoordinateScale();
+        return new NSPoint(point.X / scale, frame.origin.y + frame.size.height - point.Y / scale);
     }
 
     public static NSRect GetMainScreenFrame()

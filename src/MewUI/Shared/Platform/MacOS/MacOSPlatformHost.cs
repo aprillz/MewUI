@@ -209,46 +209,24 @@ public sealed class MacOSPlatformHost : IPlatformHost
         }
     }
 
-    // Global cursor position in the screen-px convention shared with ClientToScreen/ScreenToClient (Cocoa
-    // points × backing scale, bottom-left origin). Enables cross-window drag routing (WindowDragDropRouter).
+    // All window, cursor and work-area coordinates share the reference-screen pixel space.
     public Point GetCursorScreenPosition()
-    {
-        var location = MacOSInterop.GetMouseScreenLocation();
-        double scale = MacOSInterop.GetMainScreenScaleFactor();
-        if (scale <= 0)
-        {
-            scale = 1.0;
-        }
-        // mouseLocation is Cocoa (Y-up). Flip to the top-left, Y-down screen-pixel contract (matches
-        // Window.MoveTo and the per-window ClientToScreen/ScreenToClient conversions).
-        var frame = MacOSInterop.GetMainScreenFrame();
-        double topY = (frame.origin.y + frame.size.height) - location.y;
-        return new Point(location.x * scale, topY * scale);
-    }
+        => MacOSInterop.CocoaToScreenPixels(MacOSInterop.GetMouseScreenLocation());
+
+    public uint GetDpiForPoint(Point screenPositionPx)
+        => (uint)Math.Round(96 * MacOSWindowInterop.GetScreenScaleForCocoaPoint(
+            MacOSInterop.ScreenPixelsToCocoa(screenPositionPx)));
 
     public Rect GetWorkAreaForPoint(Point screenPositionPx)
     {
-        double scale = MacOSInterop.GetMainScreenScaleFactor();
-        if (scale <= 0)
-        {
-            scale = 1.0;
-        }
-
-        // Same top-left px <-> Cocoa flip convention as GetCursorScreenPosition. The flip uses the
-        // main screen frame, so secondary-monitor regions are approximate until the screen-pixel
-        // contract carries its reference screen.
-        var mainFrame = MacOSInterop.GetMainScreenFrame();
-        double mainTop = mainFrame.origin.y + mainFrame.size.height;
-        var cocoaPoint = new NSPoint(screenPositionPx.X / scale, mainTop - (screenPositionPx.Y / scale));
-
-        var visible = MacOSWindowInterop.GetScreenVisibleFrameForCocoaPoint(cocoaPoint);
+        var visible = MacOSWindowInterop.GetScreenVisibleFrameForCocoaPoint(
+            MacOSInterop.ScreenPixelsToCocoa(screenPositionPx));
         if (visible.size.width <= 0 || visible.size.height <= 0)
-        {
             return default;
-        }
-
-        double topPx = (mainTop - (visible.origin.y + visible.size.height)) * scale;
-        return new Rect(visible.origin.x * scale, topPx, visible.size.width * scale, visible.size.height * scale);
+        var topLeft = MacOSInterop.CocoaToScreenPixels(
+            new NSPoint(visible.origin.x, visible.origin.y + visible.size.height));
+        double scale = MacOSInterop.GetScreenCoordinateScale();
+        return new Rect(topLeft.X, topLeft.Y, visible.size.width * scale, visible.size.height * scale);
     }
 
     // setIgnoresMouseEvents (click-through) + orderFront-without-makeKey (no-activate) + high window level give

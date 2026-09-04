@@ -411,35 +411,60 @@ public sealed class X11PlatformHost : IPlatformHost
 
     public Rect GetWorkAreaForPoint(Point screenPositionPx)
     {
-        // _NET_WORKAREA is the EWMH desktop work area (screen minus reserved panels/docks), already in device
-        // pixels and root coordinates. It is a single rect spanning all monitors per virtual desktop, so a
-        // multi-monitor result is approximate until per-monitor struts are queried; still tighter than the
-        // full-client fallback the caller uses on default. The point is unused for that reason.
         if (Display == 0)
-        {
             return default;
-        }
-
-        nint workAreaAtom = NativeX11.XInternAtom(Display, "_NET_WORKAREA", true);
-        if (workAreaAtom == 0)
-        {
+        nint root = NativeX11.XRootWindow(Display, NativeX11.XDefaultScreen(Display));
+        if (NativeX11.XGetWindowAttributes(Display, root, out var attributes) == 0)
             return default;
-        }
+        var rootBounds = new Rect(0, 0, attributes.width, attributes.height);
+        var monitor = X11MonitorGeometry.SelectMonitor(X11MonitorQuery.Read(Display, root), screenPositionPx, rootBounds);
+        int desktop = ReadCurrentDesktop(root);
+        var struts = ReadWorkAreaStruts(root, desktop);
+        if (struts.Count > 0)
+            return X11MonitorGeometry.ApplyStruts(monitor, rootBounds, struts);
 
-        var root = NativeX11.XRootWindow(Display, NativeX11.XDefaultScreen(Display));
-        var workArea = ReadCardinalArray(root, workAreaAtom);
-        if (workArea.Length < 4)
+        // Older window managers may publish only the aggregate work area.
+        var workArea = ReadWindowValues(root, "_NET_WORKAREA");
+        int baseIndex = desktop <= (workArea.Length - 4) / 4 ? desktop * 4 : 0;
+        if (workArea.Length >= 4)
         {
-            return default;
+            var desktopWorkArea = new Rect(workArea[baseIndex], workArea[baseIndex + 1],
+                workArea[baseIndex + 2], workArea[baseIndex + 3]);
+            return X11MonitorGeometry.IntersectWorkArea(monitor, desktopWorkArea);
         }
+        return monitor;
+    }
 
-        int baseIndex = ReadCurrentDesktop(root) * 4;
-        if (baseIndex < 0 || baseIndex + 4 > workArea.Length)
+    private List<long[]> ReadWorkAreaStruts(nint root, int desktop)
+    {
+        var result = new List<long[]>();
+        foreach (long client in ReadWindowValues(root, "_NET_CLIENT_LIST"))
         {
-            baseIndex = 0;
+            nint window = (nint)client;
+            if (NativeX11.XGetWindowAttributes(Display, window, out var attributes) == 0 || attributes.map_state != 2)
+                continue;
+            var windowDesktop = ReadWindowValues(window, "_NET_WM_DESKTOP");
+            if (windowDesktop.Length > 0 && (uint)windowDesktop[0] != uint.MaxValue && windowDesktop[0] != desktop)
+                continue;
+            var partial = ReadWindowValues(window, "_NET_WM_STRUT_PARTIAL");
+            if (partial.Length >= 12)
+            {
+                result.Add(partial);
+            }
+            else
+            {
+                var legacy = ReadWindowValues(window, "_NET_WM_STRUT");
+                if (legacy.Length == 4)
+                    result.Add(legacy);
+            }
         }
+        return result;
+    }
 
-        return new Rect(workArea[baseIndex], workArea[baseIndex + 1], workArea[baseIndex + 2], workArea[baseIndex + 3]);
+    private long[] ReadWindowValues(nint window, string name)
+    {
+        nint atom = NativeX11.XInternAtom(Display, name, true);
+        return atom == 0 ? [] : ReadCardinalArray(window, atom);
     }
 
     private int ReadCurrentDesktop(nint root)

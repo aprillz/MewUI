@@ -28,6 +28,16 @@ internal sealed class PopupWindow : Window
     /// <summary>Raised when the platform dismiss watch requests light-dismiss (outside press, watch stolen).</summary>
     internal Action? DismissRequested { get; set; }
 
+    internal Action? RefreshPlacement { get; set; }
+
+    internal override void OnSurfaceCreated() => RefreshPlacement?.Invoke();
+
+    protected override void OnDpiChanged(uint oldDpi, uint newDpi)
+    {
+        base.OnDpiChanged(oldDpi, newDpi);
+        RefreshPlacement?.Invoke();
+    }
+
     /// <summary>Decides whether the window taking over the dismiss watch is a related popup surface.</summary>
     internal Func<nint, bool>? WatchTransferAllowed { get; set; }
 
@@ -60,6 +70,7 @@ internal sealed class PopupWindow : Window
     internal void DismissSurface()
     {
         DismissRequested = null;
+        RefreshPlacement = null;
         WatchTransferAllowed = null;
 
         // Unmap BEFORE detaching the portal content: once the portal root is nulled, any render

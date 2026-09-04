@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Text;
 
@@ -158,6 +158,39 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
     private Point _hostedPortalOrigin;
     private Point _lastLayoutPortalOrigin;
+    private double _hostedPortalScale = 1.0;
+
+    internal double HostedPortalScale
+    {
+        get => _hostedPortalScale;
+        set
+        {
+            if (!double.IsFinite(value) || value <= 0) throw new ArgumentOutOfRangeException(nameof(value));
+            if (_hostedPortalScale == value) return;
+            _hostedPortalScale = value;
+            InvalidateMeasure();
+        }
+    }
+
+    // Sample a long segment to avoid integer screen-coordinate rounding at fractional DPI.
+    // macOS uses one virtual-desktop reference scale, independently of surface backing DPI.
+    internal double ScreenUnitsPerDip
+    {
+        get
+        {
+            if (Handle == 0) return DpiScale;
+            var a = ClientToScreen(Point.Zero);
+            var b = ClientToScreen(new Point(1024, 0));
+            return Math.Max(0.0001, Math.Abs(b.X - a.X) / 1024);
+        }
+    }
+
+    internal Point VisualTreePointToSurface(Point point)
+        => _hostedPortalRoot == null ? point : new Point(
+            (point.X - _hostedPortalOrigin.X) * _hostedPortalScale,
+            (point.Y - _hostedPortalOrigin.Y) * _hostedPortalScale);
+
+    internal virtual void OnSurfaceCreated() { }
 
     /// <summary>
     /// Position (in the owner window's coordinate space) where the hosted portal subtree is arranged.
@@ -189,7 +222,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             return surfacePoint;
         }
 
-        return new Point(surfacePoint.X + _hostedPortalOrigin.X, surfacePoint.Y + _hostedPortalOrigin.Y);
+        return new Point(surfacePoint.X / _hostedPortalScale + _hostedPortalOrigin.X, surfacePoint.Y / _hostedPortalScale + _hostedPortalOrigin.Y);
     }
 
     private readonly List<AdornerEntry> _adorners = new();
@@ -1402,6 +1435,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         //   4) PresentSurface  paint the hidden window, then reveal it (no flash; Loaded changes are in
         //                      the first on-screen frame)
         _backend!.CreateSurface();
+        OnSurfaceCreated();
         PerformLayout();
         RaiseLoadedIfReady();
         _backend!.PresentSurface();
@@ -2224,6 +2258,8 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             clientSize = _clientSizeDip;
             padding = Padding;
             var contentSize = clientSize.Deflate(padding);
+            if (_hostedPortalRoot != null)
+                contentSize = new Size(contentSize.Width / _hostedPortalScale, contentSize.Height / _hostedPortalScale);
 
             ulong generationBefore = _updateGeneration;
 
@@ -2946,7 +2982,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             // owner but inside this surface is not culled by the viewport-bounds check in Render.
             var previousCullViewport = UIElement.RenderCullViewport;
             UIElement.RenderCullViewport = new Rect(
-                _hostedPortalOrigin.X, _hostedPortalOrigin.Y, clientSize.Width, clientSize.Height);
+                _hostedPortalOrigin.X, _hostedPortalOrigin.Y, clientSize.Width / _hostedPortalScale, clientSize.Height / _hostedPortalScale);
 
             // Ensure nothing paints outside the client area.
             context.Save();
@@ -2958,11 +2994,12 @@ public partial class Window : ContentControl, ILayoutRoundingHost
                 phaseStart = profiling ? Stopwatch.GetTimestamp() : 0;
                 using (profiling ? ProfilerMarkers.ContentRender.Auto() : default)
                 {
-                    if (_hostedPortalRoot != null && _hostedPortalOrigin != default)
+                    if (_hostedPortalRoot != null)
                     {
                         // The portal subtree is arranged in the owner's coordinate space; shift it back
                         // to this surface's origin for painting.
                         context.Save();
+                        context.Scale(_hostedPortalScale, _hostedPortalScale);
                         context.Translate(-_hostedPortalOrigin.X, -_hostedPortalOrigin.Y);
                         _hostedPortalRoot.Render(context);
                         context.Restore();
@@ -3392,7 +3429,8 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         OnDpiChanged(oldDpi, newDpi);
         DpiChanged?.Invoke(oldDpi, newDpi);
 
-        if (EffectiveVisualRoot != null)
+        // A portal keeps owner layout DPI; a surface DPI change only changes its output transform.
+        if (EffectiveVisualRoot != null && _hostedPortalRoot == null)
         {
             // Clear cached DPI values so subsequent GetDpi() calls don't traverse parents.
             // This also ensures subtrees moved between windows/tabs don't retain stale DPI.

@@ -705,7 +705,8 @@ public abstract partial class UIElement : Element
         }
 
         var inWindow = TranslatePoint(point, window);
-        return window.ClientToScreen(inWindow);
+        var surface = ResolveInputHostWindow() ?? window;
+        return surface.ClientToScreen(surface.VisualTreePointToSurface(inWindow));
     }
 
     /// <summary>
@@ -721,7 +722,8 @@ public abstract partial class UIElement : Element
             throw new InvalidOperationException("The visual is not connected to a window.");
         }
 
-        var inWindow = window.ScreenToClient(point);
+        var surface = ResolveInputHostWindow() ?? window;
+        var inWindow = surface.SurfacePointToVisualTree(surface.ScreenToClient(point));
         return window.TranslatePoint(inWindow, this);
     }
 
