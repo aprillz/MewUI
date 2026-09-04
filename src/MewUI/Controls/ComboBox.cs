@@ -7,7 +7,7 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// A drop-down selection control with text header and popup list.
 /// </summary>
-public sealed partial class ComboBox : DropDownBase, ISelector, IIndexedSelector
+public sealed partial class ComboBox : DropDownBase, ISelector, IIndexedSelector, IVisualTreeHost
 {
     static ComboBox() { }
 
@@ -37,6 +37,13 @@ public sealed partial class ComboBox : DropDownBase, ISelector, IIndexedSelector
     private ISelectableItemsView _itemsSource = ItemsView.EmptySelectable;
     private WheelNotchAccumulator _wheelAccumulator;
     private IDataTemplate? _itemTemplate;
+    private IDataTemplate? _selectedItemTemplate;
+
+    // The header view is built once from the effective template and rebound as the selection moves;
+    // _headerTemplate remembers which template built it so a template change rebuilds it.
+    private IDataTemplate? _headerTemplate;
+    private FrameworkElement? _headerView;
+    private TemplateContext? _headerContext;
 
     public bool ZebraStriping
     {
@@ -89,6 +96,8 @@ public sealed partial class ComboBox : DropDownBase, ISelector, IIndexedSelector
             }
             _selection.SyncFromModel();
 
+            // Same index in a new source is a different item, so the header view rebinds regardless.
+            BindHeaderView();
             InvalidateMeasure();
             InvalidateVisual();
         }
@@ -165,6 +174,32 @@ public sealed partial class ComboBox : DropDownBase, ISelector, IIndexedSelector
             {
                 SyncPopupContent(_popupList);
             }
+
+            SyncHeaderView();
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the template that presents the selected item in the header. Null falls back to
+    /// <see cref="ItemTemplate"/>; with neither set the header draws the item text.
+    /// </summary>
+    /// <remarks>
+    /// The header keeps its own size: the built view is clipped to the text area and never grows the
+    /// control, so a template larger than the header needs Width / MinWidth / Height / MinHeight on the
+    /// ComboBox. The view is not hit-testable; clicks reach the ComboBox and open the drop-down.
+    /// </remarks>
+    public IDataTemplate? SelectedItemTemplate
+    {
+        get => _selectedItemTemplate;
+        set
+        {
+            if (ReferenceEquals(_selectedItemTemplate, value))
+            {
+                return;
+            }
+
+            _selectedItemTemplate = value;
+            SyncHeaderView();
         }
     }
 
@@ -202,6 +237,7 @@ public sealed partial class ComboBox : DropDownBase, ISelector, IIndexedSelector
             SyncPopupContent(_popupList);
         }
 
+        BindHeaderView();
         InvalidateMeasure();
         InvalidateVisual();
     }
@@ -219,6 +255,7 @@ public sealed partial class ComboBox : DropDownBase, ISelector, IIndexedSelector
 
         _selection.SyncFromModel();
         SelectionChanged?.Invoke(_itemsSource.SelectedItem);
+        BindHeaderView();
         InvalidateVisual();
 
         if (_popupList != null)
@@ -227,9 +264,127 @@ public sealed partial class ComboBox : DropDownBase, ISelector, IIndexedSelector
         }
     }
 
+    private bool HasSelectedItem => SelectedIndex >= 0 && SelectedIndex < ItemsSource.Count;
+
+    private IDataTemplate? EffectiveHeaderTemplate => _selectedItemTemplate ?? _itemTemplate;
+
+    /// <summary>Builds, replaces or drops the header view to match the effective template, then rebinds it.</summary>
+    private void SyncHeaderView()
+    {
+        // A control template owns the whole visual tree, so the header view only exists without one.
+        var template = HasTemplateInstance ? null : EffectiveHeaderTemplate;
+        if (!ReferenceEquals(_headerTemplate, template))
+        {
+            ReleaseHeaderView();
+            if (template != null)
+            {
+                var context = new TemplateContext();
+                var view = template.Build(context);
+                // The view only presents the selection; input has to reach the ComboBox so a click opens the drop-down.
+                view.IsHitTestVisible = false;
+                view.Parent = this;
+                _headerContext = context;
+                _headerView = view;
+                _headerTemplate = template;
+            }
+        }
+
+        BindHeaderView();
+        InvalidateMeasure();
+        InvalidateVisual();
+    }
+
+    /// <summary>Binds the header view to the current selection; with none it is unbound but kept for the next one.</summary>
+    private void BindHeaderView()
+    {
+        if (_headerView == null || _headerContext == null || _headerTemplate == null)
+        {
+            return;
+        }
+
+        if (HasSelectedItem)
+        {
+            int index = SelectedIndex;
+            _headerContext.BindTemplate(_headerView, _headerTemplate, ItemsSource.GetItem(index), index);
+        }
+        else
+        {
+            _headerContext.UnbindTemplate(_headerView);
+        }
+    }
+
+    private void ReleaseHeaderView()
+    {
+        if (_headerView == null)
+        {
+            return;
+        }
+
+        _headerContext?.UnbindTemplate(_headerView);
+        _headerView.Parent = null;
+        _headerView = null;
+        _headerContext = null;
+        _headerTemplate = null;
+    }
+
+    protected override void OnApplyTemplate()
+    {
+        base.OnApplyTemplate();
+        SyncHeaderView();
+    }
+
+    private protected override void OnTemplateInstanceDetached()
+    {
+        base.OnTemplateInstanceDetached();
+        SyncHeaderView();
+    }
+
+    // Control's VisitChildren is an explicit implementation, so the header view is hosted by
+    // re-implementing the interface and keeping the template-instance branch Control would have taken.
+    bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
+    {
+        if (HasTemplateInstance)
+        {
+            return TemplateVisualRoot == null || visitor(TemplateVisualRoot);
+        }
+
+        return _headerView == null || visitor(_headerView);
+    }
+
+    /// <summary>The area the selected item occupies: the header minus border, padding and the arrow column.</summary>
+    private Rect GetHeaderContentRect(Rect bounds)
+    {
+        var snapped = GetSnappedBorderBounds(bounds);
+        var borderInset = GetBorderVisualInset();
+        var header = new Rect(snapped.X, snapped.Y, snapped.Width, ResolveAnchorHeight());
+        var inner = header.Deflate(new Thickness(borderInset));
+        return new Rect(inner.X, inner.Y, Math.Max(0, inner.Width - ArrowAreaWidth), inner.Height).Deflate(Padding);
+    }
+
+    protected override void ArrangeContent(Rect bounds)
+    {
+        base.ArrangeContent(bounds);
+
+        if (_headerView != null && !HasTemplateInstance)
+        {
+            _headerView.Arrange(GetHeaderContentRect(bounds));
+        }
+    }
+
     protected override Size MeasureHeader(Size availableSize)
     {
         var headerHeight = ResolveHeaderHeight();
+
+        if (_headerView != null && HasSelectedItem)
+        {
+            // Measured for its own arrange only: the header size follows the item texts and the header
+            // height, never the view, so changing the selection cannot resize the control.
+            var borderInset = GetBorderVisualInset();
+            _headerView.Measure(new Size(
+                Math.Max(0, availableSize.Width - ArrowAreaWidth),
+                Math.Max(0, headerHeight - borderInset * 2 - Padding.VerticalThickness)));
+        }
+
         double width = 80;
         var dpi = GetDpi();
         var factory = GetGraphicsFactory();
@@ -260,26 +415,42 @@ public sealed partial class ComboBox : DropDownBase, ISelector, IIndexedSelector
 
     protected override void RenderHeaderContent(IGraphicsContext context, Rect headerRect, Rect innerHeaderRect)
     {
-        // Text
         var textRect = new Rect(innerHeaderRect.X, innerHeaderRect.Y, innerHeaderRect.Width - ArrowAreaWidth, innerHeaderRect.Height)
             .Deflate(Padding);
 
-        string text = SelectedText ?? string.Empty;
-        var state = CurrentVisualState;
-        var textColor = state.IsEnabled ? Foreground : Theme.Palette.DisabledText;
-        if (string.IsNullOrEmpty(text) && !string.IsNullOrEmpty(Placeholder) && !state.IsFocused)
+        if (_headerView != null && HasSelectedItem)
         {
-            text = Placeholder;
-            textColor = Theme.Palette.PlaceholderText;
+            // Rendered here rather than through RenderSubtree so it sits between the chrome and the arrow.
+            context.Save();
+            try
+            {
+                context.IntersectClip(textRect);
+                _headerView.Render(context);
+            }
+            finally
+            {
+                context.Restore();
+            }
         }
-
-        if (!string.IsNullOrEmpty(text))
+        else
         {
-            var style = GetTextRunStyle();
-            var layout = TextLayoutOperations.GetOrCreate(
-                GetGraphicsFactory(), text, GetDpi(), in style, textRect.Width, textRect.Height);
-            TextLayoutOperations.DrawInBounds(
-                context, layout, textRect, textColor, TextAlignment.Center, this);
+            string text = SelectedText ?? string.Empty;
+            var state = CurrentVisualState;
+            var textColor = state.IsEnabled ? Foreground : Theme.Palette.DisabledText;
+            if (string.IsNullOrEmpty(text) && !string.IsNullOrEmpty(Placeholder) && !state.IsFocused)
+            {
+                text = Placeholder;
+                textColor = Theme.Palette.PlaceholderText;
+            }
+
+            if (!string.IsNullOrEmpty(text))
+            {
+                var style = GetTextRunStyle();
+                var layout = TextLayoutOperations.GetOrCreate(
+                    GetGraphicsFactory(), text, GetDpi(), in style, textRect.Width, textRect.Height);
+                TextLayoutOperations.DrawInBounds(
+                    context, layout, textRect, textColor, TextAlignment.Center, this);
+            }
         }
     }
 
@@ -457,6 +628,8 @@ public sealed partial class ComboBox : DropDownBase, ISelector, IIndexedSelector
 
     protected override void OnDispose()
     {
+        ReleaseHeaderView();
+
         if (_popupList != null)
         {
             _popupList.SelectionChanged -= OnPopupListSelectionChanged;

@@ -4193,6 +4193,38 @@ public static class ControlExtensions
         => ItemTemplate(comboBox, new DelegateTemplate<TItem>(build, bind, unbind));
 
     /// <summary>
+    /// Sets the template that presents the selected item in the header. Without it the header
+    /// falls back to the item template, then to the item text.
+    /// </summary>
+    /// <param name="comboBox">Target combo box.</param>
+    /// <param name="template">Selected item template.</param>
+    /// <returns>The combo box for chaining.</returns>
+    public static ComboBox SelectedItemTemplate(this ComboBox comboBox, IDataTemplate template)
+    {
+        ArgumentNullException.ThrowIfNull(comboBox);
+        ArgumentNullException.ThrowIfNull(template);
+
+        comboBox.SelectedItemTemplate = template;
+        return comboBox;
+    }
+
+    /// <summary>
+    /// Sets the selected item template using delegate-based templating.
+    /// </summary>
+    /// <typeparam name="TItem">Item type.</typeparam>
+    /// <param name="comboBox">Target combo box.</param>
+    /// <param name="build">Template build callback.</param>
+    /// <param name="bind">Template bind callback.</param>
+    /// <param name="unbind">Optional template cleanup callback.</param>
+    /// <returns>The combo box for chaining.</returns>
+    public static ComboBox SelectedItemTemplate<TItem>(
+        this ComboBox comboBox,
+        Func<TemplateContext, FrameworkElement> build,
+        Action<FrameworkElement, TItem, int, TemplateContext> bind,
+        Action<FrameworkElement, TItem, int, TemplateContext>? unbind = null)
+        => SelectedItemTemplate(comboBox, new DelegateTemplate<TItem>(build, bind, unbind));
+
+    /// <summary>
     /// Sets the selected index.
     /// </summary>
     /// <param name="comboBox">Target combo box.</param>
