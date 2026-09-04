@@ -55,8 +55,9 @@ public static class BrowserPlatform
     /// <summary>Milliseconds until a scheduled timer needs the loop again, or -1 when nothing is due.</summary>
     public static int NextWakeDelayMs() => BrowserPlatformHost.Active?.NextWakeDelayMs() ?? -1;
 
-    public static bool PointerMove(double x, double y, double screenX, double screenY, int buttons, ModifierKeys modifiers)
-        => BrowserPlatformHost.Active?.PointerMove(x, y, screenX, screenY, buttons, modifiers) == true;
+    /// <summary>Routes a pointer move; pointerType is 0 for a mouse, 1 for touch, 2 for a pen.</summary>
+    public static bool PointerMove(double x, double y, double screenX, double screenY, int buttons, ModifierKeys modifiers, int pointerType)
+        => BrowserPlatformHost.Active?.PointerMove(x, y, screenX, screenY, buttons, modifiers, MapPointerType(pointerType)) == true;
 
     /// <summary>
     /// Routes a pointer press or release; pointerType is 0 for a mouse, 1 for touch, 2 for a pen.
@@ -65,8 +66,10 @@ public static class BrowserPlatform
     public static bool PointerButton(double x, double y, double screenX, double screenY, int button, int buttons,
         bool isDown, double timeStampMs, ModifierKeys modifiers, int pointerType)
         => BrowserPlatformHost.Active?.PointerButton(
-            x, y, screenX, screenY, button, buttons, isDown, timeStampMs, modifiers,
-            pointerType switch { 1 => PointerType.Touch, 2 => PointerType.Pen, _ => PointerType.Mouse }) == true;
+            x, y, screenX, screenY, button, buttons, isDown, timeStampMs, modifiers, MapPointerType(pointerType)) == true;
+
+    private static PointerType MapPointerType(int pointerType)
+        => pointerType switch { 1 => PointerType.Touch, 2 => PointerType.Pen, _ => PointerType.Mouse };
 
     public static void PointerWheel(double x, double y, double screenX, double screenY,
         double deltaX, double deltaY, int buttons, ModifierKeys modifiers)

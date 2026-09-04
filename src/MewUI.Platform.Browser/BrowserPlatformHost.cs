@@ -185,8 +185,8 @@ internal sealed class BrowserPlatformHost : IPlatformHost
         }
     }
 
-    internal bool PointerMove(double x, double y, double screenX, double screenY, int buttons, ModifierKeys modifiers)
-        => RoutePointer(() => _window?.PointerMove(x, y, screenX, screenY, buttons, modifiers) == true);
+    internal bool PointerMove(double x, double y, double screenX, double screenY, int buttons, ModifierKeys modifiers, PointerType pointerType)
+        => RoutePointer(() => _window?.PointerMove(x, y, screenX, screenY, buttons, modifiers, pointerType) == true);
 
     internal bool PointerButton(double x, double y, double screenX, double screenY, int button, int buttons,
         bool isDown, double timeStampMs, ModifierKeys modifiers, PointerType pointerType)
