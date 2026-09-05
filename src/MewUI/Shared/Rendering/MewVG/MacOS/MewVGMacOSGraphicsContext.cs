@@ -551,7 +551,9 @@ internal sealed partial class MewVGMacOSGraphicsContext
 
         if (_textPixelSnap)
         {
-            (drawX, drawY) = RenderingUtil.SnapTextOriginToDevice(drawX, drawY, _transform, DpiScale);
+            var snappedOrigin = RenderingUtil.SnapTextOriginToDevice(new Point(drawX, drawY), _transform, DpiScale);
+            drawX = snappedOrigin.X;
+            drawY = snappedOrigin.Y;
         }
 
         int imageId;

@@ -231,7 +231,9 @@ internal sealed partial class MewVGX11GraphicsContext
         double drawY = boundsPx.Top / DpiScale;
         if (_textPixelSnap)
         {
-            (drawX, drawY) = RenderingUtil.SnapTextOriginToDevice(bounds.X, bounds.Y, _transform, DpiScale);
+            var snappedOrigin = RenderingUtil.SnapTextOriginToDevice(new Point(bounds.X, bounds.Y), _transform, DpiScale);
+            drawX = snappedOrigin.X;
+            drawY = snappedOrigin.Y;
         }
         double widthDip = widthPx / DpiScale;
         double heightDip = heightPx / DpiScale;

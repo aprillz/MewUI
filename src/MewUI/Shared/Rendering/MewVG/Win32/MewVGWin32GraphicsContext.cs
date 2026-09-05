@@ -280,7 +280,9 @@ internal sealed partial class MewVGWin32GraphicsContext
         {
             if (_transform.M12 == 0f && _transform.M21 == 0f)
             {
-                (drawX, drawY) = RenderingUtil.SnapTextOriginToDevice(drawX, drawY, _transform, DpiScale);
+                var snappedOrigin = RenderingUtil.SnapTextOriginToDevice(new Point(drawX, drawY), _transform, DpiScale);
+                drawX = snappedOrigin.X;
+                drawY = snappedOrigin.Y;
             }
             else if (Matrix3x2.Invert(_transform, out var inv))
             {

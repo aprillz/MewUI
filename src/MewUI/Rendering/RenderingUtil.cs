@@ -4,16 +4,14 @@ namespace Aprillz.MewUI.Rendering;
 
 internal static class RenderingUtil
 {
-    // The grid a font stack already works on, and the precision below which two coordinates are the
-    // same position rather than two positions.
+    // 1/64 px, the 26.6 fixed-point grid font rasterizers already quantize to.
     private const double DEVICE_SUBPIXEL_GRID = 64;
 
-    /// <summary>Rounds a device-pixel coordinate to a whole pixel, the same way in every pass.</summary>
-    // A bitmap cache capture differs from the window pass by an integer-pixel translation carried in
-    // a float matrix, whose error is enough to send a coordinate landing on an exact half pixel to a
-    // different pixel in each pass. Quantizing to the subpixel grid first folds that error away.
+    /// <summary>Rounds a device-pixel coordinate to a whole pixel, identically in every pass.</summary>
     public static int RoundDevicePixel(double devicePixels)
     {
+        // A capture's integer-pixel translate rides in a float matrix, and that error flips an exact
+        // half pixel to the other pixel; quantizing to the subpixel grid first folds it away.
         double quantized = Math.Round(devicePixels * DEVICE_SUBPIXEL_GRID) / DEVICE_SUBPIXEL_GRID;
         return (int)Math.Round(quantized, MidpointRounding.AwayFromZero);
     }
@@ -23,17 +21,19 @@ internal static class RenderingUtil
 
     /// <summary>
     /// Snaps a text origin onto the device pixel grid with the transform's translation included, and
-    /// returns it in the caller's own coordinates. Rotation and skew are left where they are.
+    /// returns it in the caller's own coordinates. A rotated or skewed transform returns it unchanged.
     /// </summary>
-    // Snapping local coordinates instead would put a cache capture's rows on a different grid than
-    // the window pass, because only one of the two carries the capture's translation.
-    public static (double X, double Y) SnapTextOriginToDevice(double x, double y, in Matrix3x2 transform, double dpiScale)
+    public static Point SnapTextOriginToDevice(Point origin, in Matrix3x2 transform, double dpiScale)
     {
+        // Snapping local coordinates instead would put a capture's rows on a different grid than the
+        // window pass, because only one of the two carries the capture's translation.
         if (transform.M12 != 0f || transform.M21 != 0f)
         {
-            return (x, y);
+            return origin;
         }
 
+        double x = origin.X;
+        double y = origin.Y;
         if (transform.M11 != 0f)
         {
             double world = x * transform.M11 + transform.M31;
@@ -46,7 +46,7 @@ internal static class RenderingUtil
             y = (RoundDevicePixel(world * dpiScale) / dpiScale - transform.M32) / transform.M22;
         }
 
-        return (x, y);
+        return new Point(x, y);
     }
 
     public static int CeilToPixelInt(double value, double dpiScale)
