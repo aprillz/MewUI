@@ -243,7 +243,9 @@ internal sealed partial class MewVGWin32GraphicsContext
         // integer-pixel translate) lands its rows on the same grid as live rendering.
         if (_textPixelSnap)
         {
-            (destX, destY) = RenderingUtil.SnapTextOriginToDevice(destX, destY, _transform, DpiScale);
+            var snappedOrigin = RenderingUtil.SnapTextOriginToDevice(new Point(destX, destY), _transform, DpiScale);
+            destX = snappedOrigin.X;
+            destY = snappedOrigin.Y;
         }
 
         DrawImagePattern(
