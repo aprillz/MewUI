@@ -19,6 +19,10 @@ internal sealed class FixedHeightItemsPresenter : Control, IItemsPresenter
     private ItemsAnchor _anchor;
     private bool _followEndRequest;
 
+    // The offset the last scroll-into-view correction asked the owner for, so the echo of that
+    // request can be told apart from a move the user made. NaN when no correction is outstanding.
+    private double _requestedCorrectionOffsetY = double.NaN;
+
     // Cached composed GetContainerRect delegates (avoid closure allocation per ArrangeContent).
     // Both read ItemPadding/GetContainerRect live through the properties, so they stay valid
     // across ItemPadding/GetContainerRect changes without needing invalidation.
@@ -197,8 +201,33 @@ internal sealed class FixedHeightItemsPresenter : Control, IItemsPresenter
         }
 
         CancelEndFollowIfMovedAway(clamped.Y);
+        CancelScrollIntoViewIfMovedAway(clamped.Y);
         _offset = clamped;
         InvalidateArrange();
+    }
+
+    /// <summary>
+    /// Drops a pending scroll-into-view once the owner reports an offset the presenter did not ask
+    /// for: the user scrolled, and honouring the older request would snap the list away from them.
+    /// </summary>
+    private void CancelScrollIntoViewIfMovedAway(double offsetY)
+    {
+        if (_pendingScrollIntoViewIndex < 0)
+        {
+            return;
+        }
+
+        double dpiScale = GetDpi() / 96.0;
+        double onePixelDip = dpiScale > 0 ? 1.0 / dpiScale : 1.0;
+        if (!double.IsNaN(_requestedCorrectionOffsetY) &&
+            Math.Abs(offsetY - _requestedCorrectionOffsetY) < onePixelDip)
+        {
+            // The owner is echoing back the correction this presenter asked for.
+            return;
+        }
+
+        _pendingScrollIntoViewIndex = -1;
+        _requestedCorrectionOffsetY = double.NaN;
     }
 
     /// <summary>
@@ -278,12 +307,14 @@ internal sealed class FixedHeightItemsPresenter : Control, IItemsPresenter
             if (Math.Abs(desiredOffsetY - alignedOffsetY) >= onePx * 0.99)
             {
                 alignedOffsetY = desiredOffsetY;
+                _requestedCorrectionOffsetY = desiredOffsetY;
                 OffsetCorrectionRequested?.Invoke(new Point(_offset.X, desiredOffsetY));
                 InvalidateMeasure();
             }
             else
             {
                 _pendingScrollIntoViewIndex = -1;
+                _requestedCorrectionOffsetY = double.NaN;
             }
         }
 
