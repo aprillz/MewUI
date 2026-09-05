@@ -607,12 +607,6 @@ public sealed class MacOSPlatformHost : IPlatformHost
                 backend.Dispose();
             }
         }
-
-        // If all windows were closed, stop the run loop.
-        if (_windows.Count == 0)
-        {
-            _running = false;
-        }
     }
 
     private void TryUpdateSystemTheme()
