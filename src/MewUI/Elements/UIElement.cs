@@ -417,7 +417,8 @@ public abstract partial class UIElement : Element
     public event Action<MouseWheelEventArgs>? MouseWheel;
 
     /// <summary>
-    /// Occurs when a key is pressed while the element has focus.
+    /// Occurs when a key is pressed while the element has focus. Marking it handled also drops the
+    /// text input that keystroke would produce.
     /// </summary>
     public event Action<KeyEventArgs>? KeyDown;
 

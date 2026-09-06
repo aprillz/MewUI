@@ -1291,7 +1291,8 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
     /// <summary>
     /// Preview (tunneling) keyboard events for the whole window.
-    /// If <see cref="KeyEventArgs.Handled"/> is set, the focused element will not receive the event.
+    /// If <see cref="KeyEventArgs.Handled"/> is set, the focused element will not receive the event
+    /// and the text input that keystroke would produce is dropped.
     /// </summary>
     public event Action<KeyEventArgs>? PreviewKeyDown;
 

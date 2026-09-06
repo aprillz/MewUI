@@ -79,7 +79,7 @@ internal sealed class IBusInputMethod : IX11InputMethod
     public X11ImeProcessResult ProcessKeyEvent(ref XEvent ev, bool isKeyDown)
     {
         if (_ibus == null || !_ibus.IsConnected)
-            return new X11ImeProcessResult(Handled: false, ForwardKeyToApp: true, CommittedText: null);
+            return new X11ImeProcessResult(Handled: false, ForwardKeyToApp: true, CommittedText: null, IsKeyTranslation: true);
 
         _committedDuringDrain = false;
 
@@ -110,10 +110,12 @@ internal sealed class IBusInputMethod : IX11InputMethod
             committed = XimInputMethod.LookupStringWithoutIc(ref ev.xkey);
         }
 
+        // Commits from IBus itself arrive through the CommitText signal, so this text is always the key's own.
         return new X11ImeProcessResult(
             Handled: handled,
             ForwardKeyToApp: !handled,
-            CommittedText: committed);
+            CommittedText: committed,
+            IsKeyTranslation: true);
     }
 
     /// <summary>

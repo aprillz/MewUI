@@ -21,6 +21,8 @@ internal sealed class PreviewSession : IDisposable
     private const int ACK_TIMEOUT_MS = 5000;
 
     private readonly HashSet<Window> _dirtyWindows = new();
+    // The IDE sends a key message and then the text it typed as separate messages, like WM_CHAR.
+    private readonly TextInputSuppression _textInputSuppression = new();
     private PreviewChannel? _channel;
     private Application? _app;
     private Window? _mainWindow;
@@ -348,6 +350,11 @@ internal sealed class PreviewSession : IDisposable
 
     private void HandleKey(Window window, KeyMessage message)
     {
+        if (message.IsDown)
+        {
+            _textInputSuppression.BeginKeyDown();
+        }
+
         var key = PreviewInputMapper.MapKey(message.Code);
         if (key == Key.None)
         {
@@ -358,6 +365,10 @@ internal sealed class PreviewSession : IDisposable
         if (message.IsDown)
         {
             WindowInputRouter.KeyDown(window, args);
+            if (args.Handled)
+            {
+                _textInputSuppression.SuppressKeystrokeText();
+            }
         }
         else
         {
@@ -365,10 +376,10 @@ internal sealed class PreviewSession : IDisposable
         }
     }
 
-    /// <summary>Mirrors the native WM_CHAR dispatch: preview text goes to the focused text client.</summary>
-    private static void HandleTextInput(Window window, string text)
+    /// <summary>Mirrors the native WM_CHAR dispatch: preview text goes to the focused text client unless its key was handled.</summary>
+    private void HandleTextInput(Window window, string text)
     {
-        if (text.Length == 0)
+        if (text.Length == 0 || _textInputSuppression.IsSuppressed)
         {
             return;
         }
@@ -380,12 +391,7 @@ internal sealed class PreviewSession : IDisposable
             }
         }
 
-        var args = new TextInputEventArgs(text);
-        window.RaisePreviewTextInput(args);
-        if (!args.Handled && window.FocusManager.FocusedElement is ITextInputClient client)
-        {
-            client.HandleTextInput(args);
-        }
+        WindowInputRouter.TextInput(window, new TextInputEventArgs(text));
     }
 
     /// <summary>

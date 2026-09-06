@@ -62,8 +62,6 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextC
     // the field names they used before the extraction. Reassigned only by ReplaceDocumentCore.
     private protected EditableTextDocument _document;
     private protected TextEditorSession _editor;
-    private protected bool _suppressNewLineInput;
-    private protected bool _suppressTabInput;
     private protected int _compositionStart;
     private protected int _compositionLength;
     private protected CompositionAttr[]? _compositionAttributes;
@@ -750,20 +748,7 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextC
         }
         TextInput?.Invoke(e);
         if (e.Handled || IsReadOnly) return;
-        string text = e.Text ?? string.Empty;
-        if (_suppressNewLineInput && (text.Contains('\r') || text.Contains('\n')))
-        {
-            _suppressNewLineInput = false;
-            e.Handled = true;
-            return;
-        }
-        if (_suppressTabInput && text.Contains('\t'))
-        {
-            _suppressTabInput = false;
-            e.Handled = true;
-            return;
-        }
-        text = NormalizeTypedText(text);
+        string text = NormalizeTypedText(e.Text ?? string.Empty);
         if (text.Length == 0)
         {
             e.Handled = true;

@@ -220,7 +220,6 @@ public abstract class SingleLineTextBase : TextBase
                 break;
             case Key.Tab when !IsReadOnly && AcceptTab:
                 InsertText("\t");
-                _suppressTabInput = true;
                 break;
             default:
                 return;

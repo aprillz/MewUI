@@ -1,52 +1,53 @@
-using Aprillz.MewUI;
 using Aprillz.MewUI.Input;
 
 namespace MewUI.Test.Input;
 
 /// <summary>
-/// A handled KeyDown must not also arrive as committed text on platforms that deliver the two on
-/// separate messages. Space is the printable case: Ctrl+Space still generates a space character,
-/// so a Ctrl+Space shortcut would otherwise type a space into the focused editor.
+/// A handled KeyDown must not also arrive as the keystroke's text on platforms that deliver the two on
+/// separate messages. The rule is per keystroke, not per key: any character is dropped, every char message
+/// of that keystroke is dropped, and the next keystroke starts clean.
 /// </summary>
 [TestClass]
 public sealed class TextInputSuppressionTests
 {
     [TestMethod]
-    public void AHandledSpaceKeyDownSwallowsTheFollowingSpaceChar()
+    public void AHandledKeyDownDropsTheKeystrokeText()
     {
         var suppression = new TextInputSuppression();
-        suppression.ResetPerKeyDown();
-        suppression.SuppressNextFromHandledKeyDown(Key.Space);
+        suppression.BeginKeyDown();
+        suppression.SuppressKeystrokeText();
 
-        Assert.IsTrue(suppression.TryConsumeChar(' '));
-        Assert.IsFalse(suppression.TryConsumeChar(' '), "Only the one char of that keystroke is consumed.");
+        Assert.IsTrue(suppression.IsSuppressed);
     }
 
     [TestMethod]
-    public void AnUnhandledKeyDownLetsTheSpaceThrough()
+    public void AnUnhandledKeyDownLetsTextThrough()
     {
         var suppression = new TextInputSuppression();
-        suppression.ResetPerKeyDown();
+        suppression.BeginKeyDown();
 
-        Assert.IsFalse(suppression.TryConsumeChar(' '));
+        Assert.IsFalse(suppression.IsSuppressed);
+    }
+
+    [TestMethod]
+    public void SuppressionCoversEveryCharMessageOfTheKeystroke()
+    {
+        var suppression = new TextInputSuppression();
+        suppression.BeginKeyDown();
+        suppression.SuppressKeystrokeText();
+
+        Assert.IsTrue(suppression.IsSuppressed, "first char message, e.g. a high surrogate");
+        Assert.IsTrue(suppression.IsSuppressed, "second char message, e.g. the low surrogate");
     }
 
     [TestMethod]
     public void TheNextKeyDownDropsAStaleFlag()
     {
         var suppression = new TextInputSuppression();
-        suppression.SuppressNextFromHandledKeyDown(Key.Space);
-        suppression.ResetPerKeyDown();
+        suppression.BeginKeyDown();
+        suppression.SuppressKeystrokeText();
+        suppression.BeginKeyDown();
 
-        Assert.IsFalse(suppression.TryConsumeChar(' '), "A keystroke that produced no char must not eat a later one.");
-    }
-
-    [TestMethod]
-    public void CommittedTextSuppressionCoversSpace()
-    {
-        var handled = new KeyEventArgs(Key.Space, platformKey: 0, ModifierKeys.Control) { Handled = true };
-
-        Assert.IsTrue(TextInputSuppression.ShouldSuppressCommittedText(handled, " "));
-        Assert.IsFalse(TextInputSuppression.ShouldSuppressCommittedText(handled, "a"));
+        Assert.IsFalse(suppression.IsSuppressed, "A keystroke that produced no char must not eat a later one.");
     }
 }

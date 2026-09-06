@@ -2506,7 +2506,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
     private nint HandleKeyDown(uint msg, nint wParam, nint lParam)
     {
-        _textInputSuppression.ResetPerKeyDown();
+        _textInputSuppression.BeginKeyDown();
 
         int platformKey = (int)wParam.ToInt64();
         bool isRepeat = ((lParam.ToInt64() >> 30) & 1) != 0;
@@ -2524,6 +2524,8 @@ internal sealed class Win32WindowBackend : IWindowBackend
         Window.RaisePreviewKeyDown(args);
         if (args.Handled)
         {
+            // TranslateMessage already queued this key's WM_CHAR, so the drop happens there.
+            _textInputSuppression.SuppressKeystrokeText();
             return 0;
         }
 
@@ -2545,14 +2547,13 @@ internal sealed class Win32WindowBackend : IWindowBackend
             }
 
             // Prevent a subsequent WM_CHAR '\t' from inserting a tab into the newly focused element.
-            _textInputSuppression.SuppressNextFromHandledKeyDown(Key.Tab);
+            _textInputSuppression.SuppressKeystrokeText();
             return 0;
         }
 
         if (args.Handled)
         {
-            // KeyDown-handled Enter/Tab should not also emit WM_CHAR text input.
-            _textInputSuppression.SuppressNextFromHandledKeyDown(args.Key);
+            _textInputSuppression.SuppressKeystrokeText();
         }
 
         // Suppress DefWindowProc for WM_SYSKEYDOWN when the key is a bare modifier (Alt/F10).
@@ -2595,7 +2596,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
     {
         char c = (char)wParam.ToInt64();
 
-        if (_textInputSuppression.TryConsumeChar(c))
+        if (_textInputSuppression.IsSuppressed)
         {
             return 0;
         }
@@ -2610,16 +2611,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
             return 0;
         }
 
-        var args = new TextInputEventArgs(c.ToString());
-        Window.RaisePreviewTextInput(args);
-        if (!args.Handled)
-        {
-            if (Window.FocusManager.FocusedElement is ITextInputClient client)
-            {
-                client.HandleTextInput(args);
-            }
-        }
-
+        WindowInputRouter.TextInput(Window, new TextInputEventArgs(c.ToString()));
         return 0;
     }
 
@@ -2740,15 +2732,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
             string result = GetImeCompositionString(Imm32.CompositionStringFlags.GCS_RESULTSTR);
             if (!string.IsNullOrEmpty(result))
             {
-                var ti = new TextInputEventArgs(result);
-                Window.RaisePreviewTextInput(ti);
-                if (!ti.Handled)
-                {
-                    if (Window.FocusManager.FocusedElement is ITextInputClient client)
-                    {
-                        client.HandleTextInput(ti);
-                    }
-                }
+                WindowInputRouter.TextInput(Window, new TextInputEventArgs(result));
             }
         }
 

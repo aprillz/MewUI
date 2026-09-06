@@ -99,7 +99,7 @@ internal sealed class XimInputMethod : IX11InputMethod
     public X11ImeProcessResult ProcessKeyEvent(ref XEvent ev, bool isKeyDown)
     {
         if (_xic == 0)
-            return new X11ImeProcessResult(Handled: false, ForwardKeyToApp: true, CommittedText: null);
+            return new X11ImeProcessResult(Handled: false, ForwardKeyToApp: true, CommittedText: null, IsKeyTranslation: true);
 
         bool filtered = NativeX11.XFilterEvent(ref ev, _window) != 0;
 
@@ -107,20 +107,27 @@ internal sealed class XimInputMethod : IX11InputMethod
 
         // In preedit-position mode, filtered events are owned by the IME.
         if (filtered && _usesPreeditPosition)
-            return new X11ImeProcessResult(Handled: true, ForwardKeyToApp: false, CommittedText: null);
+            return new X11ImeProcessResult(Handled: true, ForwardKeyToApp: false, CommittedText: null, IsKeyTranslation: true);
 
         // Extract committed text (KeyPress only).
-        string? committed = isKeyDown ? LookupString(ref ev.xkey, filtered) : null;
+        string? committed = null;
+        bool isKeyTranslation = true;
+        if (isKeyDown)
+        {
+            committed = LookupString(ref ev.xkey, filtered, out isKeyTranslation);
+        }
 
         // In commit-only mode, even filtered events should still route keys.
         return new X11ImeProcessResult(
             Handled: filtered && _usesPreeditPosition,
             ForwardKeyToApp: !(filtered && _usesPreeditPosition),
-            CommittedText: committed);
+            CommittedText: committed,
+            IsKeyTranslation: isKeyTranslation);
     }
 
-    private unsafe string? LookupString(ref XKeyEvent e, bool filtered)
+    private unsafe string? LookupString(ref XKeyEvent e, bool filtered, out bool isKeyTranslation)
     {
+        isKeyTranslation = true;
         if (filtered && _usesPreeditPosition)
             return null;
 
@@ -135,7 +142,7 @@ internal sealed class XimInputMethod : IX11InputMethod
 
         ImeLogger.Write($"Xutf8LookupString status={lookupStatus} bytes={byteCount} filtered={filtered}");
 
-        // XLookupChars=2, XLookupBoth=4
+        // XLookupChars=2 is text the input method composed; XLookupBoth=4 is the keystroke's own translation.
         if ((lookupStatus == 2 || lookupStatus == 4) && byteCount > 0)
         {
             byteCount = Math.Min(byteCount, buf.Length);
@@ -143,6 +150,7 @@ internal sealed class XimInputMethod : IX11InputMethod
             if (!string.IsNullOrEmpty(s))
             {
                 ImeLogger.Write($" -> text '{s}'");
+                isKeyTranslation = lookupStatus == 4;
                 return s;
             }
         }
