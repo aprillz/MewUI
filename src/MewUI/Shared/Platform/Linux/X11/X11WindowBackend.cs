@@ -2469,21 +2469,34 @@ internal sealed class X11WindowBackend : IWindowBackend
             return (Key)((int)Key.D0 + (int)(keysym - 0x30));
         }
 
+        if (keysym is >= 0xFFB0 and <= 0xFFB9) // XK_KP_0..XK_KP_9
+        {
+            return (Key)((int)Key.NumPad0 + (int)(keysym - 0xFFB0));
+        }
+
+        // Keypad keysyms (XK_KP_*) follow the same keys as their main-block counterparts.
         return keysym switch
         {
+            0x20 => Key.Space,
             0xFF08 => Key.Backspace,
-            0xFF09 => Key.Tab,
-            0xFF0D => Key.Enter,
+            0xFF09 or 0xFF89 => Key.Tab,
+            0xFF0D or 0xFF8D => Key.Enter,
             0xFF1B => Key.Escape,
-            0xFF50 => Key.Home,
-            0xFF51 => Key.Left,
-            0xFF52 => Key.Up,
-            0xFF53 => Key.Right,
-            0xFF54 => Key.Down,
-            0xFF55 => Key.PageUp,
-            0xFF56 => Key.PageDown,
-            0xFF57 => Key.End,
-            0xFFFF => Key.Delete,
+            0xFF50 or 0xFF95 => Key.Home,
+            0xFF51 or 0xFF96 => Key.Left,
+            0xFF52 or 0xFF97 => Key.Up,
+            0xFF53 or 0xFF98 => Key.Right,
+            0xFF54 or 0xFF99 => Key.Down,
+            0xFF55 or 0xFF9A => Key.PageUp,
+            0xFF56 or 0xFF9B => Key.PageDown,
+            0xFF57 or 0xFF9C => Key.End,
+            0xFF63 or 0xFF9E => Key.Insert,
+            0xFFFF or 0xFF9F => Key.Delete,
+            0xFFAA => Key.Multiply,
+            0xFFAB => Key.Add,
+            0xFFAD => Key.Subtract,
+            0xFFAE => Key.Decimal,
+            0xFFAF => Key.Divide,
             _ => Key.None
         };
     }
