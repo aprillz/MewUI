@@ -3633,6 +3633,47 @@ public static class ControlExtensions
     }
 
     /// <summary>
+    /// Configures the container placed around each row once its content is bound, so behavior can be
+    /// attached to the whole row, indent and expander included, instead of to the template. Without
+    /// a hook the template root sits in the content area and no container exists.
+    /// </summary>
+    /// <remarks>
+    /// The callback runs on every bind, which includes scrolling a row back into view, so keep it
+    /// cheap. Register event subscriptions through the supplied context and they are removed before
+    /// the next item is bound; properties assigned directly are reset by the framework instead.
+    /// </remarks>
+    /// <typeparam name="T">Item type.</typeparam>
+    /// <param name="treeView">Target tree view.</param>
+    /// <param name="prepare">Container configuration callback.</param>
+    /// <returns>The tree view for chaining.</returns>
+    public static TreeView PrepareContainer<T>(this TreeView treeView, PrepareContainerHandler<ItemContainer, T> prepare)
+    {
+        ArgumentNullException.ThrowIfNull(treeView);
+        ArgumentNullException.ThrowIfNull(prepare);
+
+        treeView.SetPrepareContainer((container, item, index, context) => prepare(container, (T)item!, index, context));
+        return treeView;
+    }
+
+    /// <summary>
+    /// Releases what <see cref="PrepareContainer{T}(TreeView, PrepareContainerHandler{ItemContainer, T})"/>
+    /// attached outside the template context, before the container takes another item. Most hooks
+    /// need no counterpart: context subscriptions and container properties are undone for you.
+    /// </summary>
+    /// <typeparam name="T">Item type.</typeparam>
+    /// <param name="treeView">Target tree view.</param>
+    /// <param name="clear">Container release callback.</param>
+    /// <returns>The tree view for chaining.</returns>
+    public static TreeView ClearContainer<T>(this TreeView treeView, PrepareContainerHandler<ItemContainer, T> clear)
+    {
+        ArgumentNullException.ThrowIfNull(treeView);
+        ArgumentNullException.ThrowIfNull(clear);
+
+        treeView.SetClearContainer((container, item, index, context) => clear(container, (T)item!, index, context));
+        return treeView;
+    }
+
+    /// <summary>
     /// Uses fixed-height row virtualization (default). Rows assume <see cref="GridView.RowHeight"/>
     /// or the theme default; cell content taller than that clips.
     /// </summary>

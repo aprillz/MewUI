@@ -16,6 +16,10 @@ public sealed partial class TreeView : Control, ISubtreeInvalidationHost, IFocus
     private readonly ScrollViewer _scrollViewer;
     private uint _itemBindingGeneration;
     private ITreeItemsView _itemsSource = TreeItemsView.Empty;
+    // The application's template; the presenter holds it wrapped in a row container while a hook is registered.
+    private IDataTemplate _itemTemplate;
+    private PrepareContainerHandler<ItemContainer, object?>? _prepareContainer;
+    private PrepareContainerHandler<ItemContainer, object?>? _clearContainer;
     // Row a finger pressed, held until the release decides between a tap and a scroll.
     private int _touchPressIndex = -1;
     private bool _touchPressOnGlyph;
@@ -149,6 +153,7 @@ public sealed partial class TreeView : Control, ISubtreeInvalidationHost, IFocus
     {
         RefreshSelectedItems();
         SelectedIndicesChanged?.Invoke();
+        RefreshContainerSelection();
         InvalidateVisual();
     }
 
@@ -310,18 +315,81 @@ public sealed partial class TreeView : Control, ISubtreeInvalidationHost, IFocus
     /// </summary>
     public IDataTemplate ItemTemplate
     {
-        get => _presenter.ItemTemplate;
+        get => _itemTemplate;
         set
         {
             ArgumentNullException.ThrowIfNull(value);
-            _presenter.ItemTemplate = value;
+            _itemTemplate = value;
+            _presenter.ItemTemplate = WrapItemTemplate(value);
             InvalidateItemBindings();
         }
     }
 
+    /// <summary>
+    /// Sets the container-prepare hook and rebuilds the rows, since the container shape depends on
+    /// whether a hook is registered. Use the typed <c>PrepareContainer</c> extension.
+    /// </summary>
+    internal void SetPrepareContainer(PrepareContainerHandler<ItemContainer, object?>? hook)
+    {
+        _prepareContainer = hook;
+        _presenter.ItemTemplate = WrapItemTemplate(_itemTemplate);
+        InvalidateItemBindings();
+    }
+
+    /// <summary>
+    /// Sets the container-clear hook and rebuilds the rows. Use the typed <c>ClearContainer</c> extension.
+    /// </summary>
+    internal void SetClearContainer(PrepareContainerHandler<ItemContainer, object?>? hook)
+    {
+        _clearContainer = hook;
+        _presenter.ItemTemplate = WrapItemTemplate(_itemTemplate);
+        InvalidateItemBindings();
+    }
+
+    private bool HasContainerHooks => _prepareContainer != null || _clearContainer != null;
+
+    /// <summary>
+    /// Wraps the template in a row-wide <see cref="ItemContainer"/> while a hook is registered. The
+    /// container spans the indent and the expander too, and pads its content past them, so a menu or
+    /// tooltip attached to it covers the whole row. Without a hook the template root sits in the
+    /// content area as before and no extra element exists.
+    /// </summary>
+    private IDataTemplate WrapItemTemplate(IDataTemplate template)
+        => HasContainerHooks
+            ? new ItemContainerTemplate(template, IsSelected, PrepareRowContainer, _clearContainer)
+            : template;
+
+    private void PrepareRowContainer(ItemContainer container, object? item, int index, TemplateContext context)
+    {
+        // The tree draws the indent and the expander underneath the container, so the content is
+        // pushed past them here rather than by the presenter's container rect.
+        container.Padding = new Thickness(_itemsSource.GetDepth(index) * Indent + Indent, 0, 0, 0);
+        _prepareContainer?.Invoke(container, item, index, context);
+    }
+
+    private void RefreshContainerSelection()
+    {
+        if (!HasContainerHooks)
+        {
+            return;
+        }
+
+        _presenter.VisitRealized((index, element) =>
+        {
+            if (element is ItemContainer container)
+            {
+                container.SetIsSelected(IsSelected(index));
+            }
+        });
+    }
+
+    internal void VisitRealizedContainers(Action<int, FrameworkElement> visitor)
+        => _presenter.VisitRealized(visitor);
+
     public static readonly MewProperty<double> IndentProperty =
         MewProperty<double>.Register<TreeView>(nameof(Indent), 16.0,
-            MewPropertyOptions.AffectsLayout);
+            MewPropertyOptions.AffectsLayout,
+            static (self, _, _) => self.InvalidateItemBindings());
 
     public static readonly MewProperty<TreeViewExpandTrigger> ExpandTriggerProperty =
         MewProperty<TreeViewExpandTrigger>.Register<TreeView>(nameof(ExpandTrigger),
@@ -384,10 +452,11 @@ public sealed partial class TreeView : Control, ISubtreeInvalidationHost, IFocus
         _itemsSource.Changed += OnItemsChanged;
         _itemsSource.SelectionChanged += OnItemsSelectionChanged;
 
+        _itemTemplate = CreateDefaultItemTemplate();
         _presenter = new FixedHeightItemsPresenter
         {
             ItemsSource = _itemsSource,
-            ItemTemplate = CreateDefaultItemTemplate(),
+            ItemTemplate = _itemTemplate,
             BeforeItemRender = OnBeforeItemRender,
             GetContainerRect = OnGetContainerRect,
             ItemPadding = ItemPadding,
@@ -420,6 +489,12 @@ public sealed partial class TreeView : Control, ISubtreeInvalidationHost, IFocus
 
     private Rect OnGetContainerRect(int i, Rect rowRect)
     {
+        if (HasContainerHooks)
+        {
+            // The row container takes the whole row; PrepareRowContainer pads its content past the indent.
+            return rowRect;
+        }
+
         int depth = _itemsSource.GetDepth(i);
         double indentX = rowRect.X + depth * Indent;
         double glyphW = Indent;
@@ -494,6 +569,7 @@ public sealed partial class TreeView : Control, ISubtreeInvalidationHost, IFocus
         _selectedNode = node;
         _selectedItem = item;
         SyncSelectionProperties(commit: !_syncingSelection);
+        RefreshContainerSelection();
         InvalidateVisual();
 
         SelectedNodeChanged?.Invoke(node);
@@ -816,8 +892,9 @@ public sealed partial class TreeView : Control, ISubtreeInvalidationHost, IFocus
                 return;
             }
 
+            // A row container already carries the indent in its own padding, so it is not added again.
             int depth = _itemsSource.GetDepth(index);
-            double indentW = depth * Indent + Indent;
+            double indentW = element is ItemContainer ? 0 : depth * Indent + Indent;
             double padW = ItemPadding.HorizontalThickness;
             double rowW = indentW + w + padW;
 
