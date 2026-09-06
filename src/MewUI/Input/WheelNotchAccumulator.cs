@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace Aprillz.MewUI.Input;
 
 /// <summary>
@@ -12,20 +14,33 @@ namespace Aprillz.MewUI.Input;
 /// </remarks>
 internal struct WheelNotchAccumulator
 {
+    // Gap that separates one swipe from the next. A trackpad reports every 8-16 ms while the
+    // fingers move, and a wheel detent carries a whole notch, so neither loses anything to it.
+    private const long IDLE_RESET_MS = 200;
+
     private double _residualX;
     private double _residualY;
+    private long _lastTakeTimestamp;
 
     /// <summary>
     /// Adds a Y-axis notch delta and returns the whole number of notches crossed
     /// since the last emission. Returns 0 when accumulated magnitude is below 1.0.
     /// </summary>
-    public int TakeY(double notchesY) => Take(ref _residualY, notchesY);
+    public int TakeY(double notchesY)
+    {
+        DropStaleResidual();
+        return Take(ref _residualY, notchesY);
+    }
 
     /// <summary>
     /// Adds an X-axis notch delta and returns the whole number of notches crossed
     /// since the last emission. Returns 0 when accumulated magnitude is below 1.0.
     /// </summary>
-    public int TakeX(double notchesX) => Take(ref _residualX, notchesX);
+    public int TakeX(double notchesX)
+    {
+        DropStaleResidual();
+        return Take(ref _residualX, notchesX);
+    }
 
     /// <summary>
     /// Discards any residual fractional notch state.
@@ -34,6 +49,23 @@ internal struct WheelNotchAccumulator
     {
         _residualX = 0;
         _residualY = 0;
+        _lastTakeTimestamp = 0;
+    }
+
+    /// <summary>Starts a new run when this input is too far from the last to belong to it.</summary>
+    private void DropStaleResidual()
+    {
+        long now = Stopwatch.GetTimestamp();
+        // A fraction left by a control the pointer merely crossed would otherwise ride along until
+        // that control is used again, and a reversal would spend itself paying the old one back.
+        if (_lastTakeTimestamp != 0
+            && Stopwatch.GetElapsedTime(_lastTakeTimestamp, now).TotalMilliseconds > IDLE_RESET_MS)
+        {
+            _residualX = 0;
+            _residualY = 0;
+        }
+
+        _lastTakeTimestamp = now;
     }
 
     private static int Take(ref double residual, double notches)
