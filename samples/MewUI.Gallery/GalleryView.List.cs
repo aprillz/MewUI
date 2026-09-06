@@ -555,13 +555,7 @@ partial class GalleryView
             ScrollToBottom();
         }
 
-        static void Copy(ChatMessage msg)
-        {
-            if (Application.IsRunning)
-            {
-                Application.Current.PlatformServices.Clipboard?.TrySetText(msg.Text);
-            }
-        }
+        void Copy(ChatMessage msg) => CopyToClipboard(msg.Text, "Copied message");
 
         return Card(
             "ItemsControl (chat / variable height)",

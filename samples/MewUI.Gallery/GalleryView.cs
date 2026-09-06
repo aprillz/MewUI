@@ -155,6 +155,13 @@ partial class GalleryView : UserControl
     public static string CombineBaseDirectory(params string[] path)
         => Path.Combine([AppContext.BaseDirectory, .. path]);
 
+    /// <summary>Puts the text on the clipboard and confirms it with a toast, or says why it could not.</summary>
+    private void CopyToClipboard(string text, string confirmation)
+    {
+        bool copied = Application.IsRunning && Application.Current.PlatformServices.Clipboard?.TrySetText(text) == true;
+        window.ShowToast(copied ? confirmation : "Clipboard is not available");
+    }
+
     private FrameworkElement Card(string title, FrameworkElement content, double minWidth = 320)
     {
         var border = new Border()
