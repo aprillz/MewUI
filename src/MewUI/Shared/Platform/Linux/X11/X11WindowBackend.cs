@@ -1488,22 +1488,32 @@ internal sealed class X11WindowBackend : IWindowBackend
             case KeyRelease:
                 bool isKeyDown = ev.type == KeyPress;
                 var imeResult = _inputMethod?.ProcessKeyEvent(ref ev, isKeyDown)
-                    ?? new X11ImeProcessResult(Handled: false, ForwardKeyToApp: true, CommittedText: null);
+                    ?? new X11ImeProcessResult(Handled: false, ForwardKeyToApp: true, CommittedText: null, IsKeyTranslation: true);
 
                 if (isKeyDown)
                 {
                     ImeLogger.Write($"[X11Key] im={_inputMethod?.GetType().Name ?? "null"} handled={imeResult.Handled} fwd={imeResult.ForwardKeyToApp} text='{imeResult.CommittedText ?? "(null)"}'");
                 }
 
+                KeyEventArgs? keyArgs = null;
                 if (imeResult.ForwardKeyToApp)
                 {
-                    HandleKey(ev.xkey, isDown: isKeyDown, imeHandled: imeResult.Handled);
+                    keyArgs = HandleKey(ev.xkey, isDown: isKeyDown, imeHandled: imeResult.Handled);
                 }
 
-                // Deliver committed text AFTER KeyDown routing (preserves Tab/Enter suppression).
+                // Committed text follows KeyDown routing so a handled KeyDown can drop the key's own text;
+                // text the input method composed is not the key's and is delivered regardless.
                 if (isKeyDown && imeResult.CommittedText != null)
                 {
-                    DeliverCommittedTextFromIme(imeResult.CommittedText);
+                    bool suppressed = keyArgs?.Handled == true && imeResult.IsKeyTranslation;
+                    if (suppressed)
+                    {
+                        ImeLogger.Write($"[X11Deliver] '{imeResult.CommittedText}' dropped by handled KeyDown");
+                    }
+                    else
+                    {
+                        DeliverCommittedText(imeResult.CommittedText);
+                    }
                 }
                 UpdateImeCursorRect();
                 break;
@@ -1683,11 +1693,14 @@ internal sealed class X11WindowBackend : IWindowBackend
         }
     }
 
-    private void HandleKey(XKeyEvent e, bool isDown, bool imeHandled)
+    /// <summary>
+    /// Routes the key and returns its event args, or null when no visual root could take it.
+    /// </summary>
+    private KeyEventArgs? HandleKey(XKeyEvent e, bool isDown, bool imeHandled)
     {
         if (Window.EffectiveVisualRoot == null)
         {
-            return;
+            return null;
         }
 
         var ks = NativeX11.XLookupKeysym(ref e, 0).ToInt64();
@@ -1700,7 +1713,7 @@ internal sealed class X11WindowBackend : IWindowBackend
             if (ks == XK_F4 && args.Modifiers.HasFlag(ModifierKeys.Alt))
             {
                 Window.Close();
-                return;
+                return args;
             }
 
             Window.RaisePreviewKeyDown(args);
@@ -1723,19 +1736,20 @@ internal sealed class X11WindowBackend : IWindowBackend
                 }
 
                 args.Handled = true;
-                return;
+                return args;
             }
 
-            // Text is delivered after HandleKey returns, from imeResult.CommittedText.
-            // When no IM is active, we extract text from the key event here as fallback.
+            // With an input method the text comes back through imeResult.CommittedText after this
+            // returns; without one the key event itself is the only source.
             if (_inputMethod == null &&
+                !args.Handled &&
                 !args.Modifiers.HasFlag(ModifierKeys.Control) &&
                 !args.Modifiers.HasFlag(ModifierKeys.Alt))
             {
                 string? committed = XimInputMethod.LookupStringWithoutIc(ref e);
                 if (committed != null)
                 {
-                    DeliverCommittedText(committed, args);
+                    DeliverCommittedText(committed);
                 }
             }
         }
@@ -1750,9 +1764,11 @@ internal sealed class X11WindowBackend : IWindowBackend
             Window.ProcessAccessKeyUp(args);
             Window.RequerySuggested();
         }
+
+        return args;
     }
 
-    private void DeliverCommittedTextFromIme(string text)
+    private void DeliverCommittedText(string text)
     {
         if (string.IsNullOrEmpty(text))
         {
@@ -1766,29 +1782,14 @@ internal sealed class X11WindowBackend : IWindowBackend
             return;
         }
 
-        var ti = new TextInputEventArgs(text);
-        Window.RaisePreviewTextInput(ti);
-        if (ti.Handled)
-        {
-            ImeLogger.Write($"[X11Deliver] '{text}' handled by PreviewTextInput");
-            return;
-        }
-
-        if (Window.FocusManager.FocusedElement is ITextInputClient client)
-        {
-            ImeLogger.Write($"[X11Deliver] '{text}' -> {client.GetType().Name}");
-            client.HandleTextInput(ti);
-        }
-        else
-        {
-            ImeLogger.Write($"[X11Deliver] '{text}' -> NO ITextInputClient (focused={Window.FocusManager.FocusedElement?.GetType().Name ?? "null"})");
-        }
+        ImeLogger.Write($"[X11Deliver] '{text}' -> {Window.FocusManager.FocusedElement?.GetType().Name ?? "null"}");
+        WindowInputRouter.TextInput(Window, new TextInputEventArgs(text));
     }
 
     private void OnImeCommitText(string text)
     {
         // For async commits (signals arriving outside ProcessKeyEvent).
-        DeliverCommittedTextFromIme(text);
+        DeliverCommittedText(text);
     }
 
     private void OnImePreeditChanged(X11PreeditState state)
@@ -1840,34 +1841,6 @@ internal sealed class X11WindowBackend : IWindowBackend
         }
 
         UpdateImeCursorRect();
-    }
-
-    private void DeliverCommittedText(string text, KeyEventArgs keyDownArgs)
-    {
-        if (string.IsNullOrEmpty(text))
-        {
-            return;
-        }
-
-        if (TextInputSuppression.ShouldSuppressCommittedText(keyDownArgs, text))
-        {
-            return;
-        }
-
-        if (text.Length == 1 && char.IsControl(text[0]) && text[0] != '\r' && text[0] != '\n')
-        {
-            return;
-        }
-
-        var ti = new TextInputEventArgs(text);
-        Window.RaisePreviewTextInput(ti);
-        if (!ti.Handled)
-        {
-            if (Window.FocusManager.FocusedElement is ITextInputClient client)
-            {
-                client.HandleTextInput(ti);
-            }
-        }
     }
 
     private void HandleButton(XButtonEvent e, bool isDown)

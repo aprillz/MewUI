@@ -867,11 +867,9 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
                 break;
             case Key.Enter when !IsReadOnly:
                 InsertText("\n");
-                _suppressNewLineInput = true;
                 break;
             case Key.Tab when !IsReadOnly && AcceptTab:
                 InsertText("\t");
-                _suppressTabInput = true;
                 break;
             default:
                 return;

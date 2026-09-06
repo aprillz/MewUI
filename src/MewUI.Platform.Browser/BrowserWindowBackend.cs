@@ -585,16 +585,7 @@ internal sealed class BrowserWindowBackend : IWindowBackend
         if (!_shown || _disposed || string.IsNullOrEmpty(text)) return false;
 
         var args = new TextInputEventArgs(text);
-        Window.RaisePreviewTextInput(args);
-        if (args.Handled)
-        {
-            return true;
-        }
-
-        if (Window.FocusManager.FocusedElement is ITextInputClient client)
-        {
-            client.HandleTextInput(args);
-        }
+        WindowInputRouter.TextInput(Window, args);
 
         return args.Handled;
     }

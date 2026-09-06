@@ -356,6 +356,18 @@ internal static class WindowInputRouter
         }
     }
 
+    /// <summary>
+    /// Delivers committed text: the window preview first, then the focused text input client unless handled.
+    /// </summary>
+    public static void TextInput(Window window, TextInputEventArgs args)
+    {
+        window.RaisePreviewTextInput(args);
+        if (!args.Handled && window.FocusManager.FocusedElement is ITextInputClient client)
+        {
+            client.HandleTextInput(args);
+        }
+    }
+
     private static UIElement ResolveKeyRoutingStart(Window window)
     {
         // A detached (stale) focused element counts as unfocused but is not cleared here:
