@@ -328,9 +328,30 @@ partial class GalleryView
             treeView.Expand(treeItems[0]);
             treeView.Expand(treeItems[0].Children[0]);
 
+            var expandNode = new Command("gallery.tree.expand", "_Expand");
+            var collapseNode = new Command("gallery.tree.collapse", "_Collapse");
+            var copyName = new Command("gallery.tree.copyName", "Copy _Name");
+
+            // One menu for every row, attached to the row container so it opens over the indent and the
+            // expander as well as the text; the node it opened over reaches the handlers as the argument.
+            var nodeMenu = new ContextMenu()
+                .Item(expandNode)
+                .Item(collapseNode)
+                .Separator()
+                .Item(copyName);
+            treeView.PrepareContainer<TreeViewNode>((container, _, _, _) => container.ContextMenu = nodeMenu);
+
             return new DockPanel()
                         .Height(240)
                         .Spacing(6)
+                        .Apply(card =>
+                        {
+                            card.Commands.Register(expandNode, (TreeViewNode node) => treeView.Expand(node),
+                                (TreeViewNode node) => node.HasChildren && !treeView.IsExpanded(node));
+                            card.Commands.Register(collapseNode, (TreeViewNode node) => treeView.Collapse(node),
+                                (TreeViewNode node) => node.HasChildren && treeView.IsExpanded(node));
+                            card.Commands.Register(copyName, (TreeViewNode node) => CopyToClipboard(node.Text, $"Copied \"{node.Text}\""));
+                        })
                         .Children(
                             new TextBlock()
                                 .DockBottom()
