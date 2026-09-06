@@ -714,6 +714,10 @@ public sealed partial class SyntaxViewer : Control, IVisualTreeHost, ITextViewHo
         base.OnMouseWheel(e);
         if (e.Handled || e.Delta.Y == 0 || _view is null) return;
         double maximum = Math.Max(0, _view.ExtentHeight - _contentBounds.Height);
+        // Content that fits has nowhere to scroll, and consuming the wheel there would stop
+        // whatever scrolls around it.
+        if (maximum <= 0) return;
+
         SetVerticalOffset(
             Math.Clamp(
                 _verticalOffset - e.Delta.Y * Theme.Metrics.ScrollWheelStep,
