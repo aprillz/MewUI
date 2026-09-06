@@ -17,7 +17,7 @@ public abstract class CommandSourceControl : ContentControl, ICommandSource
 
     /// <summary>
     /// Which parts of the command this control builds a tooltip from when it has no
-    /// <see cref="Control.ToolTip"/> of its own. Defaults to none: a control that shows its command's
+    /// <see cref="FrameworkElement.ToolTip"/> of its own. Defaults to none: a control that shows its command's
     /// text and icon has already said what a tooltip would say.
     /// </summary>
     public static readonly MewProperty<CommandToolTipMode> CommandToolTipModeProperty =
