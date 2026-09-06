@@ -3,7 +3,7 @@
 #:property TargetFramework=net10.0
 #:property PublishAot=true
 #:property TrimMode=full
-#:package Aprillz.MewUI@0.20.2
+#:package Aprillz.MewUI@0.21.0
 
 using System.Net.Http;
 
@@ -1114,7 +1114,7 @@ internal class CustomWindowSample : CustomWindow
         // Title bar left: MenuBar
         TitleBarLeft.Add(
             GalleryView.CreateMenu(this, _ => { })
-                .Apply(x => x.DrawBottomSeparator = false)
+                .DrawBottomSeparator(false)
                 .Background(Color.Transparent));
 
         // Title bar right: Theme toggle
@@ -2811,9 +2811,24 @@ partial class GalleryView
             r.IsActive.Changed += TriggerApply;
         }
 
+        var toggleActive = new Command("gallery.grid.toggleActive", "Toggle _Active");
+        var clearError = new Command("gallery.grid.clearError", "Clear _Error");
+        var removeRow = new Command("gallery.grid.remove", "_Remove Row");
+        var copyName = new Command("gallery.grid.copyName", "Copy _Name");
+
+        // One menu for every row: the row it opened over reaches the card's handlers as the typed
+        // argument, and Clear Error is enabled only on rows that have one.
+        var rowMenu = new ContextMenu()
+            .Item(toggleActive)
+            .Item(clearError)
+            .Item(copyName)
+            .Separator()
+            .Item(removeRow);
+
         grid = new GridView()
             .ItemsSource(all)
-            .Apply(g => g.SelectionChanged += obj =>
+            .PrepareContainer<ComplexGridRow>((row, _, _, _) => row.ContextMenu = rowMenu)
+            .OnSelectionChanged(obj =>
             {
                 if (obj is ComplexGridRow row)
                 {
@@ -2890,6 +2905,17 @@ partial class GalleryView
             new DockPanel()
                 .Height(270)
                 .Spacing(8)
+                .Apply(card =>
+                {
+                    card.Commands.Register(toggleActive, (ComplexGridRow row) => row.IsActive.Value = !row.IsActive.Value);
+                    card.Commands.Register(clearError, (ComplexGridRow row) => row.HasError.Value = false, (ComplexGridRow row) => row.HasError.Value);
+                    card.Commands.Register(copyName, (ComplexGridRow row) => CopyToClipboard(row.Name, $"Copied \"{row.Name}\""));
+                    card.Commands.Register(removeRow, (ComplexGridRow row) =>
+                    {
+                        all.Remove(row);
+                        ApplyView();
+                    });
+                })
                 .Children(
                     new StackPanel()
                         .DockTop()
@@ -3697,6 +3723,15 @@ partial class GalleryView
                                         )
                                         .Separator()
                                         .Item("Disabled", isEnabled: false)
+                                ),
+
+                            new Button()
+                                .Content("Right-click: opens below")
+                                .ContextMenu(
+                                    new ContextMenu { Placement = MenuPlacement.Below, PlacementOffset = new Point(0, 2) }
+                                        .Item("First")
+                                        .Item("Second")
+                                        .Item("Third")
                                 )
                          )
                  )
@@ -4268,9 +4303,30 @@ partial class GalleryView
             treeView.Expand(treeItems[0]);
             treeView.Expand(treeItems[0].Children[0]);
 
+            var expandNode = new Command("gallery.tree.expand", "_Expand");
+            var collapseNode = new Command("gallery.tree.collapse", "_Collapse");
+            var copyName = new Command("gallery.tree.copyName", "Copy _Name");
+
+            // One menu for every row, attached to the row container so it opens over the indent and the
+            // expander as well as the text; the node it opened over reaches the handlers as the argument.
+            var nodeMenu = new ContextMenu()
+                .Item(expandNode)
+                .Item(collapseNode)
+                .Separator()
+                .Item(copyName);
+            treeView.PrepareContainer<TreeViewNode>((container, _, _, _) => container.ContextMenu = nodeMenu);
+
             return new DockPanel()
                         .Height(240)
                         .Spacing(6)
+                        .Apply(card =>
+                        {
+                            card.Commands.Register(expandNode, (TreeViewNode node) => treeView.Expand(node),
+                                (TreeViewNode node) => node.HasChildren && !treeView.IsExpanded(node));
+                            card.Commands.Register(collapseNode, (TreeViewNode node) => treeView.Collapse(node),
+                                (TreeViewNode node) => node.HasChildren && treeView.IsExpanded(node));
+                            card.Commands.Register(copyName, (TreeViewNode node) => CopyToClipboard(node.Text, $"Copied \"{node.Text}\""));
+                        })
                         .Children(
                             new TextBlock()
                                 .DockBottom()
@@ -4477,6 +4533,26 @@ partial class GalleryView
         var status = new ObservableValue<string>(string.Empty);
         void UpdateStatus() => status.Value = $"Messages: {messages.Count}   OffsetY: {list.VerticalOffset:0.#}";
 
+        var replyCommand = new Command("gallery.chat.reply", "Reply");
+        var deleteCommand = new Command("gallery.chat.delete", "Delete");
+        var copyCommand = new Command("gallery.chat.copy", "Copy");
+
+        // One menu instance for every row: it captures the message of the container it opens over,
+        // and the typed handlers on the card receive that message.
+        var messageMenu = new ContextMenu()
+            .Item("Reply", replyCommand)
+            .Item("Delete", deleteCommand)
+            .Separator()
+            .Item("Copy", copyCommand);
+
+        void Reply(ChatMessage msg)
+        {
+            input.Value = $"@{msg.Sender} ";
+            ScrollToBottom();
+        }
+
+        void Copy(ChatMessage msg) => CopyToClipboard(msg.Text, "Copied message");
+
         return Card(
             "ItemsControl (chat / variable height)",
             new DockPanel()
@@ -4484,6 +4560,12 @@ partial class GalleryView
                 .MaxWidth(960)
                 .Height(320)
                 .Spacing(6)
+                .Apply(card =>
+                {
+                    card.Commands.Register(replyCommand, (ChatMessage msg) => Reply(msg));
+                    card.Commands.Register(deleteCommand, (ChatMessage msg) => messages.Remove(msg), (ChatMessage msg) => msg.Mine);
+                    card.Commands.Register(copyCommand, (ChatMessage msg) => Copy(msg));
+                })
                 .Children(
                     new StackPanel()
                         .DockTop()
@@ -4491,20 +4573,24 @@ partial class GalleryView
                         .Spacing(8)
                         .Children(
                             new Button()
-                                .Content("Prepend 20")
-                                .OnClick(() =>
-                                {
-                                    Prepend(20);
-                                    UpdateStatus();
-                                }),
+                                .Content("_Prepend 20")
+                                .OnClick(() => Prepend(20)),
+
+                            // Appends without scrolling, so the bottom anchor's end-following is
+                            // what keeps the newest message visible.
+                            new Button()
+                                .Content("_Receive")
+                                .OnClick(() => Add(false, "Bot", SampleChatText((int)nextId))),
 
                             new Button()
-                                .Content("To bottom")
-                                .OnClick(() =>
-                                {
-                                    ScrollToBottom();
-                                    UpdateStatus();
-                                }),
+                                .Content("_Clear")
+                                .OnClick(messages.Clear),
+
+                            new CheckBox()
+                                .Content("_Anchor bottom")
+                                .IsChecked(true)
+                                .OnCheckedChanged(bottom =>
+                                    list.VariableHeightPresenter(bottom ? ItemsAnchor.Bottom : ItemsAnchor.Top)),
 
                             new TextBlock()
                                 .BindText(status)
@@ -4518,13 +4604,9 @@ partial class GalleryView
                         .Children(
                             new Button()
                                 .DockRight()
-                                .Content("Send")
+                                .Content("_Send")
                                 .DockRight()
-                                .OnClick(() =>
-                                {
-                                    Send();
-                                    UpdateStatus();
-                                }),
+                                .OnClick(Send),
 
                             new TextBox()
                                 .Placeholder("Type a message...")
@@ -4535,20 +4617,23 @@ partial class GalleryView
                                     {
                                         e.Handled = true;
                                         Send();
-                                        //UpdateStatus();
                                     }
                                 })
                         ),
 
                     new ItemsControl()
                         .Ref(out list)
+                        // The offset settles during layout, so a click handler reading it right
+                        // after mutating the list would report the previous position.
+                        .OnScrollChanged(UpdateStatus)
                         .HorizontalAlignment(HorizontalAlignment.Stretch)
-                        .VariableHeightPresenter()
+                        .VariableHeightPresenter(ItemsAnchor.Bottom)
                         .WithTheme((t, _) => list
                             .BorderBrush(t.Palette.ControlBorder)
                             .BorderThickness(t.Metrics.ControlBorderThickness))
                         .ItemsSource(view)
                         .ItemPadding(Thickness.Zero)
+                        .PrepareContainer<ChatMessage>((container, _, _, _) => container.ContextMenu = messageMenu)
                         .ItemTemplate(new DelegateTemplate<ChatMessage>(
                             build: ctx => new Border()
                                 .Register(ctx, "Bubble")
@@ -5427,6 +5512,12 @@ partial class GalleryView
             ),
 
             Card(
+                "ComboBox (SelectedItemTemplate)",
+                ComboBoxSelectedItemTemplateSample(),
+                minWidth: 250
+            ),
+
+            Card(
                 "SegmentedControl",
                 new StackPanel()
                     .Vertical()
@@ -5687,6 +5778,78 @@ partial class GalleryView
     // left: stretching to the ink instead scales every icon by however tightly it happens to be drawn.
     private static readonly double[] _iconGrids = [16, 20, 24, 28, 32, 48];
 
+    // SelectedItemTemplate presents the selection in the header the same way ItemTemplate presents a
+    // row, so the closed ComboBox shows the status dot instead of falling back to the item text.
+    private static FrameworkElement ComboBoxSelectedItemTemplateSample()
+    {
+        var members = new[]
+        {
+            new DemoUser(1, "Alice", "Admin", IsOnline: true),
+            new DemoUser(2, "Bob", "Editor", IsOnline: false),
+            new DemoUser(3, "Charlie", "Viewer", IsOnline: true),
+        };
+
+        DelegateTemplate<DemoUser> MemberTemplate(bool showRole) => new(
+            build: ctx => new StackPanel()
+                .Horizontal()
+                .Spacing(8)
+                .Children(
+                    new Ellipse()
+                        .Register(ctx, "Dot")
+                        .Width(10)
+                        .Height(10)
+                        .CenterVertical(),
+                    new TextBlock()
+                        .Register(ctx, "Name")
+                        .CenterVertical(),
+                    new TextBlock()
+                        .Register(ctx, "Role")
+                        .CenterVertical()
+                        .FontSize(ThemeFontSize.Small)
+                        .IsVisible(showRole)),
+            bind: (_, member, _, ctx) =>
+            {
+                ctx.Get<TextBlock>("Name").Text = member.Name;
+                ctx.Get<TextBlock>("Role").Text = member.Role;
+                ctx.Get<Ellipse>("Dot").WithTheme((theme, dot) =>
+                    dot.Fill(member.IsOnline ? theme.Palette.Accent : theme.Palette.ControlBorder));
+            });
+
+        return new StackPanel()
+            .Vertical()
+            .Width(220)
+            .Spacing(8)
+            .Children(
+                new TextBlock()
+                    .Text("Header and list share one template")
+                    .FontSize(ThemeFontSize.Small),
+
+                new ComboBox()
+                    .Items(members, member => member.Name)
+                    .ItemHeight(28)
+                    .ItemTemplate(MemberTemplate(showRole: true))
+                    .SelectedIndex(0),
+
+                new TextBlock()
+                    .Text("Header-only template, list stays text")
+                    .FontSize(ThemeFontSize.Small),
+
+                new ComboBox()
+                    .Items(members, member => member.Name)
+                    .SelectedItemTemplate(MemberTemplate(showRole: false))
+                    .SelectedIndex(1),
+
+                new TextBlock()
+                    .Text("No selection falls back to the placeholder")
+                    .FontSize(ThemeFontSize.Small),
+
+                new ComboBox()
+                    .Placeholder("Pick a member...")
+                    .Items(members, member => member.Name)
+                    .SelectedItemTemplate(MemberTemplate(showRole: true))
+            );
+    }
+
     private static Rect IconViewBox(PathGeometry geometry)
     {
         var ink = geometry.GetBounds();
@@ -5708,23 +5871,7 @@ partial class GalleryView
 {
     private FrameworkElement ShapesPage() =>
         CardGrid(
-            Card(
-                "Rectangle",
-                new StackPanel()
-                    .Vertical()
-                    .Spacing(8)
-                    .Children(
-                        new Rectangle()
-                            .Width(120).Height(60)
-                            .Fill(Color.FromRgb(70, 130, 230))
-                            .Stroke(Color.FromRgb(40, 80, 180), 2),
-                        new Rectangle()
-                            .Width(120).Height(60)
-                            .CornerRadius(12)
-                            .Fill(Color.FromRgb(100, 200, 120))
-                            .Stroke(Color.FromRgb(60, 140, 80), 2)
-                    )
-            ),
+            RectangleCard(),
 
             Card(
                 "Ellipse",
@@ -5865,6 +6012,60 @@ partial class GalleryView
         g.Close();
         g.Freeze();
         return g;
+    }
+
+    private FrameworkElement RectangleCard()
+    {
+        var sharp = new Rectangle()
+            .Width(120).Height(60)
+            .Fill(Color.FromRgb(70, 130, 230))
+            .Stroke(Color.FromRgb(40, 80, 180), 2);
+
+        var rounded = new Rectangle()
+            .Width(120).Height(60)
+            .CornerRadius(12)
+            .Fill(Color.FromRgb(100, 200, 120))
+            .Stroke(Color.FromRgb(60, 140, 80), 2);
+
+        var panel = new StackPanel()
+            .Vertical()
+            .Spacing(8)
+            .Children(sharp, rounded);
+
+        // One command and one menu serve both shapes: each item carries its fill as command data, and
+        // the handler on the shape the menu opened over receives it.
+        var setFill = new Command("gallery.shapes.fill", "Fill");
+        (string Name, Color Value)[] fills =
+        [
+            ("Blue", Color.FromRgb(70, 130, 230)),
+            ("Green", Color.FromRgb(100, 200, 120)),
+            ("Amber", Color.FromRgb(230, 170, 60)),
+            ("Rose", Color.FromRgb(230, 100, 130)),
+        ];
+
+        var fillMenu = new ContextMenu();
+        foreach (var fill in fills)
+        {
+            fillMenu.Item(fill.Name, setFill, fill);
+        }
+
+        AttachFillMenu(sharp, setFill, fillMenu, "Blue");
+        AttachFillMenu(rounded, setFill, fillMenu, "Green");
+
+        return Card("Rectangle", panel);
+    }
+
+    private static void AttachFillMenu(Rectangle target, Command setFill, ContextMenu menu, string initialFill)
+    {
+        target.Commands.Register(setFill, ((string Name, Color Value) fill) =>
+        {
+            target.Fill(fill.Value);
+            target.ToolTip($"Fill: {fill.Name}. Right-click to change it.");
+        });
+
+        target
+            .ContextMenu(menu)
+            .ToolTip($"Fill: {initialFill}. Right-click to change it.");
     }
 }
 
@@ -6140,7 +6341,7 @@ partial class GalleryView
         // The Border provides both the nearest named-style scope and the inherited candidate.
         return new Border()
             .WithTheme((t, b) => b.Foreground(t.Palette.Accent))
-            .Apply(b => b.StyleSheet = sheet)
+            .StyleSheet(sheet)
             .Child(
                 new StackPanel()
                     .Vertical()
@@ -6183,7 +6384,7 @@ partial class GalleryView
             .FontSize(ThemeFontSize.Small);
 
         scope = new Border()
-            .Apply(b => b.StyleSheet = sheet)
+            .StyleSheet(sheet)
             .Child(
                 new Button()
                     .Content("Inside scope: Define<Button>")
@@ -8527,6 +8728,13 @@ partial class GalleryView : UserControl
     public static string CombineBaseDirectory(params string[] path)
         => Path.Combine([AppContext.BaseDirectory, .. path]);
 
+    /// <summary>Puts the text on the clipboard and confirms it with a toast, or says why it could not.</summary>
+    private void CopyToClipboard(string text, string confirmation)
+    {
+        bool copied = Application.IsRunning && Application.Current.PlatformServices.Clipboard?.TrySetText(text) == true;
+        window.ShowToast(copied ? confirmation : "Clipboard is not available");
+    }
+
     private FrameworkElement Card(string title, FrameworkElement content, double minWidth = 320)
     {
         var border = new Border()
@@ -9094,7 +9302,7 @@ internal class NativeCustomWindowSample : NativeCustomWindow
         // Title bar left: MenuBar
         TitleBarLeft.Add(
             GalleryView.CreateMenu(this, _ => { })
-                .Apply(x => x.DrawBottomSeparator = false)
+                .DrawBottomSeparator(false)
                 .Background(Color.Transparent));
 
         // Title bar right: Theme toggle

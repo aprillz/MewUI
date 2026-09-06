@@ -1,52 +1,53 @@
 <?xml version="1.0" encoding="utf-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="640" viewBox="0 0 1600 640" role="img" aria-labelledby="title description">
-<title id="title">MewUI v0.20.2 publish size comparison</title>
+<title id="title">MewUI v0.21.0 publish size comparison</title>
 <desc id="description">Original and compressed NativeAOT executable sizes for Hello World and Gallery across supported platforms and rendering backends.</desc>
 <rect width="100%" height="100%" fill="#fff"/><g font-family="Segoe UI,Arial,sans-serif" fill="#202020">
-<text x="800" y="30" text-anchor="middle" font-size="22">MewUI v0.20.2 Publish Size Comparison</text>
+<text x="800" y="30" text-anchor="middle" font-size="22">MewUI v0.21.0 Publish Size Comparison</text>
 <line x1="70" y1="535" x2="1570" y2="535" stroke="#ddd"/><text x="58" y="540" text-anchor="end" font-size="14">0</text>
-<line x1="70" y1="483.333333333333" x2="1570" y2="483.333333333333" stroke="#ddd"/><text x="58" y="488.333333333333" text-anchor="end" font-size="14">1</text>
-<line x1="70" y1="431.666666666667" x2="1570" y2="431.666666666667" stroke="#ddd"/><text x="58" y="436.666666666667" text-anchor="end" font-size="14">2</text>
-<line x1="70" y1="380" x2="1570" y2="380" stroke="#ddd"/><text x="58" y="385" text-anchor="end" font-size="14">3</text>
-<line x1="70" y1="328.333333333333" x2="1570" y2="328.333333333333" stroke="#ddd"/><text x="58" y="333.333333333333" text-anchor="end" font-size="14">4</text>
-<line x1="70" y1="276.666666666667" x2="1570" y2="276.666666666667" stroke="#ddd"/><text x="58" y="281.666666666667" text-anchor="end" font-size="14">5</text>
-<line x1="70" y1="225" x2="1570" y2="225" stroke="#ddd"/><text x="58" y="230" text-anchor="end" font-size="14">6</text>
-<line x1="70" y1="173.333333333333" x2="1570" y2="173.333333333333" stroke="#ddd"/><text x="58" y="178.333333333333" text-anchor="end" font-size="14">7</text>
-<line x1="70" y1="121.666666666667" x2="1570" y2="121.666666666667" stroke="#ddd"/><text x="58" y="126.666666666667" text-anchor="end" font-size="14">8</text>
-<line x1="70" y1="70" x2="1570" y2="70" stroke="#ddd"/><text x="58" y="75" text-anchor="end" font-size="14">9</text>
+<line x1="70" y1="488.5" x2="1570" y2="488.5" stroke="#ddd"/><text x="58" y="493.5" text-anchor="end" font-size="14">1</text>
+<line x1="70" y1="442" x2="1570" y2="442" stroke="#ddd"/><text x="58" y="447" text-anchor="end" font-size="14">2</text>
+<line x1="70" y1="395.5" x2="1570" y2="395.5" stroke="#ddd"/><text x="58" y="400.5" text-anchor="end" font-size="14">3</text>
+<line x1="70" y1="349" x2="1570" y2="349" stroke="#ddd"/><text x="58" y="354" text-anchor="end" font-size="14">4</text>
+<line x1="70" y1="302.5" x2="1570" y2="302.5" stroke="#ddd"/><text x="58" y="307.5" text-anchor="end" font-size="14">5</text>
+<line x1="70" y1="256" x2="1570" y2="256" stroke="#ddd"/><text x="58" y="261" text-anchor="end" font-size="14">6</text>
+<line x1="70" y1="209.5" x2="1570" y2="209.5" stroke="#ddd"/><text x="58" y="214.5" text-anchor="end" font-size="14">7</text>
+<line x1="70" y1="163" x2="1570" y2="163" stroke="#ddd"/><text x="58" y="168" text-anchor="end" font-size="14">8</text>
+<line x1="70" y1="116.5" x2="1570" y2="116.5" stroke="#ddd"/><text x="58" y="121.5" text-anchor="end" font-size="14">9</text>
+<line x1="70" y1="70" x2="1570" y2="70" stroke="#ddd"/><text x="58" y="75" text-anchor="end" font-size="14">10</text>
 <text x="20" y="300" text-anchor="middle" font-size="16" transform="rotate(-90 20 300)">Size (MB)</text>
 <rect x="82" y="45" width="18" height="12" fill="#287db2"/><text x="108" y="56" font-size="14">Original</text><rect x="180" y="45" width="18" height="12" fill="#ff7f0e"/><text x="206" y="56" font-size="14">Compressed</text>
 <text x="427.5" y="62" text-anchor="middle" font-size="20">Hello World</text>
-<rect x="101.5" y="367.613118489583" width="40" height="167.386881510417" fill="#287db2"/><text x="121.5" y="360.613118489583" text-anchor="middle" font-size="12">3.240</text>
-<rect x="141.5" y="461.097040176392" width="40" height="73.9029598236084" fill="#ff7f0e"/><text x="161.5" y="454.097040176392" text-anchor="middle" font-size="12">1.430</text>
+<rect x="101.5" y="387.73486328125" width="40" height="147.26513671875" fill="#287db2"/><text x="121.5" y="380.73486328125" text-anchor="middle" font-size="12">3.167</text>
+<rect x="141.5" y="470.269418716431" width="40" height="64.7305812835693" fill="#ff7f0e"/><text x="161.5" y="463.269418716431" text-anchor="middle" font-size="12">1.392</text>
 <text x="141.5" y="563" text-anchor="middle" font-size="15" font-weight="600"><tspan x="141.5">Windows x64</tspan><tspan x="141.5" dy="20">GDI</tspan></text>
-<rect x="244.5" y="359.742024739583" width="40" height="175.257975260417" fill="#287db2"/><text x="264.5" y="352.742024739583" text-anchor="middle" font-size="12">3.392</text>
-<rect x="284.5" y="458.105518023173" width="40" height="76.894481976827" fill="#ff7f0e"/><text x="304.5" y="451.105518023173" text-anchor="middle" font-size="12">1.488</text>
+<rect x="244.5" y="379.92431640625" width="40" height="155.07568359375" fill="#287db2"/><text x="264.5" y="372.92431640625" text-anchor="middle" font-size="12">3.335</text>
+<rect x="284.5" y="467.292703151703" width="40" height="67.7072968482971" fill="#ff7f0e"/><text x="304.5" y="460.292703151703" text-anchor="middle" font-size="12">1.456</text>
 <text x="284.5" y="563" text-anchor="middle" font-size="15" font-weight="600"><tspan x="284.5">Windows x64</tspan><tspan x="284.5" dy="20">Direct2D</tspan></text>
-<rect x="387.5" y="352.804361979167" width="40" height="182.195638020833" fill="#287db2"/><text x="407.5" y="345.804361979167" text-anchor="middle" font-size="12">3.526</text>
-<rect x="427.5" y="454.367014567057" width="40" height="80.6329854329427" fill="#ff7f0e"/><text x="447.5" y="447.367014567057" text-anchor="middle" font-size="12">1.561</text>
+<rect x="387.5" y="368.93505859375" width="40" height="166.06494140625" fill="#287db2"/><text x="407.5" y="361.93505859375" text-anchor="middle" font-size="12">3.571</text>
+<rect x="427.5" y="461.703218460083" width="40" height="73.296781539917" fill="#ff7f0e"/><text x="447.5" y="454.703218460083" text-anchor="middle" font-size="12">1.576</text>
 <text x="427.5" y="563" text-anchor="middle" font-size="15" font-weight="600"><tspan x="427.5">Windows x64</tspan><tspan x="427.5" dy="20">MewVG</tspan></text>
-<rect x="530.5" y="363.69255065918" width="40" height="171.30744934082" fill="#287db2"/><text x="550.5" y="356.69255065918" text-anchor="middle" font-size="12">3.316</text>
-<rect x="570.5" y="457.930450439453" width="40" height="77.0695495605469" fill="#ff7f0e"/><text x="590.5" y="450.930450439453" text-anchor="middle" font-size="12">1.492</text>
+<rect x="530.5" y="387.504974365234" width="40" height="147.495025634766" fill="#287db2"/><text x="550.5" y="380.504974365234" text-anchor="middle" font-size="12">3.172</text>
+<rect x="570.5" y="468.572657585144" width="40" height="66.427342414856" fill="#ff7f0e"/><text x="590.5" y="461.572657585144" text-anchor="middle" font-size="12">1.429</text>
 <text x="570.5" y="563" text-anchor="middle" font-size="15" font-weight="600"><tspan x="570.5">macOS arm64</tspan><tspan x="570.5" dy="20">MewVG</tspan></text>
-<rect x="673.5" y="309.570109049479" width="40" height="225.429890950521" fill="#287db2"/><text x="693.5" y="302.570109049479" text-anchor="middle" font-size="12">4.363</text>
-<rect x="713.5" y="427.619811693827" width="40" height="107.380188306173" fill="#ff7f0e"/><text x="733.5" y="420.619811693827" text-anchor="middle" font-size="12">2.078</text>
+<rect x="673.5" y="324.946807861328" width="40" height="210.053192138672" fill="#287db2"/><text x="693.5" y="317.946807861328" text-anchor="middle" font-size="12">4.517</text>
+<rect x="713.5" y="434.938942432404" width="40" height="100.061057567596" fill="#ff7f0e"/><text x="733.5" y="427.938942432404" text-anchor="middle" font-size="12">2.152</text>
 <text x="713.5" y="563" text-anchor="middle" font-size="15" font-weight="600"><tspan x="713.5">Linux x64</tspan><tspan x="713.5" dy="20">X11 + MewVG</tspan></text>
 <text x="1212.5" y="62" text-anchor="middle" font-size="20">Gallery</text>
 <line x1="820" y1="40" x2="820" y2="535" stroke="#287db2"/>
-<rect x="886.5" y="139.85595703125" width="40" height="395.14404296875" fill="#287db2"/><text x="906.5" y="132.85595703125" text-anchor="middle" font-size="12">7.648</text>
-<rect x="926.5" y="366.930389404297" width="40" height="168.069610595703" fill="#ff7f0e"/><text x="946.5" y="359.930389404297" text-anchor="middle" font-size="12">3.253</text>
+<rect x="886.5" y="170.242919921875" width="40" height="364.757080078125" fill="#287db2"/><text x="906.5" y="163.242919921875" text-anchor="middle" font-size="12">7.844</text>
+<rect x="926.5" y="379.47859621048" width="40" height="155.52140378952" fill="#ff7f0e"/><text x="946.5" y="372.47859621048" text-anchor="middle" font-size="12">3.345</text>
 <text x="926.5" y="563" text-anchor="middle" font-size="15" font-weight="600"><tspan x="926.5">Windows x64</tspan><tspan x="926.5" dy="20">GDI</tspan></text>
-<rect x="1029.5" y="133.19580078125" width="40" height="401.80419921875" fill="#287db2"/><text x="1049.5" y="126.19580078125" text-anchor="middle" font-size="12">7.777</text>
-<rect x="1069.5" y="364.540739059448" width="40" height="170.459260940552" fill="#ff7f0e"/><text x="1089.5" y="357.540739059448" text-anchor="middle" font-size="12">3.299</text>
+<rect x="1029.5" y="163.385986328125" width="40" height="371.614013671875" fill="#287db2"/><text x="1049.5" y="156.385986328125" text-anchor="middle" font-size="12">7.992</text>
+<rect x="1069.5" y="376.891414642334" width="40" height="158.108585357666" fill="#ff7f0e"/><text x="1089.5" y="369.891414642334" text-anchor="middle" font-size="12">3.400</text>
 <text x="1069.5" y="563" text-anchor="middle" font-size="15" font-weight="600"><tspan x="1069.5">Windows x64</tspan><tspan x="1069.5" dy="20">Direct2D</tspan></text>
-<rect x="1172.5" y="123.836263020833" width="40" height="411.163736979167" fill="#287db2"/><text x="1192.5" y="116.836263020833" text-anchor="middle" font-size="12">7.958</text>
-<rect x="1212.5" y="359.949070612589" width="40" height="175.05092938741" fill="#ff7f0e"/><text x="1232.5" y="352.949070612589" text-anchor="middle" font-size="12">3.388</text>
+<rect x="1172.5" y="152.0107421875" width="40" height="382.9892578125" fill="#287db2"/><text x="1192.5" y="145.0107421875" text-anchor="middle" font-size="12">8.236</text>
+<rect x="1212.5" y="371.547960758209" width="40" height="163.452039241791" fill="#ff7f0e"/><text x="1232.5" y="364.547960758209" text-anchor="middle" font-size="12">3.515</text>
 <text x="1212.5" y="563" text-anchor="middle" font-size="15" font-weight="600"><tspan x="1212.5">Windows x64</tspan><tspan x="1212.5" dy="20">MewVG</tspan></text>
-<rect x="1315.5" y="167.493476867676" width="40" height="367.506523132324" fill="#287db2"/><text x="1335.5" y="160.493476867676" text-anchor="middle" font-size="12">7.113</text>
-<rect x="1355.5" y="370.522255897522" width="40" height="164.477744102478" fill="#ff7f0e"/><text x="1375.5" y="363.522255897522" text-anchor="middle" font-size="12">3.183</text>
+<rect x="1315.5" y="193.199527740479" width="40" height="341.800472259521" fill="#287db2"/><text x="1335.5" y="186.199527740479" text-anchor="middle" font-size="12">7.351</text>
+<rect x="1355.5" y="381.106443881989" width="40" height="153.893556118011" fill="#ff7f0e"/><text x="1375.5" y="374.106443881989" text-anchor="middle" font-size="12">3.310</text>
 <text x="1355.5" y="563" text-anchor="middle" font-size="15" font-weight="600"><tspan x="1355.5">macOS arm64</tspan><tspan x="1355.5" dy="20">MewVG</tspan></text>
-<rect x="1458.5" y="71.0339482625325" width="40" height="463.966051737467" fill="#287db2"/><text x="1478.5" y="64.0339482625325" text-anchor="middle" font-size="12">8.980</text>
-<rect x="1498.5" y="317.648593584696" width="40" height="217.351406415304" fill="#ff7f0e"/><text x="1518.5" y="310.648593584696" text-anchor="middle" font-size="12">4.207</text>
+<rect x="1458.5" y="105.465686798096" width="40" height="429.534313201904" fill="#287db2"/><text x="1478.5" y="98.4656867980957" text-anchor="middle" font-size="12">9.237</text>
+<rect x="1498.5" y="333.348440647125" width="40" height="201.651559352875" fill="#ff7f0e"/><text x="1518.5" y="326.348440647125" text-anchor="middle" font-size="12">4.337</text>
 <text x="1498.5" y="563" text-anchor="middle" font-size="15" font-weight="600"><tspan x="1498.5">Linux x64</tspan><tspan x="1498.5" dy="20">X11 + MewVG</tspan></text>
 </g></svg>
