@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 using Aprillz.MewUI.Controls;
 
 namespace Aprillz.MewUI;
@@ -12,6 +14,8 @@ public static class DefaultStyles
     private static readonly object _stylesLock = new();
     private static Dictionary<Type, Style>? _styles;
     private static readonly Dictionary<Type, Func<Style>> _styleFactories = [];
+    // Types whose static constructor this class already forced, so a type without a style costs one runtime call.
+    private static readonly HashSet<Type> _classConstructorRun = [];
 
     private static Transition[] ColorTransitions =>
         field ??=
@@ -73,22 +77,53 @@ public static class DefaultStyles
     {
         lock (_stylesLock)
         {
-            _styles ??= new Dictionary<Type, Style>();
-            if (_styles.TryGetValue(controlType, out var style))
+            if (TryGetStyleNoLock(controlType, out var style))
             {
                 return style;
             }
 
-            if (!_styleFactories.TryGetValue(controlType, out var factory))
+            if (!_classConstructorRun.Add(controlType))
             {
                 return null;
             }
+        }
 
-            style = factory();
-            _styles[controlType] = style;
+        // Controls register their default style in their static constructor, and a live instance does not
+        // prove it has run on every runtime (Mono AOT defers it past the base constructor call), so force
+        // it outside the lock and look once more.
+        RunClassConstructor(controlType);
+        lock (_stylesLock)
+        {
+            TryGetStyleNoLock(controlType, out var style);
             return style;
         }
     }
+
+    private static bool TryGetStyleNoLock(Type controlType, out Style? style)
+    {
+        _styles ??= new Dictionary<Type, Style>();
+        if (_styles.TryGetValue(controlType, out style))
+        {
+            return true;
+        }
+
+        if (!_styleFactories.TryGetValue(controlType, out var factory))
+        {
+            style = null;
+            return false;
+        }
+
+        style = factory();
+        _styles[controlType] = style;
+        return true;
+    }
+
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2059",
+        Justification = "Callers pass the runtime type chain of a live control; trimming keeps those types together with their static constructor.")]
+    private static void RunClassConstructor(Type controlType)
+        => RuntimeHelpers.RunClassConstructor(controlType.TypeHandle);
 
     // Drops instantiated styles so the next lookup re-runs the factory. The factory delegates
     // are method groups whose IL is replaced in place by Hot Reload, so they need no reset.
