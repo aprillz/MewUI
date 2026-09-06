@@ -155,12 +155,14 @@ partial class GalleryView
         var toggleActive = new Command("gallery.grid.toggleActive", "Toggle _Active");
         var clearError = new Command("gallery.grid.clearError", "Clear _Error");
         var removeRow = new Command("gallery.grid.remove", "_Remove Row");
+        var copyName = new Command("gallery.grid.copyName", "Copy _Name");
 
         // One menu for every row: the row it opened over reaches the card's handlers as the typed
         // argument, and Clear Error is enabled only on rows that have one.
         var rowMenu = new ContextMenu()
             .Item(toggleActive)
             .Item(clearError)
+            .Item(copyName)
             .Separator()
             .Item(removeRow);
 
@@ -248,6 +250,7 @@ partial class GalleryView
                 {
                     card.Commands.Register(toggleActive, (ComplexGridRow row) => row.IsActive.Value = !row.IsActive.Value);
                     card.Commands.Register(clearError, (ComplexGridRow row) => row.HasError.Value = false, (ComplexGridRow row) => row.HasError.Value);
+                    card.Commands.Register(copyName, (ComplexGridRow row) => CopyToClipboard(row.Name, $"Copied \"{row.Name}\""));
                     card.Commands.Register(removeRow, (ComplexGridRow row) =>
                     {
                         all.Remove(row);
