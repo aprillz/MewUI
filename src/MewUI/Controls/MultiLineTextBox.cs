@@ -1017,7 +1017,10 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
     protected override void OnMouseWheel(MouseWheelEventArgs e)
     {
         base.OnMouseWheel(e);
-        if (!e.Handled && e.Delta.Y != 0)
+
+        // A box sized to its text has nowhere to scroll, and consuming the wheel there would stop
+        // whatever scrolls around it.
+        if (!e.Handled && e.Delta.Y != 0 && _verticalScrollBar.IsVisible)
         {
             SetVerticalOffset(_verticalOffset - e.Delta.Y * Theme.Metrics.ScrollWheelStep);
             e.Handled = true;
