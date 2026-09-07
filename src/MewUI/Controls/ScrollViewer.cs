@@ -349,7 +349,13 @@ public sealed class ScrollViewer : ContentControl
 
         if (content is IScrollContent scrollContent)
         {
-            scrollContent.SetViewport(_viewport);
+            // An unconstrained measure (a SplitPanel sizing its panes, a popup owner asking for the
+            // natural size) is hypothetical: an infinite viewport would make the content see every
+            // offset as the end and re-anchor there. Arrange hands over the displayed viewport.
+            if (!double.IsPositiveInfinity(_viewport.Width) && !double.IsPositiveInfinity(_viewport.Height))
+            {
+                scrollContent.SetViewport(_viewport);
+            }
 
             // Scroll-driven content should not require infinite measurement; it virtualizes internally.
             content.Measure(_viewport);

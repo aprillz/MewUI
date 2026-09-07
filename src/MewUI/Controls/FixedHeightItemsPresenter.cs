@@ -432,7 +432,8 @@ internal sealed class FixedHeightItemsPresenter : Control, IItemsPresenter
     /// <summary>Whether the view currently rests at the end, so a growing extent should follow it.</summary>
     private bool IsPinnedToEnd()
     {
-        if (Anchor != ItemsAnchor.Bottom)
+        // Without a real viewport there is no end to be pinned to.
+        if (Anchor != ItemsAnchor.Bottom || !double.IsFinite(_viewport.Height))
         {
             return false;
         }
