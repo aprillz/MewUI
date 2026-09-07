@@ -1,0 +1,6 @@
+{
+  "name": "mewui",
+  "version": "1.0.0",
+  "description": "Create, extend, debug, preview, or publish complete MewUI applications from public Aprillz.MewUI NuGet packages using fluent C# Markup.",
+  "skills": "./skills/"
+}

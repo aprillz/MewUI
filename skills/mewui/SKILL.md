@@ -1,6 +1,7 @@
 ---
 name: mewui
 description: Create, extend, debug, preview, or publish complete MewUI applications from public NuGet packages using fluent C# Markup. Use for project setup, Window and UserControl views, windowless lifecycle, Hot Reload, controls, layout, typed state and binding, collections, navigation, themes, dialogs, resources, custom controls, rendering backends, and NativeAOT. Do not use for MewUI framework implementation work or unrelated .NET UI frameworks.
+license: MIT
 ---
 
 # MewUI application development

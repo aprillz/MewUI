@@ -2,77 +2,63 @@
 
 # MewUI Agent Skill
 
-The MewUI agent skill helps Codex, Claude Code, and GitHub Copilot create and
-maintain complete MewUI applications from public `Aprillz.MewUI*` NuGet
-packages. Its package-level guidance covers project setup, public API discovery,
-typed state and binding, controls, reusable `Window` and `UserControl` views,
-Hot Reload and preview-friendly composition, windowless lifecycle, rendering
-backends, and NativeAOT publishing.
-
-The skill does not require a MewUI source checkout. Online Gallery sources may
-be consulted for composition patterns, but the selected package's XML
-documentation and a package-only build are authoritative.
+Teach Codex, Claude Code, or GitHub Copilot to build MewUI desktop applications
+for you. The skill itself is [mewui](mewui/). Describe the app you want and the
+agent writes working C# against the published `Aprillz.MewUI*` NuGet packages,
+runs it, and publishes it. You do not need a copy of the MewUI source.
 
 ## Install
 
-Extract the release archive and place its whole `mewui` directory in one
-supported skills location:
+### Claude Code
 
-| Agent | Project installation | Personal installation |
+```text
+/plugin marketplace add aprillz/MewUI
+/plugin install mewui@aprillz
+```
+
+### GitHub Copilot
+
+```text
+copilot plugin marketplace add aprillz/MewUI
+copilot plugin install mewui@aprillz
+```
+
+### Codex
+
+Run `$skill-installer` and ask it for the `mewui` skill from `aprillz/MewUI`.
+
+### Other agents
+
+The GitHub CLI installs the same skill for any agent that supports skills:
+
+```text
+gh skill install aprillz/MewUI mewui --agent claude-code --scope user
+```
+
+`--agent` also takes `codex`, `github-copilot`, and others. `--scope user`
+installs it once for every project; leave it out to install into the current
+repository only.
+
+Or copy the [mewui](mewui/) directory of this repository yourself, so that its
+`SKILL.md` lands where your agent looks:
+
+| Agent | In your project | In your home directory |
 | --- | --- | --- |
-| Codex | `.agents/skills/mewui` | `~/.agents/skills/mewui` |
-| Claude Code | `.claude/skills/mewui` | `~/.claude/skills/mewui` |
-| GitHub Copilot | `.github/skills/mewui` | `~/.copilot/skills/mewui` |
-
-Copilot also discovers project skills in `.agents/skills` and `.claude/skills`,
-and personal skills in `~/.agents/skills`. Teams using several agents can
-therefore commit one shared copy at `.agents/skills/mewui`. Use a product-native
-location only when its behavior or distribution scope needs to differ.
-
-The installed directory must contain `SKILL.md` and `references/` directly.
-`agents/openai.yaml` is optional OpenAI-host metadata, not a separate
-Codex-only skill. For development from this repository, copy [mewui](mewui/)
-to the selected location; do not install the repository's `agent/` or `tests/`
-directories.
-
-Official location references:
-
-- [Codex skills](https://developers.openai.com/codex/skills)
-- [Claude Code skills](https://code.claude.com/docs/en/skills)
-- [GitHub Copilot agent skills](https://docs.github.com/en/copilot/concepts/agents/about-agent-skills)
+| Codex | `.agents/skills/mewui/SKILL.md` | `~/.agents/skills/mewui/SKILL.md` |
+| Claude Code | `.claude/skills/mewui/SKILL.md` | `~/.claude/skills/mewui/SKILL.md` |
+| GitHub Copilot | `.github/skills/mewui/SKILL.md` | `~/.copilot/skills/mewui/SKILL.md` |
 
 ## Use
 
-Ask the agent to create or modify a MewUI application. Where manual skill
-invocation is supported, select `$mewui` in Codex or `/mewui` in Claude Code and
-GitHub Copilot CLI. Agents may also load it automatically when the request
-matches the `description` in `SKILL.md`.
+Ask for what you want:
 
-The agent should choose the platform and rendering backend first, create a
-package-only project, compile it, run the supported local target, and perform
-the matching RID/NativeAOT publish when deployment is requested.
+- "Build a MewUI app with a name field and a Save button"
+- "Show these records in a grid and let me filter them"
+- "Add a dark and light theme toggle"
+- "Publish it as one Windows executable with NativeAOT"
 
-## Package compatibility
+The agent picks the platform and rendering backend, creates the project, builds
+it, and runs it before reporting back. It loads the skill on its own when your
+request matches; to call it explicitly, use `/mewui` in Claude Code and the
+Copilot CLI, or `$mewui` in Codex.
 
-- Existing applications keep their compatible MewUI package line unless an upgrade is requested.
-- New applications use the current stable NuGet package.
-- All `Aprillz.MewUI*` packages in one application stay on the same version.
-- The skill is not tied to a fixed MewUI release or repository revision.
-- Restored XML documentation and compilation against the selected packages resolve API differences.
-- Gallery links are optional online examples, not dependencies or substitutes for package validation.
-
-## Source, release, and validation
-
-The canonical source is [mewui](mewui/). Agent-specific installation folders
-are distribution targets, not independently maintained sources. `SKILL.md` is
-the entry point and `references/` contains task-specific recipes.
-
-Skill releases use independent `skill-v*` tags, separate from framework `v*`
-releases. Release when guidance, supported workflows, or package validation
-materially changes, not automatically for every framework version.
-
-Package-only validation projects live in
-[`tests/MewUI.SkillTests`](../tests/MewUI.SkillTests/). They must not reference
-MewUI projects from the source checkout. Validation covers restore and build,
-real application launch, reusable view APIs, platform/backend registration,
-windowless startup contracts, and publish profiles including Windows NativeAOT.
