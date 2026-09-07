@@ -1,54 +1,148 @@
 # Command System
 
-MewUI's Command System unifies keyboard input, buttons, menus, and direct code invocation through one semantic execution path.
-It separates command identity (`Command`), execution scope (`CommandScope`), input gestures (`InputMap`), and presentation controls.
+MewUI's command system unifies keyboard input, buttons, menus, toolbars, and direct code invocation through one semantic execution path. It is split so that five questions are each answered by a different axis: what the action is (`Command`), who runs it (the scope), where the search starts (the target), what it acts on (the argument), and which value it picks (data).
 
 ```text
-InputMap / Button / Menu
-          ↓
-       Command
-          ↓
-    CommandRouter
-          ↓
- CommandScope CanExecute / Execute
+Surface (Button / MenuItem / ToolBar entry / InputMap)   "run this command" + the value the item declares (CommandData)
+        │
+        ▼ Target (CommandTarget): where to start
+   CommandRouter ── walks the context chain looking for a scope
+        │
+        ▼ Scope (CommandScope): the registered handler
+   Handler ── runs with the argument
 ```
 
-## Basic structure
+## Command: identity
 
-A `Command` contains only an action identity and a stable `CommandPresentation`. Register execution delegates with a
-`CommandScope` and key gestures with an `InputMap`. Two different `Command` instances remain different commands even
-when they use the same `Id`.
+A `Command` carries only the identity of an action and its presentation (`CommandPresentation`). What it does and whether it can run right now live entirely outside the `Command`. Menus, toolbars, and shortcuts share one `Command` instance, and the context it runs in gives it meaning. Two different instances remain different commands even when they use the same `Id`.
 
 ```csharp
-var save = new Command("file.save", "_Save");
+var save = new Command("file.save", "_Save", saveIcon);
 
 window.Commands.Register(save, () => document.Save(), () => document.IsDirty);
 window.InputMap.Map(save, new KeyGesture(Key.S, ModifierKeys.Primary));
 ```
 
-The constructor `text` accepts `_Save` access-key markers; `__` represents one literal underscore. The source is stored
-in `Command.Presentation.AccessText`, while `save.Text` returns the current normalized `"Save"`. Built-in
-access-key-aware presenters such as menus also use `AccessKey` and `AccessKeyIndex`. Other consumers, including
-toolbars, command palettes, and tooltips, can display `Command.Text` directly without leaking the marker.
+The constructor `text` accepts `_Save` access-key markers; `__` stands for one literal underscore. The source is kept in `Command.Presentation.AccessText`, while `save.Text` returns the normalized `"Save"`. Surfaces that support access keys, such as menus, also use `AccessKey` and `AccessKeyIndex`. Consumers that show no mnemonic, such as toolbars, command palettes, and tooltips, can display `Command.Text` directly without leaking the marker.
 
-Dispose the `CommandRegistration` returned by `CommandScope.Register`, or call `Unregister`, to remove a handler. A scope
-can contain only one handler for each command.
+## Scope: who runs it
+
+A scope (`CommandScope`) pairs commands with handlers. Every element and window has its own scope through `Commands`, and `Application` has one too. A scope holds one handler per command; dispose the `CommandRegistration` that `Register` returns, or call `Unregister`, to remove it. `CommandScope.Parent` builds a semantic chain independent of the visual tree.
+
+The registration shapes differ by what they bind. They are all called `Register`.
+
+| What is bound | Shape | Meaning |
+|---|---|---|
+| Delegates | `Register(cmd, Action, Func<bool>?)` | Execute and can-execute |
+| The invocation context | `Register(cmd, Action<CommandContext>, Func<CommandContext, bool>?)` | When the window, the source element, or the cancellation token is needed. An asynchronous `Func<CommandContext, ValueTask>` form exists too |
+| A target object | `Register(cmd, target, static t => ..., static t => ...)` | Closure-free static lambdas |
+| An argument type | `Register(cmd, (Item item) => ..., (Item item) => ...)` | A handler that receives the invocation argument (see the argument section) |
+
+Put the handler on the scope of **the element that owns the state**. A command that edits a document goes on the editor, one that acts on a chat message goes on the card holding the message list, one that changes a shape's fill goes on the shape. Do not put it on a recycled element such as an item container: once the container takes another item, the registration points at the wrong one. The argument section shows how a handler learns which item it was invoked on.
+
+Whether to use a command or a binding depends on how many surfaces consume the meaning. One surface editing one piece of state (a form checkbox, a radio group, a segmented control) is a binding. A meaning shared by two or more surfaces (a menu, a toolbar, and a shortcut), or one whose meaning depends on focus (save the active document), is a command.
+
+## Target: where the search starts
+
+The target (`CommandTarget`) is where the router starts looking for a handler. It is an element or a standalone scope, and it is opaque. The router walks the target element's context chain looking for a scope, then consults `CommandRouter.FallbackTarget`, the window scope, and the `Application` scope in that order. Key gestures resolve the same way: the nearest `InputMap` decides what a gesture means.
+
+The nearest handler owns the command. When its `CanExecute` is false the router does not move on to a farther scope, which lets an inner scope shadow an outer command as "not right now".
+
+Each surface picks its target differently.
+
+| Surface | Target |
+|---|---|
+| Button, ToggleButton, toolbar entries | Itself |
+| Shortcut | The focused element |
+| ContextMenu | The placement target (`PlacementTarget`) captured when it opens. The menu takes focus, but commands still run against the element it opened over, and submenus inherit the same target |
+| MenuBar | The element focused just before the menu opened |
+| A dynamic menu with a standalone scope | `menu.SetCommandTarget(CommandTarget.From(scope))` |
+
+A surface that lives outside the document, such as a toolbar, reaches the active document's handlers only when the shell points `CommandRouter.FallbackTarget` at that document. Handlers never learn what the target was and do not need to. The same handler is meant to run with the same meaning whether a menu or a shortcut invoked it, which is why `CommandContext` does not expose the target. When a handler needs the thing it was invoked on, the argument section provides it.
+
+```csharp
+var menu = new ContextMenu();
+var scope = new CommandScope();
+var select = new Command("document.select", "Select");
+
+scope.Register(select, SelectDocument, CanSelectDocument);
+menu.Item(select);
+menu.SetCommandTarget(CommandTarget.From(scope));
+menu.Show(owner);
+```
+
+## Argument: what it acts on
+
+When "Delete" is picked from a context menu over a list, the handler has to know which item. That value is the argument, and the framework finds it and passes it in.
+
+An element supplies arguments by implementing `ICommandArgumentSource`. The `ItemContainer` and `GridViewRow` that item controls create already do, so their `Item` becomes the argument. There is one rule: **the value of the nearest source above the invocation anchor is the argument.** The anchors are those of the target table: a menu starts at its placement target, a shortcut at the focused element, a button at itself. A button inside an item template therefore receives its own item.
+
+The receiver is a typed handler.
+
+```csharp
+var delete = new Command("chat.delete", "Delete");
+var reply = new Command("chat.reply", "Reply");
+
+card.Commands.Register(delete, (ChatMessage msg) => messages.Remove(msg), (ChatMessage msg) => msg.Mine);
+card.Commands.Register(reply, (ChatMessage msg) => input.Value = $"@{msg.Sender} ");
+
+list.PrepareContainer<ChatMessage>((container, _, _, _) => container.ContextMenu = messageMenu);
+```
+
+The handler holds no menu reference, walks no ancestors, and casts nothing. Always write the lambda parameter type: an untyped `msg => ...` resolves to the `CommandContext` shape instead.
+
+When there is no argument, or its type does not match, the handler evaluates as unable to run and the menu item or button is drawn disabled. Per-item enabling, such as the `msg.Mine` predicate above, goes through the same path. The target rule that the nearest handler owns the command applies here too: invoking without an argument inside a chain that has a typed handler does not fall through to an untyped handler in an outer scope.
+
+A ContextMenu captures the argument the moment it opens. If the list scrolls while the menu is up and the container takes another item, picking an entry still acts on the item the menu opened over. If that item was removed after the menu opened, the handler receives an item that is already gone, so a removal handler does nothing.
+
+## Data: which value it picks
+
+Commands that pick one value, such as alignment (left, center, right) or a fill color, differ per item only in the value. That value belongs not to the command but to **the surface item, as `CommandData`.** The command is the single verb "change the fill"; which value is the item's data.
+
+```csharp
+var setFill = new Command("shape.fill", "Fill");
+sharp.Commands.Register(setFill, (Color color) => sharp.Fill(color));
+rounded.Commands.Register(setFill, (Color color) => rounded.Fill(color));
+
+var fillMenu = new ContextMenu()
+    .Item("Blue", setFill, Color.FromRgb(70, 130, 230))
+    .Item("Green", setFill, Color.FromRgb(100, 200, 120));
+
+sharp.ContextMenu(fillMenu);
+rounded.ContextMenu(fillMenu);
+```
+
+An item that declares data passes it as the invocation argument, and a typed handler receives it. The value set can be large and can change at run time while the command stays one: a symbol list or a font list menu is one command plus generated items. Surfaces that show a value like an editor (combo boxes, sliders) remain the domain of bindings.
+
+Every invoking surface can carry data.
+
+| Surface | Declaration |
+|---|---|
+| Menu item | `Item(text, command, data)`, `MenuItem.CommandData` |
+| Button, ToggleButton | The `CommandData` property, fluent `.CommandData(value)` |
+| Toolbar entry | `Item(command, data, icon)`, `Toggle(command, data, icon)`, `ToolBarItem.CommandData` |
+| Shortcut | `Map(command, data, gesture)`. One command can map to a different gesture per value |
+
+When an item declares data, that data replaces the operand from the argument section. One invocation carries one argument.
+
+Because value items share one command, text and icons are written per item: the menu item's text, and the `Text` and `Icon` overrides of a toolbar entry. Shortcut labels are looked up by the command and data pair, so the "Left" item shows only Ctrl+L.
+
+## Checked state
+
+On/off state belongs to the surface, not to the command. `ToggleButton.IsChecked` belongs to the control, and a toolbar `Toggle` entry's checked state belongs to `ToolBarToggleItem.IsChecked`; the control the toolbar creates writes the user's change back to it. Menu items have no check mark. When several surfaces must show the same state, bind that state to each of them.
 
 ## C# Markup usage
 
-Connect a Button to a semantic action with `Command(...)` or `BindCommand(...)`. By default, Button continues to use
-explicit `Content`. Pass a `CommandPresentationMode` to opt into generated command content.
+Connect a Button to a semantic action with `Command(...)` or `BindCommand(...)`. By default a Button keeps its explicit `Content`; pass a `CommandPresentationMode` to generate content from the command.
 
 ```csharp
 new Button()
     .Command(save, presentation: CommandPresentationMode.TextAndIcon)
 ```
 
-Explicitly assigned or bound `Content` takes precedence over generated command presentation.
+Explicitly set or bound `Content` wins over generated command content.
 
-`DropDownButton` is intentionally not a Command consumer. Activating any part of it opens its
-`DropDownMenu`; commands belong to the menu items. `SplitButton` is a Button and uses its inherited
-`Command` for the primary face, while its drop-down face only opens the menu.
+`DropDownButton` is deliberately not a command consumer. Activating any part of it opens `DropDownMenu`, and the commands belong to the menu items. `SplitButton` is a Button, so its primary face runs the inherited `Command` while the drop-down face only opens the menu.
 
 ```csharp
 var more = new DropDownButton
@@ -65,12 +159,9 @@ var saveSplit = new SplitButton
 };
 ```
 
-If `save` cannot execute, only the `SplitButton` primary face is disabled; the drop-down remains
-reachable. The owner is the sole primary Command source—the template's internal buttons forward
-activation and do not execute the Command themselves.
+When `save` cannot run, only the `SplitButton` primary face is disabled and the drop-down still opens. Only the owning control is a primary command source; buttons inside its template forward activation and never run the command themselves.
 
-Each `SegmentButton` container in a `ButtonGroup` is also an independent Command consumer. Connect the per-item
-Command in `PrepareContainer`; its `CanExecute` result participates in that segment's effective enabled state.
+Each `SegmentButton` container of a `ButtonGroup` is an independent command consumer. Assign the per-item command in `PrepareContainer`; its `CanExecute` feeds that segment's effective enabled state.
 
 ```csharp
 new ButtonGroup()
@@ -79,14 +170,11 @@ new ButtonGroup()
         segment.Command(command));
 ```
 
-`SegmentedControl` remains a selection control rather than becoming a Command consumer. For independent actions such
-as left/center/right/justify alignment, use `ButtonGroup` as above. To bind the current alignment as a selected value,
-use `SegmentedControl.SelectedIndex`/`SelectedItem`. This connection does not require `CommandParameter`: each
-`SegmentButton` receives the Command it executes.
+`SegmentedControl` is a selection control that picks one value, so it does not become a command consumer. Use `ButtonGroup` as above when each item is an independent action, such as align left, center, right, or justify, and use `SegmentedControl.SelectedIndex`/`SelectedItem` when the current alignment should be a selected value. This wiring needs no `CommandData`: each segment receives the command it runs.
 
 ### ToolBar
 
-A `ToolBar` holds bands of groups, and a group holds entries. Entries are models rather than controls: the toolbar materializes one control per entry, and turns the entries a band cannot fit into rows of that band's overflow menu. `Item`, `Toggle`, and `Split` take a Command; `Menu`, `Label`, `Splitter`, and `Host` do not.
+A `ToolBar` holds bands, a band holds groups, and a group holds entries. Entries are models rather than controls: the toolbar creates one control per entry, and groups a band cannot fit are hidden behind that band's overflow button. `Item`, `Toggle`, and `Split` take a command; `Menu`, `Label`, `Splitter`, and `Host` do not.
 
 ```csharp
 var save = new Command("file.save", "_Save", saveIcon);
@@ -107,49 +195,47 @@ var bar = new ToolBar()
 bar.Commands.Register(save, () => document.Save(), () => document.IsDirty);
 ```
 
-`Item` becomes a button, `Split` a `SplitButton` whose primary face runs the command and whose chevron opens the menu, and `Menu` a `DropDownButton` that carries no command of its own. `Host` is the one entry a band cannot hide, since an arbitrary element has no menu row to collapse into; it shrinks to its own minimum instead.
+`Item` becomes a button, `Split` becomes a `SplitButton` whose primary face runs the command and whose chevron opens the menu, and `Menu` becomes a `DropDownButton` with no command of its own. `Host` is the one entry a band cannot hide: an arbitrary element has no row to fold into, so it shrinks to its minimum size instead.
 
-`Toggle` runs its command and also reads as on or off. The checked state belongs to the entry, not to the command: `ToolBarToggleItem.IsChecked` is the source, and the materialized control writes the user's change back to it. This is the same separation `CommandPresentation` makes by excluding check state.
+`Toggle` runs a command and also shows an on/off state. The checked state belongs to the entry, not the command: `ToolBarToggleItem.IsChecked` is the source, and the created control writes the user's change back to it.
 
-Entries show their command through `ToolBar.ItemPresentation`, which defaults to `CommandPresentationMode.Icon`, and a single entry can override it with `ToolBarItem.Presentation`. An icon-only entry whose command carries no icon falls back to text rather than rendering empty. Icons are drawn at `ThemeMetrics.CommandIconSize`, the same size menus use.
+Entries that pick a value declare their data together with a per-entry icon. Three entries share one command, so the icon comes from the entry rather than the command.
 
-Overflow rows are built from the same Commands as the entries they replace: an `Item` becomes a `MenuItem` for its command, a `Split` becomes a `MenuItem` with the drop-down as its submenu, and a `Splitter` becomes a separator. Enabled state, text, and icon therefore stay in one place whether the entry is on the band or in the overflow menu. A `Label` has no row, as it annotates the entry beside it.
+```csharp
+new ToolBarGroup()
+    .Toggle(setAlignment, TextAlignment.Left, alignLeftIcon)
+    .Toggle(setAlignment, TextAlignment.Center, alignCenterIcon)
+    .Toggle(setAlignment, TextAlignment.Right, alignRightIcon)
+```
+
+Entries show their command according to `ToolBar.ItemPresentation`, which defaults to `CommandPresentationMode.Icon`. A single entry can override it with `ToolBarItem.Presentation`, and `Text` and `Icon` show the entry's own presentation instead of the command's. An icon-only entry whose command has no icon falls back to text rather than rendering empty. Icons are drawn at `ThemeMetrics.CommandIconSize`, the same size menus use.
 
 ### Reactive presentation and localization
 
-`Command.Presentation.AccessText` and `Icon` are MewProperties. `Command.BindText(...)` and `BindIcon(...)` create
-real one-way bindings to `AccessTextProperty` and `IconProperty`; they are not snapshot helpers.
+`Command.Presentation.AccessText` and `Icon` are MewProperties. `Command.BindText(...)` and `BindIcon(...)` are not one-shot copies: they create real one-way bindings to `AccessTextProperty` and `IconProperty`.
 
 ```csharp
 var save = new Command("file.save", icon: saveIcon)
-    .BindText(AppStrings.Save); // ObservableValue<string>, e.g. "_Save"
+    .BindText(AppStrings.Save); // ObservableValue<string>, for example "_Save"
 ```
 
-When the source changes, the Command recomputes its text/access-key projection and updates open menus and opted-in
-Buttons that use its default presentation. `CommandPresentation` deliberately excludes `CanExecute`, selection/check
-state, shortcuts, and `CommandParameter`; those belong to execution state, the consumer, `InputMap`, and the invocation
-context respectively.
+When the value changes, the command's `Text` and access key are recomputed, and open menus and opt-in buttons that use the command's default presentation update. `CommandPresentation` never carries `CanExecute`, selection or checked state, shortcuts, or invocation values; those belong to execution state, the consumer, `InputMap`, and the item's `CommandData` respectively.
 
-Menus do not own callbacks or shortcuts either. They can use the Command's default text and access key together, or
-override both for a particular presentation context.
+Menus own no callbacks and no shortcuts of their own either. A menu item can use the command's default text and access key, or override both together to fit the context it appears in.
 
 ```csharp
 var fileMenu = new Menu()
     .Item(save)
     .Item("Save _As...", saveAs)
     .Separator()
-    .Item("Unavailable", isEnabled: false); // Presentation-only item
+    .Item("Unavailable", isEnabled: false); // presentation-only item
 ```
 
-`Item(string, Command)` and `MenuItem.Text` use the same underscore syntax. Explicit item text overrides both the
-Command's default text and access key, allowing different menus to present the same command with different access keys.
+The strings passed to `Item(string, Command)` and `MenuItem.Text` follow the same `_` rule. Explicit item text overrides both the command's default text and its access key, so the same command can show a different access key in different menus.
 
-The menu shortcut column looks up the effective `InputMap` gesture for the current command target. Do not duplicate
-the shortcut declaration on the menu item.
+A menu's shortcut column is a reverse lookup of the `InputMap` gesture that is actually effective at the current command target, so shortcuts are never declared twice.
 
-Define a command icon with an `IconTemplate` that creates a new visual at the size requested by its presenter.
-`IconTemplateSize.Dip` is the layout size and `Pixel` is the physical pixel requirement at the current DPI.
-ContextMenu, MenuBar dropdowns, and ToolBar entries all request `ThemeMetrics.CommandIconSize`, which is 16 DIPs.
+Command icons are `IconTemplate` factories that build a fresh visual at the size the surface requests. `IconTemplateSize.Dip` is the layout size; `Pixel` is the physical pixel size at the current DPI. ContextMenu, MenuBar dropdowns, and ToolBar entries all request `ThemeMetrics.CommandIconSize` (16 DIP).
 
 ```csharp
 var copyGeometry = PathGeometry.Parse(copyPathData);
@@ -164,56 +250,42 @@ var copyIcon = new IconTemplate(
 var copy = new Command("edit.copy", "Copy", copyIcon);
 ```
 
-Every `IconTemplate.Build` call must return a new parentless `FrameworkElement`. This allows multiple presenters to
-show the same Command without conflicting over a visual parent. Non-visual resources such as `ImageSource`,
-`SvgImageSource`, and frozen `PathGeometry` can be created outside the factory and shared. Return a new `Image` for
-SVG, a new `PathShape` for geometry, or a new `TextBlock` for an emoji. Build the visual once when the presenter is
-created, not on every render frame or `CanExecute` evaluation.
-A raster factory can select the smallest source at least as large as `size.Pixel` and lay out the visual at
-`size.Dip`. Active presenters rematerialize the icon when their DPI changes.
+`IconTemplate.Build` must return a new parentless `FrameworkElement` on every call, so several surfaces can show the same command without fighting over a visual parent. Non-visual resources such as `ImageSource`, `SvgImageSource`, or a frozen `PathGeometry` are created outside the factory and shared. Build happens once when a surface is created, not per frame or per `CanExecute` evaluation. A bitmap factory can pick the smallest source at or above `size.Pixel` and lay the visual out at `size.Dip`. When the DPI changes, active surfaces rebuild their icon visuals at the new size.
 
-Core consumers that currently materialize Command icons are ContextMenu, MenuBar dropdowns, ToolBar entries, and Buttons (including the primary face of `SplitButton`) with a presentation mode. Button still defaults to explicit `Content`. All of them draw the icon at `ThemeMetrics.CommandIconSize` (16 DIP).
+The core consumers that materialize command icons are ContextMenu, MenuBar dropdowns, ToolBar entries, and Buttons with a presentation mode (including a `SplitButton` primary face). A Button's default remains explicit `Content`.
 
-A MenuItem can override the Command icon.
+A menu item can override the command's icon.
 
 ```csharp
 new MenuItem("_Copy", copy)
     .Icon(compactCopyIcon);
 ```
 
-`MenuItem.Text` and `Icon` are placement overrides. They inherit from the Command only while the property has no value
-source. An explicit empty string hides the text, and an explicit null icon suppresses the Command icon. `BindText`,
-`BindIcon`, `BindCommand`, and `BindIsEnabled` create real bindings to the corresponding MenuItem MewProperties. The
-local enabled value is ANDed with `CanExecute`; command evaluation never overwrites that binding.
+`MenuItem.Text` and `Icon` are **placement overrides**: the command default is used only while the property has no value source. An explicit empty string hides the text, and an explicit `null` icon hides the command icon. `BindText`, `BindIcon`, `BindCommand`, and `BindIsEnabled` create real bindings to the corresponding MenuItem MewProperties. Local `IsEnabled` is combined with `CanExecute` by AND and is never overwritten by the binding.
 
-## Routing and scopes
+## ContextMenu placement
 
-Element and Window each provide `Commands` and `InputMap`. Execution starts at the current target and searches the
-element command context, Window, and Application in order. `CommandScope.Parent` can also define a semantic scope
-chain that is independent of the visual tree.
+A `ContextMenu` opens with `Show(placementTarget)`. `Placement` decides where it appears.
 
-The nearest scope handler owns the command. A handler whose `CanExecute` is `false` does not fall back to another
-handler for the same command in a more distant scope. The nearest effective `InputMap` determines the gesture meaning
-in the same way.
+| `Placement` | Position |
+|---|---|
+| `Pointer` (default) | At the pointer. Pass the position with `Show(target, positionInWindow)` |
+| `Below` / `Above` | Under or over the target's edge, flipping to the other side when there is no room |
+| `Right` / `Left` | Beside the target's right or left edge, flipping to the other side when there is no room |
 
-A dynamic ContextMenu that uses an explicit scope must also specify its target.
+`PlacementOffset` nudges the menu from that position, and once open, `PlacementTarget` tells which element it opened over. A menu assigned to an element's `ContextMenu` property opens on right-click automatically: at the pointer when `Placement` is `Pointer`, otherwise anchored to that element. Submenus inherit the parent's placement target and command target.
 
 ```csharp
-var menu = new ContextMenu();
-var scope = new CommandScope();
-var select = new Command("document.select", "Select");
-
-scope.Register(select, SelectDocument, CanSelectDocument);
-menu.Item(select);
-menu.SetCommandTarget(CommandTarget.From(scope));
-menu.ShowAt(owner, position);
+new Button()
+    .Content("Options")
+    .ContextMenu(new ContextMenu { Placement = MenuPlacement.Below }
+        .Item(exportPdf)
+        .Item(print));
 ```
 
 ## Standard editing commands
 
-`StandardCommands` provides `Cut`, `Copy`, `Paste`, `Delete`, `Undo`, `Redo`, and `SelectAll`. TextBox controls register
-handlers for these commands in their own scope. Default gestures are mapped in the Application `InputMap`, so a local or
-Window `InputMap` can remap or shadow them.
+`StandardCommands` provides `Cut`, `Copy`, `Paste`, `Delete`, `Undo`, `Redo`, and `SelectAll`. TextBox-family controls register handlers for them on their own scope. The default keys are mapped in the Application `InputMap`, so a local or Window `InputMap` can remap or shadow them.
 
 ```csharp
 editor.InputMap.Map(StandardCommands.Copy, new KeyGesture(Key.Insert, ModifierKeys.Control));
@@ -221,8 +293,7 @@ editor.InputMap.Map(StandardCommands.Copy, new KeyGesture(Key.Insert, ModifierKe
 
 ## TextBox, ContextMenu, InputMap, and the Edit menu
 
-The following diagram is not a type inheritance hierarchy or the actual visual tree. It is a logical view of how
-several UI entry points converge on the same editing command execution.
+The diagram below is neither a type hierarchy nor a visual tree. It is a **logical composition** showing how one editing meaning reached from several entry points collapses into a single command execution.
 
 ```text
 Keyboard Primary+X/C/V
@@ -231,20 +302,14 @@ Keyboard Primary+X/C/V
 TextBox right-click ContextMenu          ├─ StandardCommands.Cut/Copy/Paste
   └─ Cut / Copy / Paste menu items ──────┤             │
                                          │             ▼
-MenuBar Edit menu                        │    Execute the TextBox handler
+MenuBar Edit menu                        │    Executes the TextBox handler
   └─ Cut / Copy / Paste menu items ──────┘    at the current command target
                                                        │
                                                        ▼
-                                               Selection/clipboard changes
+                                             Selection / clipboard changes
 ```
 
-When a `TextBox` is created, it registers the execution and `CanExecute` handlers for `Cut`, `Copy`, and `Paste` with its
-`Commands`. The default Application `InputMap` maps `Primary+X`, `Primary+C`, and `Primary+V` to those same standard
-commands. ContextMenu and Edit menu items reference only the `Command`; they do not carry separate execution
-delegates.
-
-The following example attaches a custom ContextMenu to make the relationship explicit. Without an assigned
-ContextMenu, TextBox creates its default editing menu from the same standard commands when needed.
+A `TextBox` registers execute and `CanExecute` handlers for `Cut`, `Copy`, and `Paste` on its own `Commands` when it is created. The default Application `InputMap` maps `Primary+X`, `Primary+C`, and `Primary+V` to the same standard commands. The ContextMenu and the Edit menu hold no delegates and only reference those commands.
 
 ```csharp
 var editor = new TextBox()
@@ -262,59 +327,50 @@ var editMenu = new Menu()
 
 var menuBar = new MenuBar()
     .Items(new MenuItem("_Edit").Menu(editMenu));
-
-// Place menuBar and editor in the layout of the same Window.
 ```
 
-The menu objects neither inherit from TextBox nor duplicate its command handlers. The command target at the time a
-menu opens or a key is pressed provides the actual connection.
+The menus do not copy the TextBox handlers. The connection is decided by the **command target** at the moment a menu opens or a key is pressed. The keyboard starts at the focused TextBox and finds the effective `InputMap`; the TextBox context menu captures the right-clicked TextBox as its target; the MenuBar Edit menu preserves the target focused just before it opened. All three share the same `CanExecute` results: with no selection, `Cut` and `Copy` are disabled in both menus, and in a read-only TextBox `Cut` and `Paste` are disabled. Shortcut labels are reverse lookups against the current target, so remapping a key needs no menu edits.
 
-- Keyboard: resolution starts at the focused TextBox and finds an effective `InputMap`. The Application mapping
-  converts `Primary+X/C/V` to standard commands, and the router executes the focused TextBox handler.
-- TextBox ContextMenu: the menu captures its right-click owner as the target. The commands therefore continue to
-  operate on the original TextBox selection even after the menu takes focus.
-- MenuBar Edit menu: the menu preserves the focus target that existed just before it opened. If a TextBox had focus,
-  the Edit menu's `Cut`, `Copy`, and `Paste` commands route to that TextBox.
+## When state is re-queried
 
-All three paths also share the same `CanExecute` result. With no selection, the TextBox `Cut` and `Copy` handlers are
-not executable, so both ContextMenu and Edit menu disable those items. A read-only TextBox disables `Cut` and
-`Paste`. The menu shortcut column looks up the effective target `InputMap`, so remapping a gesture does not require
-editing separate shortcut strings in ContextMenu and the Edit menu.
+`CanExecute` and argument predicates must be cheap and side-effect free. The framework stores nothing and asks again when it needs to. It asks:
 
-## CanExecute and state updates
+- at the end of a dispatcher turn that processed work
+- on mouse button release, focus change, and window state change
+- when a menu opens, and at each of the moments above while it is open
+- when the application calls `window.RequerySuggested()`
 
-`CanExecute` must be fast and free of side effects. MewUI tracks only active command sources, such as connected
-Buttons and open menus, and evaluates their state at the end of a dispatcher turn. Focus, property, and input-map
-changes also trigger evaluation. Execution always checks `CanExecute` again immediately before invoking a handler.
+Only tracked surfaces, such as attached Buttons and open menus, are re-evaluated; the visual tree is never scanned. Right before execution, `CanExecute` is checked again regardless of what the surface showed.
 
-When an unobservable value such as a regular field changes outside the UI thread, marshal the change to the UI
-dispatcher. The default model does not perform arbitrary full visual-tree scans or expose per-command change events.
+State the framework cannot observe, such as a plain field changed outside those moments, needs a `RequerySuggested()` call or a change routed through the dispatcher before surfaces follow. `Button.CanClick` and `MenuItem.CanClick` are predicates for conditions local enough that a command would be ceremony; they combine with local `IsEnabled` and the command's `CanExecute` by AND, so any one of the three disables the surface, and they are asked again at the same moments.
 
 ## Lifetime management
 
-A Button is tracked as a command source only while connected to a visual root. A ContextMenu is tracked only while
-open. Closing a Window clears that Window's source tracker. When registering a temporary handler in a long-lived
-scope, dispose its `CommandRegistration` so captured objects are not retained unnecessarily.
+Buttons are tracked as command sources only while attached to a visual root, and a ContextMenu only while open. Closing a window clears its source tracker. When a temporary handler is registered on a long-lived scope, dispose its `CommandRegistration` so captured objects are not kept alive.
 
 ## Removed legacy APIs
 
-The following paths were removed because they could duplicate Command System execution or maintain conflicting
-enabled states.
+The following paths were removed because they produced duplicate execution or a different enabled state from the command system.
 
-- `Window.KeyBindings`, `Window.ProcessKeyBindings`, and the core `KeyBinding`
-- `Button.CanClick` and the C# Markup `OnCanClick`
-- `MenuItem.Click`, `MenuItem.CanClick`, and `MenuItem.Shortcut`
-- Callback-based `Menu.Item`/`ContextMenu.Item` overloads and shortcut arguments
+- `Window.KeyBindings`, `Window.ProcessKeyBindings`, core `KeyBinding`
+- `MenuItem.Click`, `MenuItem.Shortcut`
+- callback-based `Menu.Item`/`ContextMenu.Item` and their shortcut arguments
+- `ContextMenu.ShowAt` is obsolete, replaced by `Show` and `Placement`
 
-The ordinary UI event `Button.Click` and its `OnClick` extension remain available. Use Command for reusable actions,
-enabled conditions, shortcuts, and actions shared with menus.
+`Button.Click`/`OnClick` remains for plain UI clicks; behavior that is reused, gated, given a shortcut, or shared with a menu uses a command.
 
 ## Icon lifetime and size
 
-`Command.Icon` and `MenuItem.Icon` use `IconTemplate?`. A MenuItem inherits the Command icon only while its Icon has no
-value source; an explicitly assigned null suppresses it. A ContextMenu builds each command item's template at 16 DIPs
-when it opens and detaches the generated visual when it closes. Reopening the menu creates a new visual.
+`Command.Icon` and `MenuItem.Icon` are `IconTemplate?`. `MenuItem.Icon` falls back to the command icon only while it has no value source; an explicit null hides it. A ContextMenu builds each command item's template at 16 DIP when it opens and releases the visuals' parents when it closes; reopening builds new visuals.
 
-The factory receives both the DIP size and the target pixel size calculated for the current DPI. The presenter handles
-DPI conversion and disabled opacity. Capture reusable sources instead of parsing them inside the factory. The presenter constrains the returned
-element to a square slot, so `Stretch.Uniform` is recommended for vectors and bitmaps.
+The factory receives the DIP size and the target pixel size computed from the current DPI. DPI conversion and disabled opacity are the surface's job. Capture a shareable source outside the factory instead of parsing it on every call. The surface constrains the returned element to a square slot, so `Stretch.Uniform` is recommended for vectors and bitmaps.
+
+## At a glance
+
+| Axis | Question | Lives in | What the surface knows |
+|---|---|---|---|
+| Command | What action | The `Command` instance | Identity and presentation |
+| Scope | Who runs it | `Element.Commands`, `Window.Commands`, `Application` | Nothing |
+| Target | Where the search starts | Captured by the surface at invocation | Its own way of capturing |
+| Argument | What it acts on | The nearest `ICommandArgumentSource` above the anchor | Menus capture it on open |
+| Data | Which value | The surface item's `CommandData` | Its own declared value |
