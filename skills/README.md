@@ -50,12 +50,26 @@ Or copy the [mewui](mewui/) directory of this repository yourself, so that its
 
 ## Use
 
-Ask for what you want:
+A first request can be a whole application. Starting from nothing:
 
-- "Build a MewUI app with a name field and a Save button"
-- "Show these records in a grid and let me filter them"
+> Build a Windows MewUI app for tracking tasks. Put the task list on the left
+> and an edit pane on the right with title, due date and notes. Add buttons to
+> create and delete a task, mark one done from the list, and save everything to
+> a JSON file next to the executable.
+
+Then keep going in the same session:
+
 - "Add a dark and light theme toggle"
-- "Publish it as one Windows executable with NativeAOT"
+- "Let me filter the list by text"
+- "Ask for confirmation before deleting a task"
+- "Move the settings into a separate dialog"
+- "Publish it as one self-contained executable per platform with NativeAOT"
+
+Or bring an existing application over:
+
+> Port the WinForms utility in this folder to MewUI. Keep its window layout,
+> keyboard shortcuts and settings file format, make it run on Windows and
+> Linux, and show me it running before you report back.
 
 The agent picks the platform and rendering backend, creates the project, builds
 it, and runs it before reporting back. It loads the skill on its own when your
