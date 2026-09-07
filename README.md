@@ -60,7 +60,7 @@
 ### 🧠 MewUI Agent Skill
 
 Build package-based MewUI applications with Codex, Claude Code, or GitHub
-Copilot using the [MewUI agent skill](skills/README.md).
+Copilot using the [MewUI agent skill](https://github.com/aprillz/mewui-skill).
 
 ---
 

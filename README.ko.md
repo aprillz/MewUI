@@ -33,7 +33,7 @@
 ### 🧠 MewUI 에이전트 스킬
 
 Codex, Claude Code 또는 GitHub Copilot으로 패키지 기반 MewUI
-애플리케이션을 만들려면 [MewUI 에이전트 스킬](skills/README.ko.md)을 참고하세요.
+애플리케이션을 만들려면 [MewUI 에이전트 스킬](https://github.com/aprillz/mewui-skill)을 참고하세요.
 
 ---
 
