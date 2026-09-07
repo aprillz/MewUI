@@ -1,6 +1,7 @@
 ![Aprillz.MewUI](https://raw.githubusercontent.com/aprillz/MewUI/main/assets/logo/logo_h-1280.png)
 
 
+[![Website](https://img.shields.io/badge/Website-mewui.aprillz.net-8F54DB)](https://mewui.aprillz.net)
 ![.NET](https://img.shields.io/badge/.NET-8%2B-512BD4?logo=dotnet&logoColor=white)
 ![Windows](https://img.shields.io/badge/Windows-10%2B-0078D4?logo=windows&logoColor=white)
 ![Linux](https://img.shields.io/badge/Linux-X11-FCC624?logo=linux&logoColor=black)

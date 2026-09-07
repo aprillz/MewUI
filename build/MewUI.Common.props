@@ -10,6 +10,7 @@
     <MewUITargetFrameworks>net8.0;net10.0</MewUITargetFrameworks>
     <MewUIPackageLicenseExpression>MIT</MewUIPackageLicenseExpression>
     <MewUIRepositoryUrl>https://github.com/aprillz/MewUI</MewUIRepositoryUrl>
+    <MewUIWebsiteUrl>https://mewui.aprillz.net</MewUIWebsiteUrl>
     <MewVGVersion>0.9.0</MewVGVersion>
   </PropertyGroup>
 
@@ -22,7 +23,7 @@
     <Authors>$(MewUIAuthor)</Authors>
     <RootNamespace>$(MewUIRootNamespace)</RootNamespace>
     <PackageLicenseExpression>$(MewUIPackageLicenseExpression)</PackageLicenseExpression>
-    <PackageProjectUrl>$(MewUIRepositoryUrl)</PackageProjectUrl>
+    <PackageProjectUrl>$(MewUIWebsiteUrl)</PackageProjectUrl>
     <RepositoryUrl>$(MewUIRepositoryUrl)</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <Copyright>Copyright (c) $(MewUIAuthor)</Copyright>
