@@ -1,0 +1,19 @@
+{
+  "name": "aprillz",
+  "owner": {
+    "name": "Aprillz",
+    "url": "https://github.com/aprillz"
+  },
+  "metadata": {
+    "description": "MewUI agent skill for building MewUI applications from public NuGet packages",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "mewui",
+      "source": ".",
+      "description": "Create, extend, debug, preview, or publish complete MewUI applications from public Aprillz.MewUI NuGet packages using fluent C# Markup.",
+      "version": "1.0.0"
+    }
+  ]
+}
