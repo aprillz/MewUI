@@ -1591,7 +1591,15 @@ internal sealed class Win32WindowBackend : IWindowBackend
         RevokeDropTarget();
         _titleBarThemeSync.Dispose();
         DestroyIcons();
-        User32.ReleaseCapture();
+
+        // ReleaseCapture works on the thread, not on this window: releasing it unconditionally took
+        // the capture away from whatever else holds it, and a popup closing on a press cancelled the
+        // press the owner had just started (a button under a tooltip needed a second click).
+        if (User32.GetCapture() == Handle)
+        {
+            User32.ReleaseCapture();
+        }
+
         Window.ClearMouseOverState();
         Window.ClearMouseCaptureState();
         Window.ReleaseWindowGraphicsResources(Handle);
