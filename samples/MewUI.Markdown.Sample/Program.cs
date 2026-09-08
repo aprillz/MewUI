@@ -28,21 +28,22 @@ public class DemoWindow : Window
         var source = new MultiLineTextBox()
             .FontFamily("Consolas")
             .FontSize(13);
-        var viewer = new MarkdownViewer()
+        new MarkdownViewer()
+            .Ref(out var viewer)
             .FontSize(16)
             .Padding(new Thickness(16))
             .CornerRadius(0)
             .BaseUri(new Uri("https://example.test/docs/"))
-            .ImageResolver(new DemoImageResolver());
-        viewer.LinkRequested += link => status.Text = $"Link: {link.Url} | Resolved: {link.ResolvedUri} | Source: {link.SourceStart}+{link.SourceLength}";
+            .ImageResolver(new DemoImageResolver())
+            .OnLinkRequested(link => status.Text = $"Link: {link.Url} | Resolved: {link.ResolvedUri} | Source: {link.SourceStart}+{link.SourceLength}");
 
         void SelectCase(ReviewCase entry)
         {
-            title.Text = entry.Name;
-            description.Text = entry.Notes;
-            source.Text = entry.Markdown;
-            viewer.Markdown = entry.Markdown;
-            status.Text = $"{entry.Name} | {entry.Markdown.Length:N0} characters";
+            title.Text(entry.Name);
+            description.Text(entry.Notes);
+            source.Text(entry.Markdown);
+            viewer.Markdown(entry.Markdown);
+            status.Text($"{entry.Name} | {entry.Markdown.Length:N0} characters");
         }
 
         string NavigationLabel(ReviewCase entry)
@@ -51,14 +52,16 @@ public class DemoWindow : Window
             return separator >= 0 ? entry.Name[(separator + 1)..] : entry.Name;
         }
 
-        var apply = new Button().Content(new TextBlock().Text("Render source"));
-        apply.OnClick(handler: () => { viewer.Markdown(source.Text); status.Text("Source applied"); });
+        new Button()
+            .Ref(out var apply)
+            .Content(new TextBlock().Text("Render source"))
+            .OnClick(handler: () => { viewer.Markdown(source.Text); status.Text("Source applied"); });
         var gfm = new Button().Content(new TextBlock().Text("GFM: on"));
         bool enabled = true;
-        gfm.Click += () =>
+        gfm.OnClick(() =>
         {
             enabled = !enabled;
-            viewer.Options = new MarkdownOptions
+            viewer.Options(new MarkdownOptions
             {
                 UsePipeTables = enabled,
                 UseTaskLists = enabled,
@@ -66,64 +69,79 @@ public class DemoWindow : Window
                 UseStrikethrough = enabled,
                 UseInserted = enabled,
                 UseMarked = enabled
-            };
-            ((TextBlock)gfm.Content!).Text = enabled ? "GFM: on" : "GFM: off";
-        };
-        var toolbar = new StackPanel()
+            });
+            ((TextBlock)gfm.Content!).Text(enabled ? "GFM: on" : "GFM: off");
+        });
+        new StackPanel()
+            .Ref(out var toolbar)
             .Orientation(Orientation.Horizontal)
-            .Spacing(8);
-        toolbar.AddRange(apply, gfm);
-        var header = new StackPanel()
+            .Spacing(8)
+            .Children(apply, gfm);
+        new StackPanel()
+            .Ref(out var header)
             .Spacing(6)
-            .Margin(new Thickness(0, 0, 0, 10));
-        header.AddRange(title, description, toolbar);
+            .Margin(new Thickness(0, 0, 0, 10))
+            .Children(title, description, toolbar);
         var panes = new Grid();
         panes.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Stars(1) });
         panes.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Stars(1.5) });
-        var sourcePane = new DockPanel()
+        new DockPanel()
+            .Ref(out var sourcePane)
             .Spacing(6)
-            .Margin(new Thickness(0, 0, 10, 0));
-        sourcePane.Add(new TextBlock()
-            .Text("MARKDOWN SOURCE")
-            .FontWeight(FontWeight.Bold).DockTop());
-        sourcePane.Add(source);
-        var previewPane = new DockPanel().Spacing(6);
-        previewPane.Add(new TextBlock()
-            .Text("MEWUI RENDERED OUTPUT")
-            .FontWeight(FontWeight.Bold).DockTop());
-        previewPane.Add(viewer);
-        Grid.SetColumn(previewPane, 1);
-        panes.AddRange(sourcePane, previewPane);
-        var content = new DockPanel()
+            .Margin(new Thickness(0, 0, 10, 0))
+            .Children(
+                new TextBlock()
+                    .Text("MARKDOWN SOURCE")
+                    .FontWeight(FontWeight.Bold)
+                    .DockTop(),
+
+                source
+            );
+        new DockPanel()
+            .Ref(out var previewPane)
+            .Spacing(6)
+            .Children(
+                new TextBlock()
+                    .Text("MEWUI RENDERED OUTPUT")
+                    .FontWeight(FontWeight.Bold)
+                    .DockTop(),
+
+                viewer
+            )
+            .Column(1);
+        panes.Children(sourcePane, previewPane);
+        new DockPanel()
+            .Ref(out var content)
             .Padding(14)
-            .Spacing(8);
-        content.Add(header.DockTop());
-        content.Add(status.DockBottom());
-        content.Add(panes);
-        var navigation = new NavigationView().PaneWidth(220);
-        navigation.Items(
-            ReviewCases.All,
-            NavigationLabel,
-            icon: entry => new Border()
-                .Size(24)
-                .CornerRadius(12)
-                .Center()
-                .WithTheme((t, c) => c.Background(t.Palette.ControlBackground))
-                .Child(
-                    new TextBlock()
-                        .Text(entry.Name[..2])
-                        .LineBoxTrim(LineBoxTrim.CapAndBaseline)
-                        .Bold()
-                        .Center()
-                ),
-            content: _ => content);
-        navigation.SelectionChanged += item =>
-        {
-            if (item is ReviewCase entry)
+            .Spacing(8)
+            .Children(header.DockTop(), status.DockBottom(), panes);
+        new NavigationView()
+            .Ref(out var navigation)
+            .PaneWidth(220)
+            .Items(
+                ReviewCases.All,
+                NavigationLabel,
+                icon: entry => new Border()
+                    .Size(24)
+                    .CornerRadius(12)
+                    .Center()
+                    .WithTheme((t, c) => c.Background(t.Palette.ControlBackground))
+                    .Child(
+                        new TextBlock()
+                            .Text(entry.Name[..2])
+                            .LineBoxTrim(LineBoxTrim.CapAndBaseline)
+                            .Bold()
+                            .Center()
+                    ),
+                content: _ => content
+            )
+            .OnSelectionChanged(item =>
             {
-                SelectCase(entry);
-            }
-        };
+                if (item is ReviewCase entry)
+                {
+                    SelectCase(entry);
+                }
+            });
         navigation.SelectedIndex = 0;
 
 
