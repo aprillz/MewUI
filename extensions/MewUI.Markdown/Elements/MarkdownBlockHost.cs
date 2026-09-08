@@ -29,11 +29,15 @@ internal sealed class MarkdownBlockHost : Control, IVisualTreeHost, ILogicalTree
     private readonly double[] _heights;
     private readonly double[] _prefix;
     private readonly SortedSet<int> _realizedIndices = [];
+    // Elements that left the realized window, kept detached until the cap evicts them.
+    private readonly Dictionary<int, FrameworkElement> _cache = [];
+    private const int CACHE_LIMIT = 120;
     private bool _prefixValid;
     private double _width = double.NaN;
     private double _measuredSum;
     private int _measuredCount;
     private bool _pendingRealize;
+    private bool _anchorRetry;
     private bool _disposing;
     private int _correctionCount;
     private (int Index, double Within)? _initialAnchor;
@@ -185,6 +189,14 @@ internal sealed class MarkdownBlockHost : Control, IVisualTreeHost, ILogicalTree
             _correctionCount++;
             scroll.SetScrollOffsets(scroll.HorizontalOffset, desired);
             offset = scroll.VerticalOffset;
+            if (Math.Abs(offset - desired) >= OnePixel())
+            {
+                // The owner clamped against the extent of its last arrange; the anchor is carried into
+                // the next pass, whose metrics include the new extent.
+                _initialAnchor = (anchorIndex, anchorWithin);
+                _anchorRetry = true;
+                break;
+            }
         }
 
         EnsurePrefix();
@@ -206,6 +218,12 @@ internal sealed class MarkdownBlockHost : Control, IVisualTreeHost, ILogicalTree
         {
             double height = _prefix[index + 1] - _prefix[index] - _spacing;
             _realized[index]!.Arrange(new Rect(bounds.X, bounds.Y + _prefix[index], bounds.Width, height));
+        }
+        if (_anchorRetry && !_pendingRealize)
+        {
+            _anchorRetry = false;
+            _pendingRealize = true;
+            InvalidateMeasure();
         }
         if (_pendingTarget >= 0 && !_pendingRealize)
         {
@@ -262,11 +280,13 @@ internal sealed class MarkdownBlockHost : Control, IVisualTreeHost, ILogicalTree
 
         foreach (int index in _realizedIndices.ToArray())
         {
-            if (index < first || index > last)
+            // A block holding keyboard focus stays alive outside the window so focus is not lost.
+            if ((index < first || index > last) && !IsFocusedSubtree(_realized[index]!))
             {
                 Unrealize(index);
             }
         }
+        TrimCache(first, last);
 
         bool changed = false;
         for (int index = first; index <= last; index++)
@@ -283,12 +303,49 @@ internal sealed class MarkdownBlockHost : Control, IVisualTreeHost, ILogicalTree
         FrameworkElement? element = _realized[index];
         if (element == null)
         {
-            element = _create(_blocks[index]);
+            if (_cache.Remove(index, out var cached))
+            {
+                element = cached;
+            }
+            else
+            {
+                element = _create(_blocks[index]);
+            }
             _realized[index] = element;
             _realizedIndices.Add(index);
             AttachChild(element);
         }
         return element;
+    }
+
+    private bool IsFocusedSubtree(FrameworkElement element)
+    {
+        return FindVisualRoot() is Window window &&
+            window.FocusManager.FocusedElement is UIElement focused &&
+            VisualTree.IsInSubtreeOf(focused, element);
+    }
+
+    // Drops cached elements farthest from the realized window once the cache exceeds its cap.
+    private void TrimCache(int first, int last)
+    {
+        while (_cache.Count > CACHE_LIMIT)
+        {
+            int farthest = -1;
+            int farthestDistance = -1;
+            foreach (int index in _cache.Keys)
+            {
+                int distance = index < first ? first - index : index > last ? index - last : 0;
+                if (distance > farthestDistance)
+                {
+                    farthest = index;
+                    farthestDistance = distance;
+                }
+            }
+            if (_cache.Remove(farthest, out var element))
+            {
+                MarkdownPresenter.DisposeTree(element);
+            }
+        }
     }
 
     private bool MeasureBlock(int index, FrameworkElement element)
@@ -331,7 +388,8 @@ internal sealed class MarkdownBlockHost : Control, IVisualTreeHost, ILogicalTree
         // DisposeTree disposes children before the host itself, so the host only detaches while disposing.
         if (!_disposing)
         {
-            MarkdownPresenter.DisposeTree(element);
+            // Kept detached so scrolling back reuses the element and its text layouts.
+            _cache[index] = element;
         }
     }
 
@@ -430,6 +488,13 @@ internal sealed class MarkdownBlockHost : Control, IVisualTreeHost, ILogicalTree
         {
             Unrealize(_realizedIndices.Max);
         }
+        foreach (var element in _cache.Values)
+        {
+            MarkdownPresenter.DisposeTree(element);
+        }
+        _cache.Clear();
         base.OnDispose();
     }
+
+    internal int CachedCount => _cache.Count;
 }

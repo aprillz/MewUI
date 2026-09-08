@@ -63,6 +63,9 @@ internal sealed class MarkdownBlock
     public Block? Node { get; set; }
 }
 
+/// <summary>A selectable leaf block: its display text, the separator that precedes it when text is joined, the top-level block it lives in and whether it carries links.</summary>
+internal sealed record MarkdownTextUnit(MarkdownBlock Block, string Text, string Separator, int TopIndex, bool HasLinks);
+
 /// <summary>Parse output: the mapped block tree plus the anchor and source bookkeeping renderers need.</summary>
 internal sealed class ParsedMarkdown
 {
@@ -73,12 +76,19 @@ internal sealed class ParsedMarkdown
         Options = options;
         Anchors = anchors;
         Dictionary<string, int> anchorBlocks = new(StringComparer.OrdinalIgnoreCase);
+        List<MarkdownTextUnit> units = [];
+        Dictionary<MarkdownBlock, int> unitIndex = new(ReferenceEqualityComparer.Instance);
         for (int index = 0; index < blocks.Count; index++)
         {
             CollectAnchors(blocks[index], index, anchorBlocks);
+            CollectTextUnits(blocks[index], "\n\n", index, units, unitIndex);
         }
         AnchorBlocks = anchorBlocks;
+        TextUnits = units;
+        _unitIndex = unitIndex;
     }
+
+    private readonly Dictionary<MarkdownBlock, int> _unitIndex;
 
     public IReadOnlyList<MarkdownBlock> Blocks { get; }
     public string Source { get; }
@@ -86,6 +96,52 @@ internal sealed class ParsedMarkdown
     public HashSet<string> Anchors { get; }
     /// <summary>Maps each anchor to the index of the top-level block containing it.</summary>
     public IReadOnlyDictionary<string, int> AnchorBlocks { get; }
+    /// <summary>Selectable text blocks in document order; selection anchors and copied text address these.</summary>
+    public IReadOnlyList<MarkdownTextUnit> TextUnits { get; }
+
+    /// <summary>Returns the text unit index of a leaf block, or -1 for blocks without selectable text.</summary>
+    public int GetTextUnit(MarkdownBlock block) => _unitIndex.TryGetValue(block, out int index) ? index : -1;
+
+    // Walks the model in the same order the presenter renders it, so realized elements and copied
+    // text agree on unit numbering. The separator is what precedes the unit when text is joined.
+    private static void CollectTextUnits(MarkdownBlock block, string separator, int topIndex, List<MarkdownTextUnit> units, Dictionary<MarkdownBlock, int> unitIndex)
+    {
+        switch (block.Kind)
+        {
+            case MarkdownBlockKind.Paragraph:
+            case MarkdownBlockKind.Heading:
+            case MarkdownBlockKind.DefinitionTerm:
+            case MarkdownBlockKind.Code:
+                unitIndex[block] = units.Count;
+                bool hasLinks = block.Spans.Any(static span => VisualText(span).Length > 0 && (span.Image ? span.LinkUrl : span.Url) != null);
+                units.Add(new MarkdownTextUnit(block, string.Concat(block.Spans.Select(VisualText)), separator, topIndex, hasLinks));
+                break;
+            case MarkdownBlockKind.Table:
+                for (int rowIndex = 0; rowIndex < block.Children.Count; rowIndex++)
+                {
+                    MarkdownBlock row = block.Children[rowIndex];
+                    for (int cellIndex = 0; cellIndex < row.Children.Count; cellIndex++)
+                    {
+                        string cellSeparator = cellIndex > 0 ? "\t" : rowIndex > 0 ? "\n" : separator;
+                        foreach (MarkdownBlock child in row.Children[cellIndex].Children)
+                        {
+                            CollectTextUnits(child, cellSeparator, topIndex, units, unitIndex);
+                            cellSeparator = "\n";
+                        }
+                    }
+                }
+                break;
+            default:
+                foreach (MarkdownBlock child in block.Children)
+                {
+                    CollectTextUnits(child, separator, topIndex, units, unitIndex);
+                }
+                break;
+        }
+    }
+
+    // Mirrors MarkdownParagraph's visual text so offsets match the laid-out text.
+    private static string VisualText(MarkdownSpan span) => span.Image && span.Text.Length == 0 ? ((char)0xFFFC).ToString() : span.Text;
 
     private static void CollectAnchors(MarkdownBlock block, int topIndex, Dictionary<string, int> anchorBlocks)
     {

@@ -5,9 +5,14 @@ using Aprillz.MewUI.Text;
 
 namespace Aprillz.MewUI.Markdown;
 
-internal sealed class MarkdownParagraph : TextElement
+internal sealed class MarkdownParagraph : TextElement, ISelectableText
 {
+    // Unwrapped layouts (code blocks) measure at this width so the viewer can scroll them sideways.
+    private const double UNWRAPPED_WIDTH = 1_000_000;
+
     private readonly IReadOnlyList<MarkdownSpan> _spans;
+    private int _selectionStart;
+    private int _selectionEnd;
     private readonly Action<MarkdownSpan> _activate;
     private readonly MarkdownTheme _theme;
     private readonly IReadOnlyList<MarkdownInlineImage> _images;
@@ -68,10 +73,101 @@ internal sealed class MarkdownParagraph : TextElement
     internal TextAlignment Alignment { get; init; }
     internal double FontScale { get; init; } = 1;
     internal bool Heading { get; init; }
+    /// <summary>False lays the text out on one line per source line, for code blocks that scroll sideways.</summary>
+    internal bool Wrap { get; init; } = true;
+    /// <summary>True skips the inline code background; the block draws its own.</summary>
+    internal bool PlainCode { get; init; }
+
+    public int TextUnit { get; set; } = -1;
+    public int TextLength => Text.Length;
+    internal int LinkCount => _links.Count;
+    internal int FocusedLink => _focusedLink;
+
+    /// <summary>Moves keyboard focus to this paragraph with the given link current; used by the presenter's Tab traversal.</summary>
+    internal void FocusLink(int index)
+    {
+        if (_links.Count == 0)
+        {
+            return;
+        }
+        _focusedLink = Math.Clamp(index, 0, _links.Count - 1);
+        Focus();
+        InvalidateVisual();
+    }
+    internal bool IsFullySelected => Text.Length > 0 && _selectionStart == 0 && _selectionEnd == Text.Length;
+
+    public int OffsetAt(Point windowPoint)
+    {
+        var layout = GetLayout(Bounds.Width);
+        double localY = windowPoint.Y - Bounds.Y;
+        if (localY < 0 || layout.Lines.Count == 0)
+        {
+            return 0;
+        }
+        var lastLine = layout.Lines[^1];
+        if (localY >= lastLine.Bounds.Bottom)
+        {
+            return Text.Length;
+        }
+        var hit = layout.HitTestPoint(new Point(windowPoint.X - Bounds.X, localY));
+        return Math.Clamp(hit.InsertionIndex, 0, Text.Length);
+    }
+
+    public (int Start, int End) WordAt(int offset)
+    {
+        offset = Math.Clamp(offset, 0, Text.Length);
+        if (Text.Length == 0)
+        {
+            return (0, 0);
+        }
+        // Same rule as the core text editor: letters, digits and underscores form a word; any
+        // other character selects just itself.
+        int probe = Math.Min(offset, Text.Length - 1);
+        if (!IsWordCharacter(Text[probe]))
+        {
+            int elementEnd = probe + 1;
+            if (elementEnd < Text.Length && char.IsSurrogatePair(Text[probe], Text[elementEnd]))
+            {
+                elementEnd++;
+            }
+            return (probe, elementEnd);
+        }
+        int start = probe;
+        while (start > 0 && IsWordCharacter(Text[start - 1]))
+        {
+            start--;
+        }
+        int end = probe + 1;
+        while (end < Text.Length && IsWordCharacter(Text[end]))
+        {
+            end++;
+        }
+        return (start, end);
+    }
+
+    private static bool IsWordCharacter(char value) => char.IsLetterOrDigit(value) || value == '_';
+
+    public void SetSelection(int start, int end)
+    {
+        start = Math.Clamp(start, 0, Text.Length);
+        end = Math.Clamp(end, 0, Text.Length);
+        if (end <= start)
+        {
+            start = 0;
+            end = 0;
+        }
+        if (start == _selectionStart && end == _selectionEnd)
+        {
+            return;
+        }
+        _selectionStart = start;
+        _selectionEnd = end;
+        InvalidateVisual();
+    }
 
     internal ITextLayout GetLayout(double width)
     {
-        width = double.IsFinite(width) ? Math.Max(1, width) : 1_000_000;
+        width = Wrap && double.IsFinite(width) ? Math.Max(1, width) : UNWRAPPED_WIDTH;
         var style = new TextRunStyle(FontFamily, FontSize * FontScale, Heading ? FontWeight.Bold : FontWeight,
             FontStyle == FontStyle.Italic);
         uint dpi = GetDpi();
@@ -129,7 +225,7 @@ internal sealed class MarkdownParagraph : TextElement
         _layout = engine.GetOrCreateLayout(new TextLayoutRequest
         {
             Text = Text.AsMemory(), DefaultStyle = style, Dpi = dpi, Runs = runs, Inlines = inlines,
-            Paragraph = new TextParagraphStyle { MaxWidth = width, Wrapping = TextWrapping.Wrap, Alignment = Alignment }
+            Paragraph = new TextParagraphStyle { MaxWidth = width, Wrapping = Wrap ? TextWrapping.Wrap : TextWrapping.NoWrap, Alignment = Alignment }
         }, TextLayoutCachePolicy.Owner, this);
         return _layout;
     }
@@ -156,7 +252,7 @@ internal sealed class MarkdownParagraph : TextElement
 
     protected override void ArrangeContent(Rect bounds)
     {
-        if (double.IsFinite(bounds.Width) && Math.Abs(bounds.Width - _width) > 0.01)
+        if (Wrap && double.IsFinite(bounds.Width) && Math.Abs(bounds.Width - _width) > 0.01)
         {
             GetLayout(bounds.Width);
             InvalidateMeasure();
@@ -178,12 +274,22 @@ internal sealed class MarkdownParagraph : TextElement
                 link ? TextDecoration.Underline : TextDecoration.None));
             offset += length;
         }
+        if (_selectionEnd > _selectionStart)
+        {
+            // Background only: the selection paints behind the glyphs like the core text boxes,
+            // and a null foreground leaves link colors to their own spans.
+            paints.Add(new TextPaintSpan(new TextRange(_selectionStart, _selectionEnd - _selectionStart),
+                null, Theme.Palette.SelectionBackground));
+        }
         var options = new TextDrawOptions(Foreground, paints.ToArray(), Owner: this);
         context.Save();
         try
         {
             context.SetClip(Bounds);
-            DrawInlineCodeBackgrounds(context, layout);
+            if (!PlainCode)
+            {
+                DrawInlineCodeBackgrounds(context, layout);
+            }
             context.Text.Draw(layout, new Point(Bounds.X, Bounds.Y), in options);
             if (IsFocused && _links.Count > 0)
             {

@@ -22,7 +22,7 @@ public sealed class MarkdownExtensibilityTests
         presenter.Measure(new Size(240, 100));
 
         // Markdig derives MathBlock from FencedCodeBlock, so the source shows in the code presentation.
-        Assert.IsTrue(Descendants(presenter.DocumentRoot!).OfType<TextBlock>().Any(text => text.Text.Contains("x^2")));
+        Assert.IsTrue(Descendants(presenter.DocumentRoot!).OfType<MarkdownParagraph>().Any(text => text.PlainCode && text.Text.Contains("x^2")));
     }
 
     [TestMethod]
