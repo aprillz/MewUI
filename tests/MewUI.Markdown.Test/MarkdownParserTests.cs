@@ -61,6 +61,19 @@ public sealed class MarkdownParserTests
     }
 
     [TestMethod]
+    public void HtmlBlocksRemainLiteralParagraphs()
+    {
+        const string source = "<script>alert('not executed')</script>\n\n<iframe src=\"https://example.test\"></iframe>";
+        var blocks = MarkdownParser.Parse(source, new MarkdownOptions());
+
+        Assert.IsNotEmpty(blocks);
+        Assert.IsTrue(blocks.All(block => block.Kind.ToString() == "Paragraph"));
+        string renderedText = string.Concat(blocks.Select(Text));
+        StringAssert.Contains(renderedText, "<script>");
+        StringAssert.Contains(renderedText, "<iframe");
+    }
+
+    [TestMethod]
     public void OrderedListRetainsStartAndNestedItems()
     {
         var blocks = MarkdownParser.Parse("3. third\n4. fourth\n   - nested", new MarkdownOptions());
@@ -450,8 +463,8 @@ public sealed class MarkdownPresenterTests
         foreach (var checkBox in checkBoxes)
         {
             var paragraph = Descendants(checkBox.Parent!).OfType<MarkdownParagraph>().Single();
-            double lineHeight = paragraph.GetFirstLineHeight(paragraph.Bounds.Width);
-            double expectedY = paragraph.Bounds.Y + Math.Max(0, (lineHeight - checkBox.Bounds.Height) / 2);
+            double visualCenter = paragraph.GetFirstLineVisualCenter(paragraph.Bounds.Width);
+            double expectedY = paragraph.Bounds.Y + Math.Max(0, visualCenter - checkBox.Bounds.Height * 0.5);
             Assert.AreEqual(expectedY, checkBox.Bounds.Y, 0.01);
         }
 
@@ -475,12 +488,57 @@ public sealed class MarkdownPresenterTests
             Descendants(grid).OfType<TextBlock>().Count(text => text.Text is "1." or "2.") == 2);
         var markers = Descendants(list).OfType<TextBlock>().Where(text => text.Text is "1." or "2.").ToArray();
 
-        Assert.AreEqual(new Thickness(40, 0, 0, 0), list.Margin);
+        Assert.AreEqual(Thickness.Zero, list.Margin);
+        Assert.AreEqual(32d, list.ColumnDefinitions[0].Width.Value);
+        Assert.IsTrue(list.ColumnDefinitions[0].Width.IsAbsolute);
         Assert.HasCount(2, markers);
         Assert.IsTrue(markers.All(marker => marker.HorizontalAlignment == HorizontalAlignment.Right));
         Assert.IsTrue(markers.All(marker => marker.VerticalAlignment == VerticalAlignment.Top));
         Assert.AreEqual(0, Grid.GetRow(markers[0]));
         Assert.AreEqual(1, Grid.GetRow(markers[1]));
+    }
+
+    [TestMethod]
+    public void NestedListsUseOneFixedHangingIndentPerLevel()
+    {
+        EnsureGdi();
+        using var presenter = new MarkdownPresenter
+        {
+            Markdown = "- parent\n  - child\n    - grandchild"
+        };
+        presenter.Measure(new Size(480, 240));
+        presenter.Arrange(new Rect(0, 0, 480, presenter.DesiredSize.Height));
+
+        var lists = Descendants(presenter.DocumentRoot!).OfType<Grid>()
+            .Where(grid => grid.ColumnDefinitions.Count == 2 &&
+                grid.ColumnDefinitions[0].Width.IsAbsolute &&
+                grid.ColumnDefinitions[0].Width.Value == 32)
+            .ToArray();
+
+        Assert.HasCount(3, lists);
+        Assert.IsTrue(lists.All(list => list.Margin == Thickness.Zero));
+
+        var paragraphs = Descendants(presenter.DocumentRoot!).OfType<MarkdownParagraph>()
+            .ToDictionary(paragraph => paragraph.Text);
+        Assert.AreEqual(32d, paragraphs["child"].Bounds.X - paragraphs["parent"].Bounds.X, 0.01);
+        Assert.AreEqual(32d, paragraphs["grandchild"].Bounds.X - paragraphs["child"].Bounds.X, 0.01);
+    }
+
+    [TestMethod]
+    public void ListIndentComesFromMarkdownTheme()
+    {
+        EnsureGdi();
+        using var presenter = new MarkdownPresenter
+        {
+            Markdown = "- parent\n  - child",
+            MarkdownTheme = new MarkdownTheme { ListIndent = 24 }
+        };
+        presenter.Measure(new Size(320, 160));
+        presenter.Arrange(new Rect(0, 0, 320, presenter.DesiredSize.Height));
+
+        var paragraphs = Descendants(presenter.DocumentRoot!).OfType<MarkdownParagraph>()
+            .ToDictionary(paragraph => paragraph.Text);
+        Assert.AreEqual(24d, paragraphs["child"].Bounds.X - paragraphs["parent"].Bounds.X, 0.01);
     }
 
     [TestMethod]

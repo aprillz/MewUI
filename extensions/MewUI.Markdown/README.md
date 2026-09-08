@@ -8,6 +8,8 @@ The sample demonstrates tables, Unicode text, mixed and extra emphasis, read-onl
 
 Default fenced code blocks display the normalized language and include an overlaid Copy button. While the application is running it uses the platform clipboard service; clipboard access is otherwise best-effort.
 
+Raw HTML is never executed. Inline HTML and HTML blocks are displayed as literal text, including script, iframe, and style elements.
+
 Image loading is disabled by default and requires an application-provided resolver. Resolver work is asynchronous and requires a running UI dispatcher or synchronization context. The host resolver must enforce URI, byte, and pixel limits and may provide caching; the package does not cache images. A resolver returns a lease, for example:
 
 ```csharp

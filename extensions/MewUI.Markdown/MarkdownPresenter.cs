@@ -6,6 +6,8 @@ namespace Aprillz.MewUI.Markdown;
 /// <summary>Displays Markdown without owning a scroll viewport; properties must be changed on the UI thread.</summary>
 public class MarkdownPresenter : Control, ISubtreeInvalidationHost, ILogicalTreeHost
 {
+    private const double LIST_MARKER_SPACING = 8;
+
     /// <summary>Identifies the document source property.</summary>
     public static readonly MewProperty<string> MarkdownProperty = MewProperty<string>.Register<MarkdownPresenter>(
         nameof(Markdown), string.Empty, MewPropertyOptions.AffectsLayout, static (self, _, _) => self.InvalidateDocument(true));
@@ -354,18 +356,18 @@ public class MarkdownPresenter : Control, ISubtreeInvalidationHost, ILogicalTree
             double contentWidth = Math.Max(0, bounds.Width - BOX_SIZE - SPACING);
             _content.Arrange(new Rect(contentX, bounds.Y, contentWidth, bounds.Height));
 
-            double firstLineHeight = _content is MarkdownParagraph paragraph
-                ? paragraph.GetFirstLineHeight(contentWidth)
-                : Math.Min(bounds.Height, _content.DesiredSize.Height);
-            double taskY = bounds.Y + Math.Max(0, (firstLineHeight - BOX_SIZE) / 2);
+            double firstLineCenter = _content is MarkdownParagraph paragraph
+                ? paragraph.GetFirstLineVisualCenter(contentWidth)
+                : Math.Min(bounds.Height, _content.DesiredSize.Height) * 0.5;
+            double taskY = bounds.Y + Math.Max(0, firstLineCenter - BOX_SIZE * 0.5);
             _task.Arrange(new Rect(bounds.X, taskY, BOX_SIZE, BOX_SIZE));
         }
     }
 
     private FrameworkElement RenderList(MarkdownBlock block)
     {
-        var grid = new Grid { Margin = new Thickness(40, 0, 0, 0) };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = Math.Max(0, MarkdownTheme.ListIndent) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Star });
         for (int rowIndex = 0; rowIndex < block.Children.Count; rowIndex++)
         {
@@ -375,7 +377,7 @@ public class MarkdownPresenter : Control, ISubtreeInvalidationHost, ILogicalTree
             var marker = new TextBlock
             {
                 Text = taskItem ? string.Empty : string.IsNullOrWhiteSpace(item.Marker) ? "•" : item.Marker,
-                Margin = new Thickness(0, 0, 8, 0),
+                Margin = new Thickness(0, 0, LIST_MARKER_SPACING, 0),
                 HorizontalAlignment = HorizontalAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Top,
                 VerticalTextAlignment = TextAlignment.Top
