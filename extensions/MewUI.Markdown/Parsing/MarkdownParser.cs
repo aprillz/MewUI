@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Text;
 using Aprillz.MewUI;
 using Markdig;
+using Markdig.Extensions.DefinitionLists;
 using Markdig.Extensions.EmphasisExtras;
 using Markdig.Extensions.TaskLists;
 using Markdig.Extensions.Tables;
@@ -22,6 +23,9 @@ internal enum MarkdownBlockKind
     Table,
     TableRow,
     TableCell,
+    DefinitionList,
+    DefinitionItem,
+    DefinitionTerm,
     Group
 }
 
@@ -97,6 +101,11 @@ internal static class MarkdownParser
         if (options.UseAutoLinks)
         {
             builder.UseAutoLinks();
+        }
+
+        if (options.UseDefinitionLists)
+        {
+            builder.UseDefinitionLists();
         }
 
         EmphasisExtraOptions emphasisOptions = 0;
@@ -210,6 +219,24 @@ internal static class MarkdownParser
                 {
                     Kind = MarkdownBlockKind.Paragraph,
                     Spans = [RawSpan(html, source)]
+                };
+            case DefinitionList definitionList:
+                return new MarkdownBlock
+                {
+                    Kind = MarkdownBlockKind.DefinitionList,
+                    Children = MapChildren(definitionList, source, options, anchors)
+                };
+            case DefinitionItem definitionItem:
+                return new MarkdownBlock
+                {
+                    Kind = MarkdownBlockKind.DefinitionItem,
+                    Children = MapChildren(definitionItem, source, options, anchors)
+                };
+            case DefinitionTerm definitionTerm:
+                return new MarkdownBlock
+                {
+                    Kind = MarkdownBlockKind.DefinitionTerm,
+                    Spans = Flatten(definitionTerm.Inline, options)
                 };
             case LeafBlock leaf when leaf.Inline is not null:
                 return new MarkdownBlock

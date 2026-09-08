@@ -107,15 +107,35 @@ public sealed class MarkdownParserTests
             UseStrikethrough = false,
             UseInserted = false,
             UseMarked = false,
+            UseDefinitionLists = false,
             SoftBreakAsNewLine = true
         };
-        var blocks = MarkdownParser.Parse("www.example.test\n~~no~~ ++inserted++ ==marked==\n- [x] task\n| a | b |\n| - | - |", options);
+        var blocks = MarkdownParser.Parse("www.example.test\n~~no~~ ++inserted++ ==marked==\n- [x] task\n| a | b |\n| - | - |\n\nTerm\n: Definition", options);
 
         Assert.IsFalse(blocks.Any(block => block.Kind.ToString() == "Table"));
         Assert.IsFalse(blocks.SelectMany(block => block.Spans).Any(span => span.Strike));
         Assert.IsFalse(blocks.SelectMany(DescendantSpans).Any(span => span.Inserted || span.Marked));
+        Assert.IsFalse(blocks.Any(block => block.Kind.ToString() == "DefinitionList"));
         Assert.IsTrue(string.Concat(blocks.SelectMany(DescendantSpans).Select(span => span.Text)).Contains("[x]", StringComparison.Ordinal));
         StringAssert.Contains(Text(blocks[0]), "\n");
+    }
+
+    [TestMethod]
+    public void DefinitionListsPreserveTermsAndDefinitionBlocks()
+    {
+        var list = MarkdownParser.Parse(
+            "First term\nSecond *term*\n:   First definition.\n\n    Continuation paragraph.\n\n:   Second definition with **style**.",
+            new MarkdownOptions()).Single();
+
+        Assert.AreEqual("DefinitionList", list.Kind.ToString());
+        Assert.HasCount(2, list.Children);
+        Assert.IsTrue(list.Children.All(item => item.Kind.ToString() == "DefinitionItem"));
+        Assert.HasCount(2, list.Children.SelectMany(item => item.Children)
+            .Where(child => child.Kind.ToString() == "DefinitionTerm"));
+        Assert.IsTrue(list.Children.SelectMany(DescendantSpans).Any(span => span.Text == "term" && span.Italic));
+        Assert.IsTrue(list.Children.SelectMany(DescendantSpans).Any(span => span.Text == "style" && span.Bold));
+        StringAssert.Contains(string.Concat(list.Children.SelectMany(DescendantSpans).Select(span => span.Text)),
+            "Continuation paragraph.");
     }
 
     [TestMethod]
@@ -726,6 +746,24 @@ public sealed class MarkdownPresenterTests
         var paragraphs = Descendants(presenter.DocumentRoot!).OfType<MarkdownParagraph>()
             .ToDictionary(paragraph => paragraph.Text);
         Assert.AreEqual(24d, paragraphs["child"].Bounds.X - paragraphs["parent"].Bounds.X, 0.01);
+    }
+
+    [TestMethod]
+    public void DefinitionTermsAreBoldAndBodiesUseThemeIndent()
+    {
+        EnsureGdi();
+        using var presenter = new MarkdownPresenter
+        {
+            Markdown = "Term\n:   Definition",
+            MarkdownTheme = new MarkdownTheme { ListIndent = 24 }
+        };
+        presenter.Measure(new Size(320, 160));
+        presenter.Arrange(new Rect(0, 0, 320, presenter.DesiredSize.Height));
+
+        var paragraphs = Descendants(presenter.DocumentRoot!).OfType<MarkdownParagraph>()
+            .ToDictionary(paragraph => paragraph.Text);
+        Assert.AreEqual(FontWeight.Bold, paragraphs["Term"].FontWeight);
+        Assert.AreEqual(24d, paragraphs["Definition"].Bounds.X - paragraphs["Term"].Bounds.X, 0.01);
     }
 
     [TestMethod]

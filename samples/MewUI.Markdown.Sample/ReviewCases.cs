@@ -307,7 +307,30 @@ internal static class ReviewCases
 
                 [한글 🌍 é العربية mixed link](https://example.test/unicode)
                 """),
-            new("12 Unsupported", "Deliberately unsupported: HTML stays literal; math, footnotes, Mermaid, definition lists and other extensions are not enabled.", """"
+            new("12 Definition lists", "Multiple terms and definitions, rich inline content, paragraphs, lists and code inside definitions.", """"
+                Apple
+                :   A fruit with **bold**, *italic*, and `code` content.
+
+                First term
+                Second term
+                :   One definition shared by two terms.
+
+                Term with multiple definitions
+                :   First definition.
+
+                :   Second definition with a [link](https://example.test/definition).
+
+                Structured definition
+                :   First paragraph in the definition.
+
+                  Second paragraph in the same definition.
+
+                  - Nested list item
+                  - Another nested item
+
+                      indented_code_inside_definition();
+                """"),
+            new("13 Unsupported", "Deliberately unsupported: HTML stays literal; math, footnotes, Mermaid and other extensions are not enabled.", """"
                 Inline <b>HTML bold</b> and <em>HTML italic</em> must not execute as HTML.
 
                 <div class="sample">
@@ -320,9 +343,6 @@ internal static class ReviewCases
                 Footnote reference[^note].
 
                 [^note]: Footnote definition: not enabled.
-
-                Term
-                : Definition list: not enabled.
 
                 Math: $x^2 + y^2 = z^2$.
 
@@ -339,7 +359,7 @@ internal static class ReviewCases
 
                 ~subscript~ / ^superscript^ are not enabled.
                 """"),
-            new("13 Mixed document", "README-style combination: inspect vertical rhythm, nesting, clipping and scrolling as a whole.", """"
+            new("14 Mixed document", "README-style combination: inspect vertical rhythm, nesting, clipping and scrolling as a whole.", """"
                 # Example project
 
                 A **small native UI** with *styled text*, [documentation](https://example.test/docs) and `code`.
@@ -379,7 +399,7 @@ internal static class ReviewCases
 
                 Parser: Markdig, BSD-2-Clause. [More information](https://github.com/xoofx/markdig).
                 """"),
-            new("14 Malformed / edge", "Unmatched delimiters, unresolved references, empty constructs and an unclosed fence. Content must not vanish or crash.", """"
+            new("15 Malformed / edge", "Unmatched delimiters, unresolved references, empty constructs and an unclosed fence. Content must not vanish or crash.", """"
                 #
 
                 **unclosed bold
@@ -402,12 +422,12 @@ internal static class ReviewCases
                 This fence is intentionally never closed.
                 The last line must remain visible: END-OF-FIXTURE
                 """"),
-            new("15 Long document", "200 repeated sections for scroll/resize review. Not a virtualization or performance pass.",
+            new("16 Long document", "200 repeated sections for scroll/resize review. Not a virtualization or performance pass.",
                 "# Long document\n\n" + string.Join("\n\n", Enumerable.Range(1, 200).Select(index =>
                     $"## Section {index}\n\nParagraph {index}: **bold**, *italic*, `code`, 한글 🌍 and [link {index}](https://example.test/{index}). Resize and scroll to check layout stability.")))
         ];
         string overview = "# Markdown case catalogue\n\nCommonMark core + enabled GFM + unsupported syntax. Select a category for focused inspection.\n\n" +
-            string.Join("\n\n", cases.Take(13).Select(entry => "# " + entry.Name + "\n\n" + entry.Markdown));
+            string.Join("\n\n", cases.Take(14).Select(entry => "# " + entry.Name + "\n\n" + entry.Markdown));
         return new[] { new ReviewCase("00 All cases", "Visual catalogue, not a claim of full Markdown conformance. Edge and long-document fixtures have separate categories.", overview) }.Concat(cases).ToArray();
     }
 }
