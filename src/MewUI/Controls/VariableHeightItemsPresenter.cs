@@ -402,67 +402,103 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
 
         double onePx = dpiScale > 0 ? 1.0 / dpiScale : 1.0;
 
-        // Visible range (with small overscan).
-        int first = Math.Max(0, FindIndexByY(Math.Max(0, alignedOffsetY - EstimatedItemHeight * 2)));
-        int lastExclusive = Math.Min(count, FindIndexByY(alignedOffsetY + contentBounds.Height + EstimatedItemHeight * 2) + 1);
+        bool anyHeightChanged = LayoutContainers(alignedOffsetY);
 
-        // Recycle out-of-range (no allocations on hot path).
-        _recycleScratch.Clear();
-        foreach (var key in _realized.Keys)
+        // Realizes the range around the offset, measures it and positions the containers. Called
+        // again with a corrected offset so the containers already sit where the owner will scroll
+        // to; waiting for the next pass leaves them at the old offset until further input arrives.
+        bool LayoutContainers(double offsetY)
         {
-            if (key < first || key >= lastExclusive)
+            bool anyChanged = false;
+            for (int round = 0; round < 2; round++)
             {
-                if (!IsFocusedSubtree(key))
+                bool changed = LayoutContainersOnce(offsetY);
+                anyChanged |= changed;
+                if (!changed)
                 {
-                    _recycleScratch.Add(key);
+                    break;
                 }
-                else
+                // Measured heights replaced estimates inside the range, so the range end moved.
+                InvalidatePrefix();
+            }
+            return anyChanged;
+        }
+
+        bool LayoutContainersOnce(double offsetY)
+        {
+            EnsurePrefix();
+            _arrangedItems.Clear();
+
+            // Visible range (with small overscan).
+            int first = Math.Max(0, FindIndexByY(Math.Max(0, offsetY - EstimatedItemHeight * 2)));
+            int lastExclusive = Math.Min(count, FindIndexByY(offsetY + contentBounds.Height + EstimatedItemHeight * 2) + 1);
+
+            // Recycle out-of-range (no allocations on hot path).
+            _recycleScratch.Clear();
+            foreach (var key in _realized.Keys)
+            {
+                if (key < first || key >= lastExclusive)
                 {
-                    // Don't rebind focus-pinned items immediately - it can reset
-                    // user-interaction state (e.g. ToggleSwitch.IsChecked).
-                    // Defer rebind + style snap until the item re-enters the visible range.
-                    (_pendingRebind ??= new()).Add(key);
+                    if (!IsFocusedSubtree(key))
+                    {
+                        _recycleScratch.Add(key);
+                    }
+                    else
+                    {
+                        // Don't rebind focus-pinned items immediately - it can reset
+                        // user-interaction state (e.g. ToggleSwitch.IsChecked).
+                        // Defer rebind + style snap until the item re-enters the visible range.
+                        (_pendingRebind ??= new()).Add(key);
+                    }
                 }
             }
-        }
-        for (int i = 0; i < _recycleScratch.Count; i++)
-        {
-            Recycle(_recycleScratch[i]);
-        }
-
-        bool anyHeightChanged = false;
-
-        // Layout realized containers at absolute positions (window coordinates).
-        double width = UseHorizontalExtentForLayout
-            ? Math.Max(contentBounds.Width, Extent.Width)
-            : contentBounds.Width;
-        double x = contentBounds.X - alignedOffsetX;
-
-        double yContent = _prefix![first];
-        double y = contentBounds.Y + (yContent - alignedOffsetY) + GetAnchorShift();
-
-        for (int i = first; i < lastExclusive; i++)
-        {
-            var element = GetOrCreate(i, ItemBindingGeneration);
-            anyHeightChanged |= MeasureAndCacheItemHeight(i, width, dpiScale);
-            double alignedH = _heights[i];
-
-            var itemRect = new Rect(x, y, width, alignedH);
-            var containerRect = GetContainerRect != null ? GetContainerRect(i, itemRect) : itemRect;
-            var padding = ItemPadding;
-            if (padding != default)
+            for (int i = 0; i < _recycleScratch.Count; i++)
             {
-                containerRect = containerRect.Deflate(padding);
+                Recycle(_recycleScratch[i]);
             }
-            containerRect = LayoutRounding.RoundRectToPixels(containerRect, dpiScale);
 
-            element.Arrange(containerRect);
-            _arrangedItems.Add((i, itemRect));
+            bool heightChanged = false;
 
-            y += alignedH;
+            // Layout realized containers at absolute positions (window coordinates).
+            double width = UseHorizontalExtentForLayout
+                ? Math.Max(contentBounds.Width, Extent.Width)
+                : contentBounds.Width;
+            double x = contentBounds.X - alignedOffsetX;
+
+            double yContent = _prefix![first];
+            double y = contentBounds.Y + (yContent - offsetY) + GetAnchorShift();
+
+            double overscanBottom = contentBounds.Bottom + EstimatedItemHeight * 2;
+            for (int i = first; i < count; i++)
+            {
+                // The estimated range end is a floor: keep realizing while measured items still
+                // fall short of the viewport, so one pass always covers it.
+                if (i >= lastExclusive && y >= overscanBottom)
+                {
+                    break;
+                }
+                var element = GetOrCreate(i, ItemBindingGeneration);
+                heightChanged |= MeasureAndCacheItemHeight(i, width, dpiScale);
+                double alignedH = _heights[i];
+
+                var itemRect = new Rect(x, y, width, alignedH);
+                var containerRect = GetContainerRect != null ? GetContainerRect(i, itemRect) : itemRect;
+                var padding = ItemPadding;
+                if (padding != default)
+                {
+                    containerRect = containerRect.Deflate(padding);
+                }
+                containerRect = LayoutRounding.RoundRectToPixels(containerRect, dpiScale);
+
+                element.Arrange(containerRect);
+                _arrangedItems.Add((i, itemRect));
+
+                y += alignedH;
+            }
+
+            FlushRecycledByIndexToPool();
+            return heightChanged;
         }
-
-        FlushRecycledByIndexToPool();
 
         if (anyHeightChanged)
         {
@@ -493,6 +529,7 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
                 {
                     RequestOffsetCorrection(new Point(_offset.X, desiredOffsetY));
                     InvalidateMeasure();
+                    LayoutContainers(desiredOffsetY);
                 }
                 else
                 {
@@ -512,19 +549,29 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
             }
             else
             {
-                EnsurePrefix();
-                if (anchorIndex >= 0 && anchorIndex < count)
+                // Re-laying out at the corrected offset realizes new items whose measurements can
+                // move the anchor again, so the correction is re-evaluated once more.
+                for (int attempt = 0; attempt < 2 && anchorIndex >= 0 && anchorIndex < count; attempt++)
                 {
+                    EnsurePrefix();
                     double newAnchorTop = _prefix![anchorIndex];
                     double desiredOffsetY = newAnchorTop + anchorWithin;
                     desiredOffsetY = Math.Clamp(desiredOffsetY, 0, Math.Max(0, Extent.Height - _viewport.Height));
 
                     // Only request correction when the difference is at least one device pixel.
-                    if (!_isRequestingOffsetCorrection && Math.Abs(desiredOffsetY - alignedOffsetY) >= onePx * 0.99)
+                    if (_isRequestingOffsetCorrection || Math.Abs(desiredOffsetY - alignedOffsetY) < onePx * 0.99)
                     {
-                        RequestOffsetCorrection(new Point(_offset.X, desiredOffsetY));
-                        InvalidateMeasure();
+                        break;
                     }
+                    RequestOffsetCorrection(new Point(_offset.X, desiredOffsetY));
+                    InvalidateMeasure();
+                    alignedOffsetY = desiredOffsetY;
+                    if (!LayoutContainers(desiredOffsetY))
+                    {
+                        break;
+                    }
+                    InvalidatePrefix();
+                    RecomputeExtent();
                 }
             }
         }
