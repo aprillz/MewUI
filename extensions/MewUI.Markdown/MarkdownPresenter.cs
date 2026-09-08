@@ -412,13 +412,15 @@ public class MarkdownPresenter : Control, ISubtreeInvalidationHost, ILogicalTree
 
     private void ActivateLink(MarkdownSpan span)
     {
-        string url = span.Url ?? string.Empty;
+        string url = (span.Image ? span.LinkUrl : span.Url) ?? string.Empty;
+        string? title = span.Image ? span.LinkTitle : span.Title;
         if (url.StartsWith('#') && _root is ScrollViewer scroll &&
             _anchors.TryGetValue(Uri.UnescapeDataString(url[1..]), out var target))
         {
             scroll.SetScrollOffsets(0, scroll.VerticalOffset + target.Bounds.Y - scroll.Bounds.Y);
         }
-        LinkRequested?.Invoke(new MarkdownLinkRequestedEventArgs(url, ResolveUri(url, BaseUri), span.Title, span.SourceStart, span.SourceLength));
+        LinkRequested?.Invoke(new MarkdownLinkRequestedEventArgs(
+            url, ResolveUri(url, BaseUri), title, span.SourceStart, span.SourceLength));
     }
 
     protected override Size MeasureContent(Size availableSize)

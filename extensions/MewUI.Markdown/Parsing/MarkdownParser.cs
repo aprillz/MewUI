@@ -38,7 +38,9 @@ internal sealed record MarkdownSpan(
     int SourceStart = -1,
     int SourceLength = 0,
     bool Image = false,
-    bool? TaskChecked = null);
+    bool? TaskChecked = null,
+    string? LinkUrl = null,
+    string? LinkTitle = null);
 
 internal sealed class MarkdownBlock
 {
@@ -384,14 +386,26 @@ internal static class MarkdownParser
                         for (int spanIndex = linkStart; spanIndex < spans.Count; spanIndex++)
                         {
                             MarkdownSpan span = spans[spanIndex];
-                            spans[spanIndex] = span with
+                            if (span.Image)
                             {
-                                Url = linkUrl,
-                                Title = linkTitle,
-                                SourceStart = GetStart(link),
-                                SourceLength = GetLength(link),
-                                Image = link.IsImage
-                            };
+                                spans[spanIndex] = span with
+                                {
+                                    LinkUrl = linkUrl,
+                                    LinkTitle = linkTitle,
+                                    SourceStart = GetStart(link),
+                                    SourceLength = GetLength(link)
+                                };
+                            }
+                            else
+                            {
+                                spans[spanIndex] = span with
+                                {
+                                    Url = linkUrl,
+                                    Title = linkTitle,
+                                    SourceStart = GetStart(link),
+                                    SourceLength = GetLength(link)
+                                };
+                            }
                         }
                     }
                     break;

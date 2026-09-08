@@ -40,10 +40,12 @@ internal sealed class MarkdownParagraph : TextElement
         foreach (var span in spans)
         {
             int length = GetVisualText(span).Length;
-            if (span.Url != null && !span.Image && length > 0)
+            string? linkUrl = GetLinkUrl(span);
+            if (linkUrl != null && length > 0)
             {
                 if (_links.Count > 0 && _links[^1].Start + _links[^1].Length == offset &&
-                    _links[^1].Span.Url == span.Url && _links[^1].Span.SourceStart == span.SourceStart)
+                    GetLinkUrl(_links[^1].Span) == linkUrl &&
+                    _links[^1].Span.SourceStart == span.SourceStart)
                 {
                     var previous = _links[^1];
                     _links[^1] = (previous.Start, previous.Length + length, previous.Span);
@@ -178,10 +180,14 @@ internal sealed class MarkdownParagraph : TextElement
                 var link = _links[_focusedLink];
                 _rangeBounds.Clear();
                 layout.GetRangeBounds(link.Start, link.Length, _rangeBounds);
+                double focusThickness = LayoutRounding.SnapThicknessToPixels(1, context.DpiScale, 1);
                 foreach (var rectangle in _rangeBounds)
                 {
-                    context.DrawRectangle(new Rect(Bounds.X + rectangle.X, Bounds.Y + rectangle.Y,
-                        rectangle.Width, rectangle.Height), Theme.Palette.Focus, 1);
+                    var focusBounds = LayoutRounding.SnapBoundsRectToPixels(
+                        new Rect(Bounds.X + rectangle.X, Bounds.Y + rectangle.Y,
+                            rectangle.Width, rectangle.Height),
+                        context.DpiScale);
+                    context.DrawRectangle(focusBounds, Theme.Palette.Focus, focusThickness, strokeInset: true);
                 }
             }
         }
@@ -261,6 +267,8 @@ internal sealed class MarkdownParagraph : TextElement
     private static string GetVisualText(MarkdownSpan span) => span.Image && span.Text.Length == 0
         ? "\uFFFC"
         : span.Text;
+
+    private static string? GetLinkUrl(MarkdownSpan span) => span.Image ? span.LinkUrl : span.Url;
 
     private void InvalidateImage()
     {
