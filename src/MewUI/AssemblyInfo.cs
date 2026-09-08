@@ -13,6 +13,7 @@ using System.Runtime.CompilerServices;
 [assembly: InternalsVisibleTo("Aprillz.MewUI.Backend.MewVG.Browser")]
 [assembly: InternalsVisibleTo("Aprillz.MewUI.Test")]
 [assembly: InternalsVisibleTo("Aprillz.MewUI.Svg.Test")]
+[assembly: InternalsVisibleTo("Aprillz.MewUI.Markdown.Test")]
 [assembly: InternalsVisibleTo("Aprillz.MewUI.WindowAutomationTest")]
 [assembly: InternalsVisibleTo("Aprillz.MewUI.Preview")]
 [assembly: InternalsVisibleTo("Aprillz.MewUI.Benchmarks")]
