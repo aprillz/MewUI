@@ -1,5 +1,6 @@
 using Aprillz.MewUI.Controls;
 using Aprillz.MewUI.Rendering;
+using Aprillz.MewUI.Text;
 
 namespace Aprillz.MewUI.Markdown;
 
@@ -26,13 +27,25 @@ public class MarkdownPresenter : Control, ISubtreeInvalidationHost, ILogicalTree
     /// <summary>Identifies the optional code block presentation factory.</summary>
     public static readonly MewProperty<Func<string, string?, FrameworkElement?>?> CodeBlockFactoryProperty = MewProperty<Func<string, string?, FrameworkElement?>?>.Register<MarkdownPresenter>(
         nameof(CodeBlockFactory), null, MewPropertyOptions.AffectsLayout, static (self, _, _) => self.InvalidateDocument(false));
+    /// <summary>Identifies the custom renderer registry property.</summary>
+    public static readonly MewProperty<MarkdownRenderers?> RenderersProperty = MewProperty<MarkdownRenderers?>.Register<MarkdownPresenter>(
+        nameof(Renderers), null, MewPropertyOptions.AffectsLayout, static (self, _, _) => self.InvalidateDocument(false));
+    /// <summary>Identifies the background parse delay property.</summary>
+    public static readonly MewProperty<TimeSpan> ParseDelayProperty = MewProperty<TimeSpan>.Register<MarkdownPresenter>(
+        nameof(ParseDelay), TimeSpan.Zero);
 
     private readonly bool _scrollable;
-    private Element? _root;
-    private IReadOnlyList<MarkdownBlock>? _document;
+    private ScrollViewer? _scroll;
+    private FrameworkElement? _blocks;
+    private MarkdownBlockHost? _host;
+    private ParsedMarkdown? _document;
+    private MarkdownRenderContext? _context;
     private readonly Dictionary<string, FrameworkElement> _anchors = new(StringComparer.OrdinalIgnoreCase);
+    private (int Index, double Within)? _carriedAnchor;
+    private CancellationTokenSource? _parseCancellation;
+    private int _parseRevision;
+    private bool _parsePending;
     private bool _disposed;
-    private double _savedOffset;
 
     /// <summary>Creates a presenter with no internal scroll viewer.</summary>
     public MarkdownPresenter() { }
@@ -51,34 +64,135 @@ public class MarkdownPresenter : Control, ISubtreeInvalidationHost, ILogicalTree
     public IMarkdownImageResolver? ImageResolver { get => GetValue(ImageResolverProperty); set => SetValue(ImageResolverProperty, value); }
     /// <summary>Gets or sets a UI-thread code factory receiving text and language; returned unattached elements transfer ownership to the presenter, and null uses plain text.</summary>
     public Func<string, string?, FrameworkElement?>? CodeBlockFactory { get => GetValue(CodeBlockFactoryProperty); set => SetValue(CodeBlockFactoryProperty, value); }
+    /// <summary>Gets or sets custom renderers consulted before the default presentation; assign a configured instance.</summary>
+    public MarkdownRenderers? Renderers { get => GetValue(RenderersProperty); set => SetValue(RenderersProperty, value); }
+    /// <summary>Gets or sets the debounce delay after which source changes parse on a worker thread; zero parses synchronously on the UI thread.</summary>
+    public TimeSpan ParseDelay { get => GetValue(ParseDelayProperty); set => SetValue(ParseDelayProperty, value < TimeSpan.Zero ? TimeSpan.Zero : value); }
     /// <summary>Requests host handling of a link; no external navigation occurs automatically.</summary>
     public event Action<MarkdownLinkRequestedEventArgs>? LinkRequested;
+    /// <summary>Reports a failed background parse; the previous document stays displayed.</summary>
+    public event Action<Exception>? ParseFailed;
 
-    internal IReadOnlyList<MarkdownBlock> Document => _document ??= MarkdownParser.Parse(Markdown, Options);
-    internal Element? DocumentRoot => _root;
+    internal ParsedMarkdown Document => _document ??= MarkdownParser.ParseDocument(Markdown, Options);
+    internal Element? DocumentRoot => _scroll ?? (Element?)_blocks;
+    internal MarkdownBlockHost? BlockHost => _host;
+    internal bool IsParsePending => _parsePending;
 
     private void InvalidateDocument(bool parse)
     {
         if (parse)
         {
+            if (ParseDelay > TimeSpan.Zero && !_disposed)
+            {
+                // The previous tree stays visible until the newest revision arrives.
+                StartBackgroundParse();
+                return;
+            }
+            CancelBackgroundParse();
             _document = null;
+            // A different document starts at the top; re-rendering the same one keeps its position.
+            _scroll?.SetScrollOffsets(0, 0);
+            _carriedAnchor = null;
         }
-        if (_root is ScrollViewer scroll)
+        else if (_host != null && _scroll != null)
         {
-            _savedOffset = scroll.VerticalOffset;
+            // The rebuilt tree puts the same block back at the viewport top.
+            int index = _host.IndexAt(_scroll.VerticalOffset);
+            _carriedAnchor = (index, _scroll.VerticalOffset - _host.GetBlockTop(index));
         }
-        ClearTree();
+        ClearBlocks();
         InvalidateMeasure();
     }
 
-    private void ClearTree()
+    private void CancelBackgroundParse()
     {
-        var previous = _root;
-        _root = null;
+        _parseCancellation?.Cancel();
+        _parseCancellation?.Dispose();
+        _parseCancellation = null;
+        _parsePending = false;
+    }
+
+    private void StartBackgroundParse()
+    {
+        CancelBackgroundParse();
+        var cancellation = new CancellationTokenSource();
+        _parseCancellation = cancellation;
+        _parsePending = true;
+        int revision = ++_parseRevision;
+        var dispatcher = Application.IsRunning ? Application.Current.Dispatcher : null;
+        _ = ParseAsync(Markdown, Options, ParseDelay, revision, cancellation.Token, dispatcher, SynchronizationContext.Current);
+    }
+
+    private async Task ParseAsync(string markdown, MarkdownOptions options, TimeSpan delay, int revision,
+        CancellationToken cancellation, IDispatcher? dispatcher, SynchronizationContext? synchronization)
+    {
+        ParsedMarkdown? parsed = null;
+        Exception? failure = null;
+        try
+        {
+            await Task.Delay(delay, cancellation).ConfigureAwait(false);
+            parsed = MarkdownParser.ParseDocument(markdown, options);
+            cancellation.ThrowIfCancellationRequested();
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (Exception error)
+        {
+            failure = error;
+        }
+
+        void Apply() => ApplyParse(revision, parsed, failure);
+        if (dispatcher != null)
+        {
+            dispatcher.BeginInvoke(Apply);
+        }
+        else if (synchronization != null)
+        {
+            synchronization.Post(_ => Apply(), null);
+        }
+        else
+        {
+            Apply();
+        }
+    }
+
+    private void ApplyParse(int revision, ParsedMarkdown? parsed, Exception? failure)
+    {
+        if (_disposed || revision != _parseRevision)
+        {
+            return;
+        }
+        _parsePending = false;
+        if (failure != null)
+        {
+            ParseFailed?.Invoke(failure);
+            return;
+        }
+        _document = parsed;
+        _scroll?.SetScrollOffsets(0, 0);
+        ClearBlocks();
+        InvalidateMeasure();
+    }
+
+    private void ClearBlocks()
+    {
+        var previous = _blocks;
+        _blocks = null;
+        _host = null;
+        _context = null;
         _anchors.Clear();
         if (previous != null)
         {
-            DetachChild(previous);
+            if (_scroll != null)
+            {
+                _scroll.Content = null;
+            }
+            else
+            {
+                DetachChild(previous);
+            }
             DisposeTree(previous);
         }
     }
@@ -104,25 +218,41 @@ public class MarkdownPresenter : Control, ISubtreeInvalidationHost, ILogicalTree
 
     private void EnsureTree()
     {
-        if (_root != null || _disposed)
+        if (_blocks != null || _disposed)
         {
             return;
         }
-        var blocks = RenderBlocks(Document);
+        ParsedMarkdown? document = _parsePending ? _document : Document;
+        if (document == null)
+        {
+            return;
+        }
+        _context = new MarkdownRenderContext(this, document);
         if (_scrollable)
         {
-            var scroll = new ScrollViewer { Content = blocks };
-            scroll.SetBinding(PaddingProperty, this, PaddingProperty);
-            _root = scroll;
+            if (_scroll == null)
+            {
+                _scroll = new ScrollViewer();
+                _scroll.SetBinding(PaddingProperty, this, PaddingProperty);
+                AttachChild(_scroll);
+            }
+            _host = new MarkdownBlockHost(document.Blocks, MarkdownTheme.BlockSpacing, RenderBlock);
+            if (_carriedAnchor is (int carriedIndex, double carriedWithin))
+            {
+                _host.SetInitialAnchor(carriedIndex, carriedWithin);
+                _carriedAnchor = null;
+            }
+            _blocks = _host;
+            _scroll.Content = _blocks;
         }
         else
         {
-            _root = blocks;
+            _blocks = RenderBlocks(document.Blocks);
+            AttachChild(_blocks);
         }
-        AttachChild(_root);
     }
 
-    private StackPanel RenderBlocks(IReadOnlyList<MarkdownBlock> blocks, double? spacing = null)
+    internal StackPanel RenderBlocks(IReadOnlyList<MarkdownBlock> blocks, double? spacing = null)
     {
         var panel = new StackPanel { Spacing = Math.Max(0, spacing ?? MarkdownTheme.BlockSpacing) };
         try
@@ -142,6 +272,18 @@ public class MarkdownPresenter : Control, ISubtreeInvalidationHost, ILogicalTree
 
     private FrameworkElement RenderBlock(MarkdownBlock block)
     {
+        if (block.Node != null && Renderers is MarkdownRenderers renderers && _context != null)
+        {
+            var custom = renderers.RenderBlock(block.Node, _context);
+            if (custom != null)
+            {
+                if (custom.Parent != null || custom.LogicalParent != null)
+                {
+                    throw new InvalidOperationException("A block renderer must return an unattached element.");
+                }
+                return custom;
+            }
+        }
         switch (block.Kind)
         {
             case MarkdownBlockKind.Paragraph:
@@ -257,21 +399,53 @@ public class MarkdownPresenter : Control, ISubtreeInvalidationHost, ILogicalTree
         }
     }
 
+    /// <summary>Creates a body paragraph for inline content, resolving registered inline renderers.</summary>
+    internal FrameworkElement CreateParagraph(IReadOnlyList<MarkdownSpan> spans, bool heading = false, int level = 0, TextAlignment alignment = TextAlignment.Left)
+    {
+        IInlineTextObject?[]? objects = null;
+        if (Renderers is MarkdownRenderers renderers && renderers.HasInlineRenderers && _context != null)
+        {
+            for (int index = 0; index < spans.Count; index++)
+            {
+                MarkdownSpan span = spans[index];
+                if (span.Node == null || span.Image)
+                {
+                    continue;
+                }
+                IInlineTextObject? inlineObject = renderers.RenderInline(span.Node, _context);
+                if (inlineObject == null)
+                {
+                    continue;
+                }
+                if (objects == null)
+                {
+                    objects = new IInlineTextObject?[spans.Count];
+                    spans = spans.ToArray();
+                }
+                objects[index] = inlineObject;
+                if (span.Text.Length == 0)
+                {
+                    // The object needs at least one column to occupy.
+                    ((MarkdownSpan[])spans)[index] = span with { Text = ((char)0xFFFC).ToString() };
+                }
+            }
+        }
+        return new MarkdownParagraph(spans, MarkdownTheme, ActivateLink, BaseUri, ImageResolver, objects)
+        {
+            Heading = heading,
+            FontScale = heading ? Math.Max(1.05, 2.0 - (level - 1) * 0.18) : 1,
+            Alignment = alignment
+        };
+    }
+
     private FrameworkElement RenderParagraph(MarkdownBlock block)
     {
-        FrameworkElement CreateText(IReadOnlyList<MarkdownSpan> spans) => new MarkdownParagraph(spans, MarkdownTheme, ActivateLink, BaseUri, ImageResolver)
-        {
-            Heading = block.Kind == MarkdownBlockKind.Heading,
-            FontScale = block.Kind == MarkdownBlockKind.Heading ? Math.Max(1.05, 2.0 - (block.Level - 1) * 0.18) : 1,
-            Alignment = block.Alignment
-        };
-
         MarkdownSpan? taskSpan = block.Spans.FirstOrDefault(span => span.TaskChecked.HasValue);
         IReadOnlyList<MarkdownSpan> contentSpans = taskSpan == null
             ? block.Spans
             : block.Spans.Where(span => !span.TaskChecked.HasValue).ToArray();
 
-        FrameworkElement result = CreateText(contentSpans);
+        FrameworkElement result = CreateParagraph(contentSpans, block.Kind == MarkdownBlockKind.Heading, block.Level, block.Alignment);
         if (taskSpan != null)
         {
             var task = new CheckBox
@@ -290,7 +464,8 @@ public class MarkdownPresenter : Control, ISubtreeInvalidationHost, ILogicalTree
         }
         if (!string.IsNullOrEmpty(block.Anchor))
         {
-            _anchors.TryAdd(block.Anchor, result);
+            // Overwrite: a virtualized heading is re-created each time it is realized.
+            _anchors[block.Anchor] = result;
         }
         return result;
     }
@@ -431,6 +606,18 @@ public class MarkdownPresenter : Control, ISubtreeInvalidationHost, ILogicalTree
         return list;
     }
 
+    private bool IsAttached(Element element)
+    {
+        for (Element? current = element; current != null; current = current.Parent)
+        {
+            if (ReferenceEquals(current, this))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     internal static Uri? ResolveUri(string url, Uri? baseUri)
     {
         if (Uri.TryCreate(url, UriKind.Absolute, out var absolute))
@@ -448,45 +635,66 @@ public class MarkdownPresenter : Control, ISubtreeInvalidationHost, ILogicalTree
     {
         string url = (span.Image ? span.LinkUrl : span.Url) ?? string.Empty;
         string? title = span.Image ? span.LinkTitle : span.Title;
-        if (url.StartsWith('#') && _root is ScrollViewer scroll &&
-            _anchors.TryGetValue(Uri.UnescapeDataString(url[1..]), out var target))
+        if (url.StartsWith('#'))
         {
-            scroll.SetScrollOffsets(0, scroll.VerticalOffset + target.Bounds.Y - scroll.Bounds.Y);
+            NavigateToAnchor(Uri.UnescapeDataString(url[1..]));
         }
         LinkRequested?.Invoke(new MarkdownLinkRequestedEventArgs(
             url, ResolveUri(url, BaseUri), title, span.SourceStart, span.SourceLength));
     }
 
+    /// <summary>Scrolls the owned viewport to a heading anchor; returns false when the anchor is unknown or there is no viewport.</summary>
+    internal bool NavigateToAnchor(string anchor)
+    {
+        if (_scroll == null)
+        {
+            return false;
+        }
+        if (_anchors.TryGetValue(anchor, out var target) && IsAttached(target))
+        {
+            _scroll.SetScrollOffsets(0, _scroll.VerticalOffset + target.Bounds.Y - _scroll.Bounds.Y);
+            return true;
+        }
+        if (_host != null && _document != null && _document.AnchorBlocks.TryGetValue(anchor, out int blockIndex))
+        {
+            // The heading is not realized yet: land on its top-level block; the host lands it over the next layout passes.
+            _host.RequestScrollToBlock(blockIndex);
+            return true;
+        }
+        return false;
+    }
+
     protected override Size MeasureContent(Size availableSize)
     {
         EnsureTree();
+        var root = DocumentRoot;
         if (_scrollable)
         {
-            _root?.Measure(availableSize);
-            return _root?.DesiredSize ?? Size.Empty;
+            root?.Measure(availableSize);
+            return root?.DesiredSize ?? Size.Empty;
         }
-        _root?.Measure(availableSize.Deflate(Padding));
-        return (_root?.DesiredSize ?? Size.Empty).Inflate(Padding);
+        root?.Measure(availableSize.Deflate(Padding));
+        return (root?.DesiredSize ?? Size.Empty).Inflate(Padding);
     }
 
-    protected override void ArrangeContent(Rect bounds)
-    {
-        _root?.Arrange(_scrollable ? bounds : bounds.Deflate(Padding));
-        if (_root is ScrollViewer scroll && _savedOffset != 0)
-        {
-            scroll.SetScrollOffsets(0, _savedOffset);
-            _savedOffset = 0;
-        }
-    }
+    protected override void ArrangeContent(Rect bounds) =>
+        DocumentRoot?.Arrange(_scrollable ? bounds : bounds.Deflate(Padding));
 
-    protected override void RenderSubtree(IGraphicsContext context) => _root?.Render(context);
-    bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor) => _root == null || visitor(_root);
-    bool ILogicalTreeHost.VisitLogicalChildren(Func<Element, bool> visitor) => _root == null || visitor(_root);
+    protected override void RenderSubtree(IGraphicsContext context) => DocumentRoot?.Render(context);
+    bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor) => DocumentRoot is not Element root || visitor(root);
+    bool ILogicalTreeHost.VisitLogicalChildren(Func<Element, bool> visitor) => DocumentRoot is not Element root || visitor(root);
 
     protected override void OnDispose()
     {
         _disposed = true;
-        ClearTree();
+        CancelBackgroundParse();
+        ClearBlocks();
+        if (_scroll != null)
+        {
+            DetachChild(_scroll);
+            _scroll.Dispose();
+            _scroll = null;
+        }
         _document = null;
         LinkRequested = null;
         base.OnDispose();
