@@ -259,7 +259,7 @@ internal static class ReviewCases
 
                 [Back to links heading](#links)
                 """),
-            new("10 Images", "In-memory fixtures: valid, wide, delayed, missing and empty-alt. Switch cases during delayed loading.", """
+            new("10 Images", "In-memory fixtures: valid, wide, delayed, missing, empty-alt and inline flow. Switch cases during delayed loading.", """
                 Normal image:
 
                 ![160 x 80 color fixture](demo:checker "Local fixture")
@@ -280,7 +280,7 @@ internal static class ReviewCases
 
                 ![](demo:checker)
 
-                Text before ![inline-position image](demo:checker) text after. Currently promoted to a block: inspect this limitation.
+                Text before ![inline-position image](demo:checker) text after. The image stays in the same flowing paragraph.
 
                 [![Linked image](demo:checker)](https://example.test/image-link)
 

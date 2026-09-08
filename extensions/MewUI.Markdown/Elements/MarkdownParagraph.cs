@@ -1,4 +1,5 @@
 using Aprillz.MewUI.Controls;
+using Aprillz.MewUI.Platform;
 using Aprillz.MewUI.Rendering;
 using Aprillz.MewUI.Text;
 
@@ -9,6 +10,7 @@ internal sealed class MarkdownParagraph : TextElement
     private readonly IReadOnlyList<MarkdownSpan> _spans;
     private readonly Action<MarkdownSpan> _activate;
     private readonly MarkdownTheme _theme;
+    private readonly IReadOnlyList<MarkdownInlineImage> _images;
     private readonly List<(int Start, int Length, MarkdownSpan Span)> _links = [];
     private readonly List<Rect> _rangeBounds = [];
     private readonly Dictionary<TextRunStyle, IFont> _metricFonts = [];
@@ -20,29 +22,38 @@ internal sealed class MarkdownParagraph : TextElement
     private int _focusedLink;
     private int _pressedLink = -1;
 
-    internal MarkdownParagraph(IReadOnlyList<MarkdownSpan> spans, MarkdownTheme theme, Action<MarkdownSpan> activate)
+    internal MarkdownParagraph(
+        IReadOnlyList<MarkdownSpan> spans,
+        MarkdownTheme theme,
+        Action<MarkdownSpan> activate,
+        Uri? baseUri = null,
+        IMarkdownImageResolver? resolver = null)
     {
         _spans = spans;
         _theme = theme;
         _activate = activate;
-        Text = string.Concat(spans.Select(span => span.Text));
+        _images = spans.Where(static span => span.Image)
+            .Select(span => new MarkdownInlineImage(span, baseUri, resolver, InvalidateImage))
+            .ToArray();
+        Text = string.Concat(spans.Select(GetVisualText));
         int offset = 0;
         foreach (var span in spans)
         {
-            if (span.Url != null && !span.Image && span.Text.Length > 0)
+            int length = GetVisualText(span).Length;
+            if (span.Url != null && !span.Image && length > 0)
             {
                 if (_links.Count > 0 && _links[^1].Start + _links[^1].Length == offset &&
                     _links[^1].Span.Url == span.Url && _links[^1].Span.SourceStart == span.SourceStart)
                 {
                     var previous = _links[^1];
-                    _links[^1] = (previous.Start, previous.Length + span.Text.Length, previous.Span);
+                    _links[^1] = (previous.Start, previous.Length + length, previous.Span);
                 }
                 else
                 {
-                    _links.Add((offset, span.Text.Length, span));
+                    _links.Add((offset, length, span));
                 }
             }
-            offset += span.Text.Length;
+            offset += length;
         }
         Focusable = _links.Count > 0;
     }
@@ -76,19 +87,36 @@ internal sealed class MarkdownParagraph : TextElement
         _width = width;
         _dpi = dpi;
         _style = style;
+        int imageIndex = 0;
         var runs = new List<GeometryStyleRun>();
+        var inlines = new List<InlineRun>();
         int offset = 0;
         foreach (var span in _spans)
         {
-            if (span.Text.Length > 0)
+            string visualText = GetVisualText(span);
+            if (visualText.Length > 0)
             {
-                runs.Add(new GeometryStyleRun(offset, span.Text.Length, ResolveSpanStyle(style, span)));
+                runs.Add(new GeometryStyleRun(offset, visualText.Length, ResolveSpanStyle(style, span)));
+                if (span.Image)
+                {
+                    MarkdownInlineImage image = _images[imageIndex++];
+                    image.Start(Application.IsRunning ? Application.Current.Dispatcher : null, SynchronizationContext.Current);
+                    if (image.IsReady && image.TryPrepare(GetGraphicsFactory(), width))
+                    {
+                        inlines.Add(new InlineRun(offset, visualText.Length, image));
+                    }
+                }
             }
-            offset += span.Text.Length;
+            else if (span.Image)
+            {
+                MarkdownInlineImage image = _images[imageIndex++];
+                image.Start(Application.IsRunning ? Application.Current.Dispatcher : null, SynchronizationContext.Current);
+            }
+            offset += visualText.Length;
         }
         _layout = engine.GetOrCreateLayout(new TextLayoutRequest
         {
-            Text = Text.AsMemory(), DefaultStyle = style, Dpi = dpi, Runs = runs,
+            Text = Text.AsMemory(), DefaultStyle = style, Dpi = dpi, Runs = runs, Inlines = inlines,
             Paragraph = new TextParagraphStyle { MaxWidth = width, Wrapping = TextWrapping.Wrap, Alignment = Alignment }
         }, TextLayoutCachePolicy.Owner, this);
         return _layout;
@@ -131,11 +159,12 @@ internal sealed class MarkdownParagraph : TextElement
         foreach (var span in _spans)
         {
             bool link = span.Url != null && !span.Image;
-            paints.Add(new TextPaintSpan(new TextRange(offset, span.Text.Length),
+            int length = GetVisualText(span).Length;
+            paints.Add(new TextPaintSpan(new TextRange(offset, length),
                 link ? _theme.LinkForeground ?? Theme.Palette.Accent : null,
                 span.Marked && !span.Code ? _theme.MarkedBackground ?? Theme.Palette.Accent.WithAlpha(64) : null,
                 link ? TextDecoration.Underline : TextDecoration.None));
-            offset += span.Text.Length;
+            offset += length;
         }
         var options = new TextDrawOptions(Foreground, paints.ToArray(), Owner: this);
         context.Save();
@@ -168,15 +197,16 @@ internal sealed class MarkdownParagraph : TextElement
         int offset = 0;
         foreach (var span in _spans)
         {
-            if (!span.Code || span.Text.Length == 0)
+            int length = GetVisualText(span).Length;
+            if (!span.Code || length == 0)
             {
-                offset += span.Text.Length;
+                offset += length;
                 continue;
             }
 
             var font = GetMetricFont(ResolveSpanStyle(_style, span));
             _rangeBounds.Clear();
-            layout.GetRangeBounds(offset, span.Text.Length, _rangeBounds);
+            layout.GetRangeBounds(offset, length, _rangeBounds);
             foreach (var rangeBounds in _rangeBounds)
             {
                 foreach (var line in layout.Lines)
@@ -195,7 +225,7 @@ internal sealed class MarkdownParagraph : TextElement
                     break;
                 }
             }
-            offset += span.Text.Length;
+            offset += length;
         }
     }
 
@@ -226,6 +256,18 @@ internal sealed class MarkdownParagraph : TextElement
             font.Dispose();
         }
         _metricFonts.Clear();
+    }
+
+    private static string GetVisualText(MarkdownSpan span) => span.Image && span.Text.Length == 0
+        ? "\uFFFC"
+        : span.Text;
+
+    private void InvalidateImage()
+    {
+        _engine?.ManagedCache.ReleaseOwner(this);
+        _layout = null;
+        InvalidateMeasure();
+        InvalidateVisual();
     }
 
     internal int HitLink(Point position)
@@ -341,6 +383,10 @@ internal sealed class MarkdownParagraph : TextElement
         _engine?.ManagedCache.ReleaseOwner(this);
         _layout = null;
         ClearMetricFonts();
+        foreach (var image in _images)
+        {
+            image.Dispose();
+        }
         base.OnDispose();
     }
 }

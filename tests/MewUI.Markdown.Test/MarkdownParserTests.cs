@@ -294,6 +294,91 @@ public sealed class MarkdownParagraphTests
         Assert.AreEqual(initialCacheCount, factory.TextEngine.ManagedCache.Count);
     }
 
+    [TestMethod]
+    public void ImageSpanUsesInlineLayoutAndKeepsSurroundingTextInTheParagraph()
+    {
+        RequireWindows();
+        EnsureGdi();
+        var resolver = new ImmediateResolver(new TestVectorImageSource(new Size(80, 20)));
+        using var paragraph = new MarkdownParagraph(
+            [new MarkdownSpan("before "), new MarkdownSpan("alt", Url: "demo:image", Image: true), new MarkdownSpan(" after")],
+            new MarkdownTheme(),
+            _ => { },
+            null,
+            resolver)
+        {
+            FontSize = 16
+        };
+
+        paragraph.Measure(new Size(500, 100));
+        var layout = paragraph.GetLayout(500);
+
+        using var fallback = new MarkdownParagraph(
+            [new MarkdownSpan("before alt after")],
+            new MarkdownTheme(),
+            _ => { })
+        {
+            FontSize = 16
+        };
+        fallback.Measure(new Size(500, 100));
+
+        Assert.IsGreaterThan(fallback.DesiredSize.Width + 30, layout.MeasuredSize.Width);
+        Assert.IsGreaterThanOrEqualTo(fallback.DesiredSize.Height, layout.MeasuredSize.Height);
+    }
+
+    [TestMethod]
+    public void InlineImageFitsWithinParagraphWidth()
+    {
+        RequireWindows();
+        EnsureGdi();
+        using var paragraph = new MarkdownParagraph(
+            [new MarkdownSpan("wide", Url: "demo:image", Image: true)],
+            new MarkdownTheme(),
+            _ => { },
+            null,
+            new ImmediateResolver(new TestVectorImageSource(new Size(1600, 120))));
+
+        paragraph.Measure(new Size(240, 200));
+
+        Assert.IsLessThanOrEqualTo(240, paragraph.DesiredSize.Width);
+    }
+
+    [TestMethod]
+    public void DelayedInlineImageInvalidatesLayoutAndReleasesLeaseOnDispose()
+    {
+        RequireWindows();
+        EnsureGdi();
+        var pending = new TaskCompletionSource<MarkdownImageLease?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        int releases = 0;
+        var context = new PumpSynchronizationContext();
+        SynchronizationContext? previous = SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(context);
+        try
+        {
+            using var paragraph = new MarkdownParagraph(
+                [new MarkdownSpan("before "), new MarkdownSpan("delayed", Url: "demo:image", Image: true), new MarkdownSpan(" after")],
+                new MarkdownTheme(),
+                _ => { },
+                null,
+                new PendingInlineResolver(pending));
+            paragraph.Measure(new Size(500, 100));
+            double fallbackWidth = paragraph.DesiredSize.Width;
+
+            pending.SetResult(new MarkdownImageLease(new TestVectorImageSource(new Size(80, 20)), () => releases++));
+            Assert.IsTrue(SpinWait.SpinUntil(() => context.Count > 0, TimeSpan.FromSeconds(2)));
+            context.Drain();
+            paragraph.Measure(new Size(500, 100));
+
+            Assert.IsGreaterThan(fallbackWidth + 30, paragraph.DesiredSize.Width);
+            paragraph.Dispose();
+            Assert.AreEqual(1, releases);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previous);
+        }
+    }
+
     private static Point Center(Rect rectangle) =>
         new(rectangle.X + Math.Max(1, rectangle.Width * 0.5), rectangle.Y + Math.Max(1, rectangle.Height * 0.5));
 
@@ -309,6 +394,68 @@ public sealed class MarkdownParagraphTests
     {
         GdiBackend.Register();
         return (GdiGraphicsFactory)Application.DefaultGraphicsFactory;
+    }
+
+    private sealed class ImmediateResolver(IImageSource source) : IMarkdownImageResolver
+    {
+        public ValueTask<MarkdownImageLease?> ResolveAsync(MarkdownImageRequest request, CancellationToken cancellationToken)
+            => new(new MarkdownImageLease(source));
+    }
+
+    private sealed class TestVectorImageSource(Size size) : IVectorImageSource
+    {
+        public Size IntrinsicSize => size;
+
+        public IImage CreateImage(IGraphicsFactory factory) => throw new InvalidOperationException();
+
+        public void Render(IGraphicsContext context, Rect destRect) { }
+    }
+
+    private sealed class PendingInlineResolver(TaskCompletionSource<MarkdownImageLease?> pending) : IMarkdownImageResolver
+    {
+        public ValueTask<MarkdownImageLease?> ResolveAsync(MarkdownImageRequest request, CancellationToken cancellationToken)
+            => new(pending.Task);
+    }
+
+    private sealed class PumpSynchronizationContext : SynchronizationContext
+    {
+        private readonly Queue<(SendOrPostCallback Callback, object? State)> _queue = new();
+
+        public int Count
+        {
+            get
+            {
+                lock (_queue)
+                {
+                    return _queue.Count;
+                }
+            }
+        }
+
+        public override void Post(SendOrPostCallback d, object? state)
+        {
+            lock (_queue)
+            {
+                _queue.Enqueue((d, state));
+            }
+        }
+
+        public void Drain()
+        {
+            while (true)
+            {
+                (SendOrPostCallback Callback, object? State) work;
+                lock (_queue)
+                {
+                    if (_queue.Count == 0)
+                    {
+                        return;
+                    }
+                    work = _queue.Dequeue();
+                }
+                work.Callback(work.State);
+            }
+        }
     }
 }
 
@@ -609,4 +756,5 @@ public sealed class MarkdownPresenterTests
             return new ValueTask<MarkdownImageLease?>(pending.Task);
         }
     }
+
 }
