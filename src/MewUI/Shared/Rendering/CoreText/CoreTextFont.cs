@@ -50,6 +50,8 @@ internal sealed unsafe partial class CoreTextFont : FontBase, IGlyphOutlineFont
             InternalLeading = Math.Max(0, (ascentPx + descentPx + leadingPx) / dpiScale - size);
             double capHeightPx = CoreTextNative.CTFontGetCapHeight(fontRef);
             CapHeight = capHeightPx > 0 ? capHeightPx / dpiScale : Ascent * 0.7;
+            double xHeightPx = CoreTextNative.CTFontGetXHeight(fontRef);
+            XHeight = xHeightPx > 0 ? xHeightPx / dpiScale : CapHeight * 0.72;
         }
     }
 
@@ -607,6 +609,9 @@ internal sealed unsafe partial class CoreTextFont : FontBase, IGlyphOutlineFont
 
         [LibraryImport("/System/Library/Frameworks/CoreText.framework/CoreText")]
         internal static partial double CTFontGetCapHeight(nint font);
+
+        [LibraryImport("/System/Library/Frameworks/CoreText.framework/CoreText")]
+        internal static partial double CTFontGetXHeight(nint font);
 
         [LibraryImport("/System/Library/Frameworks/CoreText.framework/CoreText")]
         [return: MarshalAs(UnmanagedType.I1)]

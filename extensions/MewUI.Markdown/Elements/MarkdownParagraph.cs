@@ -11,6 +11,7 @@ internal sealed class MarkdownParagraph : TextElement
     private readonly MarkdownTheme _theme;
     private readonly List<(int Start, int Length, MarkdownSpan Span)> _links = [];
     private readonly List<Rect> _rangeBounds = [];
+    private readonly Dictionary<TextRunStyle, IFont> _metricFonts = [];
     private ITextEngine? _engine;
     private ITextLayout? _layout;
     private double _width = double.NaN;
@@ -67,6 +68,10 @@ internal sealed class MarkdownParagraph : TextElement
         {
             _engine.ManagedCache.ReleaseOwner(this);
         }
+        if (_dpi != dpi || _style != style || !ReferenceEquals(_engine, engine))
+        {
+            ClearMetricFonts();
+        }
         _engine = engine;
         _width = width;
         _dpi = dpi;
@@ -77,14 +82,7 @@ internal sealed class MarkdownParagraph : TextElement
         {
             if (span.Text.Length > 0)
             {
-                runs.Add(new GeometryStyleRun(offset, span.Text.Length, style with
-                {
-                    FontFamily = span.Code ? _theme.CodeFontFamily : style.FontFamily,
-                    Weight = span.Bold ? FontWeight.Bold : style.Weight,
-                    Italic = span.Italic || style.Italic,
-                    Decoration = (span.Strike ? TextDecoration.Strikethrough : TextDecoration.None) |
-                        (span.Inserted ? TextDecoration.Underline : TextDecoration.None)
-                }));
+                runs.Add(new GeometryStyleRun(offset, span.Text.Length, ResolveSpanStyle(style, span)));
             }
             offset += span.Text.Length;
         }
@@ -96,10 +94,17 @@ internal sealed class MarkdownParagraph : TextElement
         return _layout;
     }
 
-    internal double GetFirstLineHeight(double width)
+    internal double GetFirstLineVisualCenter(double width)
     {
         var lines = GetLayout(width).Lines;
-        return lines.Count == 0 ? 0 : lines[0].Bounds.Height;
+        if (lines.Count == 0)
+        {
+            return 0;
+        }
+
+        var line = lines[0];
+        var font = GetMetricFont(_style);
+        return line.Bounds.Y + line.Baseline - font.XHeight * 0.5;
     }
 
     protected override Size MeasureContent(Size availableSize)
@@ -128,8 +133,7 @@ internal sealed class MarkdownParagraph : TextElement
             bool link = span.Url != null && !span.Image;
             paints.Add(new TextPaintSpan(new TextRange(offset, span.Text.Length),
                 link ? _theme.LinkForeground ?? Theme.Palette.Accent : null,
-                span.Code ? _theme.CodeBackground ?? Theme.Palette.ControlBackground :
-                    span.Marked ? _theme.MarkedBackground ?? Theme.Palette.Accent.WithAlpha(64) : null,
+                span.Marked && !span.Code ? _theme.MarkedBackground ?? Theme.Palette.Accent.WithAlpha(64) : null,
                 link ? TextDecoration.Underline : TextDecoration.None));
             offset += span.Text.Length;
         }
@@ -138,6 +142,7 @@ internal sealed class MarkdownParagraph : TextElement
         try
         {
             context.SetClip(Bounds);
+            DrawInlineCodeBackgrounds(context, layout);
             context.Text.Draw(layout, new Point(Bounds.X, Bounds.Y), in options);
             if (IsFocused && _links.Count > 0)
             {
@@ -155,6 +160,72 @@ internal sealed class MarkdownParagraph : TextElement
         {
             context.Restore();
         }
+    }
+
+    private void DrawInlineCodeBackgrounds(IGraphicsContext context, ITextLayout layout)
+    {
+        Color background = _theme.CodeBackground ?? Theme.Palette.ControlBackground;
+        int offset = 0;
+        foreach (var span in _spans)
+        {
+            if (!span.Code || span.Text.Length == 0)
+            {
+                offset += span.Text.Length;
+                continue;
+            }
+
+            var font = GetMetricFont(ResolveSpanStyle(_style, span));
+            _rangeBounds.Clear();
+            layout.GetRangeBounds(offset, span.Text.Length, _rangeBounds);
+            foreach (var rangeBounds in _rangeBounds)
+            {
+                foreach (var line in layout.Lines)
+                {
+                    if (Math.Abs(line.Bounds.Y - rangeBounds.Y) > 0.01)
+                    {
+                        continue;
+                    }
+
+                    double baseline = line.Bounds.Y + line.Baseline;
+                    context.FillRectangle(new Rect(
+                        Bounds.X + rangeBounds.X,
+                        Bounds.Y + baseline - font.Ascent,
+                        rangeBounds.Width,
+                        font.Ascent + font.Descent), background);
+                    break;
+                }
+            }
+            offset += span.Text.Length;
+        }
+    }
+
+    private TextRunStyle ResolveSpanStyle(TextRunStyle style, MarkdownSpan span) => style with
+    {
+        FontFamily = span.Code ? _theme.CodeFontFamily : style.FontFamily,
+        Weight = span.Bold ? FontWeight.Bold : style.Weight,
+        Italic = span.Italic || style.Italic,
+        Decoration = (span.Strike ? TextDecoration.Strikethrough : TextDecoration.None) |
+            (span.Inserted ? TextDecoration.Underline : TextDecoration.None)
+    };
+
+    private IFont GetMetricFont(TextRunStyle style)
+    {
+        if (!_metricFonts.TryGetValue(style, out var font))
+        {
+            font = GetGraphicsFactory().CreateFont(style.FontFamily, style.FontSize, _dpi,
+                style.Weight, style.Italic);
+            _metricFonts.Add(style, font);
+        }
+        return font;
+    }
+
+    private void ClearMetricFonts()
+    {
+        foreach (var font in _metricFonts.Values)
+        {
+            font.Dispose();
+        }
+        _metricFonts.Clear();
     }
 
     internal int HitLink(Point position)
@@ -269,6 +340,7 @@ internal sealed class MarkdownParagraph : TextElement
     {
         _engine?.ManagedCache.ReleaseOwner(this);
         _layout = null;
+        ClearMetricFonts();
         base.OnDispose();
     }
 }

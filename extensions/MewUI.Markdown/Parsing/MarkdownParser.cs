@@ -203,6 +203,12 @@ internal static class MarkdownParser
                     Children = MapChildren(cell, source, options, anchors, alignment),
                     Alignment = alignment
                 };
+            case HtmlBlock html:
+                return new MarkdownBlock
+                {
+                    Kind = MarkdownBlockKind.Paragraph,
+                    Spans = [RawSpan(html, source)]
+                };
             case LeafBlock leaf when leaf.Inline is not null:
                 return new MarkdownBlock
                 {

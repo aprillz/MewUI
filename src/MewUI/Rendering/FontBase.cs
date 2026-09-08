@@ -16,6 +16,7 @@ internal abstract class FontBase : IFont
     public double Descent { get; protected set; }
     public double InternalLeading { get; protected set; }
     public double CapHeight { get; protected set; }
+    public double XHeight { get; protected set; }
 
     protected FontBase(string family, double size, FontWeight weight, bool italic, bool underline, bool strikethrough)
     {

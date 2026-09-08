@@ -77,7 +77,8 @@ internal sealed partial class ManagedTextEngine : ITextEngine, IDisposable
                     segments[index] = segments[index] with { X = segments[index].X + x };
                 }
             }
-            double baseline = ApplyHalfLeading(font.Ascent, height, font.Ascent + font.Descent);
+            double baseline = ApplyHalfLeading(
+                context.GetRasterBaseline(font), height, font.Ascent + font.Descent);
             double trimTop = 0;
             double trimBottom = 0;
             if (snapshot.Paragraph.LineBoxTrim != LineBoxTrim.None)

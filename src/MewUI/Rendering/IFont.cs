@@ -58,4 +58,11 @@ public interface IFont : IDisposable
     /// Used for visual centering. Falls back to <c>Ascent * 0.7</c> if unavailable.
     /// </summary>
     double CapHeight { get; }
+
+    /// <summary>
+    /// Gets the x-height in device-independent units (distance from the baseline to the top of
+    /// a lowercase letter such as 'x'). Implementations should return the font's actual metric;
+    /// the default preserves compatibility for custom font implementations.
+    /// </summary>
+    double XHeight => CapHeight * 0.72;
 }

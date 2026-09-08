@@ -44,6 +44,22 @@ public sealed class FontFamilyFallbackTests
     }
 
     [TestMethod]
+    public void Gdi_ReportsUsableXHeight()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("GDI is Windows-only.");
+            return;
+        }
+
+        using var factory = new GdiGraphicsFactory();
+        using var font = factory.CreateFont("Segoe UI", 16, 96);
+
+        Assert.IsGreaterThan(0, font.XHeight);
+        Assert.IsLessThanOrEqualTo(font.CapHeight, font.XHeight);
+    }
+
+    [TestMethod]
     public void Direct2D_MissingFirstCandidate_FallsToTheInstalledFamily()
     {
         if (!OperatingSystem.IsWindows())
@@ -73,5 +89,21 @@ public sealed class FontFamilyFallbackTests
         using var font = factory.CreateFont($"{MISSING}, {MISSING} Two", 16);
 
         Assert.AreEqual(MISSING, font.Family);
+    }
+
+    [TestMethod]
+    public void Direct2D_ReportsUsableXHeight()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("Direct2D is Windows-only.");
+            return;
+        }
+
+        using var factory = new Direct2DGraphicsFactory();
+        using var font = factory.CreateFont("Segoe UI", 16, 96);
+
+        Assert.IsGreaterThan(0, font.XHeight);
+        Assert.IsLessThanOrEqualTo(font.CapHeight, font.XHeight);
     }
 }

@@ -5,6 +5,8 @@ public sealed record MarkdownTheme
 {
     /// <summary>Gets the gap between document blocks in DIPs.</summary>
     public double BlockSpacing { get; init; } = 8;
+    /// <summary>Gets the hanging-indent width reserved for each list nesting level in DIPs.</summary>
+    public double ListIndent { get; init; } = 32;
     /// <summary>Gets the font family for inline and block code.</summary>
     public string CodeFontFamily { get; init; } = "Consolas";
     /// <summary>Gets the optional link foreground.</summary>

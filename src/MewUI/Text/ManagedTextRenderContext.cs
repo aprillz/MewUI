@@ -100,18 +100,15 @@ internal sealed class ManagedTextRenderContext : ITextRenderContext, IDisposable
         for (int lineIndex = 0; lineIndex < lines.Count; lineIndex++)
         {
             var line = lines[lineIndex];
-            // Ink renders in the untrimmed box: a cap-trimmed line reports a smaller layout box,
-            // but the glyphs keep their font-metric position and may overflow it.
-            double inkY = origin.Y + line.Metrics.Bounds.Y - line.TrimTop;
-            double inkHeight = line.Metrics.Bounds.Height + line.TrimTop + line.TrimBottom;
-            double inkBaseline = line.Metrics.Baseline + line.TrimTop;
             var runs = managed.GetRuns(line);
             for (int index = 0; index < runs.Length; index++)
             {
                 ref readonly var run = ref runs[index];
+                Rect bounds = GetBaselineAlignedBounds(
+                    line, origin, run.X, run.Width, run.Baseline);
                 if (run.Kind == ManagedTextRunKind.Inline)
                 {
-                    managed.GetInline(in run)?.Draw(this, new Point(origin.X + run.X, inkY));
+                    managed.GetInline(in run)?.Draw(this, bounds.Position);
                     continue;
                 }
                 if (run.Kind is ManagedTextRunKind.Tab or ManagedTextRunKind.NewLine)
@@ -119,15 +116,14 @@ internal sealed class ManagedTextRenderContext : ITextRenderContext, IDisposable
                     continue;
                 }
 
-                var bounds = new Rect(origin.X + run.X, inkY, Math.Max(1, run.Width), inkHeight);
                 var realized = GetOrCreateRun(
-                    managed, run.TextStart, run.TextLength, run.Font, run.Width, inkHeight, options.Transient);
+                    managed, run.TextStart, run.TextLength, run.Font, run.Width, bounds.Height, options.Transient);
                 if (realized is not null)
                 {
                     try
                     {
                         DrawRunColorSegments(
-                            managed, line.RunStart + index, origin, bounds, inkBaseline, realized, in options);
+                            managed, line.RunStart + index, origin, bounds, run.Baseline, realized, in options);
                     }
                     finally
                     {
@@ -146,6 +142,20 @@ internal sealed class ManagedTextRenderContext : ITextRenderContext, IDisposable
         }
 
         DrawDecorations(managed, origin, options.PaintSpans.Span);
+    }
+
+    private static Rect GetBaselineAlignedBounds(
+        ManagedTextLine line,
+        Point origin,
+        double x,
+        double width,
+        double baseline)
+    {
+        double lineBaseline = origin.Y + line.Metrics.Bounds.Y + line.Metrics.Baseline;
+        double top = lineBaseline - baseline;
+        // The outer trim changes the reported box, not the glyph ink that may overflow it.
+        double inkBottom = origin.Y + line.Metrics.Bounds.Bottom + line.TrimBottom;
+        return new Rect(origin.X + x, top, Math.Max(1, width), Math.Max(1, inkBottom - top));
     }
 
     private void DrawFastPath(ManagedTextLayout managed, Point origin, Color color, object? owner, bool transient)
@@ -230,14 +240,15 @@ internal sealed class ManagedTextRenderContext : ITextRenderContext, IDisposable
         var font = runs.Length > 0 ? runs[^1].Font : managed.GetDefaultFont();
         double x = runs.Length > 0 ? runs[^1].X + runs[^1].Width : lineBounds.X;
         double width = Math.Max(1, lineBounds.Right - x);
-        double inkHeight = lineBounds.Height + line.TrimTop + line.TrimBottom;
-        using var run = _backend.CreateRun(ELLIPSIS, font, width, inkHeight);
+        double baseline = runs.Length > 0 ? runs[^1].Baseline : font.Ascent;
+        Rect bounds = GetBaselineAlignedBounds(line, origin, x, width, baseline);
+        using var run = _backend.CreateRun(ELLIPSIS, font, width, bounds.Height);
         if (run is null)
         {
             return;
         }
 
-        _backend.DrawRun(run, new Point(origin.X + x, origin.Y + lineBounds.Y - line.TrimTop), color, owner);
+        _backend.DrawRun(run, bounds.Position, color, owner);
     }
 
     private void DrawBackgrounds(ManagedTextLayout layout, Point origin, ReadOnlySpan<TextPaintSpan> spans)

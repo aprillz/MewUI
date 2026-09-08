@@ -197,6 +197,7 @@ internal sealed unsafe partial class DirectWriteFont : FontBase, IGlyphOutlineFo
             - metrics.designUnitsPerEm) * scale;
         InternalLeading = Math.Max(0, leading);
         CapHeight = metrics.capHeight > 0 ? metrics.capHeight * scale : Ascent * 0.7;
+        XHeight = metrics.xHeight > 0 ? metrics.xHeight * scale : CapHeight * 0.72;
     }
 
     public unsafe bool TryAppendGlyphOutline(PathGeometry path, char ch, Point baselineOrigin, out double advance)

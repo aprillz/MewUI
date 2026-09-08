@@ -72,6 +72,8 @@ internal sealed class CountingGraphicsFactory(IGraphicsFactory inner) : IGraphic
             return inner.Measure(text, font);
         }
 
+        public double GetRasterBaseline(IFont font) => inner.GetRasterBaseline(font);
+
         public double[]? GetUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font)
             => inner.GetUtf16PrefixAdvances(text, font);
 

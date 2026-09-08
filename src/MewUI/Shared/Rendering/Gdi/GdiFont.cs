@@ -58,6 +58,7 @@ internal sealed partial class GdiFont : FontBase, IGlyphOutlineFont
         Descent = tm.tmDescent / dpiScale;
         InternalLeading = tm.tmInternalLeading / dpiScale;
         CapHeight = ResolveCapHeight(in tm, dpiScale);
+        XHeight = ResolveXHeight(in tm, dpiScale);
     }
 
     /// <summary>Cap height in device-independent units.</summary>
@@ -81,6 +82,24 @@ internal sealed partial class GdiFont : FontBase, IGlyphOutlineFont
         }
 
         return (tm.tmAscent - tm.tmInternalLeading) * 0.92 / dpiScale;
+    }
+
+    private unsafe double ResolveXHeight(in TEXTMETRIC tm, double dpiScale)
+    {
+        EnsureOutlineDc();
+        if (_outlineDc != 0)
+        {
+            var matrix = MAT2.Identity;
+            GLYPHMETRICS metrics;
+            if (GetGlyphOutlineW(_outlineDc, 'x', GdiConstants.GGO_METRICS, &metrics, 0, null, &matrix)
+                    != 0xFFFFFFFF
+                && metrics.gmptGlyphOrigin.y > 0)
+            {
+                return metrics.gmptGlyphOrigin.y / dpiScale;
+            }
+        }
+
+        return (tm.tmAscent - tm.tmInternalLeading) * 0.66 / dpiScale;
     }
 
     /// <summary>Internal leading in pixels (for use by rasterizers operating in pixel space).</summary>
