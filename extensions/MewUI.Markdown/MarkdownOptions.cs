@@ -17,4 +17,6 @@ public sealed record MarkdownOptions
     public bool UseMarked { get; init; } = true;
     /// <summary>Gets whether soft line breaks are displayed as new lines.</summary>
     public bool SoftBreakAsNewLine { get; init; }
+    /// <summary>Gets whether definition lists are recognized.</summary>
+    public bool UseDefinitionLists { get; init; } = true;
 }

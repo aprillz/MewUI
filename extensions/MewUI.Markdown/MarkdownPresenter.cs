@@ -162,6 +162,8 @@ public class MarkdownPresenter : Control, ISubtreeInvalidationHost, ILogicalTree
                 return RenderList(block);
             case MarkdownBlockKind.Table:
                 return RenderTable(block);
+            case MarkdownBlockKind.DefinitionList:
+                return RenderDefinitionList(block);
             default:
                 return RenderBlocks(block.Children);
         }
@@ -395,6 +397,38 @@ public class MarkdownPresenter : Control, ISubtreeInvalidationHost, ILogicalTree
         return new Border { Child = grid, Padding = Thickness.Zero, CornerRadius = 0,
             NonUniformBorderThickness = new Thickness(0, 0, 1, 1) }
             .WithTheme((theme, element) => element.BorderBrush = theme.Palette.ControlBorder);
+    }
+
+    private FrameworkElement RenderDefinitionList(MarkdownBlock block)
+    {
+        var list = new StackPanel { Spacing = Math.Max(0, MarkdownTheme.BlockSpacing) };
+        foreach (var item in block.Children)
+        {
+            var itemPanel = new StackPanel { Spacing = Math.Max(0, MarkdownTheme.BlockSpacing / 2) };
+            foreach (var child in item.Children)
+            {
+                FrameworkElement content;
+                if (child.Kind == MarkdownBlockKind.DefinitionTerm)
+                {
+                    content = RenderParagraph(child);
+                    if (content is TextElement term)
+                    {
+                        term.FontWeight = FontWeight.Bold;
+                    }
+                }
+                else
+                {
+                    content = new Border
+                    {
+                        Margin = new Thickness(Math.Max(0, MarkdownTheme.ListIndent), 0, 0, 0),
+                        Child = RenderBlock(child)
+                    };
+                }
+                itemPanel.Add(content);
+            }
+            list.Add(itemPanel);
+        }
+        return list;
     }
 
     internal static Uri? ResolveUri(string url, Uri? baseUri)

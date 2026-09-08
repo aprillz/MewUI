@@ -2,7 +2,7 @@
 
 `Aprillz.MewUI.Markdown` provides a small Markdown viewer extension for MewUI. `MarkdownViewer` inherits from `MarkdownPresenter`, so both controls expose the same Markdown content and options API.
 
-The sample demonstrates tables, Unicode text, mixed and extra emphasis, read-only task checkboxes, inline and fenced code, local anchors, relative links, and an image without a resolver. Tight and loose lists retain their distinct block spacing. Link requests are reported in the sample status line; the sample does not launch a browser.
+The sample demonstrates tables, definition lists, Unicode text, mixed and extra emphasis, read-only task checkboxes, inline and fenced code, local anchors, relative links, and resolved images. Tight and loose lists retain their distinct block spacing. Link requests are reported in the sample status line; the sample does not launch a browser.
 
 `MarkdownTheme` is available for public theme configuration. There is no selection or built-in syntax highlighting. An optional `CodeBlockFactory` has the signature `Func<string, string?, FrameworkElement?>`: it receives normalized code text and the first language token. Return an unattached element to replace the default block, or `null` for the plain fallback. This can be used to integrate a host `SyntaxViewer`.
 
