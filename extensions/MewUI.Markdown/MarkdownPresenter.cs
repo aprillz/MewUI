@@ -257,7 +257,7 @@ public class MarkdownPresenter : Control, ISubtreeInvalidationHost, ILogicalTree
 
     private FrameworkElement RenderParagraph(MarkdownBlock block)
     {
-        FrameworkElement CreateText(IReadOnlyList<MarkdownSpan> spans) => new MarkdownParagraph(spans, MarkdownTheme, ActivateLink)
+        FrameworkElement CreateText(IReadOnlyList<MarkdownSpan> spans) => new MarkdownParagraph(spans, MarkdownTheme, ActivateLink, BaseUri, ImageResolver)
         {
             Heading = block.Kind == MarkdownBlockKind.Heading,
             FontScale = block.Kind == MarkdownBlockKind.Heading ? Math.Max(1.05, 2.0 - (block.Level - 1) * 0.18) : 1,
@@ -269,37 +269,7 @@ public class MarkdownPresenter : Control, ISubtreeInvalidationHost, ILogicalTree
             ? block.Spans
             : block.Spans.Where(span => !span.TaskChecked.HasValue).ToArray();
 
-        FrameworkElement result;
-        if (contentSpans.Any(span => span.Image))
-        {
-            var panel = new StackPanel { Spacing = Math.Max(0, MarkdownTheme.BlockSpacing) };
-            var pending = new List<MarkdownSpan>();
-            foreach (var span in contentSpans)
-            {
-                if (span.Image)
-                {
-                    if (pending.Count > 0)
-                    {
-                        panel.Add(CreateText(pending.ToArray()));
-                        pending.Clear();
-                    }
-                    panel.Add(new MarkdownImage(span, BaseUri, ImageResolver));
-                }
-                else
-                {
-                    pending.Add(span);
-                }
-            }
-            if (pending.Count > 0)
-            {
-                panel.Add(CreateText(pending.ToArray()));
-            }
-            result = panel;
-        }
-        else
-        {
-            result = CreateText(contentSpans);
-        }
+        FrameworkElement result = CreateText(contentSpans);
         if (taskSpan != null)
         {
             var task = new CheckBox

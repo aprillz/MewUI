@@ -130,6 +130,90 @@ public sealed class TextBaselinePlacementTests
     }
 
     [TestMethod]
+    public void FullPath_TallInlineObject_FitsInsideItsLineBox()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("GDI is Windows-only.");
+            return;
+        }
+
+        var inline = new RecordingInlineObject(new InlineMetrics(160, 80, 80));
+        using var factory = new GdiGraphicsFactory();
+        var layout = (ManagedTextLayout)factory.TextEngine.CreateLayout(
+            CreateRequest("#") with { Inlines = [new InlineRun(0, 1, inline)] });
+        using var graphics = new RecordingTextBackendContext();
+        using var renderer = new ManagedTextRenderContext(graphics);
+        renderer.Draw(layout, Point.Zero, new TextDrawOptions(Color.White));
+
+        TextLayoutLineMetrics line = layout.Lines[0];
+        Assert.AreEqual(80, line.Bounds.Height, 0.001);
+        Assert.AreEqual(80, line.Baseline, 0.001);
+        Assert.AreEqual(line.Bounds.Y, inline.DrawOrigin!.Value.Y, 0.001);
+        Assert.IsLessThanOrEqualTo(
+            line.Bounds.Bottom + 0.001,
+            inline.DrawOrigin.Value.Y + inline.Metrics.Height);
+    }
+
+    [TestMethod]
+    public void FullPath_MixedTextAndTallInlineObject_PreservesBothSidesOfBaseline()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("GDI is Windows-only.");
+            return;
+        }
+
+        var inline = new RecordingInlineObject(new InlineMetrics(80, 80, 80));
+        using var factory = new GdiGraphicsFactory();
+        var layout = (ManagedTextLayout)factory.TextEngine.CreateLayout(
+            CreateRequest("a#") with { Inlines = [new InlineRun(1, 1, inline)] });
+        using var graphics = new RecordingTextBackendContext();
+        using var renderer = new ManagedTextRenderContext(graphics);
+        renderer.Draw(layout, Point.Zero, new TextDrawOptions(Color.White));
+
+        TextLayoutLineMetrics line = layout.Lines[0];
+        Assert.AreEqual(line.Bounds.Y, inline.DrawOrigin!.Value.Y, 0.001);
+        Assert.IsGreaterThan(80, line.Bounds.Height);
+        Assert.IsLessThanOrEqualTo(
+            line.Bounds.Bottom + 0.001,
+            inline.DrawOrigin.Value.Y + inline.Metrics.Height);
+    }
+
+    [TestMethod]
+    public void FullPath_ExplicitLineHeight_SplitsSpaceAroundInlineObject()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("GDI is Windows-only.");
+            return;
+        }
+
+        var inline = new RecordingInlineObject(new InlineMetrics(80, 80, 80));
+        using var factory = new GdiGraphicsFactory();
+        var request = CreateRequest("#") with
+        {
+            Inlines = [new InlineRun(0, 1, inline)],
+            Paragraph = new TextParagraphStyle
+            {
+                MaxWidth = double.PositiveInfinity,
+                Wrapping = TextWrapping.NoWrap,
+                LineHeight = 100
+            }
+        };
+        var layout = (ManagedTextLayout)factory.TextEngine.CreateLayout(request);
+        using var graphics = new RecordingTextBackendContext();
+        using var renderer = new ManagedTextRenderContext(graphics);
+        renderer.Draw(layout, Point.Zero, new TextDrawOptions(Color.White));
+
+        TextLayoutLineMetrics line = layout.Lines[0];
+        Assert.AreEqual(100, line.Bounds.Height, 0.001);
+        Assert.AreEqual(90, line.Baseline, 0.001);
+        Assert.AreEqual(10, inline.DrawOrigin!.Value.Y, 0.001);
+        Assert.AreEqual(10, line.Bounds.Bottom - (inline.DrawOrigin.Value.Y + inline.Metrics.Height), 0.001);
+    }
+
+    [TestMethod]
     public void FullPath_Ellipsis_DrawsOnTheLineBaseline()
     {
         if (!OperatingSystem.IsWindows())
