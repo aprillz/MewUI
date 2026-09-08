@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Aprillz.MewUI.Markdown.Sample</RootNamespace>
+    <AssemblyName>Aprillz.MewUI.Markdown.Sample</AssemblyName>
+    <MewUIBackend>Direct2D</MewUIBackend>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\MewUI\MewUI.csproj" />
+    <ProjectReference Include="..\..\extensions\MewUI.Markdown\MewUI.Markdown.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Platform.Win32\MewUI.Platform.Win32.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Backend.Direct2D\MewUI.Backend.Direct2D.csproj" />
+  </ItemGroup>
+
+  <Import Project="..\..\build\Aprillz.MewUI.targets" />
+
+</Project>
