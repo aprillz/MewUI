@@ -14,4 +14,10 @@
     <ProjectReference Include="..\..\extensions\MewUI.Markdown\MewUI.Markdown.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Headless window helpers shared with the core test project for focus and DPI scenarios. -->
+    <Compile Include="..\MewUI.Test\Infrastructure\HeadlessWindow.cs" Link="Infrastructure\HeadlessWindow.cs" />
+    <Compile Include="..\MewUI.Test\Infrastructure\HeadlessWindowBackend.cs" Link="Infrastructure\HeadlessWindowBackend.cs" />
+  </ItemGroup>
+
 </Project>

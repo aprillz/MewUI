@@ -783,8 +783,8 @@ public sealed class MarkdownPresenterTests
         var pending = new TaskCompletionSource<MarkdownImageLease?>(TaskCreationOptions.RunContinuationsAsynchronously);
         var released = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var resolver = new PendingResolver(pending);
-        var image = new MarkdownImage(new MarkdownSpan("alt", Url: "image.png", Image: true), null, resolver);
-        image.Measure(new Size(200, 100));
+        var image = new MarkdownInlineImage(new MarkdownSpan("alt", Url: "image.png", Image: true), null, resolver, static () => { });
+        image.Start(null, null);
         image.Dispose();
 
         pending.SetResult(new MarkdownImageLease(new StubImageSource(), () => released.TrySetResult(true)));

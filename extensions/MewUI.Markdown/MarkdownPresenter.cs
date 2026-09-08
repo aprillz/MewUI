@@ -5,7 +5,7 @@ using Aprillz.MewUI.Text;
 namespace Aprillz.MewUI.Markdown;
 
 /// <summary>Displays Markdown without owning a scroll viewport; properties must be changed on the UI thread.</summary>
-public class MarkdownPresenter : Control, ISubtreeInvalidationHost, ILogicalTreeHost
+public partial class MarkdownPresenter : Control, ISubtreeInvalidationHost, ILogicalTreeHost
 {
     private const double LIST_MARKER_SPACING = 8;
 
@@ -48,9 +48,13 @@ public class MarkdownPresenter : Control, ISubtreeInvalidationHost, ILogicalTree
     private bool _disposed;
 
     /// <summary>Creates a presenter with no internal scroll viewer.</summary>
-    public MarkdownPresenter() { }
+    public MarkdownPresenter() => InitializeSelection();
 
-    private protected MarkdownPresenter(bool scrollable) => _scrollable = scrollable;
+    private protected MarkdownPresenter(bool scrollable)
+    {
+        _scrollable = scrollable;
+        InitializeSelection();
+    }
 
     /// <summary>Gets or sets the Markdown source; equal values preserve the current tree.</summary>
     public string Markdown { get => GetValue(MarkdownProperty); set => SetValue(MarkdownProperty, value ?? string.Empty); }
@@ -90,6 +94,7 @@ public class MarkdownPresenter : Control, ISubtreeInvalidationHost, ILogicalTree
             }
             CancelBackgroundParse();
             _document = null;
+            ClearSelectionState();
             // A different document starts at the top; re-rendering the same one keeps its position.
             _scroll?.SetScrollOffsets(0, 0);
             _carriedAnchor = null;
@@ -171,6 +176,7 @@ public class MarkdownPresenter : Control, ISubtreeInvalidationHost, ILogicalTree
             return;
         }
         _document = parsed;
+        ClearSelectionState();
         _scroll?.SetScrollOffsets(0, 0);
         ClearBlocks();
         InvalidateMeasure();
@@ -199,11 +205,6 @@ public class MarkdownPresenter : Control, ISubtreeInvalidationHost, ILogicalTree
 
     internal static void DisposeTree(Element element)
     {
-        if (element is MarkdownImage image)
-        {
-            image.Dispose();
-            return;
-        }
         if (element is IVisualTreeHost host)
         {
             var children = new List<Element>();
@@ -357,11 +358,22 @@ public class MarkdownPresenter : Control, ISubtreeInvalidationHost, ILogicalTree
                 Application.Current.PlatformServices.Clipboard?.TrySetText(text);
             }
         };
+        FrameworkElement codeText;
+        if (custom != null)
+        {
+            codeText = custom;
+        }
+        else
+        {
+            // The default code text is a paragraph so it joins the document selection.
+            codeText = new MarkdownParagraph(block.Spans, MarkdownTheme, ActivateLink) { Wrap = false, PlainCode = true };
+            AssignTextUnit(codeText, block);
+        }
         var content = new ScrollViewer
         {
             Padding = new Thickness(8, language == null ? 8 : 28, 8, 8),
             HorizontalScroll = ScrollMode.Auto, VerticalScroll = ScrollMode.Disabled,
-            Content = custom ?? new TextBlock { Text = text, FontFamily = MarkdownTheme.CodeFontFamily }
+            Content = codeText
         };
         var overlay = new MarkdownOverlayCanvas();
         if (language != null)
@@ -446,6 +458,7 @@ public class MarkdownPresenter : Control, ISubtreeInvalidationHost, ILogicalTree
             : block.Spans.Where(span => !span.TaskChecked.HasValue).ToArray();
 
         FrameworkElement result = CreateParagraph(contentSpans, block.Kind == MarkdownBlockKind.Heading, block.Level, block.Alignment);
+        AssignTextUnit(result, block);
         if (taskSpan != null)
         {
             var task = new CheckBox
@@ -606,6 +619,16 @@ public class MarkdownPresenter : Control, ISubtreeInvalidationHost, ILogicalTree
         return list;
     }
 
+    // Elements rendered from a parsed leaf block join the selection under that block's unit index.
+    private void AssignTextUnit(FrameworkElement element, MarkdownBlock block)
+    {
+        if (element is ISelectableText selectable && _document != null)
+        {
+            selectable.TextUnit = _document.GetTextUnit(block);
+            ApplySelectionTo(selectable);
+        }
+    }
+
     private bool IsAttached(Element element)
     {
         for (Element? current = element; current != null; current = current.Parent)
@@ -677,8 +700,11 @@ public class MarkdownPresenter : Control, ISubtreeInvalidationHost, ILogicalTree
         return (root?.DesiredSize ?? Size.Empty).Inflate(Padding);
     }
 
-    protected override void ArrangeContent(Rect bounds) =>
+    protected override void ArrangeContent(Rect bounds)
+    {
         DocumentRoot?.Arrange(_scrollable ? bounds : bounds.Deflate(Padding));
+        FlushPendingLinkFocus();
+    }
 
     protected override void RenderSubtree(IGraphicsContext context) => DocumentRoot?.Render(context);
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor) => DocumentRoot is not Element root || visitor(root);

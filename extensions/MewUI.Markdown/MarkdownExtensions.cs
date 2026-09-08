@@ -21,6 +21,10 @@ public static class MarkdownExtensions
     public static T Renderers<T>(this T control, MarkdownRenderers? renderers) where T : MarkdownPresenter { control.Renderers = renderers; return control; }
     /// <summary>Sets the background parse delay; zero parses synchronously.</summary>
     public static T ParseDelay<T>(this T control, TimeSpan delay) where T : MarkdownPresenter { control.ParseDelay = delay; return control; }
+    /// <summary>Sets whether text can be selected.</summary>
+    public static T IsSelectionEnabled<T>(this T control, bool enabled) where T : MarkdownPresenter { control.IsSelectionEnabled = enabled; return control; }
+    /// <summary>Subscribes to selection changes.</summary>
+    public static T OnSelectionChanged<T>(this T control, Action handler) where T : MarkdownPresenter { control.SelectionChanged += handler; return control; }
     /// <summary>Subscribes to background parse failures.</summary>
     public static T OnParseFailed<T>(this T control, Action<Exception> handler) where T : MarkdownPresenter { control.ParseFailed += handler; return control; }
 }
