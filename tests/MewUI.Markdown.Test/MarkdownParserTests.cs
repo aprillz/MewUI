@@ -168,6 +168,24 @@ public sealed class MarkdownParserTests
     }
 
     [TestMethod]
+    public void LinkedImagePreservesImageAndLinkDestinations()
+    {
+        const string source = "[![alt](demo:image \"image title\")](target \"link title\")";
+        var span = MarkdownParser.Parse(source, new MarkdownOptions())
+            .SelectMany(DescendantSpans)
+            .Single();
+
+        Assert.IsTrue(span.Image);
+        Assert.AreEqual("alt", span.Text);
+        Assert.AreEqual("demo:image", span.Url);
+        Assert.AreEqual("image title", span.Title);
+        Assert.AreEqual("target", span.LinkUrl);
+        Assert.AreEqual("link title", span.LinkTitle);
+        Assert.AreEqual(0, span.SourceStart);
+        Assert.AreEqual(source.Length, span.SourceLength);
+    }
+
+    [TestMethod]
     public void TableAlignmentAndHeadingAnchorsAreMapped()
     {
         var blocks = MarkdownParser.Parse("# Heading\n\n| Left | Center | Right |\n| :--- | :---: | ---: |\n| a | b | c |", new MarkdownOptions());
@@ -463,6 +481,28 @@ public sealed class MarkdownParagraphTests
 [DoNotParallelize]
 public sealed class MarkdownPresenterTests
 {
+    [TestMethod]
+    public void LinkedImageRaisesOuterLinkRequest()
+    {
+        EnsureGdi();
+        MarkdownLinkRequestedEventArgs? requested = null;
+        using var presenter = new MarkdownPresenter
+        {
+            Markdown = "[![alt](demo:image)](page)",
+            BaseUri = new Uri("https://example.test/docs/")
+        };
+        presenter.LinkRequested += args => requested = args;
+        presenter.Measure(new Size(320, 200));
+        var paragraph = Descendants(presenter.DocumentRoot!).OfType<MarkdownParagraph>().Single();
+
+        paragraph.HandleKey(new KeyEventArgs(Key.Enter, 0));
+
+        Assert.IsNotNull(requested);
+        Assert.AreEqual("page", requested.Url);
+        Assert.AreEqual(new Uri("https://example.test/docs/page"), requested.ResolvedUri);
+        Assert.AreEqual("[![alt](demo:image)](page)".Length, requested.SourceLength);
+    }
+
     [TestMethod]
     public void ViewerForwardsPaddingToOwnedScrollViewer()
     {
