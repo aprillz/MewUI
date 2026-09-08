@@ -17,4 +17,10 @@ public static class MarkdownExtensions
     public static T CodeBlockFactory<T>(this T control, Func<string, string?, Controls.FrameworkElement?>? factory) where T : MarkdownPresenter { control.CodeBlockFactory = factory; return control; }
     /// <summary>Subscribes to host-handled link requests.</summary>
     public static T OnLinkRequested<T>(this T control, Action<MarkdownLinkRequestedEventArgs> handler) where T : MarkdownPresenter { control.LinkRequested += handler; return control; }
+    /// <summary>Sets the custom renderer registry.</summary>
+    public static T Renderers<T>(this T control, MarkdownRenderers? renderers) where T : MarkdownPresenter { control.Renderers = renderers; return control; }
+    /// <summary>Sets the background parse delay; zero parses synchronously.</summary>
+    public static T ParseDelay<T>(this T control, TimeSpan delay) where T : MarkdownPresenter { control.ParseDelay = delay; return control; }
+    /// <summary>Subscribes to background parse failures.</summary>
+    public static T OnParseFailed<T>(this T control, Action<Exception> handler) where T : MarkdownPresenter { control.ParseFailed += handler; return control; }
 }

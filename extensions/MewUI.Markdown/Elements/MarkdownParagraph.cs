@@ -11,6 +11,8 @@ internal sealed class MarkdownParagraph : TextElement
     private readonly Action<MarkdownSpan> _activate;
     private readonly MarkdownTheme _theme;
     private readonly IReadOnlyList<MarkdownInlineImage> _images;
+    // Custom inline objects aligned with the span list; null entries are plain text.
+    private readonly IReadOnlyList<IInlineTextObject?>? _objects;
     private readonly List<(int Start, int Length, MarkdownSpan Span)> _links = [];
     private readonly List<Rect> _rangeBounds = [];
     private readonly Dictionary<TextRunStyle, IFont> _metricFonts = [];
@@ -27,11 +29,13 @@ internal sealed class MarkdownParagraph : TextElement
         MarkdownTheme theme,
         Action<MarkdownSpan> activate,
         Uri? baseUri = null,
-        IMarkdownImageResolver? resolver = null)
+        IMarkdownImageResolver? resolver = null,
+        IReadOnlyList<IInlineTextObject?>? objects = null)
     {
         _spans = spans;
         _theme = theme;
         _activate = activate;
+        _objects = objects;
         _images = spans.Where(static span => span.Image)
             .Select(span => new MarkdownInlineImage(span, baseUri, resolver, InvalidateImage))
             .ToArray();
@@ -93,13 +97,19 @@ internal sealed class MarkdownParagraph : TextElement
         var runs = new List<GeometryStyleRun>();
         var inlines = new List<InlineRun>();
         int offset = 0;
-        foreach (var span in _spans)
+        for (int spanIndex = 0; spanIndex < _spans.Count; spanIndex++)
         {
+            var span = _spans[spanIndex];
             string visualText = GetVisualText(span);
             if (visualText.Length > 0)
             {
                 runs.Add(new GeometryStyleRun(offset, visualText.Length, ResolveSpanStyle(style, span)));
-                if (span.Image)
+                IInlineTextObject? inlineObject = _objects?[spanIndex];
+                if (inlineObject != null)
+                {
+                    inlines.Add(new InlineRun(offset, visualText.Length, inlineObject));
+                }
+                else if (span.Image)
                 {
                     MarkdownInlineImage image = _images[imageIndex++];
                     image.Start(Application.IsRunning ? Application.Current.Dispatcher : null, SynchronizationContext.Current);
@@ -394,6 +404,13 @@ internal sealed class MarkdownParagraph : TextElement
         foreach (var image in _images)
         {
             image.Dispose();
+        }
+        if (_objects != null)
+        {
+            foreach (var inlineObject in _objects)
+            {
+                (inlineObject as IDisposable)?.Dispose();
+            }
         }
         base.OnDispose();
     }
