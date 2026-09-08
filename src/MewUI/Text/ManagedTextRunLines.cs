@@ -421,30 +421,37 @@ internal sealed partial class ManagedTextEngine
     {
         var defaultFont = GetFont(snapshot.DefaultStyle, snapshot.Dpi);
         double width = 0;
-        double naturalHeight = 0;
-        double baseline = 0;
-        double textHeight = 0;
+        double measuredHeight = 0;
+        double contentAscent = 0;
+        double contentDescent = 0;
         for (int index = start; index < end; index++)
         {
             ref readonly var fragment = ref cells[index].Fragment;
             width += cellWidths[index];
-            naturalHeight = Math.Max(naturalHeight, fragment.MeasuredHeight);
-            baseline = Math.Max(baseline, fragment.Baseline);
-            // Measured against the fonts' own ascent and descent, not the measured heights: those
-            // already carry the font's line gap, so comparing with them would find nothing to split.
-            textHeight = Math.Max(textHeight, fragment.Font.Ascent + fragment.Font.Descent);
+            measuredHeight = Math.Max(measuredHeight, fragment.MeasuredHeight);
+            contentAscent = Math.Max(contentAscent, fragment.Baseline);
+            double alignedHeight = fragment.Kind == ManagedTextRunKind.Inline
+                ? fragment.MeasuredHeight
+                : fragment.Font.Ascent + fragment.Font.Descent;
+            contentDescent = Math.Max(
+                contentDescent,
+                Math.Max(0, alignedHeight - fragment.Baseline));
         }
 
-        double height = ResolveLineHeight(snapshot.Paragraph, GetFontLineHeight(context, defaultFont), naturalHeight);
-        if (baseline <= 0)
+        if (contentAscent <= 0)
         {
-            baseline = defaultFont.Ascent;
+            contentAscent = defaultFont.Ascent;
         }
-        if (textHeight <= 0)
+        if (contentDescent <= 0 && start == end)
         {
-            textHeight = defaultFont.Ascent + defaultFont.Descent;
+            contentDescent = defaultFont.Descent;
         }
-        baseline = ApplyHalfLeading(baseline, height, textHeight);
+        double contentHeight = contentAscent + contentDescent;
+        double height = ResolveLineHeight(
+            snapshot.Paragraph,
+            GetFontLineHeight(context, defaultFont),
+            Math.Max(measuredHeight, contentHeight));
+        double baseline = ApplyHalfLeading(contentAscent, height, contentHeight);
 
         (double trailingWhitespace, int trailingWhitespaceLength) =
             GetTrailingWhitespace(snapshot, cells, cellWidths, start, end);
