@@ -15,6 +15,8 @@ internal interface ITextBackendMeasurementContext : IDisposable
 
     Size Measure(ReadOnlySpan<char> text, IFont font);
 
+    double GetRasterBaseline(IFont font);
+
     double[]? GetUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font);
 
     /// <summary>

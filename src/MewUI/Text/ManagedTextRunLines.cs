@@ -184,7 +184,8 @@ internal sealed partial class ManagedTextEngine
             var font = GetFont(snapshot.DefaultStyle, snapshot.Dpi);
             double fontHeight = GetFontLineHeight(context, font);
             double height = ResolveLineHeight(snapshot.Paragraph, fontHeight, fontHeight);
-            double baseline = ApplyHalfLeading(font.Ascent, height, font.Ascent + font.Descent);
+            double baseline = ApplyHalfLeading(
+                context.GetRasterBaseline(font), height, font.Ascent + font.Descent);
             lines.Add(new ManagedTextLine(
                 new TextLayoutLineMetrics(
                     snapshot.Text.Length, 0, 0, new Rect(ResolveLineX(snapshot.Paragraph, 0), y, 0, height), baseline))

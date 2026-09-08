@@ -211,7 +211,7 @@ internal sealed partial class ManagedTextEngine
                     Kind = span[0] == '\t' ? ManagedTextRunKind.Tab : ManagedTextRunKind.NewLine,
                     InlineIndex = -1,
                     MeasuredHeight = font.Ascent + font.Descent,
-                    Baseline = font.Ascent,
+                    Baseline = context.GetRasterBaseline(font),
                     Width = 0,
                     AdvanceStart = -1
                 });
@@ -298,7 +298,7 @@ internal sealed partial class ManagedTextEngine
             Kind = ManagedTextRunKind.Text,
             InlineIndex = -1,
             MeasuredHeight = font.Ascent + font.Descent,
-            Baseline = font.Ascent,
+            Baseline = context.GetRasterBaseline(font),
             AdvanceStart = fragments.AdvanceCount,
             BoundaryStart = fragments.BoundaryCount,
             BoundaryCount = lastBoundary - firstBoundary + 1

@@ -35,6 +35,7 @@ internal sealed class FreeTypeFont : FontBase, IGlyphOutlineFont
                 Descent = descentPx / dpiScale;
                 InternalLeading = Math.Max(0, (heightPx - ascentPx - descentPx) / dpiScale);
                 CapHeight = ResolveCapHeight(face.Face, in metrics, dpiScale, Ascent);
+                XHeight = ResolveXHeight(face.Face, dpiScale, CapHeight);
             }
         }
         catch
@@ -43,6 +44,7 @@ internal sealed class FreeTypeFont : FontBase, IGlyphOutlineFont
             Ascent = size;
             Descent = size * 0.25;
             CapHeight = size * 0.7;
+            XHeight = size * 0.5;
         }
     }
 
@@ -115,6 +117,25 @@ internal sealed class FreeTypeFont : FontBase, IGlyphOutlineFont
         }
 
         return ascent * 0.7;
+    }
+
+    private static unsafe double ResolveXHeight(nint face, double dpiScale, double capHeight)
+    {
+        if (FT.FT_Load_Char(face, 'x', FreeTypeLoad.FT_LOAD_DEFAULT | FreeTypeLoad.FT_LOAD_TARGET_LIGHT) == 0)
+        {
+            var faceRec = (FT_FaceRec*)face;
+            if (faceRec->glyph != 0)
+            {
+                var slot = (FT_GlyphSlotRec*)faceRec->glyph;
+                double xHeightPx = (long)slot->metrics.horiBearingY / 64.0;
+                if (xHeightPx > 0)
+                {
+                    return xHeightPx / dpiScale;
+                }
+            }
+        }
+
+        return capHeight * 0.72;
     }
 
     public unsafe bool TryAppendGlyphOutline(PathGeometry path, char ch, Point baselineOrigin, out double advance)

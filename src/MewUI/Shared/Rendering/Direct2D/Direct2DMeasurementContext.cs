@@ -15,6 +15,9 @@ internal sealed unsafe class Direct2DMeasurementContext : MeasureGraphicsContext
 
     public override double DpiScale => 1.0;
 
+    public override double GetRasterBaseline(IFont font)
+        => Math.Round(font.Ascent * _pixelsPerDip, MidpointRounding.AwayFromZero) / _pixelsPerDip;
+
     public Direct2DMeasurementContext(nint dwriteFactory, uint dpi = 96, DWriteTextFormatCache? textFormatCache = null)
     {
         _dwriteFactory = dwriteFactory;

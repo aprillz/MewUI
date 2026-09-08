@@ -14,10 +14,15 @@ internal abstract class MeasureGraphicsContextBase : ITextBackendMeasurementCont
 
     public abstract Size MeasureText(ReadOnlySpan<char> text, IFont font, double maxWidth);
 
+    public virtual double GetRasterBaseline(IFont font) => font.Ascent;
+
     bool ITextBackendMeasurementContext.SupportsUtf16PrefixAdvances => this is ITextAdvanceSource;
 
     Size ITextBackendMeasurementContext.Measure(ReadOnlySpan<char> text, IFont font)
         => MeasureText(text, font);
+
+    double ITextBackendMeasurementContext.GetRasterBaseline(IFont font)
+        => GetRasterBaseline(font);
 
     double[]? ITextBackendMeasurementContext.GetUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font)
         => this is ITextAdvanceSource source ? source.GetUtf16PrefixAdvances(text, font) : null;
