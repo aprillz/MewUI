@@ -776,24 +776,17 @@ internal sealed class TextLayoutRequestSnapshot
         hash.Add(style.BaselineOffset);
     }
 
-    // A quarter of the range keeps every sum with a font metric finite, so no line box can overflow.
-    internal const double MAX_BASELINE_OFFSET = double.MaxValue / 4;
-
     private static void ValidateStyle(TextRunStyle style, string parameterName)
     {
         if (string.IsNullOrWhiteSpace(style.FontFamily) || style.FontSize <= 0 || double.IsNaN(style.FontSize))
         {
             throw new ArgumentException("Text styles require a font family and positive font size.", parameterName);
         }
-        if (!IsValidBaselineOffset(style.BaselineOffset))
+        if (!TextLayoutLimits.IsValidBaselineOffset(style.BaselineOffset))
         {
             throw new ArgumentOutOfRangeException(parameterName, "The baseline offset must be finite.");
         }
     }
-
-    /// <summary>True when a baseline offset is finite and small enough to lay out.</summary>
-    internal static bool IsValidBaselineOffset(double offset)
-        => double.IsFinite(offset) && Math.Abs(offset) <= MAX_BASELINE_OFFSET;
 
     private static void ValidateRange(int start, int length, int textLength, string parameterName)
     {

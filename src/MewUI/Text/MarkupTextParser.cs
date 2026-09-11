@@ -5,15 +5,6 @@ namespace Aprillz.MewUI.Text;
 
 internal static class MarkupTextParser
 {
-    private const int MAX_NESTING = 128;
-    private const int MAX_TAG_LENGTH = 4096;
-    private const double RELATIVE_SIZE_STEP = 1.2;
-
-    // Synthetic scripts: a script's size relative to its parent, and its baseline shift as a fraction of the parent's size.
-    private const double SCRIPT_SIZE_SCALE = 0.75;
-    private const double SUPERSCRIPT_SHIFT = 0.35;
-    private const double SUBSCRIPT_SHIFT = -0.20;
-
     public static MarkupTextDocument Parse(string source)
     {
         if (source.Length == 0)
@@ -103,7 +94,7 @@ internal static class MarkupTextParser
             return false;
         }
 
-        if (stack.Count >= MAX_NESTING)
+        if (stack.Count >= TextMarkupConstants.MAX_NESTING)
         {
             return false;
         }
@@ -133,9 +124,9 @@ internal static class MarkupTextParser
         switch (tag.Name)
         {
             case "sup":
-                return TryApplyScript(ref style, SUPERSCRIPT_SHIFT);
+                return TryApplyScript(ref style, TextMarkupConstants.SUPERSCRIPT_SHIFT);
             case "sub":
-                return TryApplyScript(ref style, SUBSCRIPT_SHIFT);
+                return TryApplyScript(ref style, TextMarkupConstants.SUBSCRIPT_SHIFT);
             case "b":
             case "strong":
                 style = style with { FontWeight = MewUI.FontWeight.Bold };
@@ -156,10 +147,10 @@ internal static class MarkupTextParser
                 style = style with { FontFamily = null, UsesMonospaceFont = true };
                 break;
             case "big":
-                style = ScaleFontSize(style, RELATIVE_SIZE_STEP);
+                style = ScaleFontSize(style, TextMarkupConstants.RELATIVE_SIZE_STEP);
                 break;
             case "small":
-                style = ScaleFontSize(style, 1.0 / RELATIVE_SIZE_STEP);
+                style = ScaleFontSize(style, 1.0 / TextMarkupConstants.RELATIVE_SIZE_STEP);
                 break;
             case "span":
             case "font":
@@ -237,7 +228,7 @@ internal static class MarkupTextParser
         {
             scripted = style with
             {
-                FontSize = absoluteSize * SCRIPT_SIZE_SCALE,
+                FontSize = absoluteSize * TextMarkupConstants.SCRIPT_SIZE_SCALE,
                 BaselineOffset = style.BaselineOffset + shift * absoluteSize
             };
         }
@@ -245,7 +236,7 @@ internal static class MarkupTextParser
         {
             scripted = style with
             {
-                FontSizeScale = style.FontSizeScale * SCRIPT_SIZE_SCALE,
+                FontSizeScale = style.FontSizeScale * TextMarkupConstants.SCRIPT_SIZE_SCALE,
                 BaselineOffsetScale = style.BaselineOffsetScale + shift * style.FontSizeScale
             };
         }
@@ -254,8 +245,8 @@ internal static class MarkupTextParser
             ? double.IsFinite(size) && size > 0
             : double.IsFinite(scripted.FontSizeScale) && scripted.FontSizeScale > 0;
         if (!usableSize ||
-            !TextLayoutRequestSnapshot.IsValidBaselineOffset(scripted.BaselineOffset) ||
-            !TextLayoutRequestSnapshot.IsValidBaselineOffset(scripted.BaselineOffsetScale))
+            !TextLayoutLimits.IsValidBaselineOffset(scripted.BaselineOffset) ||
+            !TextLayoutLimits.IsValidBaselineOffset(scripted.BaselineOffsetScale))
         {
             return false;
         }
@@ -366,7 +357,7 @@ internal static class MarkupTextParser
         char quote = '\0';
         while (end < source.Length)
         {
-            if (end - start > MAX_TAG_LENGTH)
+            if (end - start > TextMarkupConstants.MAX_TAG_LENGTH)
             {
                 end = start + 1;
                 return false;
@@ -676,7 +667,7 @@ internal sealed record MarkupTextDocument(string Text, MarkupTextSpan[] Spans)
                 Italic = markupStyle.Italic || defaultStyle.Italic,
                 Decoration = markupStyle.Decoration | defaultStyle.Decoration,
                 // An owner size too large for the resolved shift keeps the owner's offset instead of failing the layout.
-                BaselineOffset = TextLayoutRequestSnapshot.IsValidBaselineOffset(offset) ? offset : defaultStyle.BaselineOffset
+                BaselineOffset = TextLayoutLimits.IsValidBaselineOffset(offset) ? offset : defaultStyle.BaselineOffset
             };
 
             if (style != defaultStyle)
