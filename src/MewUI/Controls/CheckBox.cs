@@ -208,19 +208,31 @@ public partial class CheckBox : CommandSourceControl
     {
         base.OnMouseUp(e);
 
-        if (e.Button != MouseButton.Left || !IsPressed)
+        if (e.Button != MouseButton.Left || !IsMouseCaptured)
         {
             return;
         }
 
-        _pressCapture.EndPress();
+        bool wasPressed = _pressCapture.EndPress();
 
-        if (IsEffectivelyEnabled && Bounds.Contains(e.Position))
+        if (wasPressed && IsEffectivelyEnabled && Bounds.Contains(e.Position))
         {
             Toggle();
         }
 
         e.Handled = true;
+    }
+
+    protected override void OnMouseEnter()
+    {
+        base.OnMouseEnter();
+        _pressCapture.PointerEntered();
+    }
+
+    protected override void OnMouseLeave()
+    {
+        base.OnMouseLeave();
+        _pressCapture.PointerLeft();
     }
 
     protected override void OnKeyUp(KeyEventArgs e)

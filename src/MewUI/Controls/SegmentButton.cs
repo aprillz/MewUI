@@ -169,8 +169,11 @@ public sealed partial class SegmentButton : CommandSourceControl
 
         if (e.Button == MouseButton.Left && IsEffectivelyEnabled)
         {
-            _pressCapture.BeginPress();
-            Activate();
+            if (_pressCapture.BeginPress())
+            {
+                Activate();
+            }
+
             e.Handled = true;
         }
     }
@@ -192,7 +195,7 @@ public sealed partial class SegmentButton : CommandSourceControl
     {
         base.OnMouseUp(e);
 
-        if (e.Button == MouseButton.Left && IsPressed)
+        if (e.Button == MouseButton.Left && IsMouseCaptured)
         {
             _pressCapture.EndPress();
 
@@ -200,10 +203,16 @@ public sealed partial class SegmentButton : CommandSourceControl
         }
     }
 
+    protected override void OnMouseEnter()
+    {
+        base.OnMouseEnter();
+        _pressCapture.PointerEntered();
+    }
+
     protected override void OnMouseLeave()
     {
         base.OnMouseLeave();
-        _pressCapture.CancelPress();
+        _pressCapture.PointerLeft();
     }
 
     protected override void OnKeyDown(KeyEventArgs e)

@@ -54,19 +54,9 @@ public class RepeatButton : Button
     {
         base.OnMouseUp(e);
 
-        if (e.Button != MouseButton.Left)
+        if (e.Button == MouseButton.Left)
         {
-            return;
-        }
-
-        StopRepeat();
-
-        // A leave earlier in the hold clears IsPressed (Button.OnMouseLeave) without releasing
-        // capture, so the base call above skips its own release; make sure it still happens here.
-        if (IsMouseCaptured && FindVisualRoot() is Window window)
-        {
-            window.ReleaseMouseCapture();
-            e.Handled = true;
+            StopRepeat();
         }
     }
 

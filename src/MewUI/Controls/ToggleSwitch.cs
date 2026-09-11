@@ -162,21 +162,31 @@ public sealed partial class ToggleSwitch : ToggleBase
     {
         base.OnMouseUp(e);
 
-        if (e.Button != MouseButton.Left || !IsPressed)
+        if (e.Button != MouseButton.Left || !IsMouseCaptured)
         {
             return;
         }
 
-        _pressCapture.EndPress();
+        bool wasPressed = _pressCapture.EndPress();
 
-        if (!IsEffectivelyEnabled)
+        if (wasPressed && IsEffectivelyEnabled)
         {
-            return;
+            CommitIsCheckedFromUser(!IsChecked);
         }
-
-        CommitIsCheckedFromUser(!IsChecked);
 
         e.Handled = true;
+    }
+
+    protected override void OnMouseEnter()
+    {
+        base.OnMouseEnter();
+        _pressCapture.PointerEntered();
+    }
+
+    protected override void OnMouseLeave()
+    {
+        base.OnMouseLeave();
+        _pressCapture.PointerLeft();
     }
 
 }

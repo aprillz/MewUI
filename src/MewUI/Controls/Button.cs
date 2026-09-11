@@ -249,12 +249,12 @@ public partial class Button : CommandSourceControl
     {
         base.OnMouseUp(e);
 
-        if (e.Button == MouseButton.Left && IsPressed)
+        if (e.Button == MouseButton.Left && IsMouseCaptured)
         {
-            _pressCapture.EndPress();
+            bool wasPressed = _pressCapture.EndPress();
 
-            // Fire click if still over button
-            if (!SuppressClickOnMouseUp && IsEffectivelyEnabled && Bounds.Contains(e.Position))
+            // Fire click only when the release lands on the still-pressed button
+            if (wasPressed && !SuppressClickOnMouseUp && IsEffectivelyEnabled && Bounds.Contains(e.Position))
             {
                 OnClick();
             }
@@ -266,10 +266,16 @@ public partial class Button : CommandSourceControl
     /// <summary>When true, mouse-up does not raise <see cref="Click"/> (RepeatButton fires it from press/timer instead).</summary>
     private protected virtual bool SuppressClickOnMouseUp => false;
 
+    protected override void OnMouseEnter()
+    {
+        base.OnMouseEnter();
+        _pressCapture.PointerEntered();
+    }
+
     protected override void OnMouseLeave()
     {
         base.OnMouseLeave();
-        _pressCapture.CancelPress();
+        _pressCapture.PointerLeft();
     }
 
     protected override void OnKeyDown(KeyEventArgs e)

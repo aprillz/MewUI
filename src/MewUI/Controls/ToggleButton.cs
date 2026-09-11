@@ -64,14 +64,16 @@ public partial class ToggleButton : ToggleBase
     {
         base.OnMouseUp(e);
 
-        if (e.Handled || e.Button != MouseButton.Left || !IsPressed)
+        if (e.Button != MouseButton.Left || !IsMouseCaptured)
         {
             return;
         }
 
-        _pressCapture.EndPress();
+        // A MouseUp handler that marked the event handled suppresses the toggle, never the release.
+        bool toggleAllowed = !e.Handled;
+        bool wasPressed = _pressCapture.EndPress();
 
-        if (IsEffectivelyEnabled && Bounds.Contains(e.Position))
+        if (toggleAllowed && wasPressed && IsEffectivelyEnabled && Bounds.Contains(e.Position))
         {
             CommitIsCheckedFromUser(!IsChecked);
         }
@@ -79,10 +81,16 @@ public partial class ToggleButton : ToggleBase
         e.Handled = true;
     }
 
+    protected override void OnMouseEnter()
+    {
+        base.OnMouseEnter();
+        _pressCapture.PointerEntered();
+    }
+
     protected override void OnMouseLeave()
     {
         base.OnMouseLeave();
-        _pressCapture.CancelPress();
+        _pressCapture.PointerLeft();
     }
 
     protected override void OnKeyDown(KeyEventArgs e)
