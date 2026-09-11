@@ -35,6 +35,7 @@
 
     <Compile Include="..\MewUI\Shared\Rendering\Common\TextBitmap.cs" LinkBase="Rendering\Common" />
     <Compile Include="..\MewUI\Shared\Rendering\Common\TextCacheKey.cs" LinkBase="Rendering\Common" />
+    <Compile Include="..\MewUI\Shared\Rendering\Common\TextInkInsetPx.cs" LinkBase="Rendering\Common" />
     <Compile Include="..\MewUI\Shared\Rendering\CoreText\*.cs" LinkBase="Rendering\CoreText" />
     <Compile Include="..\MewUI\Shared\Native\MacOS\MetalExt.cs" LinkBase="Native" />
     <Compile Include="..\MewUI\Shared\Native\MacOS\Structs\CGGeometry.cs" LinkBase="Native\Structs" />

@@ -23,14 +23,17 @@ internal static partial class BrowserNative
     [LibraryImport(LibraryName, EntryPoint = "mewui_text_ink_box", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial double MeasureInkBox(string text, string cssFont, out double ascent, out double descent);
 
+    [LibraryImport(LibraryName, EntryPoint = "mewui_text_ink_extent", StringMarshalling = StringMarshalling.Utf8)]
+    internal static unsafe partial double MeasureInkExtent(string text, string cssFont, double* horizontal, double* vertical);
+
     [LibraryImport(LibraryName, EntryPoint = "mewui_text_rasterize", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int RasterizeText(string text, string cssFont, int widthPx, int heightPx, double scale,
-        int red, int green, int blue, int alpha, int horizontalAlignment, int verticalAlignment, int wrap,
+        int red, int green, int blue, int alpha, int insetLeftPx, int insetTopPx, int wrap,
         nint pixels);
 
     [LibraryImport(LibraryName, EntryPoint = "mewui_text_draw_to_texture", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int DrawTextToTexture(string text, string cssFont, int widthPx, int heightPx, double scale,
-        int red, int green, int blue, int alpha, int horizontalAlignment, int verticalAlignment, int wrap,
+        int red, int green, int blue, int alpha, int insetLeftPx, int insetTopPx, int wrap,
         nint texture);
 
     [LibraryImport(LibraryName)]

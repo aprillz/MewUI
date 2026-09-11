@@ -26,6 +26,7 @@
   <ItemGroup>
     <Compile Include="..\MewUI\Shared\Rendering\Common\TextBitmap.cs" LinkBase="Rendering\Common" />
     <Compile Include="..\MewUI\Shared\Rendering\Common\TextCacheKey.cs" LinkBase="Rendering\Common" />
+    <Compile Include="..\MewUI\Shared\Rendering\Common\TextInkInsetPx.cs" LinkBase="Rendering\Common" />
 
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\MewVGGraphicsContext.Common.cs" LinkBase="Rendering\MewVG" />
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\MewVGGraphicsFactory.cs" LinkBase="Rendering\MewVG" />
@@ -53,7 +54,7 @@
     <Compile Include="..\MewUI\Shared\Rendering\Gdi\GdiMeasurementContext.cs" LinkBase="Rendering\Gdi" />
     <Compile Include="..\MewUI\Shared\Rendering\Gdi\GdiTextAdvances.cs" LinkBase="Rendering\Gdi" />
     <Compile Include="..\MewUI\Shared\Rendering\Gdi\GdiWrappedEllipsisHelper.cs" LinkBase="Rendering\Gdi" />
-    <Compile Include="..\MewUI\Shared\Rendering\Gdi\TextInkInsetPx.cs" LinkBase="Rendering\Gdi" />
+    <Compile Include="..\MewUI\Shared\Rendering\Gdi\TextInkInsetRectExtensions.cs" LinkBase="Rendering\Gdi" />
 
     <Compile Include="..\MewUI\Shared\Native\Win32\User32.cs" LinkBase="Native" />
     <Compile Include="..\MewUI\Shared\Native\Win32\Gdi32.cs" LinkBase="Native" />

@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
 using Aprillz.MewUI.Native.FreeType;
+using Aprillz.MewUI.Text;
 using FT = Aprillz.MewUI.Native.FreeType.FreeType;
 
 namespace Aprillz.MewUI.Rendering.FreeType;
@@ -47,6 +48,120 @@ internal sealed class FreeTypeFont : FontBase, IGlyphOutlineFont
             XHeight = size * 0.5;
         }
     }
+
+    private readonly object _glyphInkGate = new();
+    private Dictionary<uint, GlyphInk>? _glyphInk;
+
+    /// <summary>
+    /// Ink of a single-line run that falls outside its advance box and the font's ascent/descent band,
+    /// in device-independent units, from the hinted glyph metrics the rasterizer draws with. Zero for
+    /// code points this face has no glyph for.
+    /// </summary>
+    internal unsafe TextInkOverhang GetRunInkOverhang(ReadOnlySpan<char> text)
+    {
+        if (text.IsEmpty || string.IsNullOrWhiteSpace(FontPath) || PixelHeight <= 0 || Size <= 0)
+        {
+            return TextInkOverhang.None;
+        }
+
+        FreeTypeFaceCache.FaceEntry face;
+        try
+        {
+            face = FreeTypeFaceCache.Instance.Get(FontPath, PixelHeight, Weight, IsItalic);
+        }
+        catch
+        {
+            return TextInkOverhang.None;
+        }
+
+        double dpiScale = PixelHeight / Size;
+        // Same rounding FreeTypeText uses to place the baseline in its bitmap.
+        double baselinePx = Math.Max(1, Math.Round(Ascent * dpiScale));
+        double descentPx = Descent * dpiScale;
+        double left = 0;
+        double right = 0;
+        double above = 0;
+        double below = 0;
+        double advanceAfter = 0;
+        // The right overhang is the furthest any glyph's ink reaches past the run's end, so a wide
+        // italic followed by a narrow glyph still counts; the left one only comes from the first glyph.
+        for (int index = text.Length - 1; index >= 0; index--)
+        {
+            uint code = text[index];
+            if (char.IsLowSurrogate(text[index]) && index > 0 && char.IsHighSurrogate(text[index - 1]))
+            {
+                code = (uint)char.ConvertToUtf32(text[index - 1], text[index]);
+                index--;
+            }
+
+            var ink = GetGlyphInk(face, code);
+            right = Math.Max(right, ink.Right - advanceAfter);
+            above = Math.Max(above, ink.Top - baselinePx);
+            below = Math.Max(below, ink.Bottom - descentPx);
+            advanceAfter += ink.Advance;
+            if (index == 0)
+            {
+                left = ink.Left;
+            }
+        }
+
+        return TextInkOverhang.FromEdges(left / dpiScale, above / dpiScale, right / dpiScale, below / dpiScale);
+    }
+
+    private unsafe GlyphInk GetGlyphInk(FreeTypeFaceCache.FaceEntry face, uint code)
+    {
+        lock (_glyphInkGate)
+        {
+            _glyphInk ??= new Dictionary<uint, GlyphInk>();
+            if (_glyphInk.TryGetValue(code, out var cached))
+            {
+                return cached;
+            }
+        }
+
+        // A code point this face lacks is drawn from the fallback face the rasterizer picks, so its ink
+        // comes from there too.
+        var activeFace = face;
+        uint glyph = face.GetGlyphIndex(code);
+        if (glyph == 0 &&
+            LinuxFontFallbackResolver.Resolve(code, PixelHeight, Weight, IsItalic) is FreeTypeFaceCache.FaceEntry fallbackFace)
+        {
+            activeFace = fallbackFace;
+            glyph = fallbackFace.GetGlyphIndex(code);
+        }
+
+        var ink = default(GlyphInk);
+        if (glyph != 0)
+        {
+            lock (activeFace.SyncRoot)
+            {
+                nint slotPointer =
+                    FT.FT_Load_Glyph(activeFace.Face, glyph, FreeTypeLoad.FT_LOAD_DEFAULT | FreeTypeLoad.FT_LOAD_TARGET_LIGHT) == 0
+                        ? activeFace.GetGlyphSlotPointer()
+                        : 0;
+                if (slotPointer != 0)
+                {
+                    var metrics = ((FT_GlyphSlotRec*)slotPointer)->metrics;
+                    double bearingX = (long)metrics.horiBearingX / 64.0;
+                    double bearingY = (long)metrics.horiBearingY / 64.0;
+                    double width = (long)metrics.width / 64.0;
+                    double height = (long)metrics.height / 64.0;
+                    double advance = (long)metrics.horiAdvance / 64.0;
+                    ink = new GlyphInk(-bearingX, bearingX + width - advance, bearingY, height - bearingY, advance);
+                }
+            }
+        }
+
+        lock (_glyphInkGate)
+        {
+            _glyphInk[code] = ink;
+        }
+        return ink;
+    }
+
+    // Pixel extents of one glyph's ink: past the pen origin on the left, past its advance on the right,
+    // above and below the baseline.
+    private readonly record struct GlyphInk(double Left, double Right, double Top, double Bottom, double Advance);
 
     /// <summary>
     /// Reads the ascent and descent the font asks line layout to use, in pixels at the active size.

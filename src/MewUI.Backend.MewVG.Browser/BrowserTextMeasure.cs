@@ -1,4 +1,5 @@
 using Aprillz.MewUI.Rendering;
+using Aprillz.MewUI.Text;
 
 namespace Aprillz.MewUI.Rendering.MewVG;
 
@@ -42,6 +43,20 @@ internal static class BrowserTextMeasure
         }
 
         return new Size(widest, lineHeight * Math.Max(1, lines));
+    }
+
+    /// <summary>Ink of one run past its advance box and the font's ascent/descent band, in device-independent units.</summary>
+    internal static unsafe TextInkOverhang MeasureInk(ReadOnlySpan<char> text, IFont font)
+    {
+        if (text.IsEmpty)
+        {
+            return TextInkOverhang.None;
+        }
+
+        double* horizontal = stackalloc double[2];
+        double* vertical = stackalloc double[2];
+        BrowserNative.MeasureInkExtent(text.ToString(), BrowserFont.CssFontFor(font), horizontal, vertical);
+        return TextInkOverhang.FromEdges(horizontal[0], vertical[0], horizontal[1], vertical[1]);
     }
 
     internal static double MeasureLine(ReadOnlySpan<char> line, string cssFont)

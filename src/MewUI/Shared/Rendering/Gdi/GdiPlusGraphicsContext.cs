@@ -1281,9 +1281,14 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         var trimming = format.Trimming;
 
         // GDI text bypasses GDI+ WorldTransform - apply transform manually.
+        // A text-engine run rasterizes into a surface grown by its ink overhang and draws unclipped
+        // inside it, so glyphs that reach past the run box survive.
+        var inkInset = TextInkInsetPx.FromOverhang(layout.InkOverhang, _dpiScale);
         bool hasTextTransform = TryGetTextWorldTransform(out var textTransform);
         var bounds = hasTextTransform ? layout.EffectiveBounds : TransformRect(layout.EffectiveBounds);
-        var cullBounds = hasTextTransform ? TransformRect(layout.EffectiveBounds) : bounds;
+        var cullBounds = hasTextTransform
+            ? TransformRect(InflateByInset(layout.EffectiveBounds, inkInset))
+            : InflateByInset(bounds, inkInset);
 
         // Early cull: skip if the bounds rect is entirely outside the current clip region.
         var cullR = ToDeviceRect(cullBounds);
@@ -1292,9 +1297,6 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
             return;
         }
 
-        // A text-engine run rasterizes into a surface grown by its ink overhang and draws unclipped
-        // inside it, so glyphs that reach past the run box survive.
-        var inkInset = GetInkInsetPx(layout);
         if (!hasTextTransform && (_pixelSurface != null || color.A < 255 || EnableAlphaTextHint))
         {
             var r = GetTextLayoutRect(bounds, wrapping);
@@ -1354,6 +1356,11 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
             // rotated text with correct premultiplied alpha instead.
             var rt = GetTextLayoutRect(bounds, wrapping);
             uint fmt = BuildTextFormat(horizontalAlignment, verticalAlignment, wrapping, trimming);
+            if (inkInset.HasInset)
+            {
+                // The temp surface already spans the ink-grown bounding box.
+                fmt |= GdiConstants.DT_NOCLIP;
+            }
             int yOff = 0;
             int txtH = 0;
             if (wrapping != TextWrapping.NoWrap)
@@ -1444,19 +1451,18 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
     protected override TextInkOverhang MeasureRunInkOverhang(ReadOnlySpan<char> text, IFont font, BackendTextLayout layout)
         => font is GdiFont gdiFont ? gdiFont.GetRunInkOverhang(text) : TextInkOverhang.None;
 
-    /// <summary>Device-pixel growth of a run's raster box: its ink overhang plus one antialiasing pixel per side.</summary>
-    private TextInkInsetPx GetInkInsetPx(BackendTextLayout layout)
+    private Rect InflateByInset(Rect rect, TextInkInsetPx inset)
     {
-        if (layout.InkOverhang is not TextInkOverhang ink)
+        if (!inset.HasInset)
         {
-            return default;
+            return rect;
         }
 
-        return new TextInkInsetPx(
-            (int)Math.Ceiling(ink.Left * _dpiScale) + 1,
-            (int)Math.Ceiling(ink.Top * _dpiScale) + 1,
-            (int)Math.Ceiling(ink.Right * _dpiScale) + 1,
-            (int)Math.Ceiling(ink.Bottom * _dpiScale) + 1);
+        return new Rect(
+            rect.X - inset.Left / _dpiScale,
+            rect.Y - inset.Top / _dpiScale,
+            rect.Width + (inset.Left + inset.Right) / _dpiScale,
+            rect.Height + (inset.Top + inset.Bottom) / _dpiScale);
     }
 
     private int ApplyTextClip(RECT boundsPx)

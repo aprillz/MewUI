@@ -57,7 +57,9 @@ internal static unsafe class FreeTypeText
         TextAlignment hAlign,
         TextAlignment vAlign,
         TextWrapping wrapping,
-        TextTrimming trimming = TextTrimming.None)
+        TextTrimming trimming = TextTrimming.None,
+        int insetLeftPx = 0,
+        int insetTopPx = 0)
     {
         if (text.IsEmpty)
         {
@@ -211,8 +213,9 @@ internal static unsafe class FreeTypeText
                 _ => startX
             };
 
-            int penX = lineX;
-            int penY = startY + (lineIndex * lineHeightPx);
+            // A grown raster for glyph ink overhang keeps the run box inset by these offsets.
+            int penX = lineX + insetLeftPx;
+            int penY = startY + insetTopPx + (lineIndex * lineHeightPx);
 
             var lineText = text.Slice(line.Start, line.Length);
             bool trimmed = trimmedFlags[lineIndex];

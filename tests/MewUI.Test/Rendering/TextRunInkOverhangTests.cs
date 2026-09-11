@@ -103,6 +103,99 @@ public sealed class TextRunInkOverhangTests
         });
     }
 
+    [TestMethod]
+    [DynamicData(nameof(Backends), DynamicDataSourceType.Method)]
+    public void LeftOverhang_SurvivesTheRunBox(string backend)
+    {
+        RunOnBackend(backend, factory =>
+        {
+            // A large serif italic f hangs its tail left of the pen origin; the reference puts two spaces in
+            // front so its box starts early, then subtracts their advance.
+            var style = new TextRunStyle("Times New Roman", 64, FontWeight.Normal, true);
+            foreach (double scale in new[] { 1.0, 1.25, 1.5 })
+            {
+                var tight = InkExtent(factory, scale, "f", style, null);
+                var reference = InkExtent(factory, scale, "  f", style, null);
+                int shiftedLeft = reference.Left - (int)Math.Round(reference.PrefixWidth * scale);
+                Console.WriteLine($"[{backend} x{scale}] f left tight={tight.Left} reference={shiftedLeft}");
+                Assert.IsLessThan(-1, shiftedLeft, $"{backend} x{scale}: the reference glyph does not hang left of its origin, so this check proves nothing.");
+                Assert.AreEqual(shiftedLeft, tight.Left, 1, $"{backend} x{scale}: the left overhang was clipped at the run box.");
+            }
+        });
+    }
+
+    [TestMethod]
+    public void Gdi_RotatedRunOnACachedSurface_KeepsItsOverhang()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("GDI is Windows-only.");
+            return;
+        }
+
+        // A quarter turn sends the run through the transformed per-pixel path, where the italic's right
+        // overhang lands below the run box.
+        using var factory = new Aprillz.MewUI.Rendering.Gdi.GdiGraphicsFactory();
+        var style = new TextRunStyle("Segoe UI", FONT_SIZE, FontWeight.Bold, true);
+        var (tight, runBoxBottom) = RotatedInkBottom(factory, "ff", style);
+        var (reference, _) = RotatedInkBottom(factory, "ff  ", style);
+        Console.WriteLine($"[Gdi rotated] ff bottom tight={tight} reference={reference} run box bottom={runBoxBottom:F1}");
+        Assert.IsGreaterThan(runBoxBottom, reference, "the reference ink does not reach past the run box, so this check proves nothing.");
+        Assert.AreEqual(reference, tight, "the rotated italic overhang was clipped at the run box.");
+    }
+
+    /// <summary>Ink bottom row of a run turned a quarter clockwise, and the row its run box ends on.</summary>
+    private static (int InkBottom, double RunBoxBottom) RotatedInkBottom(IGraphicsFactory factory, string text, TextRunStyle style)
+    {
+        const int sizePx = 200;
+        var layout = factory.TextEngine.CreateLayout(new TextLayoutRequest
+        {
+            Text = text.AsMemory(),
+            DefaultStyle = style,
+            Paragraph = new TextParagraphStyle { MaxWidth = 1000 },
+            Transient = true
+        });
+
+        using var surface = factory.CreateSurface(RenderSurfaceDescriptor.CachedImage(sizePx, sizePx, 1));
+        using (var context = factory.CreateContext(surface))
+        {
+            context.BeginFrame(surface);
+            context.Clear(Color.White);
+            context.Translate(120, 20);
+            context.Rotate(Math.PI / 2);
+            var options = new TextDrawOptions(Color.Black, Transient: true);
+            context.Text.Draw(layout, new Point(0, 0), in options);
+            context.EndFrame();
+        }
+
+        var cpu = (ICpuPixelSurface)surface;
+        var pixels = cpu.GetReadOnlyPixelSpan();
+        int stride = cpu.StrideBytes;
+        int bottom = -1;
+        for (int y = 0; y < sizePx; y++)
+        {
+            for (int x = 0; x < sizePx; x++)
+            {
+                int offset = y * stride + x * 4;
+                if (pixels[offset] < 250 || pixels[offset + 1] < 250 || pixels[offset + 2] < 250)
+                {
+                    bottom = y;
+                    break;
+                }
+            }
+        }
+
+        // The run box ends one advance below the origin; the trailing spaces widen only the reference box.
+        double advance = factory.TextEngine.CreateLayout(new TextLayoutRequest
+        {
+            Text = "ff".AsMemory(),
+            DefaultStyle = style,
+            Paragraph = new TextParagraphStyle { MaxWidth = 1000 },
+            Transient = true
+        }).MeasuredSize.Width;
+        return (bottom + 1, 20 + advance);
+    }
+
     private static void RunOnBackend(string backend, Action<IGraphicsFactory> body)
     {
         if (!OperatingSystem.IsWindows())
@@ -135,7 +228,7 @@ public sealed class TextRunInkOverhangTests
         }
     }
 
-    private readonly record struct InkResult(int Right, int Bottom, double RunWidthPx, double LineHeight);
+    private readonly record struct InkResult(int Left, int Right, int Bottom, double RunWidthPx, double LineHeight, double PrefixWidth);
 
     /// <summary>Draws one line at the origin and returns its ink extents in device pixels from the origin.</summary>
     private static InkResult InkExtent(
@@ -173,6 +266,7 @@ public sealed class TextRunInkOverhangTests
         int stride = cpu.StrideBytes;
         int rows = pixels.Length / stride;
         int columns = stride / 4;
+        int left = int.MaxValue;
         int right = -1;
         int bottom = -1;
         for (int y = 0; y < rows; y++)
@@ -182,6 +276,7 @@ public sealed class TextRunInkOverhangTests
                 int offset = y * stride + x * 4;
                 if (pixels[offset] < 250 || pixels[offset + 1] < 250 || pixels[offset + 2] < 250)
                 {
+                    left = Math.Min(left, x);
                     right = Math.Max(right, x);
                     bottom = Math.Max(bottom, y);
                 }
@@ -189,10 +284,14 @@ public sealed class TextRunInkOverhangTests
         }
 
         int originPx = (int)Math.Round(ORIGIN * scale);
+        // Advance of the leading spaces, so a reference drawn with them can be shifted back onto the tight draw.
+        int glyphStart = text.Length - text.TrimStart().Length;
         return new InkResult(
+            left - originPx,
             right + 1 - originPx,
             bottom + 1 - originPx,
             layout.MeasuredSize.Width * scale,
-            layout.Lines[0].Bounds.Height);
+            layout.Lines[0].Bounds.Height,
+            layout.GetCaretBounds(new CharacterHit(glyphStart, 0)).X);
     }
 }
