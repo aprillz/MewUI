@@ -89,9 +89,27 @@ public class DemoWindow : Window
             .BaseUri(new Uri("https://example.test/docs/"))
             .ImageResolver(new DemoImageResolver())
             .OnLinkRequested(link => status.Text = $"Link: {link.Url} | Resolved: {link.ResolvedUri} | Source: {link.SourceStart}+{link.SourceLength}");
+        var gfm = new Button().Content(new TextBlock().Text("GFM: on"));
+        var html = new Button().Content(new TextBlock().Text("HTML: off"));
+        bool gfmEnabled = true;
+        bool htmlEnabled = false;
+
+        void ApplyOptions() => viewer.Options(new MarkdownOptions
+        {
+            UsePipeTables = gfmEnabled,
+            UseTaskLists = gfmEnabled,
+            UseAutoLinks = gfmEnabled,
+            UseStrikethrough = gfmEnabled,
+            UseInserted = gfmEnabled,
+            UseMarked = gfmEnabled,
+            UseHtmlFormatting = htmlEnabled
+        });
 
         void SelectCase(ReviewCase entry)
         {
+            htmlEnabled = entry.UseHtmlFormatting;
+            ((TextBlock)html.Content!).Text(htmlEnabled ? "HTML: on" : "HTML: off");
+            ApplyOptions();
             title.Text(entry.Name);
             description.Text(entry.Notes);
             source.Text(entry.Markdown);
@@ -109,27 +127,23 @@ public class DemoWindow : Window
             .Ref(out var apply)
             .Content(new TextBlock().Text("Render source"))
             .OnClick(handler: () => { viewer.Markdown(source.Text); status.Text("Source applied"); });
-        var gfm = new Button().Content(new TextBlock().Text("GFM: on"));
-        bool enabled = true;
         gfm.OnClick(() =>
         {
-            enabled = !enabled;
-            viewer.Options(new MarkdownOptions
-            {
-                UsePipeTables = enabled,
-                UseTaskLists = enabled,
-                UseAutoLinks = enabled,
-                UseStrikethrough = enabled,
-                UseInserted = enabled,
-                UseMarked = enabled
-            });
-            ((TextBlock)gfm.Content!).Text(enabled ? "GFM: on" : "GFM: off");
+            gfmEnabled = !gfmEnabled;
+            ApplyOptions();
+            ((TextBlock)gfm.Content!).Text(gfmEnabled ? "GFM: on" : "GFM: off");
+        });
+        html.OnClick(() =>
+        {
+            htmlEnabled = !htmlEnabled;
+            ApplyOptions();
+            ((TextBlock)html.Content!).Text(htmlEnabled ? "HTML: on" : "HTML: off");
         });
         new StackPanel()
             .Ref(out var toolbar)
             .Orientation(Orientation.Horizontal)
             .Spacing(8)
-            .Children(apply, gfm);
+            .Children(apply, gfm, html);
         new StackPanel()
             .Ref(out var header)
             .Spacing(6)

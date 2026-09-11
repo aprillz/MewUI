@@ -1,4 +1,4 @@
-internal sealed record ReviewCase(string Name, string Notes, string Markdown);
+internal sealed record ReviewCase(string Name, string Notes, string Markdown, bool UseHtmlFormatting = false);
 
 internal static class ReviewCases
 {
@@ -330,7 +330,49 @@ internal static class ReviewCases
 
                       indented_code_inside_definition();
                 """"),
-            new("13 Unsupported", "Deliberately unsupported: HTML stays literal; math, footnotes, Mermaid and other extensions are not enabled.", """"
+            new("13 HTML formatting", "Limited native text formatting only. Verify nesting, scripts, colors, line breaks, links, wrapping and Sub/Sup alignment.", """"
+                Plain <b>bold</b>, <i>italic</i>, <u>underline</u>, <s>strike</s>, and <code>inline_code()</code>.
+
+                Nested: <strong>bold <em>bold italic <u>underlined</u></em> restored bold</strong> restored plain.
+
+                Scripts: H<sub>2</sub>O, E = mc<sup>2</sup>, nested x<sup>2<sup>n</sup></sup>, and mixed x<sup>a<sub>b</sub></sup>.
+
+                Sizes: <small>small</small>, normal, <big>big</big>, <span size='20px'>20 DIP</span>, <span size='1.5x'>1.5x</span>.
+
+                Font and weight: <font font='Georgia'>Georgia</font>, <tt>monospace</tt>, <span weight='300'>Light</span>, <span weight='700'>Bold 700</span>.
+
+                Colors: <span color='red'>red</span>, <span color='#107C10'>hex</span>, <span color='rgb(0,120,212)'>rgb</span>, <span color='white' background='navy'>fixed background</span>.
+
+                Attributes: <span underline strikethrough color='aqua' background='#60202020'>combined</span> and <u>outer <span underline='false'>removed inside</span> restored</u>.
+
+                Entities: &lt;b&gt; &amp; &quot;quotes&quot; &#9731; &#x1F642;.<br>Explicit HTML break.
+
+                Markdown mixing: <b>HTML bold with *Markdown italic* and [a link](https://example.test/html)</b>.
+
+                HTML comments disappear when formatting is enabled: before <!-- hidden comment --> after.
+
+                <b>
+                Standalone HTML block with a superscript <sup>2</sup>.
+                </b>
+
+                Unsupported stays literal: <badge>badge</badge>, <script>alert('never executed')</script>, <iframe src='https://example.test'></iframe>.
+
+                Malformed stays visible: before </b> after, <b broken='unterminated'.
+                """", true),
+            new("14 Footnotes", "Footnote numbering follows first-reference order. Verify repeated references, multiple paragraphs, formatting and return links.", """"
+                First reference[^details], another note[^short], and the first note again[^details].
+
+                References may use descriptive labels[^long-label] while displaying sequential numbers.
+
+                [^short]: A short footnote.
+
+                [^details]: The first referenced footnote contains **bold**, *italic*, `inline code`, and a [link](https://example.test/footnote).
+
+                    A second paragraph belongs to the same footnote and ends with return links.
+
+                [^long-label]: Labels do not determine the displayed number.
+                """"),
+            new("15 Unsupported", "Deliberately unsupported: structural and executable HTML stays literal; math, Mermaid and other extensions are not enabled.", """"
                 Inline <b>HTML bold</b> and <em>HTML italic</em> must not execute as HTML.
 
                 <div class="sample">
@@ -339,10 +381,6 @@ internal static class ReviewCases
                 </div>
 
                 <!-- HTML comment -->
-
-                Footnote reference[^note].
-
-                [^note]: Footnote definition: not enabled.
 
                 Math: $x^2 + y^2 = z^2$.
 
@@ -359,7 +397,7 @@ internal static class ReviewCases
 
                 ~subscript~ / ^superscript^ are not enabled.
                 """"),
-            new("14 Mixed document", "README-style combination: inspect vertical rhythm, nesting, clipping and scrolling as a whole.", """"
+            new("16 Mixed document", "README-style combination: inspect vertical rhythm, nesting, clipping and scrolling as a whole.", """"
                 # Example project
 
                 A **small native UI** with *styled text*, [documentation](https://example.test/docs) and `code`.
@@ -399,7 +437,7 @@ internal static class ReviewCases
 
                 Parser: Markdig, BSD-2-Clause. [More information](https://github.com/xoofx/markdig).
                 """"),
-            new("15 Malformed / edge", "Unmatched delimiters, unresolved references, empty constructs and an unclosed fence. Content must not vanish or crash.", """"
+            new("17 Malformed / edge", "Unmatched delimiters, unresolved references, empty constructs and an unclosed fence. Content must not vanish or crash.", """"
                 #
 
                 **unclosed bold
@@ -422,12 +460,12 @@ internal static class ReviewCases
                 This fence is intentionally never closed.
                 The last line must remain visible: END-OF-FIXTURE
                 """"),
-            new("16 Long document", "200 repeated sections for scroll/resize review. Not a virtualization or performance pass.",
+            new("18 Long document", "200 repeated sections for scroll/resize review. Not a virtualization or performance pass.",
                 "# Long document\n\n" + string.Join("\n\n", Enumerable.Range(1, 200).Select(index =>
                     $"## Section {index}\n\nParagraph {index}: **bold**, *italic*, `code`, 한글 🌍 and [link {index}](https://example.test/{index}). Resize and scroll to check layout stability.")))
         ];
         string overview = "# Markdown case catalogue\n\nCommonMark core + enabled GFM + unsupported syntax. Select a category for focused inspection.\n\n" +
-            string.Join("\n\n", cases.Take(14).Select(entry => "# " + entry.Name + "\n\n" + entry.Markdown));
-        return new[] { new ReviewCase("00 All cases", "Visual catalogue, not a claim of full Markdown conformance. Edge and long-document fixtures have separate categories.", overview) }.Concat(cases).ToArray();
+            string.Join("\n\n", cases.Take(15).Select(entry => "# " + entry.Name + "\n\n" + entry.Markdown));
+        return new[] { new ReviewCase("00 All cases", "Visual catalogue, not a claim of full Markdown conformance. Edge and long-document fixtures have separate categories.", overview, true) }.Concat(cases).ToArray();
     }
 }
