@@ -1,3 +1,5 @@
+using Aprillz.MewUI.Text;
+
 namespace Aprillz.MewUI.Rendering;
 
 /// <summary>
@@ -14,6 +16,12 @@ internal sealed class BackendTextLayout
     public required double EffectiveMaxWidth { get; init; }
 
     public required double ContentHeight { get; init; }
+
+    /// <summary>
+    /// Set on text-engine run realizations: ink the backend draws outside <see cref="EffectiveBounds"/>
+    /// instead of clipping it. Null for immediate-mode layouts, which keep their box as the clip.
+    /// </summary>
+    internal TextInkOverhang? InkOverhang { get; set; }
 
     /// <summary>Backend-private native handle for rendering.</summary>
     internal nint BackendHandle => Volatile.Read(ref _backendLease)?.Handle ?? 0;

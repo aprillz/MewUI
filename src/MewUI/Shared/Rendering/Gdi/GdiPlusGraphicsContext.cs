@@ -4,6 +4,7 @@ using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Native.Constants;
 using Aprillz.MewUI.Native.Structs;
 using Aprillz.MewUI.Rendering.Gdi.Core;
+using Aprillz.MewUI.Text;
 
 using static Aprillz.MewUI.Rendering.GradientBrushHelper;
 
@@ -1291,6 +1292,9 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
             return;
         }
 
+        // A text-engine run rasterizes into a surface grown by its ink overhang and draws unclipped
+        // inside it, so glyphs that reach past the run box survive.
+        var inkInset = GetInkInsetPx(layout);
         if (!hasTextTransform && (_pixelSurface != null || color.A < 255 || EnableAlphaTextHint))
         {
             var r = GetTextLayoutRect(bounds, wrapping);
@@ -1309,11 +1313,17 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
                     out textHeightPx);
             }
 
+            if (inkInset.HasInset)
+            {
+                r = inkInset.Inflate(r);
+                gdiFormat |= GdiConstants.DT_NOCLIP;
+            }
+
             if (_textCache != null && !_transientText)
             {
                 _textCache.DrawCached(
                     Hdc, text, r, gdiFont, color, gdiFormat, yOffsetPx, textHeightPx,
-                    wrapping, trimming, horizontalAlignment, verticalAlignment);
+                    wrapping, trimming, horizontalAlignment, verticalAlignment, inkInset);
             }
             else
             {
@@ -1331,7 +1341,8 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
                     wrapping,
                     trimming,
                     horizontalAlignment,
-                    verticalAlignment);
+                    verticalAlignment,
+                    inkInset);
             }
             return;
         }
@@ -1393,7 +1404,11 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
                     out textHeightPx);
             }
 
-            int clipState = ApplyTextClip(r);
+            int clipState = ApplyTextClip(inkInset.HasInset ? inkInset.Inflate(r) : r);
+            if (inkInset.HasInset)
+            {
+                gdiFormat |= GdiConstants.DT_NOCLIP;
+            }
 
             bool drawn = false;
             if (trimming == TextTrimming.CharacterEllipsis && wrapping != TextWrapping.NoWrap)
@@ -1424,6 +1439,24 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
                 Gdi32.SelectObject(Hdc, oldFont);
             }
         }
+    }
+
+    protected override TextInkOverhang MeasureRunInkOverhang(ReadOnlySpan<char> text, IFont font, BackendTextLayout layout)
+        => font is GdiFont gdiFont ? gdiFont.GetRunInkOverhang(text) : TextInkOverhang.None;
+
+    /// <summary>Device-pixel growth of a run's raster box: its ink overhang plus one antialiasing pixel per side.</summary>
+    private TextInkInsetPx GetInkInsetPx(BackendTextLayout layout)
+    {
+        if (layout.InkOverhang is not TextInkOverhang ink)
+        {
+            return default;
+        }
+
+        return new TextInkInsetPx(
+            (int)Math.Ceiling(ink.Left * _dpiScale) + 1,
+            (int)Math.Ceiling(ink.Top * _dpiScale) + 1,
+            (int)Math.Ceiling(ink.Right * _dpiScale) + 1,
+            (int)Math.Ceiling(ink.Bottom * _dpiScale) + 1);
     }
 
     private int ApplyTextClip(RECT boundsPx)

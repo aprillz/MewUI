@@ -22,7 +22,8 @@ internal static class OpenGLTextRasterizer
         TextAlignment verticalAlignment,
         TextWrapping wrapping,
         TextTrimming trimming = TextTrimming.None,
-        byte[]? buffer = null)
+        byte[]? buffer = null,
+        TextInkInsetPx inkInset = default)
     {
         widthPx = Math.Max(1, widthPx);
         heightPx = Math.Max(1, heightPx);
@@ -75,6 +76,13 @@ internal static class OpenGLTextRasterizer
                 if (!drawn)
                 {
                     uint format = GdiConstants.DT_NOPREFIX;
+                    if (inkInset.HasInset)
+                    {
+                        // The bitmap was grown by the ink inset; the text lays out in the inner box and
+                        // draws past it into the margin.
+                        rect = inkInset.Inner(widthPx, heightPx);
+                        format |= GdiConstants.DT_NOCLIP;
+                    }
                     format |= wrapping == TextWrapping.NoWrap ? GdiConstants.DT_SINGLELINE : GdiConstants.DT_WORDBREAK;
                     if (trimming == TextTrimming.CharacterEllipsis)
                         format |= GdiConstants.DT_END_ELLIPSIS;
