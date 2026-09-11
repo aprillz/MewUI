@@ -78,8 +78,8 @@ internal sealed partial class ManagedTextEngine : ITextEngine, IDisposable
                     segments[index] = segments[index] with { X = segments[index].X + x };
                 }
             }
-            double baseline = ApplyHalfLeading(
-                context.GetRasterBaseline(font), height, font.Ascent + font.Descent);
+            double rasterBaseline = context.GetRasterBaseline(font);
+            double baseline = ApplyHalfLeading(rasterBaseline, height, font.Ascent + font.Descent);
             double trimTop = 0;
             double trimBottom = 0;
             if (snapshot.Paragraph.LineBoxTrim != LineBoxTrim.None)
@@ -97,7 +97,8 @@ internal sealed partial class ManagedTextEngine : ITextEngine, IDisposable
                 fastSegments: segments)
             {
                 TrimTop = trimTop,
-                TrimBottom = trimBottom
+                TrimBottom = trimBottom,
+                FastRasterBaseline = rasterBaseline
             };
             return new ManagedTextLayout(this, snapshot, [line], new Size(width, boxHeight), isFastPath: true);
         }
@@ -867,6 +868,12 @@ internal sealed class ManagedTextLine(
 
     /// <summary>Line-box trim taken off the bottom (descent and line-height surplus).</summary>
     public double TrimBottom { get; set; }
+
+    /// <summary>
+    /// Baseline of the fast path's single font within its realized run, before half-leading; the run is
+    /// placed so this meets <see cref="TextLayoutLineMetrics.Baseline"/>.
+    /// </summary>
+    public double FastRasterBaseline { get; init; }
 }
 
 internal sealed class ManagedTextLayoutCache : ITextLayoutCache, IDisposable

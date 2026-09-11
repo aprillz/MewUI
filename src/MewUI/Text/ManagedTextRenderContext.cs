@@ -170,6 +170,10 @@ internal sealed class ManagedTextRenderContext : ITextRenderContext, IDisposable
         return new Rect(origin.X + x, top, Math.Max(1, width), Math.Max(1, inkBottom - top));
     }
 
+    /// <summary>Run box of a fast-path segment, placed like a run-path run so both put glyphs on the line baseline.</summary>
+    private static Rect GetFastPathBounds(ManagedTextLine line, Point origin, IFont font, double x, double width)
+        => GetBaselineAlignedBounds(line, origin, x, width, line.FastRasterBaseline, 0, font.Ascent + font.Descent);
+
     private void DrawFastPath(ManagedTextLayout managed, Point origin, Color color, object? owner, bool transient)
     {
         var line = managed.ManagedLines[0];
@@ -183,11 +187,7 @@ internal sealed class ManagedTextRenderContext : ITextRenderContext, IDisposable
 
         foreach (var segment in line.FastSegments ?? [])
         {
-            var bounds = new Rect(
-                origin.X + segment.X,
-                origin.Y + line.Metrics.Bounds.Y - line.TrimTop,
-                Math.Max(1, segment.Width),
-                line.Metrics.Bounds.Height + line.TrimTop + line.TrimBottom);
+            var bounds = GetFastPathBounds(line, origin, font, segment.X, segment.Width);
             var realized = GetOrCreateRun(managed, segment.Start, segment.Length, font, bounds.Width, bounds.Height, transient);
             if (realized is not null)
             {
@@ -223,11 +223,7 @@ internal sealed class ManagedTextRenderContext : ITextRenderContext, IDisposable
 
         Rect startCaret = managed.GetCaretBounds(new CharacterHit(textStart, 0));
         Rect endCaret = managed.GetCaretBounds(new CharacterHit(textEnd, 0));
-        var bounds = new Rect(
-            origin.X + startCaret.X,
-            origin.Y + line.Metrics.Bounds.Y - line.TrimTop,
-            Math.Max(1, endCaret.X - startCaret.X),
-            line.Metrics.Bounds.Height + line.TrimTop + line.TrimBottom);
+        var bounds = GetFastPathBounds(line, origin, font, startCaret.X, endCaret.X - startCaret.X);
         var realized = GetOrCreateRun(managed, textStart, textEnd - textStart, font, bounds.Width, bounds.Height, transient);
         if (realized is not null)
         {
