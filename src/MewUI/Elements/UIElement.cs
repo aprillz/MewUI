@@ -165,6 +165,9 @@ public abstract partial class UIElement : Element
             if (!IsVisible)
             {
                 MarkSubtreeCulled();
+
+                // A hidden holder, or one under this element, cannot receive the release that would end its capture.
+                (FindVisualRoot() as Window)?.ReleaseCaptureWithin(this);
             }
 
             OnVisibilityChanged();
@@ -175,6 +178,12 @@ public abstract partial class UIElement : Element
         }
         else if (property == IsEffectivelyEnabledProperty)
         {
+            // Descendants refresh their own effective state, so only the holder itself is checked here.
+            if (!IsEffectivelyEnabled && IsMouseCaptured)
+            {
+                (FindVisualRoot() as Window)?.ReleaseCaptureWithin(this);
+            }
+
             OnEnabledChanged();
         }
         else if (property == IsFocusedProperty)
@@ -906,9 +915,15 @@ public abstract partial class UIElement : Element
         // Keep the single-focus invariant: a focused element leaving the tree would otherwise strand
         // FocusManager.FocusedElement on a detached element (stale IsFocused / focus border). Release it
         // here, while still attached, so focus-within unwinds up the retained ancestor chain.
-        if ((IsFocused || IsFocusWithin) && oldRoot is Window window)
+        if (oldRoot is Window window)
         {
-            window.FocusManager.ClearFocus();
+            // A holder leaving the tree can no longer receive the release that would end its capture.
+            window.ReleaseCaptureWithin(this);
+
+            if (IsFocused || IsFocusWithin)
+            {
+                window.FocusManager.ClearFocus();
+            }
         }
     }
 

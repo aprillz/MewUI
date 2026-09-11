@@ -229,6 +229,7 @@ internal static class WindowInputRouter
                 }
             }
 
+            var heldBeforePress = window.CapturedElement;
             for (var current = element; current != null && !args.Handled; current = GetInputBubbleParent(window, current))
             {
                 args.Source = current;
@@ -248,14 +249,23 @@ internal static class WindowInputRouter
                     current.RaiseMouseDoubleClick(args);
                 }
             }
+
+            if (window.CapturedElement != null && !ReferenceEquals(window.CapturedElement, heldBeforePress))
+            {
+                window.NotePressCapture(button);
+            }
         }
         else
         {
+            var heldBeforeRelease = window.CapturedElement;
             for (var current = element; current != null && !args.Handled; current = GetInputBubbleParent(window, current))
             {
                 args.Source = current;
                 current.RaiseMouseUp(args);
             }
+
+            // A capture taken while this button's press was routed ends with its release, even when the holder kept it.
+            window.EndPressCapture(button, heldBeforeRelease);
             window.RequerySuggested();
         }
     }

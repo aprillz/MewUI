@@ -699,7 +699,11 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
     public void ReleaseMouseCapture()
     {
-        User32.ReleaseCapture();
+        // ReleaseCapture works on the thread: a capture the system already moved elsewhere (a move loop) stays there.
+        if (User32.GetCapture() == Handle)
+        {
+            User32.ReleaseCapture();
+        }
     }
 
     public nint ProcessMessage(uint msg, nint wParam, nint lParam)
@@ -788,13 +792,12 @@ internal sealed class Win32WindowBackend : IWindowBackend
                 return 0;
 
             case WindowMessages.WM_CANCELMODE:
+                Window.OnOsCaptureCancelled();
+                return User32.DefWindowProc(Handle, msg, wParam, lParam);
+
             case WindowMessages.WM_CAPTURECHANGED:
-                // Capture can be revoked by the OS (e.g. deactivation). Keep UI state consistent.
-                Window.ClearMouseCaptureState();
-                if (Window.Kind == Controls.WindowKind.Popup)
-                {
-                    HandlePopupSurfaceCaptureChanged(msg, lParam);
-                }
+                // lParam is the window taking the capture; the framework ignores the changes it made itself.
+                Window.OnOsCaptureLost(lParam);
                 return User32.DefWindowProc(Handle, msg, wParam, lParam);
 
             case WindowMessages.WM_PAINT:
@@ -2162,38 +2165,6 @@ internal sealed class Win32WindowBackend : IWindowBackend
         return 0;
     }
 
-    /// <summary>
-    /// Maintains the popup dismiss watch (mouse capture) for popup surfaces. Losing capture to nothing
-    /// (an inner control released it) re-arms the watch; losing it to an unrelated window, or a mode
-    /// cancel, asks the framework to light-dismiss.
-    /// </summary>
-    private void HandlePopupSurfaceCaptureChanged(uint msg, nint lParam)
-    {
-        if (msg == WindowMessages.WM_CANCELMODE)
-        {
-            _ = Window.OnPopupSurfaceWatchTransfer(0);
-            return;
-        }
-
-        nint newHolder = lParam;
-        if (newHolder == Handle)
-        {
-            return;
-        }
-
-        if (newHolder == 0)
-        {
-            if (Handle != 0 && User32.IsWindowVisible(Handle))
-            {
-                User32.SetCapture(Handle);
-            }
-        }
-        else
-        {
-            _ = Window.OnPopupSurfaceWatchTransfer(newHolder);
-        }
-    }
-
     private nint HandleActivate(nint wParam)
     {
         bool active = (wParam.ToInt64() & 0xFFFF) != 0;
@@ -2939,9 +2910,8 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
         if (!enabled)
         {
-            // Keep managed UI state consistent while modal.
+            // Keep managed UI state consistent while modal; the window ends its element capture before disabling.
             Window.ClearMouseOverState();
-            Window.ClearMouseCaptureState();
         }
     }
 

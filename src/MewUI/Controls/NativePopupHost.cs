@@ -185,19 +185,6 @@ internal sealed class NativePopupHost : IPopupHost
         }
 
         PopupHostSupport.DetachChrome(entry);
-
-        // Closing a submenu drops the platform dismiss watch with it; re-arm it on the topmost
-        // surviving interactive popup surface so outside presses keep dismissing the rest of the chain.
-        for (int i = _popups.Count - 1; i >= 0; i--)
-        {
-            if (ReferenceEquals(_popups[i].Host, this)
-                && _popups[i].Element.IsHitTestVisible
-                && _popups[i].NativeWindow is PopupWindow remaining)
-            {
-                remaining.RecapturePopupSurface();
-                break;
-            }
-        }
     }
 
     // Native popups draw and hit-test in their own windows, so the owner surface does nothing for them.
