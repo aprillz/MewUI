@@ -1853,7 +1853,7 @@ internal sealed class X11WindowBackend : IWindowBackend
         // hit test and initiate the EWMH resize directly from the shadow/grip area.
         if (isDown && e.button == X11MouseButton.Left && TryGetTransparentResizeEdge(pos, out var resizeEdge))
         {
-            BeginDragResize(resizeEdge);
+            Window.DragResize(resizeEdge);
             return;
         }
 
@@ -2914,7 +2914,6 @@ internal sealed class X11WindowBackend : IWindowBackend
         if (!enabled)
         {
             Window.ClearMouseOverState();
-            Window.ClearMouseCaptureState();
         }
     }
 

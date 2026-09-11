@@ -326,6 +326,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
     internal void ClearMouseCaptureState()
     {
+        _pressCaptureButton = null;
         if (_capturedElement != null)
         {
             _capturedElement.SetMouseCaptured(false);
@@ -1058,15 +1059,25 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     public void Restore() => WindowState = WindowState.Normal;
 
     /// <summary>
-    /// Initiates a window drag move using the platform's native mechanism.
+    /// Initiates a window drag move using the platform's native mechanism. An element capture ends first,
+    /// since the platform move takes the pointer.
     /// Call this from a mouse down handler on a custom title bar element.
     /// </summary>
-    public void DragMove() => _backend?.BeginDragMove();
+    public void DragMove()
+    {
+        EndElementCapture();
+        _backend?.BeginDragMove();
+    }
 
     /// <summary>
-    /// Initiates a window resize from the specified edge using the platform's native mechanism.
+    /// Initiates a window resize from the specified edge using the platform's native mechanism. An element
+    /// capture ends first, since the platform resize takes the pointer.
     /// </summary>
-    public void DragResize(ResizeEdge edge) => _backend?.BeginDragResize(edge);
+    public void DragResize(ResizeEdge edge)
+    {
+        EndElementCapture();
+        _backend?.BeginDragResize(edge);
+    }
 
     private bool _windowStateFromBackend;
 
@@ -1388,10 +1399,22 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     internal virtual bool IsPopupInputForwardTarget(nint windowHandle) => false;
 
     /// <summary>
-    /// Re-arms the platform dismiss watch (raw backend mouse capture) for a popup surface without
-    /// routing input to a captured element. No-op when the backend is absent.
+    /// Arms the platform dismiss watch (the platform mouse capture) for a popup surface without routing input
+    /// to a captured element, and keeps it armed across later captures until the surface is dismissed.
+    /// No-op when the backend is absent.
     /// </summary>
-    internal void RecapturePopupSurface() => _backend?.CaptureMouse();
+    internal void RecapturePopupSurface()
+    {
+        if (_backend == null)
+        {
+            return;
+        }
+
+        var watches = _armedWatches ??= new List<Window>();
+        watches.Remove(this);
+        watches.Add(this);
+        AcquireOsCapture();
+    }
 
     /// <summary>
     /// Shows the window.
@@ -2010,6 +2033,8 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         _modalDisableCount++;
         if (_modalDisableCount == 1)
         {
+            // A disabled window receives no release, so an element capture would outlive the modal.
+            EndElementCapture();
             _backend?.SetEnabled(false);
         }
     }
@@ -2554,7 +2579,9 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     }
 
     /// <summary>
-    /// Captures mouse input for the specified element until released.
+    /// Captures mouse input for the specified element until released. The request is ignored for an element
+    /// that is not in a window's tree, not effectively enabled, or hidden, and the capture ends when the holder
+    /// leaves the tree or becomes disabled or hidden.
     /// </summary>
     /// <param name="element">Element that should receive captured mouse events.</param>
     public void CaptureMouse(UIElement element) => CaptureMouse(element, null);
@@ -2562,13 +2589,13 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     /// <summary>
     /// Captures mouse input for the element and runs <paramref name="onCaptureLost"/> once when the
     /// capture ends for any reason: release, another element capturing, pointer cancel, or the
-    /// platform revoking it.
+    /// platform revoking it. Returns false, without capturing, when the element may not hold the capture.
     /// </summary>
-    internal void CaptureMouse(UIElement element, Action? onCaptureLost)
+    internal bool CaptureMouse(UIElement element, Action? onCaptureLost)
     {
-        if (_lifetimeState == WindowLifetimeState.Closed)
+        if (_lifetimeState == WindowLifetimeState.Closed || !CanHoldMouseCapture(element))
         {
-            return;
+            return false;
         }
 
         // Content hosted in a native popup window reaches this via its owner (FindVisualRoot returns
@@ -2578,19 +2605,17 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         if (inputHost != null && !ReferenceEquals(inputHost, this))
         {
             _captureDelegatedTo = inputHost;
-            inputHost.CaptureMouse(element, onCaptureLost);
-            return;
+            return inputHost.CaptureMouse(element, onCaptureLost);
         }
 
         EnsureBackend();
 
         if (_backend!.Handle == 0)
         {
-            return;
+            return false;
         }
 
-        _backend.CaptureMouse();
-
+        _captureDelegatedTo = null;
         if (_capturedElement != null && !ReferenceEquals(_capturedElement, element))
         {
             _capturedElement.SetMouseCaptured(false);
@@ -2600,6 +2625,8 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         _capturedElement = element;
         _captureLostCallback = onCaptureLost;
         element.SetMouseCaptured(true);
+        AcquireOsCapture();
+        return true;
     }
 
     // The popup surface a capture was delegated to, so a later ReleaseMouseCapture on this owner window
@@ -2621,8 +2648,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             return;
         }
 
-        _backend?.ReleaseMouseCapture();
-        ClearMouseCaptureState();
+        ReleaseLocalCapture();
     }
 
     internal void AttachBackend(IWindowBackend backend)
@@ -2734,6 +2760,12 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         IsActive = isActive;
         FocusManager.InvalidateFocusVisualStates();
 
+        // An inactive window keeps no element capture: its release may land in another application.
+        if (!isActive)
+        {
+            EndElementCapture();
+        }
+
         // Dialogs living in this surface have no backend of their own to hear about the change.
         for (var dialog = ActiveInSurfaceDialog; dialog != null; dialog = dialog.ActiveInSurfaceDialog)
         {
@@ -2776,6 +2808,8 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         {
             return;
         }
+
+        ForgetMouseCapture();
 
         if (Owner != null)
         {

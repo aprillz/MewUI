@@ -69,6 +69,9 @@ internal sealed class PopupWindow : Window
     /// </summary>
     internal void DismissSurface()
     {
+        // The watch and any capture inside end first, so the next popup in the chain takes the capture back.
+        EndPopupWatch();
+
         DismissRequested = null;
         RefreshPlacement = null;
         WatchTransferAllowed = null;

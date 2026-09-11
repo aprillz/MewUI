@@ -3,7 +3,7 @@ namespace Aprillz.MewUI;
 public partial class Window
 {
     /// <summary>
-    /// Acquires backend-level mouse capture for the duration of a drag session.
+    /// Acquires the platform mouse capture for the duration of a drag session.
     /// Does not affect the element-level <see cref="CapturedElement"/> state, since drag routing
     /// uses its own resolution (global cursor + cross-window registry in Phase 4).
     /// </summary>
@@ -11,13 +11,14 @@ public partial class Window
     {
         EnsureBackend();
         if (Backend?.Handle == 0) return;
-        Backend?.CaptureMouse();
+        AcquireOsCapture();
     }
 
-    /// <summary>Releases the backend-level mouse capture acquired by <see cref="CaptureMouseForDrag"/>.</summary>
+    /// <summary>Releases the platform mouse capture acquired by <see cref="CaptureMouseForDrag"/>.</summary>
     internal void ReleaseMouseAfterDrag()
     {
-        Backend?.ReleaseMouseCapture();
+        ReleaseOsCapture();
+        RearmPopupWatch();
     }
 
     /// <summary>

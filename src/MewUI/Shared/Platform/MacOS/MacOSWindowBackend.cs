@@ -689,7 +689,6 @@ internal sealed class MacOSWindowBackend : IWindowBackend
         if (!enabled)
         {
             _window.ClearMouseOverState();
-            _window.ClearMouseCaptureState();
         }
     }
 
