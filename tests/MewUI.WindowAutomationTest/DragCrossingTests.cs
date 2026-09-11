@@ -11,6 +11,7 @@ namespace MewUI.WindowAutomationTest;
 /// to re-fit once the move loop exits.
 /// </summary>
 [TestClass]
+[OSCondition(OperatingSystems.Windows)]
 public sealed class DragCrossingTests
 {
     private const uint WM_ENTERSIZEMOVE = 0x0231;

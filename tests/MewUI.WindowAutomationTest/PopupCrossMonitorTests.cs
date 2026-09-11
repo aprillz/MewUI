@@ -5,6 +5,7 @@ using Aprillz.MewUI.Controls;
 namespace MewUI.WindowAutomationTest;
 
 [TestClass]
+[OSCondition(OperatingSystems.Windows)]
 public sealed class PopupCrossMonitorTests
 {
     [TestMethod]
