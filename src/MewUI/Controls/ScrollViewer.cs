@@ -256,6 +256,10 @@ public sealed class ScrollViewer : ContentControl
 
         _barFade = new ScrollBarFade(this, _vBar, _hBar, InvalidateVisual);
 
+        // A bar keeps the fade revealed while it holds the capture; re-evaluate once the drag lets go.
+        _vBar.CaptureEnded = OnBarCaptureEnded;
+        _hBar.CaptureEnded = OnBarCaptureEnded;
+
         _vBar.ValueChanged += v =>
         {
             VerticalOffset = v;
@@ -577,6 +581,14 @@ public sealed class ScrollViewer : ContentControl
         }
     }
 
+    private void OnBarCaptureEnded()
+    {
+        if (AutoHideScrollBars)
+        {
+            _barFade.UpdateHot();
+        }
+    }
+
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
     {
         if (Content != null && !visitor(Content)) return false;
@@ -847,10 +859,10 @@ public sealed class ScrollViewer : ContentControl
             UpdateFade();
         }
 
-        /// <summary>Recomputes hover from the bars (called on move/wheel) and refreshes the fade.</summary>
+        /// <summary>Recomputes hover from the bars (called on move/wheel and when a bar's drag ends) and refreshes the fade.</summary>
         public void UpdateHot()
         {
-            bool hot = (_vBar.IsVisible && _vBar.IsMouseOver) || (_hBar.IsVisible && _hBar.IsMouseOver);
+            bool hot = IsBarHot(_vBar) || IsBarHot(_hBar);
             if (hot == _hot)
             {
                 return;
@@ -865,10 +877,10 @@ public sealed class ScrollViewer : ContentControl
             UpdateFade();
         }
 
-        /// <summary>Clears hover (pointer left the control) and lets the bars fade out.</summary>
+        /// <summary>Clears hover (pointer left the control) and lets the bars fade out, unless a bar is being dragged.</summary>
         public void ClearHot()
         {
-            if (!_hot)
+            if (!_hot || _vBar.IsMouseCaptured || _hBar.IsMouseCaptured)
             {
                 return;
             }
@@ -876,6 +888,9 @@ public sealed class ScrollViewer : ContentControl
             _hot = false;
             UpdateFade();
         }
+
+        /// <summary>Whether a bar keeps the fade revealed: hovered, or holding the capture for a thumb drag that left it.</summary>
+        private static bool IsBarHot(ScrollBar bar) => bar.IsVisible && (bar.IsMouseOver || bar.IsMouseCaptured);
 
         public void Dispose()
         {

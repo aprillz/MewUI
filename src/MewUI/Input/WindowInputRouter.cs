@@ -48,6 +48,21 @@ internal static class WindowInputRouter
         UpdateMouseOver(window, null);
     }
 
+    /// <summary>
+    /// The element mouse-over follows for the element under the pointer: during an element capture only the
+    /// captured element and its descendants count, so a drag lights up nothing it passes over.
+    /// </summary>
+    internal static UIElement? MouseOverTarget(Window window, UIElement? actualHit)
+    {
+        var captured = window.CapturedElement;
+        if (captured == null || actualHit == null)
+        {
+            return actualHit;
+        }
+
+        return ReferenceEquals(actualHit, captured) || captured.IsAncestorOf(actualHit) ? actualHit : null;
+    }
+
     // Delivers events to the captured element regardless of pointer position. Callers that need
     // the true element under the pointer (mouse-over state, focus/popup-close policy) should call
     // window.HitTest directly instead, since capture must not affect those decisions.
@@ -90,13 +105,12 @@ internal static class WindowInputRouter
             return;
         }
 
-        // Mouse-over must reflect the real element under the pointer, not the capture target,
-        // so IsMouseOver stops tracking a captured element once the pointer leaves it.
+        // Events go to the capture target, while mouse-over follows the pointer within the captured subtree only.
         var actualHit = window.HitTest(positionInWindow);
         var element = window.CapturedElement ?? actualHit;
         if (ProducesHover(pointerType))
         {
-            UpdateMouseOver(window, actualHit);
+            UpdateMouseOver(window, MouseOverTarget(window, actualHit));
         }
 
         var args = new MouseEventArgs(positionInWindow, screenPosition, MewUI.MouseButton.Left, leftDown, rightDown, middleDown, modifiers: modifiers)
@@ -173,7 +187,7 @@ internal static class WindowInputRouter
 
         if (ProducesHover(pointerType))
         {
-            UpdateMouseOver(window, actualHit);
+            UpdateMouseOver(window, MouseOverTarget(window, actualHit));
         }
         else if (isDown)
         {
@@ -266,6 +280,11 @@ internal static class WindowInputRouter
 
             // A capture taken while this button's press was routed ends with its release, even when the holder kept it.
             window.EndPressCapture(button, heldBeforeRelease);
+            if (ProducesHover(pointerType))
+            {
+                UpdateMouseOver(window, MouseOverTarget(window, actualHit));
+            }
+
             window.RequerySuggested();
         }
     }

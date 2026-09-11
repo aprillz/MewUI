@@ -157,9 +157,11 @@ internal sealed partial class TabHeaderButton : ContentControl
 
         if (e.Button == MouseButton.Left && IsEffectivelyEnabled)
         {
-            _pressCapture.BeginPress();
+            if (_pressCapture.BeginPress())
+            {
+                ClickedCallback?.Invoke(Index);
+            }
 
-            ClickedCallback?.Invoke(Index);
             e.Handled = true;
         }
     }
@@ -168,7 +170,7 @@ internal sealed partial class TabHeaderButton : ContentControl
     {
         base.OnMouseUp(e);
 
-        if (e.Button == MouseButton.Left && IsPressed)
+        if (e.Button == MouseButton.Left && IsMouseCaptured)
         {
             _pressCapture.EndPress();
 
@@ -176,10 +178,16 @@ internal sealed partial class TabHeaderButton : ContentControl
         }
     }
 
+    protected override void OnMouseEnter()
+    {
+        base.OnMouseEnter();
+        _pressCapture.PointerEntered();
+    }
+
     protected override void OnMouseLeave()
     {
         base.OnMouseLeave();
-        _pressCapture.CancelPress();
+        _pressCapture.PointerLeft();
     }
 
     protected override void OnKeyDown(KeyEventArgs e)

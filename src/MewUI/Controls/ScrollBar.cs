@@ -71,6 +71,19 @@ public sealed partial class ScrollBar : RangeBase
         Cursor = CursorType.Arrow;
     }
 
+    /// <summary>Called when this bar stops holding the mouse capture, so its owner can refresh state it kept for the drag.</summary>
+    internal Action? CaptureEnded { get; set; }
+
+    protected override void OnMewPropertyChanged(MewProperty property)
+    {
+        base.OnMewPropertyChanged(property);
+
+        if (property == IsMouseCapturedProperty && !IsMouseCaptured)
+        {
+            CaptureEnded?.Invoke();
+        }
+    }
+
     protected override VisualState ComputeVisualState()
     {
         var state = base.ComputeVisualState();

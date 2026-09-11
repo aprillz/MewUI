@@ -331,6 +331,10 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         {
             _capturedElement.SetMouseCaptured(false);
             _capturedElement = null;
+
+            // Hover and the cursor followed the captured element; they follow the pointer again.
+            UpdateCursorForElement(_mouseOverElement);
+            ReevaluateMouseOver();
         }
 
         NotifyCaptureLost();
@@ -403,16 +407,17 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         {
             // A finger does not hover, so a scroll it drives must not light whatever passes under
             // its last position. Only a device that reports an in-range position re-evaluates.
-            if (_lastPointerType == PointerType.Touch)
+            // A window closed before this ran has no tree left to hit-test.
+            if (_lastPointerType == PointerType.Touch || _lifetimeState == WindowLifetimeState.Closed)
             {
                 return;
             }
 
             // When layout/scroll offsets change without an actual mouse move, the element under the cursor can change.
-            // Re-run hit testing at the last known mouse position to keep IsMouseOver state accurate.
-            // Use a real hit test: mouse-over must track the pointer's actual target even during capture.
+            // Re-run hit testing at the last known mouse position to keep IsMouseOver state accurate; during an
+            // element capture only the captured subtree counts, as for a real move.
             var leaf = HitTest(_lastMousePositionDip);
-            WindowInputRouter.UpdateMouseOver(this, leaf);
+            WindowInputRouter.UpdateMouseOver(this, WindowInputRouter.MouseOverTarget(this, leaf));
         });
     }
 
