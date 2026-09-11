@@ -18,18 +18,24 @@ reference. Build-time only: nothing ships into the runtime / NativeAOT output.
 | `MEW1101` | Object initializer -> fluent chain | analyzer + code fix | `InitializerToFluentAnalyzer.cs`, `InitializerToFluentCodeFix.cs` |
 | `MEW1102` | Fluent chain expand / collapse | refactoring | `FluentChainFormatRefactoring.cs` |
 | `MEW1103` | Merge statements into a fluent chain | refactoring | `MergeChainStatementsRefactoring.cs` |
-| `MEW1104` | Property assignment -> fluent call | refactoring | `AssignmentToFluentCallRefactoring.cs` |
+| `MEW1104` | Configuration statement -> fluent call | refactoring | `AssignmentToFluentCallRefactoring.cs` |
+| `MEW1105` | Merge statements into a fluent chain | analyzer + code fix | `ChainStatementAnalyzer.cs`, `ChainStatementCodeFix.cs` |
+| `MEW1106` | Configuration statement -> fluent call | analyzer + code fix | `ChainStatementAnalyzer.cs`, `ChainStatementCodeFix.cs` |
 
 Shared pieces:
 
 - `FluentMethodResolver.cs` resolves a property/event name to its fluent setter extension. The
   extension methods are the source of truth (no mapping table to drift); it also tries the
   `On`-prefixed name (`Click` -> `OnClick`).
-- `FluentChainLayout.cs` is the shared layout engine (used by MEW1101 / MEW1102 / MEW1103): it
-  rebuilds a chain from its structure, expands element children as a tree, keeps values inline, and
+- `ChainStatementDescriber.cs` decides what a single statement contributes to a chain on its
+  receiver (a fluent call, an event subscription, a property assignment, a static attached setter, or
+  a call an extension declares it replaces). MEW1103 / MEW1104 / MEW1105 / MEW1106 all go through it,
+  so they never judge the same statement differently.
+- `FluentChainLayout.cs` is the shared layout engine (used by MEW1101 / MEW1102 / MEW1103 / MEW1105):
+  it rebuilds a chain from its structure, expands element children as a tree, keeps values inline, and
   re-indents multi-line lambda bodies.
 
-20 tests in `tests/MewUI.Analyzers.Test` cover all four.
+52 tests in `tests/MewUI.Analyzers.Test` cover all six.
 
 ## `MEW1101` - Convert object initializer to fluent chain
 
@@ -176,40 +182,102 @@ _titleBar = new Border()
 
 ### Rules
 
-1. **Anchor.** A single local declaration (`var x = ...`) or a simple assignment (`x = ...`).
-2. **Follow-ups.** Consecutive statements that are either `x.Method(...);` (a fluent call) or
-   `x.Event += handler;` (an event subscription, folded in as `.OnEvent(handler)`). Each must return
-   `x`'s own type, so chaining and assigning back to `x` stay valid; the first non-matching statement
-   stops collection.
-3. **`.Ref(out var x)`.** For a *local declaration* of a reference type, the reference is captured
+1. **Anchor.** A single local declaration (`var x = ...`) or a simple assignment (`x = ...`). The
+   assigned value must be an object creation, a call chain, an identifier, or a member access: calls
+   are appended without parentheses, so anything looser (a conditional, say) would change meaning.
+2. **Follow-ups.** Consecutive statements that configure `x` - see the statement kinds below. Each
+   resulting call must return `x`'s own type, so chaining and assigning back to `x` stay valid; the
+   first non-matching statement stops collection.
+3. **Top-level statements.** A file with top-level statements works the same way. Collection stops at
+   the first compilation unit member that is not a statement, so trailing type declarations are never
+   folded in.
+4. **`.Ref(out var x)`.** For a *local declaration* of a reference type, the reference is captured
    inline with `.Ref(out var x)` (the MewUI idiom) instead of keeping a `var x = ...;` statement,
-   when a `Ref` extension exists. Field / property assignments keep `x = chain;`.
+   when a `Ref` extension exists. The call goes right after the expression that creates the instance.
+   Field / property assignments keep `x = chain;`.
 
    ```csharp
-   var panel = new StackPanel();
+   var panel = new StackPanel().Spacing(8);
    panel.Vertical();
-   panel.Spacing(8);
+   panel.Add(header);
+   panel.Add(body);
    // -> Merge into fluent chain
    new StackPanel()
        .Ref(out var panel)
+       .Spacing(8)
        .Vertical()
-       .Spacing(8);
+       .Children(header, body);
    ```
 
-4. The merged chain is expanded via the shared layout engine.
+5. **Collection setters.** Consecutive calls replaced by the same collection setter become one call,
+   as shown above; the setter takes the whole list at once.
+6. The merged chain is expanded via the shared layout engine.
 
-## `MEW1104` - Property assignment to fluent call
+## `MEW1104` - Configuration statement to fluent call
 
-Converts `receiver.Prop = value;` into `receiver.Prop(value);` when a fluent setter for `Prop` exists
-on the receiver's type. Caret on the assignment.
+Converts one statement into the fluent call it is equivalent to. Caret on the statement.
 
 ```csharp
-_titleBar.Child = new DockPanel().Children(...);
-// -> Convert to fluent call
-_titleBar.Child(new DockPanel().Children(...));
+_titleBar.Child = new DockPanel().Children(...);   // -> _titleBar.Child(new DockPanel()...)
+_titleBar.Click += OnClick;                        // -> _titleBar.OnClick(OnClick)
+Grid.SetColumn(_titleBar, 1);                      // -> _titleBar.Column(1)
+panel.AddRange(a, b);                              // -> panel.Children(a, b)
 ```
 
-Not offered when no fluent setter resolves for the assigned member.
+### Statement kinds
+
+These are the shapes MEW1103 folds into a chain and MEW1104 converts on their own.
+
+| Statement | Becomes | How it resolves |
+|---|---|---|
+| `x.Prop = value;` | `.Prop(value)` | an extension named after the property |
+| `x.Event += handler;` | `.OnEvent(handler)` | the `On` prefix convention |
+| `Owner.SetProp(x, value);` | `.Prop(value)` | the `Set` prefix convention, on a static two-parameter method |
+| `x.Add(a);` | `.Children(a)` | an extension that declares it replaces `Add` (see below) |
+
+Not offered when nothing resolves, when the resulting call would not return the receiver's type, or
+when the statement is already a fluent chain.
+
+### Declaring a replacement
+
+A member such as `Panel.Add` cannot be matched to `Children` by name or signature, so the extension
+declares it:
+
+```csharp
+[FluentReplacesMember(nameof(Panel.Add))]
+[FluentReplacesMember(nameof(Panel.AddRange))]
+public static T Children<T>(this T panel, params Element[] children) where T : Panel
+```
+
+The extension's only value parameter must be a `params` array that accepts every argument of the
+call it replaces. Applying it in the member's place must have the same effect and ordering; the
+attribute is the only guarantee of that, so it is added by hand after checking both bodies. The
+attribute is internal to MewUI and read by metadata name, so the analyzer does not reference MewUI.
+
+## `MEW1105` / `MEW1106` - The same two as diagnostics
+
+MEW1103 and MEW1104 need the caret on the right statement. MEW1105 (merge) and MEW1106 (single
+statement) report the same opportunities as `Hidden` diagnostics with the same fixes, so a whole file
+can be converted with Fix All.
+
+Statements absorbed by a MEW1105 merge are not also reported as MEW1106, so the two fixes never
+target the same statement.
+
+Being `Hidden`, they show up only as a lightbulb. To convert a file from the command line, raise the
+severity and run `dotnet format`:
+
+```ini
+# .editorconfig
+[*.cs]
+dotnet_diagnostic.MEW1105.severity = suggestion
+```
+
+```
+dotnet format analyzers <project> --severity info --diagnostics MEW1105
+```
+
+Pass one id per run: `dotnet format` can fail to build a Fix All action when several are combined. A
+run applies only non-overlapping fixes, so repeat it until the file stops changing.
 
 ## Testing
 

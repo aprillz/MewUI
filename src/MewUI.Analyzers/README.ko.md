@@ -17,16 +17,21 @@ MewUI fluent markup용 Roslyn analyzer와 refactoring 모음. NuGet analyzer(`an
 | `MEW1101` | 이니셜라이저 -> fluent 체인 | analyzer + code fix | `InitializerToFluentAnalyzer.cs`, `InitializerToFluentCodeFix.cs` |
 | `MEW1102` | fluent 체인 펼침 / 접기 | refactoring | `FluentChainFormatRefactoring.cs` |
 | `MEW1103` | 문장들을 fluent 체인으로 병합 | refactoring | `MergeChainStatementsRefactoring.cs` |
-| `MEW1104` | 속성 대입 -> fluent 호출 | refactoring | `AssignmentToFluentCallRefactoring.cs` |
+| `MEW1104` | 구성 문장 -> fluent 호출 | refactoring | `AssignmentToFluentCallRefactoring.cs` |
+| `MEW1105` | 문장들을 fluent 체인으로 병합 | analyzer + code fix | `ChainStatementAnalyzer.cs`, `ChainStatementCodeFix.cs` |
+| `MEW1106` | 구성 문장 -> fluent 호출 | analyzer + code fix | `ChainStatementAnalyzer.cs`, `ChainStatementCodeFix.cs` |
 
 공유 컴포넌트:
 
 - `FluentMethodResolver.cs`: 속성/이벤트 이름을 fluent setter 확장으로 해석. **extension 메서드가
   source of truth**(별도 매핑 표 없음 -> drift 없음)이고, `On`-prefix(`Click` -> `OnClick`)도 시도.
-- `FluentChainLayout.cs`: 공유 레이아웃 엔진(MEW1101/1102/1103 공용). 체인을 구조에서 재구성하고,
+- `ChainStatementDescriber.cs`: 문장 하나가 수신자에 대한 어떤 체인 호출인지 판정(fluent 호출, 이벤트
+  구독, 속성 대입, 정적 attached setter, 확장이 대체를 선언한 호출). MEW1103/1104/1105/1106이 모두 이
+  판정을 거치므로 같은 문장을 서로 다르게 보지 않음.
+- `FluentChainLayout.cs`: 공유 레이아웃 엔진(MEW1101/1102/1103/1105 공용). 체인을 구조에서 재구성하고,
   element 자식은 트리로 펼치고, 값은 inline 유지하며, 멀티라인 람다 본문을 재들여쓰기.
 
-`tests/MewUI.Analyzers.Test`에 테스트 20개가 4개 기능을 모두 커버.
+`tests/MewUI.Analyzers.Test`에 테스트 52개가 6개 기능을 모두 커버.
 
 ## `MEW1101` - 이니셜라이저를 fluent 체인으로
 
@@ -168,37 +173,94 @@ _titleBar = new Border()
 
 ### 규칙
 
-1. **anchor.** 단일 지역 선언(`var x = ...`) 또는 단순 대입(`x = ...`).
-2. **후속.** 연속된 `x.Method(...);`(fluent 호출) 또는 `x.Event += handler;`(이벤트 구독 ->
-   `.OnEvent(handler)`로 흡수). 각각 `x`의 타입을 반환해야(체인/재대입 유효) 하고, 첫 비매칭 문장에서 수집 중단.
-3. **`.Ref(out var x)`.** 참조 타입의 *지역 선언*이면 `var x = ...;` 대신 `.Ref(out var x)`로 인라인 캡처
-   (MewUI 관용구), `Ref` 확장이 존재할 때. 필드/속성 대입은 `x = chain;` 유지.
+1. **anchor.** 단일 지역 선언(`var x = ...`) 또는 단순 대입(`x = ...`). 대입 값은 object creation, 호출
+   체인, 식별자, 멤버 접근이어야 함. 호출이 괄호 없이 덧붙으므로 조건식 같은 느슨한 식은 의미가 바뀜.
+2. **후속.** `x`를 구성하는 연속된 문장(아래 문장 종류 표). 각 결과 호출이 `x`의 타입을 반환해야
+   (체인/재대입 유효) 하고, 첫 비매칭 문장에서 수집 중단.
+3. **최상위 문.** 최상위 문으로 작성된 파일도 동일하게 동작. 문장이 아닌 컴파일 단위 멤버가 나오면
+   수집을 멈추므로 뒤따르는 타입 선언은 흡수되지 않음.
+4. **`.Ref(out var x)`.** 참조 타입의 *지역 선언*이면 `var x = ...;` 대신 `.Ref(out var x)`로 인라인 캡처
+   (MewUI 관용구), `Ref` 확장이 존재할 때. 이 호출은 인스턴스를 만드는 식 바로 뒤에 들어감.
+   필드/속성 대입은 `x = chain;` 유지.
 
    ```csharp
-   var panel = new StackPanel();
+   var panel = new StackPanel().Spacing(8);
    panel.Vertical();
-   panel.Spacing(8);
+   panel.Add(header);
+   panel.Add(body);
    // -> Merge into fluent chain
    new StackPanel()
        .Ref(out var panel)
+       .Spacing(8)
        .Vertical()
-       .Spacing(8);
+       .Children(header, body);
    ```
 
-4. 합쳐진 체인은 공유 레이아웃 엔진으로 펼침.
+5. **컬렉션 setter.** 같은 컬렉션 setter로 대체되는 연속 호출은 위처럼 하나의 호출로 합쳐짐. setter가
+   목록 전체를 한 번에 받기 때문.
+6. 합쳐진 체인은 공유 레이아웃 엔진으로 펼침.
 
-## `MEW1104` - 속성 대입을 fluent 호출로
+## `MEW1104` - 구성 문장을 fluent 호출로
 
-`receiver.Prop = value;`를, 그 타입에 `Prop` fluent setter가 있으면 `receiver.Prop(value);`로 변환.
-캐럿은 대입문에.
+문장 하나를 그와 동등한 fluent 호출로 변환. 캐럿은 그 문장에.
 
 ```csharp
-_titleBar.Child = new DockPanel().Children(...);
-// -> Convert to fluent call
-_titleBar.Child(new DockPanel().Children(...));
+_titleBar.Child = new DockPanel().Children(...);   // -> _titleBar.Child(new DockPanel()...)
+_titleBar.Click += OnClick;                        // -> _titleBar.OnClick(OnClick)
+Grid.SetColumn(_titleBar, 1);                      // -> _titleBar.Column(1)
+panel.AddRange(a, b);                              // -> panel.Children(a, b)
 ```
 
-대입 멤버에 대한 fluent setter가 해석 안 되면 미제공.
+### 문장 종류
+
+MEW1103이 체인으로 접고 MEW1104가 단독 변환하는 형태들.
+
+| 문장 | 결과 | 해석 근거 |
+|---|---|---|
+| `x.Prop = value;` | `.Prop(value)` | 속성 이름과 같은 확장 |
+| `x.Event += handler;` | `.OnEvent(handler)` | `On` 접두 규약 |
+| `Owner.SetProp(x, value);` | `.Prop(value)` | 매개변수 2개 정적 메서드의 `Set` 접두 규약 |
+| `x.Add(a);` | `.Children(a)` | `Add`를 대체한다고 선언한 확장 (아래) |
+
+해석되는 것이 없거나, 결과 호출이 수신자 타입을 반환하지 않거나, 이미 fluent 체인인 문장이면 미제공.
+
+### 대체 선언
+
+`Panel.Add` 같은 멤버는 이름으로도 시그니처로도 `Children`과 대응시킬 수 없으므로 확장이 선언한다.
+
+```csharp
+[FluentReplacesMember(nameof(Panel.Add))]
+[FluentReplacesMember(nameof(Panel.AddRange))]
+public static T Children<T>(this T panel, params Element[] children) where T : Panel
+```
+
+확장의 유일한 값 매개변수는 대체 대상 호출의 모든 인자를 받는 `params` 배열이어야 한다. 멤버 자리에
+넣었을 때 효과와 순서가 같아야 하며, 이를 보증하는 것은 이 선언뿐이므로 양쪽 본문을 사람이 대조한 뒤
+추가한다. attribute는 MewUI internal이고 분석기는 metadata name으로 읽으므로 분석기는 MewUI를 참조하지
+않는다.
+
+## `MEW1105` / `MEW1106` - 같은 둘의 진단 형태
+
+MEW1103과 MEW1104는 캐럿을 정확한 문장에 놓아야 한다. MEW1105(병합)와 MEW1106(단일 문장)은 같은 대상을
+`Hidden` 진단으로 보고하고 같은 수정을 제공하므로, Fix All로 파일 전체를 한 번에 변환할 수 있다.
+
+MEW1105 병합이 흡수하는 문장은 MEW1106으로 중복 보고하지 않는다. 두 수정이 같은 문장을 건드리지 않게
+하기 위해서다.
+
+`Hidden`이라 lightbulb로만 보인다. 명령줄로 파일을 변환하려면 심각도를 올리고 `dotnet format`을 쓴다.
+
+```ini
+# .editorconfig
+[*.cs]
+dotnet_diagnostic.MEW1105.severity = suggestion
+```
+
+```
+dotnet format analyzers <project> --severity info --diagnostics MEW1105
+```
+
+id는 한 번에 하나씩 준다. 여러 개를 묶으면 `dotnet format`이 Fix All 액션을 만들지 못하는 경우가 있다.
+한 번의 실행은 겹치지 않는 수정만 적용하므로 파일이 더 이상 바뀌지 않을 때까지 반복한다.
 
 ## 테스트
 
