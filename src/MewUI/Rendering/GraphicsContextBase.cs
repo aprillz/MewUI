@@ -462,8 +462,22 @@ internal abstract class GraphicsContextBase : IGraphicsContext, ITextBackendRend
         var constraints = new BackendTextLayoutConstraints(
             new Rect(0, 0, Math.Max(1, width), Math.Max(1, height)));
         var layout = CreateBackendTextLayout(text, format, in constraints);
-        return layout is null ? null : new GraphicsBackendTextRun(text.ToString(), format, layout, width, height);
+        if (layout is null)
+        {
+            return null;
+        }
+
+        layout.InkOverhang = MeasureRunInkOverhang(text, font, layout);
+        return new GraphicsBackendTextRun(text.ToString(), format, layout, width, height);
     }
+
+    /// <summary>
+    /// Ink of a text-engine run that falls outside its run box. The base reports none, so a backend
+    /// that cannot measure glyph extents draws the box as before; one that can overrides this and
+    /// draws that ink instead of clipping it.
+    /// </summary>
+    protected virtual TextInkOverhang MeasureRunInkOverhang(ReadOnlySpan<char> text, IFont font, BackendTextLayout layout)
+        => TextInkOverhang.None;
 
     void ITextBackendRenderContext.DrawRun(ITextBackendRun run, Point origin, Color color, object? owner)
     {
@@ -494,6 +508,7 @@ internal abstract class GraphicsContextBase : IGraphicsContext, ITextBackendRend
         public double Width { get; } = Math.Max(1, width);
         public double Height { get; } = Math.Max(1, height);
         public nint NativeHandle => Layout.BackendHandle;
+        public TextInkOverhang Ink => Layout.InkOverhang ?? TextInkOverhang.None;
 
         public void Dispose() => Layout.ReleaseBackendHandle();
     }

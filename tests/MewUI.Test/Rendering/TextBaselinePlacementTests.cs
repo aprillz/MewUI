@@ -310,6 +310,7 @@ public sealed class TextBaselinePlacementTests
         public string Text { get; } = text;
         public double Baseline { get; } = baseline;
         public nint NativeHandle => 0;
+        public TextInkOverhang Ink => TextInkOverhang.None;
         public void Dispose() { }
     }
 

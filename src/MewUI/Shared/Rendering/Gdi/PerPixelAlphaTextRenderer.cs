@@ -21,7 +21,8 @@ internal static class PerPixelAlphaTextRenderer
         TextWrapping wrapping = TextWrapping.NoWrap,
         TextTrimming trimming = TextTrimming.None,
         TextAlignment hAlign = TextAlignment.Left,
-        TextAlignment vAlign = TextAlignment.Top)
+        TextAlignment vAlign = TextAlignment.Top,
+        TextInkInsetPx inkInset = default)
     {
         var surfaceRect = targetRect;
         if (pixelSurface != null)
@@ -86,6 +87,15 @@ internal static class PerPixelAlphaTextRenderer
                         targetRect.right - surfaceRect.left,
                         targetRect.bottom - surfaceRect.top)
                     : RECT.FromLTRB(0, 0, width, height);
+                if (inkInset.HasInset)
+                {
+                    // The target rect was grown by the ink inset; the text lays out in the original box.
+                    localRect = RECT.FromLTRB(
+                        localRect.left + inkInset.Left,
+                        localRect.top + inkInset.Top,
+                        localRect.right - inkInset.Right,
+                        localRect.bottom - inkInset.Bottom);
+                }
                 if (yOffsetPx != 0)
                 {
                     localRect.top += yOffsetPx;

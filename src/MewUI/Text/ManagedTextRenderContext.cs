@@ -410,10 +410,20 @@ internal sealed class ManagedTextRenderContext : ITextRenderContext, IDisposable
                 // Interior color boundaries floor to whole device pixels so adjacent clips agree
                 // on pixel ownership; backend clip rounding otherwise shifts the boundary column
                 // into the neighbor color depending on the fractional scroll offset.
+                // The outer edges follow the glyph ink instead of the run box, so a colour split keeps
+                // the same overhang an unsplit run draws.
                 double dpiScale = _context.DpiScale;
-                double clipLeft = segmentStart == 0 ? runBounds.X : Math.Floor(left * dpiScale) / dpiScale;
-                double clipRight = index == boundaries.Length ? runBounds.Right : Math.Floor(right * dpiScale) / dpiScale;
-                var clip = new Rect(clipLeft, runBounds.Y, Math.Max(0, clipRight - clipLeft), runBounds.Height).Intersect(runBounds);
+                double antialiasMargin = 1 / dpiScale;
+                var ink = realized.Run.Ink;
+                double clipLeft = segmentStart == 0
+                    ? runBounds.X - ink.Left - antialiasMargin
+                    : Math.Floor(left * dpiScale) / dpiScale;
+                double clipRight = index == boundaries.Length
+                    ? runBounds.Right + ink.Right + antialiasMargin
+                    : Math.Floor(right * dpiScale) / dpiScale;
+                double clipTop = runBounds.Y - ink.Top - antialiasMargin;
+                double clipBottom = runBounds.Bottom + ink.Bottom + antialiasMargin;
+                var clip = new Rect(clipLeft, clipTop, Math.Max(0, clipRight - clipLeft), Math.Max(0, clipBottom - clipTop));
                 if (!clip.IsEmpty)
                 {
                     _context.Save();

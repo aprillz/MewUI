@@ -28,11 +28,24 @@ internal interface ITextBackendMeasurementContext : IDisposable
         => false;
 }
 
+/// <summary>Glyph ink that extends past a run's advance box and line box, in DIP; never negative.</summary>
+internal readonly record struct TextInkOverhang(double Left, double Top, double Right, double Bottom)
+{
+    public static TextInkOverhang None => default;
+
+    /// <summary>Clamps each side to zero so a run box never shrinks below its layout geometry.</summary>
+    public static TextInkOverhang FromEdges(double left, double top, double right, double bottom)
+        => new(Math.Max(0, left), Math.Max(0, top), Math.Max(0, right), Math.Max(0, bottom));
+}
+
 /// <summary>Opaque backend realization of one positioned text run.</summary>
 internal interface ITextBackendRun : IDisposable
 {
     /// <summary>Native handle exposed only to lifetime diagnostics; zero when the backend has none.</summary>
     nint NativeHandle { get; }
+
+    /// <summary>Ink the backend draws outside the run box; the run box itself stays layout geometry.</summary>
+    TextInkOverhang Ink { get; }
 }
 
 /// <summary>

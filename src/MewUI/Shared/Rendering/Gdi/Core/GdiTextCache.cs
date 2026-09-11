@@ -51,7 +51,8 @@ internal sealed class GdiTextCache : IDisposable
         TextWrapping wrapping,
         TextTrimming trimming,
         TextAlignment hAlign,
-        TextAlignment vAlign)
+        TextAlignment vAlign,
+        TextInkInsetPx inkInset = default)
     {
         int width = targetRect.Width;
         int height = targetRect.Height;
@@ -64,14 +65,15 @@ internal sealed class GdiTextCache : IDisposable
         {
             // Oversized bounds: fall back to the uncached renderer rather than growing the cache unbounded.
             PerPixelAlphaTextRenderer.DrawText(hdc, null, _surfacePool, text, targetRect, font, color, format,
-                yOffsetPx, textHeightPx, wrapping, trimming, hAlign, vAlign);
+                yOffsetPx, textHeightPx, wrapping, trimming, hAlign, vAlign, inkInset);
             return;
         }
 
         var fontHandle = font.GetHandle(GdiFontRenderMode.Coverage);
         var key = new TextCacheKey(
             string.GetHashCode(text), fontHandle, string.Empty, 0, color.ToArgb(),
-            width, height, (int)hAlign, (int)vAlign, (int)wrapping, (int)trimming);
+            width, height, (int)hAlign, (int)vAlign, (int)wrapping, (int)trimming,
+            inkInset.Left, inkInset.Top);
 
         if (TryGet(key, text, out var cached))
         {
@@ -93,7 +95,7 @@ internal sealed class GdiTextCache : IDisposable
         int oldBkMode = Gdi32.SetBkMode(surface.MemDc, GdiConstants.TRANSPARENT);
         try
         {
-            var localRect = RECT.FromLTRB(0, 0, width, height);
+            var localRect = inkInset.HasInset ? inkInset.Inner(width, height) : RECT.FromLTRB(0, 0, width, height);
             if (yOffsetPx != 0)
             {
                 localRect.top += yOffsetPx;

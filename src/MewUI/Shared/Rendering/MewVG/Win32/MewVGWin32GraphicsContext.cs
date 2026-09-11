@@ -3,6 +3,7 @@ using System.Numerics;
 using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Rendering.Gdi;
 using Aprillz.MewUI.Rendering.OpenGL;
+using Aprillz.MewUI.Text;
 using Aprillz.MewVG;
 
 namespace Aprillz.MewUI.Rendering.MewVG;
@@ -157,6 +158,9 @@ internal sealed partial class MewVGWin32GraphicsContext
     private Size MeasureTextCore(ReadOnlySpan<char> text, IFont font, double maxWidth)
         => EnsureMeasureContext().MeasureText(text, font, maxWidth);
 
+    protected override TextInkOverhang MeasureRunInkOverhang(ReadOnlySpan<char> text, IFont font, BackendTextLayout layout)
+        => font is GdiFont gdiFont ? gdiFont.GetRunInkOverhang(text) : TextInkOverhang.None;
+
     public override Size MeasureText(ReadOnlySpan<char> text, IFont font)
         => MeasureTextCore(text, font);
 
@@ -236,6 +240,23 @@ internal sealed partial class MewVGWin32GraphicsContext
 
         if (widthPx <= 0 || heightPx <= 0) return;
 
+        // A text-engine run rasterizes into a bitmap grown by its ink overhang plus one antialiasing
+        // pixel per side, and lays out in the inner box, so ink past the run box is kept.
+        var inkInset = default(TextInkInsetPx);
+        if (layout.InkOverhang is TextInkOverhang ink)
+        {
+            inkInset = new TextInkInsetPx(
+                (int)Math.Ceiling(ink.Left * DpiScale) + 1,
+                (int)Math.Ceiling(ink.Top * DpiScale) + 1,
+                (int)Math.Ceiling(ink.Right * DpiScale) + 1,
+                (int)Math.Ceiling(ink.Bottom * DpiScale) + 1);
+            widthPx += inkInset.Left + inkInset.Right;
+            heightPx += inkInset.Top + inkInset.Bottom;
+            boundsPx = new PixelRect(boundsPx.Left - inkInset.Left, boundsPx.Top - inkInset.Top, widthPx, heightPx);
+        }
+        double insetLeftDip = inkInset.Left / DpiScale;
+        double insetTopDip = inkInset.Top / DpiScale;
+
         widthPx = ClampTextRasterExtent(widthPx, boundsPx, axis: 0);
         heightPx = ClampTextRasterExtent(heightPx, boundsPx, axis: 1);
         boundsPx = new PixelRect(boundsPx.Left, boundsPx.Top, widthPx, heightPx);
@@ -245,7 +266,8 @@ internal sealed partial class MewVGWin32GraphicsContext
             var c = _clipBoundsWorld.Value;
             // Transform the full text rect (rotation/skew aware, not just translation) before the clip test, so
             // rotated text is not wrongly culled and skipped.
-            var worldText = TransformRectToWorldAABB(new Rect(bounds.X, bounds.Y, widthPx / DpiScale, heightPx / DpiScale));
+            var worldText = TransformRectToWorldAABB(new Rect(
+                bounds.X - insetLeftDip, bounds.Y - insetTopDip, widthPx / DpiScale, heightPx / DpiScale));
             if (worldText.Right <= c.X || worldText.X >= c.Right || worldText.Bottom <= c.Y || worldText.Y >= c.Bottom)
                 return;
         }
@@ -298,6 +320,10 @@ internal sealed partial class MewVGWin32GraphicsContext
             }
         }
 
+        // The raster origin sits one inset up and left of the layout origin.
+        drawX -= insetLeftDip;
+        drawY -= insetTopDip;
+
         bool needsLinear = NeedsLinearFilter();
         var textHash = string.GetHashCode(text);
         var key = new MewVGTextCacheKey(new TextCacheKey(
@@ -311,7 +337,9 @@ internal sealed partial class MewVGWin32GraphicsContext
             (int)format.HorizontalAlignment,
             (int)format.VerticalAlignment,
             (int)format.Wrapping,
-            (int)format.Trimming), needsLinear);
+            (int)format.Trimming,
+            inkInset.Left,
+            inkInset.Top), needsLinear);
 
         MewVGTextEntry entry;
         if (_transientText)
@@ -327,7 +355,8 @@ internal sealed partial class MewVGWin32GraphicsContext
                 format.VerticalAlignment,
                 format.Wrapping,
                 format.Trimming,
-                _textCache.RentTransientBuffer(widthPx * heightPx * 4));
+                _textCache.RentTransientBuffer(widthPx * heightPx * 4),
+                inkInset);
             entry = _textCache.UseTransient(bmp.Data.AsSpan(0, bmp.WidthPx * bmp.HeightPx * 4), bmp.WidthPx, bmp.HeightPx, needsLinear);
         }
         else if (!_textCache.TryGet(key, text, out entry))
@@ -342,7 +371,8 @@ internal sealed partial class MewVGWin32GraphicsContext
                 format.HorizontalAlignment,
                 format.VerticalAlignment,
                 format.Wrapping,
-                format.Trimming);
+                format.Trimming,
+                inkInset: inkInset);
             entry = _textCache.CreateImage(key, text, ref bmp);
         }
 

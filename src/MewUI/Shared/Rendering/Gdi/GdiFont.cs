@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Native.Constants;
 using Aprillz.MewUI.Native.Structs;
+using Aprillz.MewUI.Text;
 
 namespace Aprillz.MewUI.Rendering.Gdi;
 
@@ -54,6 +55,8 @@ internal sealed partial class GdiFont : FontBase, IGlyphOutlineFont
         User32.ReleaseDC(0, hdc);
 
         InternalLeadingPx = tm.tmInternalLeading;
+        _ascentPx = tm.tmAscent;
+        _descentPx = tm.tmDescent;
         Ascent = tm.tmAscent / dpiScale;
         Descent = tm.tmDescent / dpiScale;
         InternalLeading = tm.tmInternalLeading / dpiScale;
@@ -104,6 +107,83 @@ internal sealed partial class GdiFont : FontBase, IGlyphOutlineFont
 
     /// <summary>Internal leading in pixels (for use by rasterizers operating in pixel space).</summary>
     internal int InternalLeadingPx { get; }
+
+    private readonly int _ascentPx;
+    private readonly int _descentPx;
+    private Dictionary<char, GlyphInk>? _glyphInk;
+
+    /// <summary>
+    /// Ink of a single-line run that falls outside its advance box and the font's ascent/descent band,
+    /// in device-independent units. Zero for code units the outline query cannot answer.
+    /// </summary>
+    internal TextInkOverhang GetRunInkOverhang(ReadOnlySpan<char> text)
+    {
+        if (text.IsEmpty || Handle == 0)
+        {
+            return TextInkOverhang.None;
+        }
+
+        EnsureOutlineDc();
+        if (_outlineDc == 0)
+        {
+            return TextInkOverhang.None;
+        }
+
+        // The right overhang is the furthest any glyph's ink reaches past the run's end, so a wide
+        // italic followed by a narrow glyph still counts; the left one only comes from the first glyph.
+        int advanceAfter = 0;
+        int left = 0;
+        int right = 0;
+        int above = 0;
+        int below = 0;
+        for (int index = text.Length - 1; index >= 0; index--)
+        {
+            var ink = GetGlyphInk(text[index]);
+            right = Math.Max(right, ink.Right - advanceAfter);
+            above = Math.Max(above, ink.Above);
+            below = Math.Max(below, ink.Below);
+            advanceAfter += ink.Advance;
+            if (index == 0)
+            {
+                left = ink.Left;
+            }
+        }
+
+        double scale = 96.0 / Dpi;
+        return TextInkOverhang.FromEdges(left * scale, above * scale, right * scale, below * scale);
+    }
+
+    private unsafe GlyphInk GetGlyphInk(char ch)
+    {
+        _glyphInk ??= new Dictionary<char, GlyphInk>();
+        if (_glyphInk.TryGetValue(ch, out var cached))
+        {
+            return cached;
+        }
+
+        var ink = default(GlyphInk);
+        if (!char.IsSurrogate(ch) && !char.IsControl(ch))
+        {
+            var matrix = MAT2.Identity;
+            GLYPHMETRICS metrics;
+            if (GetGlyphOutlineW(_outlineDc, ch, GdiConstants.GGO_METRICS, &metrics, 0, null, &matrix) != 0xFFFFFFFF)
+            {
+                int originX = metrics.gmptGlyphOrigin.x;
+                int originY = metrics.gmptGlyphOrigin.y;
+                ink = new GlyphInk(
+                    Math.Max(0, -originX),
+                    Math.Max(0, originX + (int)metrics.gmBlackBoxX - metrics.gmCellIncX),
+                    Math.Max(0, originY - _ascentPx),
+                    Math.Max(0, (int)metrics.gmBlackBoxY - originY - _descentPx),
+                    metrics.gmCellIncX);
+            }
+        }
+
+        _glyphInk[ch] = ink;
+        return ink;
+    }
+
+    private readonly record struct GlyphInk(int Left, int Right, int Above, int Below, int Advance);
 
     /// <summary>Picks the first installed family from a comma-separated list; single names pass through.</summary>
     internal static string SelectFamilyCandidate(string family)

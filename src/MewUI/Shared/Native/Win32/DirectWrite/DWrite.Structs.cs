@@ -73,6 +73,16 @@ internal unsafe struct DWRITE_GLYPH_RUN_DESCRIPTION
     public uint textPosition;
 }
 
+/// <summary>How far glyph ink extends past each edge of a text layout's box; positive means outside.</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct DWRITE_OVERHANG_METRICS
+{
+    public float left;
+    public float top;
+    public float right;
+    public float bottom;
+}
+
 [StructLayout(LayoutKind.Sequential)]
 internal struct DWRITE_MATRIX
 {

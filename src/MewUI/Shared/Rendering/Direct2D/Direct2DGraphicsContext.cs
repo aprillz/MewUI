@@ -1067,12 +1067,14 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
             return;
         }
 
+        // A text-engine run keeps its box as layout geometry and draws the ink that overhangs it.
+        var ink = layout.InkOverhang ?? TextInkOverhang.None;
         if (_clipBoundsWorld.HasValue && bounds.Width < 100_000)
         {
             var clip = _clipBoundsWorld.Value;
-            var wv = Vector2.Transform(new Vector2((float)bounds.X, (float)bounds.Y), _transform);
-            if (wv.X + bounds.Width <= clip.X || wv.X >= clip.Right ||
-                wv.Y + bounds.Height <= clip.Y || wv.Y >= clip.Bottom)
+            var wv = Vector2.Transform(new Vector2((float)(bounds.X - ink.Left), (float)(bounds.Y - ink.Top)), _transform);
+            if (wv.X + bounds.Width + ink.Left + ink.Right <= clip.X || wv.X >= clip.Right ||
+                wv.Y + bounds.Height + ink.Top + ink.Bottom <= clip.Y || wv.Y >= clip.Bottom)
             {
                 return;
             }
@@ -1090,6 +1092,12 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
 
         var rt = _deviceContext != 0 ? _deviceContext : _renderTarget;
         var origin = new D2D1_POINT_2F((float)bounds.X, (float)bounds.Y);
+
+        if (layout.InkOverhang.HasValue)
+        {
+            D2D1VTable.DrawTextLayout((ID2D1RenderTarget*)rt, origin, layout.BackendHandle, brush, options);
+            return;
+        }
 
         if (layout.ContentHeight > bounds.Height)
         {
@@ -1114,6 +1122,18 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         {
             D2D1VTable.PopAxisAlignedClip((ID2D1RenderTarget*)rt);
         }
+    }
+
+    protected override TextInkOverhang MeasureRunInkOverhang(ReadOnlySpan<char> text, IFont font, BackendTextLayout layout)
+    {
+        // The run layout's box is its max width and height, so the overhangs are relative to the run box.
+        if (layout.BackendHandle == 0 ||
+            DWriteVTable.GetOverhangMetrics(layout.BackendHandle, out var overhangs) < 0)
+        {
+            return TextInkOverhang.None;
+        }
+
+        return TextInkOverhang.FromEdges(overhangs.left, overhangs.top, overhangs.right, overhangs.bottom);
     }
 
     public override Size MeasureText(ReadOnlySpan<char> text, IFont font)

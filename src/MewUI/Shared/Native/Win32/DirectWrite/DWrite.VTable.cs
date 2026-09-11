@@ -276,6 +276,19 @@ internal static unsafe class DWriteVTable
         }
     }
 
+    /// <summary>IDWriteTextLayout::GetOverhangMetrics (vtable index 61).</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int GetOverhangMetrics(nint textLayout, out DWRITE_OVERHANG_METRICS overhangs)
+    {
+        overhangs = default;
+        var vtbl = *(nint**)textLayout;
+        var fn = (delegate* unmanaged[Stdcall]<nint, DWRITE_OVERHANG_METRICS*, int>)vtbl[61];
+        fixed (DWRITE_OVERHANG_METRICS* p = &overhangs)
+        {
+            return fn(textLayout, p);
+        }
+    }
+
     // --- IDWriteFactory: CreateFontFileReference (vtable index 7) ---
 
     /// <summary>IDWriteFactory::CreateFontFileReference (vtable index 7).</summary>
