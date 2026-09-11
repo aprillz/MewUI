@@ -1,6 +1,7 @@
 using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Rendering.FreeType;
 using Aprillz.MewUI.Rendering.OpenGL;
+using Aprillz.MewUI.Text;
 using Aprillz.MewVG;
 
 namespace Aprillz.MewUI.Rendering.MewVG;
@@ -135,6 +136,9 @@ internal sealed partial class MewVGX11GraphicsContext
         return fallback.MeasureText(text, font, maxWidth);
     }
 
+    protected override TextInkOverhang MeasureRunInkOverhang(ReadOnlySpan<char> text, IFont font, BackendTextLayout layout)
+        => font is FreeTypeFont ftFont ? ftFont.GetRunInkOverhang(text) : TextInkOverhang.None;
+
     public override Size MeasureText(ReadOnlySpan<char> text, IFont font)
         => MeasureTextCore(text, font);
 
@@ -214,6 +218,18 @@ internal sealed partial class MewVGX11GraphicsContext
 
         if (widthPx <= 0 || heightPx <= 0) return;
 
+        // A text-engine run rasterizes into a bitmap grown by its ink overhang plus one antialiasing
+        // pixel per side, with the run box inset inside it, so ink past the box is kept.
+        var inkInset = TextInkInsetPx.FromOverhang(layout.InkOverhang, DpiScale);
+        if (inkInset.HasInset)
+        {
+            widthPx += inkInset.Left + inkInset.Right;
+            heightPx += inkInset.Top + inkInset.Bottom;
+            boundsPx = new PixelRect(boundsPx.Left - inkInset.Left, boundsPx.Top - inkInset.Top, widthPx, heightPx);
+        }
+        double insetLeftDip = inkInset.Left / DpiScale;
+        double insetTopDip = inkInset.Top / DpiScale;
+
         widthPx = ClampTextRasterExtent(widthPx, boundsPx, axis: 0);
         heightPx = ClampTextRasterExtent(heightPx, boundsPx, axis: 1);
         boundsPx = new PixelRect(boundsPx.Left, boundsPx.Top, widthPx, heightPx);
@@ -221,7 +237,8 @@ internal sealed partial class MewVGX11GraphicsContext
         if (_clipBoundsWorld.HasValue)
         {
             var c = _clipBoundsWorld.Value;
-            var textWorld = TransformRectToWorldAABB(new Rect(bounds.X, bounds.Y, widthPx / DpiScale, heightPx / DpiScale));
+            var textWorld = TransformRectToWorldAABB(new Rect(
+                bounds.X - insetLeftDip, bounds.Y - insetTopDip, widthPx / DpiScale, heightPx / DpiScale));
             if (textWorld.Right <= c.X || textWorld.X >= c.Right || textWorld.Bottom <= c.Y || textWorld.Y >= c.Bottom)
                 return;
         }
@@ -232,8 +249,8 @@ internal sealed partial class MewVGX11GraphicsContext
         if (_textPixelSnap)
         {
             var snappedOrigin = RenderingUtil.SnapTextOriginToDevice(new Point(bounds.X, bounds.Y), _transform, DpiScale);
-            drawX = snappedOrigin.X;
-            drawY = snappedOrigin.Y;
+            drawX = snappedOrigin.X - insetLeftDip;
+            drawY = snappedOrigin.Y - insetTopDip;
         }
         double widthDip = widthPx / DpiScale;
         double heightDip = heightPx / DpiScale;
@@ -249,7 +266,9 @@ internal sealed partial class MewVGX11GraphicsContext
             (int)format.HorizontalAlignment,
             (int)format.VerticalAlignment,
             (int)format.Wrapping,
-            (int)format.Trimming));
+            (int)format.Trimming,
+            inkInset.Left,
+            inkInset.Top));
 
         MewVGTextEntry entry;
         if (_transientText)
@@ -263,7 +282,9 @@ internal sealed partial class MewVGX11GraphicsContext
                 format.HorizontalAlignment,
                 format.VerticalAlignment,
                 format.Wrapping,
-                format.Trimming);
+                format.Trimming,
+                inkInset.Left,
+                inkInset.Top);
             entry = _textCache.UseTransient(bmp.Data.AsSpan(0, bmp.WidthPx * bmp.HeightPx * 4), bmp.WidthPx, bmp.HeightPx, linear: false);
         }
         else if (!_textCache.TryGet(key, text, out entry))
@@ -277,7 +298,9 @@ internal sealed partial class MewVGX11GraphicsContext
                 format.HorizontalAlignment,
                 format.VerticalAlignment,
                 format.Wrapping,
-                format.Trimming);
+                format.Trimming,
+                inkInset.Left,
+                inkInset.Top);
             entry = _textCache.CreateImage(key, text, ref bmp);
         }
 

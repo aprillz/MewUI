@@ -67,6 +67,7 @@ internal sealed class MewVGMetalTextCache : IDisposable
         public TextAlignment LastVerticalAlignment;
         public TextWrapping LastWrapping;
         public TextTrimming LastTrimming;
+        public TextInkInsetPx LastInset;
         public long LastUse;
     }
 
@@ -88,7 +89,9 @@ internal sealed class MewVGMetalTextCache : IDisposable
         TextAlignment HorizontalAlignment,
         TextAlignment VerticalAlignment,
         TextWrapping Wrapping,
-        TextTrimming Trimming = TextTrimming.None)
+        TextTrimming Trimming = TextTrimming.None,
+        int InsetLeftPx = 0,
+        int InsetTopPx = 0)
     {
         public override int GetHashCode()
         {
@@ -103,6 +106,8 @@ internal sealed class MewVGMetalTextCache : IDisposable
                 hash = (hash * 397) ^ (int)Wrapping;
                 hash = (hash * 397) ^ (int)Trimming;
                 hash = (hash * 397) ^ TextHash;
+                hash = (hash * 397) ^ InsetLeftPx;
+                hash = (hash * 397) ^ InsetTopPx;
                 return hash;
             }
         }
@@ -124,6 +129,7 @@ internal sealed class MewVGMetalTextCache : IDisposable
         TextAlignment verticalAlignment,
         TextWrapping wrapping,
         TextTrimming trimming,
+        TextInkInsetPx inset,
         out int imageId,
         out int bitmapWidthPx,
         out int bitmapHeightPx)
@@ -152,7 +158,9 @@ internal sealed class MewVGMetalTextCache : IDisposable
             horizontalAlignment,
             verticalAlignment,
             wrapping,
-            trimming);
+            trimming,
+            inset.Left,
+            inset.Top);
 
         if (_cache.TryGetValue(key, out var entry))
         {
@@ -169,7 +177,7 @@ internal sealed class MewVGMetalTextCache : IDisposable
             Remove(key);
         }
 
-        var bmp = CoreTextText.Rasterize(font, text, widthPx, heightPx, dpi, color, horizontalAlignment, verticalAlignment, wrapping, widthPx, trimming);
+        var bmp = CoreTextText.Rasterize(font, text, widthPx, heightPx, dpi, color, horizontalAlignment, verticalAlignment, wrapping, widthPx, trimming, inset);
         if (bmp.WidthPx <= 0 || bmp.HeightPx <= 0 || bmp.Data.Length == 0)
         {
             return false;
@@ -320,6 +328,7 @@ internal sealed class MewVGMetalTextCache : IDisposable
         TextAlignment verticalAlignment,
         TextWrapping wrapping,
         TextTrimming trimming,
+        TextInkInsetPx inset,
         out int imageId,
         out int bitmapWidthPx,
         out int bitmapHeightPx)
@@ -357,6 +366,7 @@ internal sealed class MewVGMetalTextCache : IDisposable
             entry.LastVerticalAlignment == verticalAlignment &&
             entry.LastWrapping == wrapping &&
             entry.LastTrimming == trimming &&
+            entry.LastInset == inset &&
             text.SequenceEqual(lastText);
 
         if (sameInputs)
@@ -378,12 +388,12 @@ internal sealed class MewVGMetalTextCache : IDisposable
             // would repaint every quad already queued this frame, so use the keyed cache.
             return TryGetOrCreate(
                 font, text, widthPx, heightPx, dpi, color,
-                horizontalAlignment, verticalAlignment, wrapping, trimming,
+                horizontalAlignment, verticalAlignment, wrapping, trimming, inset,
                 out imageId, out bitmapWidthPx, out bitmapHeightPx);
         }
 
         if (!RasterizeIntoEntry(entry, font, text, widthPx, heightPx, dpi, color,
-                horizontalAlignment, verticalAlignment, wrapping, trimming,
+                horizontalAlignment, verticalAlignment, wrapping, trimming, inset,
                 out int actualW, out int actualH))
         {
             return false;
@@ -398,6 +408,7 @@ internal sealed class MewVGMetalTextCache : IDisposable
         entry.LastVerticalAlignment = verticalAlignment;
         entry.LastWrapping = wrapping;
         entry.LastTrimming = trimming;
+        entry.LastInset = inset;
         entry.LastText = text.ToString();
         entry.LastUse = ++_useStamp;
 
@@ -425,6 +436,7 @@ internal sealed class MewVGMetalTextCache : IDisposable
         TextAlignment verticalAlignment,
         TextWrapping wrapping,
         TextTrimming trimming,
+        TextInkInsetPx inset,
         out int imageId,
         out int bitmapWidthPx,
         out int bitmapHeightPx)
@@ -445,7 +457,7 @@ internal sealed class MewVGMetalTextCache : IDisposable
 
         var entry = _transientSlots[_transientIndex++];
         if (!RasterizeIntoEntry(entry, font, text, Math.Max(1, widthPx), Math.Max(1, heightPx), dpi, color,
-                horizontalAlignment, verticalAlignment, wrapping, trimming,
+                horizontalAlignment, verticalAlignment, wrapping, trimming, inset,
                 out int actualW, out int actualH))
         {
             return false;
@@ -471,13 +483,12 @@ internal sealed class MewVGMetalTextCache : IDisposable
         TextAlignment verticalAlignment,
         TextWrapping wrapping,
         TextTrimming trimming,
+        TextInkInsetPx inset,
         out int actualW,
         out int actualH)
     {
-        // The rasterized bitmap is widthPx + aaExtra × heightPx (matches CoreTextText.Rasterize).
-        int aaExtra = (int)Math.Ceiling(dpi / 96.0 * 2);
-        int aaWidthPx = checked(widthPx + aaExtra);
-        int requiredBytes = checked(aaWidthPx * heightPx * 4);
+        var (rasterWidthPx, rasterHeightPx) = CoreTextText.GetBitmapSizePx(widthPx, heightPx, dpi, inset);
+        int requiredBytes = checked(rasterWidthPx * rasterHeightPx * 4);
 
         // Grow buffer if needed. No shrink - rare large rasterization shouldn't force
         // reallocation on every subsequent small one.
@@ -491,7 +502,7 @@ internal sealed class MewVGMetalTextCache : IDisposable
         if (!CoreTextText.RasterizeInto(
                 font, text, widthPx, heightPx, dpi, color,
                 horizontalAlignment, verticalAlignment,
-                wrapping, widthPx, trimming,
+                wrapping, widthPx, trimming, inset,
                 entry.Buffer,
                 out actualW, out actualH))
         {

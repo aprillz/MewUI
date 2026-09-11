@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Rendering.OpenGL;
+using Aprillz.MewUI.Text;
 
 namespace Aprillz.MewUI.Rendering.MewVG;
 
@@ -151,6 +152,9 @@ internal sealed partial class MewVGWin32GraphicsContext
     private static Size MeasureTextCore(ReadOnlySpan<char> text, IFont font, double maxWidth)
         => BrowserTextMeasure.Measure(text, font, maxWidth);
 
+    protected override TextInkOverhang MeasureRunInkOverhang(ReadOnlySpan<char> text, IFont font, BackendTextLayout layout)
+        => BrowserTextMeasure.MeasureInk(text, font);
+
     public override BackendTextLayout CreateBackendTextLayout(
         ReadOnlySpan<char> text,
         BackendTextFormat format,
@@ -202,7 +206,11 @@ internal sealed partial class MewVGWin32GraphicsContext
 
         int widthPx = (int)Math.Ceiling(inkWidthDip * DpiScale);
         int heightPx = (int)Math.Ceiling(inkHeightDip * DpiScale);
-        if (widthPx <= 0 || heightPx <= 0 || widthPx > MAX_TEXT_EXTENT_PX || heightPx > MAX_TEXT_EXTENT_PX)
+        // A text-engine run rasterizes into a texture grown by its ink overhang, with the run box inset inside it.
+        var inkInset = TextInkInsetPx.FromOverhang(layout.InkOverhang, DpiScale);
+        int rasterWidthPx = widthPx + inkInset.Left + inkInset.Right;
+        int rasterHeightPx = heightPx + inkInset.Top + inkInset.Bottom;
+        if (widthPx <= 0 || heightPx <= 0 || rasterWidthPx > MAX_TEXT_EXTENT_PX || rasterHeightPx > MAX_TEXT_EXTENT_PX)
         {
             return;
         }
@@ -212,7 +220,7 @@ internal sealed partial class MewVGWin32GraphicsContext
         var cache = _resources?.TextCache
             ?? _offscreenTextCaches.GetValue(_offscreen!, surface => new BrowserTextCache(surface.Vg));
         int imageId = cache.GetOrCreateImage(
-            text, layout, BrowserFont.CssFontFor(format.Font), widthPx, heightPx, DpiScale, color);
+            text, layout, BrowserFont.CssFontFor(format.Font), rasterWidthPx, rasterHeightPx, DpiScale, color, inkInset);
         if (imageId == 0)
         {
             return;
@@ -250,11 +258,12 @@ internal sealed partial class MewVGWin32GraphicsContext
 
         DrawImagePattern(
             imageId,
-            new Rect(destX, destY, drawWidth, drawHeight),
+            new Rect(destX - inkInset.Left / DpiScale, destY - inkInset.Top / DpiScale,
+                rasterWidthPx / DpiScale, rasterHeightPx / DpiScale),
             1f,
             sourceRect: null,
-            widthPx,
-            heightPx);
+            rasterWidthPx,
+            rasterHeightPx);
     }
 
     public override void DrawImage(IImage image, Point location)

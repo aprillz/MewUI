@@ -26,6 +26,7 @@
   <ItemGroup>
     <Compile Include="../MewUI/Shared/Rendering/Common/TextBitmap.cs" LinkBase="Rendering/Common" />
     <Compile Include="../MewUI/Shared/Rendering/Common/TextCacheKey.cs" LinkBase="Rendering/Common" />
+    <Compile Include="../MewUI/Shared/Rendering/Common/TextInkInsetPx.cs" LinkBase="Rendering/Common" />
 
     <Compile Include="../MewUI/Shared/Rendering/MewVG/MewVGGraphicsContext.Common.cs" LinkBase="Rendering/MewVG" />
     <Compile Include="../MewUI/Shared/Rendering/MewVG/MewVGGraphicsFactory.cs" LinkBase="Rendering/MewVG" />

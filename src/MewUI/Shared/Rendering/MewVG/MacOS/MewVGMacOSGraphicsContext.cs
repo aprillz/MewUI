@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 
 using Aprillz.MewUI.Rendering.CoreText;
+using Aprillz.MewUI.Text;
 using Aprillz.MewVG;
 using Aprillz.MewVG.Interop;
 
@@ -484,6 +485,11 @@ internal sealed partial class MewVGMacOSGraphicsContext
         };
     }
 
+    protected override TextInkOverhang MeasureRunInkOverhang(ReadOnlySpan<char> text, IFont font, BackendTextLayout layout)
+        => font is CoreTextFont coreTextFont
+            ? CoreTextText.MeasureRunInk(coreTextFont, text, (uint)Math.Round(DpiScale * 96.0), layout.EffectiveBounds.Width)
+            : TextInkOverhang.None;
+
     public override void DrawBackendTextLayout(ReadOnlySpan<char> text,
         BackendTextFormat format, BackendTextLayout layout, Color color)
         => DrawTextLayoutCore(text, format, layout, color, owner: null);
@@ -499,6 +505,13 @@ internal sealed partial class MewVGMacOSGraphicsContext
         if (format.Font is not CoreTextFont ct) return;
 
         var bounds = layout.EffectiveBounds;
+        // A text-engine run rasterizes into a bitmap grown by its ink overhang, with the run box inset
+        // inside it, and its visible rect reaches that far past the box.
+        var inkInset = TextInkInsetPx.FromOverhang(layout.InkOverhang, DpiScale);
+        double inkLeft = inkInset.Left / DpiScale;
+        double inkTop = inkInset.Top / DpiScale;
+        double inkRight = inkInset.Right / DpiScale;
+        double inkBottom = inkInset.Bottom / DpiScale;
 
         double targetWidthDip = layout.MeasuredSize.Width;
         if (bounds.Width > 0 && !double.IsInfinity(bounds.Width) && !double.IsNaN(bounds.Width))
@@ -519,7 +532,8 @@ internal sealed partial class MewVGMacOSGraphicsContext
         if (_clipBoundsWorld.HasValue)
         {
             var c = _clipBoundsWorld.Value;
-            var textWorld = TransformRectToWorldAABB(new Rect(bounds.X, bounds.Y, widthPx / DpiScale, heightPx / DpiScale));
+            var textWorld = TransformRectToWorldAABB(new Rect(bounds.X - inkLeft, bounds.Y - inkTop,
+                widthPx / DpiScale + inkLeft + inkRight, heightPx / DpiScale + inkTop + inkBottom));
             if (textWorld.Right <= c.X || textWorld.X >= c.Right || textWorld.Bottom <= c.Y || textWorld.Y >= c.Bottom)
                 return;
         }
@@ -555,6 +569,8 @@ internal sealed partial class MewVGMacOSGraphicsContext
             drawX = snappedOrigin.X;
             drawY = snappedOrigin.Y;
         }
+        drawX -= inkLeft;
+        drawY -= inkTop;
 
         int imageId;
         int bitmapWidthPx;
@@ -571,6 +587,7 @@ internal sealed partial class MewVGMacOSGraphicsContext
                 TextAlignment.Top,
                 format.Wrapping,
                 format.Trimming,
+                inkInset,
                 out imageId,
                 out bitmapWidthPx,
                 out bitmapHeightPx)
@@ -587,6 +604,7 @@ internal sealed partial class MewVGMacOSGraphicsContext
                 TextAlignment.Top,
                 format.Wrapping,
                 format.Trimming,
+                inkInset,
                 out imageId,
                 out bitmapWidthPx,
                 out bitmapHeightPx)
@@ -601,6 +619,7 @@ internal sealed partial class MewVGMacOSGraphicsContext
                 TextAlignment.Top,
                 format.Wrapping,
                 format.Trimming,
+                inkInset,
                 out imageId,
                 out bitmapWidthPx,
                 out bitmapHeightPx);
@@ -616,23 +635,24 @@ internal sealed partial class MewVGMacOSGraphicsContext
         double rectX = drawX;
         double rectY = drawY;
         double rectW = Math.Max(widthDip, Math.Min(bitmapWidthDip, widthDip + (bitmapWidthDip - widthDip)));
-        double rectH = heightDip;
+        double rectH = heightDip + inkTop + inkBottom;
         double snapTolerance = 2.0 / DpiScale;
         if (bounds.Width > 0 && !double.IsInfinity(bounds.Width))
         {
-            if (rectX < bounds.X)
+            double minLeft = bounds.X - inkLeft;
+            if (rectX < minLeft)
             {
-                double leftClip = bounds.X - rectX;
+                double leftClip = minLeft - rectX;
                 rectW -= leftClip;
-                rectX = bounds.X;
+                rectX = minLeft;
             }
-            double maxRight = bounds.X + bounds.Width;
+            double maxRight = bounds.X + bounds.Width + inkRight;
             if (rectX + rectW > maxRight + snapTolerance)
                 rectW = maxRight - rectX;
         }
         if (bounds.Height > 0 && !double.IsInfinity(bounds.Height))
         {
-            double maxBottom = bounds.Y + bounds.Height;
+            double maxBottom = bounds.Y + bounds.Height + inkBottom;
             if (rectY + rectH > maxBottom)
                 rectH = maxBottom - rectY;
         }

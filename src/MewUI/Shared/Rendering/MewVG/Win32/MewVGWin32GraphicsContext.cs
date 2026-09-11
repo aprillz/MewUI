@@ -242,14 +242,9 @@ internal sealed partial class MewVGWin32GraphicsContext
 
         // A text-engine run rasterizes into a bitmap grown by its ink overhang plus one antialiasing
         // pixel per side, and lays out in the inner box, so ink past the run box is kept.
-        var inkInset = default(TextInkInsetPx);
-        if (layout.InkOverhang is TextInkOverhang ink)
+        var inkInset = TextInkInsetPx.FromOverhang(layout.InkOverhang, DpiScale);
+        if (inkInset.HasInset)
         {
-            inkInset = new TextInkInsetPx(
-                (int)Math.Ceiling(ink.Left * DpiScale) + 1,
-                (int)Math.Ceiling(ink.Top * DpiScale) + 1,
-                (int)Math.Ceiling(ink.Right * DpiScale) + 1,
-                (int)Math.Ceiling(ink.Bottom * DpiScale) + 1);
             widthPx += inkInset.Left + inkInset.Right;
             heightPx += inkInset.Top + inkInset.Bottom;
             boundsPx = new PixelRect(boundsPx.Left - inkInset.Left, boundsPx.Top - inkInset.Top, widthPx, heightPx);

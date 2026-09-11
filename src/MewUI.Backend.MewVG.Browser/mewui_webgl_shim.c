@@ -80,9 +80,26 @@ EM_JS(double, mewui_text_ink_box, (const char* utf8_text, const char* utf8_font,
     return metrics.width;
 });
 
+// Ink of one run past its advance box and the font's ascent/descent band, in CSS pixels: the left and
+// right overhang go to out_horizontal[0..1], the top and bottom to out_vertical[0..1], measured from the
+// baseline the rasterizers draw at. The parameter list matches mewui_text_measure.
+EM_JS(double, mewui_text_ink_extent, (const char* utf8_text, const char* utf8_font, double* out_horizontal, double* out_vertical), {
+    mewui_text_ensure_context();
+    var ctx = Module.mewuiTextCtx;
+    var f = UTF8ToString(utf8_font);
+    if (Module.mewuiTextFont !== f) { ctx.font = f; ctx.textBaseline = "alphabetic"; Module.mewuiTextFont = f; }
+    var metrics = ctx.measureText(UTF8ToString(utf8_text));
+    var band = ctx.measureText("Mg");
+    HEAPF64[out_horizontal >> 3] = metrics.actualBoundingBoxLeft || 0;
+    HEAPF64[(out_horizontal >> 3) + 1] = (metrics.actualBoundingBoxRight || 0) - metrics.width;
+    HEAPF64[out_vertical >> 3] = (metrics.actualBoundingBoxAscent || 0) - (band.fontBoundingBoxAscent || 0);
+    HEAPF64[(out_vertical >> 3) + 1] = (metrics.actualBoundingBoxDescent || 0) - (band.fontBoundingBoxDescent || 0);
+    return metrics.width;
+});
+
 // Rasterizes one text run into straight-alpha RGBA. Returns the line count drawn.
 EM_JS(int, mewui_text_rasterize, (const char* utf8_text, const char* utf8_font, int width_px, int height_px,
-    double scale, int red, int green, int blue, int alpha, int h_align, int v_align, int wrap,
+    double scale, int red, int green, int blue, int alpha, int inset_left_px, int inset_top_px, int wrap,
     unsigned char* out_pixels), {
     mewui_text_ensure_context();
     var canvas = Module.mewuiTextCanvas;
@@ -102,8 +119,10 @@ EM_JS(int, mewui_text_rasterize, (const char* utf8_text, const char* utf8_font, 
     ctx.fillStyle = "rgba(" + red + "," + green + "," + blue + "," + (alpha / 255) + ")";
 
     // The managed text engine breaks lines and positions every run, so one call draws one run at the
-    // top left of its own box. h_align, v_align and wrap stay in the signature but carry no work.
+    // top left of its own box, inset by the room a grown texture leaves for glyph ink overhang. wrap
+    // stays in the signature but carries no work.
     var ascent = ctx.measureText("Mg").fontBoundingBoxAscent || 0;
+    ctx.translate(inset_left_px, inset_top_px);
     ctx.scale(scale, scale);
     ctx.fillText(UTF8ToString(utf8_text), 0, ascent);
 
@@ -119,7 +138,7 @@ EM_JS(int, mewui_text_rasterize, (const char* utf8_text, const char* utf8_font, 
 // GPU do not happen. The parameter list matches mewui_text_rasterize exactly, unused arguments
 // included, so both share one interop signature; a shape without a trampoline aborts the runtime.
 EM_JS(int, mewui_text_draw_to_texture, (const char* utf8_text, const char* utf8_font, int width_px, int height_px,
-    double scale, int red, int green, int blue, int alpha, int h_align, int v_align, int wrap,
+    double scale, int red, int green, int blue, int alpha, int inset_left_px, int inset_top_px, int wrap,
     unsigned int texture), {
     mewui_text_ensure_context();
     var canvas = Module.mewuiTextCanvas;
@@ -137,6 +156,7 @@ EM_JS(int, mewui_text_draw_to_texture, (const char* utf8_text, const char* utf8_
     if (Module.mewuiTextFont !== f) { ctx.font = f; ctx.textBaseline = "alphabetic"; Module.mewuiTextFont = f; }
     ctx.fillStyle = "rgba(" + red + "," + green + "," + blue + "," + (alpha / 255) + ")";
     var ascent = ctx.measureText("Mg").fontBoundingBoxAscent || 0;
+    ctx.translate(inset_left_px, inset_top_px);
     ctx.scale(scale, scale);
     ctx.fillText(UTF8ToString(utf8_text), 0, ascent);
 

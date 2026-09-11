@@ -1,5 +1,7 @@
 using System.Runtime.InteropServices;
 
+using Aprillz.MewUI.Text;
+
 namespace Aprillz.MewUI.Rendering.CoreText;
 
 internal static unsafe partial class CoreTextText
@@ -22,7 +24,8 @@ internal static unsafe partial class CoreTextText
         TextAlignment verticalAlignment,
         TextWrapping wrapping,
         int wrapWidthPx = 0,
-        TextTrimming trimming = TextTrimming.None)
+        TextTrimming trimming = TextTrimming.None,
+        TextInkInsetPx inset = default)
     {
         widthPx = Math.Max(1, widthPx);
         heightPx = Math.Max(1, heightPx);
@@ -33,19 +36,16 @@ internal static unsafe partial class CoreTextText
             return new TextBitmap(1, 1, new byte[4]);
         }
 
-        // Extend the bitmap so glyphs at the text's trailing edge have room for
-        // anti-aliasing / font smoothing. Text is still aligned to the original widthPx
-        // boundary; the extra pixels are transparent and extend beyond it.
+        // Text is still aligned to the original widthPx boundary; the extra pixels are transparent.
         int alignWidthPx = widthPx;
-        int aaExtra = (int)Math.Ceiling(dpi / 96.0 * 2); // 2 DIP in device pixels
-        widthPx += aaExtra;
+        (widthPx, heightPx) = GetBitmapSizePx(widthPx, heightPx, dpi, inset);
 
         int stride = checked(widthPx * 4);
         var data = new byte[checked(stride * heightPx)];
 
         if (!RasterizeCore(ctFont, text, widthPx, heightPx, alignWidthPx,
                           color, horizontalAlignment, verticalAlignment,
-                          wrapping, wrapWidthPx, trimming, data))
+                          wrapping, wrapWidthPx, trimming, inset, data))
         {
             return new TextBitmap(1, 1, new byte[4]);
         }
@@ -59,11 +59,10 @@ internal static unsafe partial class CoreTextText
     /// reuse a single buffer per TextBlock instance even when the text content mutates.
     /// </summary>
     /// <remarks>
-    /// <c>destBuffer</c> receives BGRA premultiplied pixels and must be at least
-    /// <c>(widthPx + aaExtra) * heightPx * 4</c> bytes, where <c>aaExtra = ceil(dpi / 96 * 2)</c>;
-    /// bytes beyond the rasterized region are not modified. <c>actualWidthPx</c> receives the
-    /// AA-extended bitmap width - the same value <see cref="TextBitmap.WidthPx"/> would have on
-    /// the equivalent <see cref="Rasterize"/> call - used for both the GPU upload extent and the
+    /// <c>destBuffer</c> receives BGRA premultiplied pixels and must hold the bitmap
+    /// <see cref="GetBitmapSizePx"/> reports; bytes beyond the rasterized region are not modified.
+    /// <c>actualWidthPx</c> and <c>actualHeightPx</c> receive that bitmap size - the same values
+    /// <see cref="Rasterize"/> would return - used for both the GPU upload extent and the
     /// image-pattern UV math. Returns false on any failure (bad font, empty text, buffer too
     /// small, CG init fail).
     /// </remarks>
@@ -79,6 +78,7 @@ internal static unsafe partial class CoreTextText
         TextWrapping wrapping,
         int wrapWidthPx,
         TextTrimming trimming,
+        TextInkInsetPx inset,
         byte[] destBuffer,
         out int actualWidthPx,
         out int actualHeightPx)
@@ -97,8 +97,7 @@ internal static unsafe partial class CoreTextText
         }
 
         int alignWidthPx = widthPx;
-        int aaExtra = (int)Math.Ceiling(dpi / 96.0 * 2);
-        widthPx += aaExtra;
+        (widthPx, heightPx) = GetBitmapSizePx(widthPx, heightPx, dpi, inset);
 
         int stride = checked(widthPx * 4);
         int required = checked(stride * heightPx);
@@ -109,7 +108,7 @@ internal static unsafe partial class CoreTextText
 
         if (!RasterizeCore(ctFont, text, widthPx, heightPx, alignWidthPx,
                           color, horizontalAlignment, verticalAlignment,
-                          wrapping, wrapWidthPx, trimming, destBuffer))
+                          wrapping, wrapWidthPx, trimming, inset, destBuffer))
         {
             return false;
         }
@@ -117,6 +116,75 @@ internal static unsafe partial class CoreTextText
         actualWidthPx = widthPx;
         actualHeightPx = heightPx;
         return true;
+    }
+
+    /// <summary>
+    /// Bitmap size for a run box of the given size: two DIP of trailing antialiasing room plus the ink
+    /// inset on every side.
+    /// </summary>
+    public static (int WidthPx, int HeightPx) GetBitmapSizePx(int widthPx, int heightPx, uint dpi, TextInkInsetPx inset)
+    {
+        int aaExtra = (int)Math.Ceiling(dpi / 96.0 * 2);
+        return (checked(widthPx + aaExtra + inset.Left + inset.Right), checked(heightPx + inset.Top + inset.Bottom));
+    }
+
+    /// <summary>
+    /// Ink of a single-line run that falls outside its run box, in device-independent units: past the
+    /// pen origin on the left, past <paramref name="boxWidth"/> on the right, and past the font's
+    /// ascent/descent band. Glyphs sit at their advance positions in the font the run is drawn with;
+    /// code units that font has no glyph for contribute nothing.
+    /// </summary>
+    public static TextInkOverhang MeasureRunInk(CoreTextFont font, ReadOnlySpan<char> text, uint dpi, double boxWidth)
+    {
+        const int STACK_LIMIT = 128;
+        var ctFont = font.GetFontRef(dpi);
+        if (text.IsEmpty || ctFont == 0)
+        {
+            return TextInkOverhang.None;
+        }
+
+        Span<ushort> glyphs = text.Length <= STACK_LIMIT ? stackalloc ushort[text.Length] : new ushort[text.Length];
+        Span<CGRect> rects = text.Length <= STACK_LIMIT ? stackalloc CGRect[text.Length] : new CGRect[text.Length];
+        Span<CGSize> advances = text.Length <= STACK_LIMIT ? stackalloc CGSize[text.Length] : new CGSize[text.Length];
+        fixed (char* characters = text)
+        fixed (ushort* glyphPointer = glyphs)
+        fixed (CGRect* rectPointer = rects)
+        fixed (CGSize* advancePointer = advances)
+        {
+            // Missing glyphs come back as zero, which the loop below skips.
+            _ = CTFontGetGlyphsForCharacters(ctFont, characters, glyphPointer, (nuint)text.Length);
+            CTFontGetBoundingRectsForGlyphs(ctFont, CTFontOrientationHorizontal, glyphPointer, rectPointer, (nuint)text.Length);
+            CTFontGetAdvancesForGlyphs(ctFont, CTFontOrientationHorizontal, glyphPointer, advancePointer, (nuint)text.Length);
+        }
+
+        double ascent = CTFontGetAscent(ctFont);
+        double descent = CTFontGetDescent(ctFont);
+        double inkLeft = 0;
+        double inkRight = 0;
+        double above = 0;
+        double below = 0;
+        double pen = 0;
+        // Bounding rects are in glyph space with y up from the baseline.
+        for (int index = 0; index < text.Length; index++)
+        {
+            if (glyphs[index] == 0)
+            {
+                continue;
+            }
+
+            ref readonly var rect = ref rects[index];
+            if (rect.size.width > 0)
+            {
+                inkLeft = Math.Min(inkLeft, pen + rect.origin.x);
+                inkRight = Math.Max(inkRight, pen + rect.origin.x + rect.size.width);
+                above = Math.Max(above, rect.origin.y + rect.size.height - ascent);
+                below = Math.Max(below, -rect.origin.y - descent);
+            }
+            pen += advances[index].width;
+        }
+
+        double scale = dpi / 96.0;
+        return TextInkOverhang.FromEdges(-inkLeft / scale, above / scale, inkRight / scale - boxWidth, below / scale);
     }
 
     /// <summary>
@@ -136,6 +204,7 @@ internal static unsafe partial class CoreTextText
         TextWrapping wrapping,
         int wrapWidthPx,
         TextTrimming trimming,
+        TextInkInsetPx inset,
         byte[] data)
     {
         int stride = widthPx * 4;
@@ -177,6 +246,8 @@ internal static unsafe partial class CoreTextText
 
                 // Layout.
                 var metrics = GetLineMetrics(ctFont);
+                // The run box sits inset inside a bitmap grown for glyph ink overhang.
+                int innerHeightPx = heightPx - inset.Top - inset.Bottom;
                 if (wrapping == TextWrapping.Wrap && wrapWidthPx > 0 && alignWidthPx > wrapWidthPx)
                 {
                     alignWidthPx = wrapWidthPx;
@@ -194,7 +265,7 @@ internal static unsafe partial class CoreTextText
                 bool wrapOverflowTrimmed = false;
                 if (trimming == TextTrimming.CharacterEllipsis && wrapping != TextWrapping.NoWrap)
                 {
-                    int maxVisibleLines = Math.Max(1, (int)(heightPx / metrics.LineHeight));
+                    int maxVisibleLines = Math.Max(1, (int)(innerHeightPx / metrics.LineHeight));
                     if (lines.Count > maxVisibleLines)
                     {
                         lines.Lines.RemoveRange(maxVisibleLines, lines.Count - maxVisibleLines);
@@ -249,10 +320,10 @@ internal static unsafe partial class CoreTextText
                 double totalHeight = lines.Count * metrics.LineHeight;
                 double topY = verticalAlignment switch
                 {
-                    TextAlignment.Center => (heightPx - totalHeight) / 2.0,
-                    TextAlignment.Bottom => heightPx - totalHeight,
+                    TextAlignment.Center => (innerHeightPx - totalHeight) / 2.0,
+                    TextAlignment.Bottom => innerHeightPx - totalHeight,
                     _ => 0.0
-                };
+                } + inset.Top;
 
                 for (int i = 0; i < lines.Count; i++)
                 {
@@ -265,7 +336,7 @@ internal static unsafe partial class CoreTextText
                         TextAlignment.Center => (alignWidthPx - line.Width) / 2.0,
                         TextAlignment.Right => Math.Max(0, alignWidthPx - line.Width - 1.0),
                         _ => 0.0
-                    };
+                    } + inset.Left;
 
                     // Baseline in "top-left" coordinates.
                     // Leading trim is handled centrally by GraphicsContextBase.
