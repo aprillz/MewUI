@@ -1,6 +1,8 @@
 using Aprillz.MewUI.Controls;
 using Aprillz.MewUI.Rendering;
 using Aprillz.MewUI.Text;
+using Markdig.Syntax;
+using Markdig.Syntax.Inlines;
 
 namespace Aprillz.MewUI.Markdown;
 
@@ -29,7 +31,8 @@ public partial class MarkdownPresenter : Control, ISubtreeInvalidationHost, ILog
         nameof(CodeBlockFactory), null, MewPropertyOptions.AffectsLayout, static (self, _, _) => self.InvalidateDocument(false));
     /// <summary>Identifies the custom renderer registry property.</summary>
     public static readonly MewProperty<MarkdownRenderers?> RenderersProperty = MewProperty<MarkdownRenderers?>.Register<MarkdownPresenter>(
-        nameof(Renderers), null, MewPropertyOptions.AffectsLayout, static (self, _, _) => self.InvalidateDocument(false));
+        nameof(Renderers), null, MewPropertyOptions.AffectsLayout,
+        static (self, oldValue, newValue) => self.OnRenderersChanged(oldValue, newValue));
     /// <summary>Identifies the background parse delay property.</summary>
     public static readonly MewProperty<TimeSpan> ParseDelayProperty = MewProperty<TimeSpan>.Register<MarkdownPresenter>(
         nameof(ParseDelay), TimeSpan.Zero);
@@ -77,7 +80,7 @@ public partial class MarkdownPresenter : Control, ISubtreeInvalidationHost, ILog
     /// <summary>Reports a failed background parse; the previous document stays displayed.</summary>
     public event Action<Exception>? ParseFailed;
 
-    internal ParsedMarkdown Document => _document ??= MarkdownParser.ParseDocument(Markdown, Options);
+    internal ParsedMarkdown Document => _document ??= MarkdownParser.ParseDocument(Markdown, Options, GetMappingProfile());
     internal Element? DocumentRoot => _scroll ?? (Element?)_blocks;
     internal MarkdownBlockHost? BlockHost => _host;
     internal bool IsParsePending => _parsePending;
@@ -125,10 +128,12 @@ public partial class MarkdownPresenter : Control, ISubtreeInvalidationHost, ILog
         _parsePending = true;
         int revision = ++_parseRevision;
         var dispatcher = Application.IsRunning ? Application.Current.Dispatcher : null;
-        _ = ParseAsync(Markdown, Options, ParseDelay, revision, cancellation.Token, dispatcher, SynchronizationContext.Current);
+        _ = ParseAsync(Markdown, Options, GetMappingProfile(), ParseDelay, revision, cancellation.Token,
+            dispatcher, SynchronizationContext.Current);
     }
 
-    private async Task ParseAsync(string markdown, MarkdownOptions options, TimeSpan delay, int revision,
+    private async Task ParseAsync(string markdown, MarkdownOptions options, MarkdownMappingProfile mappingProfile,
+        TimeSpan delay, int revision,
         CancellationToken cancellation, IDispatcher? dispatcher, SynchronizationContext? synchronization)
     {
         ParsedMarkdown? parsed = null;
@@ -136,7 +141,7 @@ public partial class MarkdownPresenter : Control, ISubtreeInvalidationHost, ILog
         try
         {
             await Task.Delay(delay, cancellation).ConfigureAwait(false);
-            parsed = MarkdownParser.ParseDocument(markdown, options);
+            parsed = MarkdownParser.ParseDocument(markdown, options, mappingProfile);
             cancellation.ThrowIfCancellationRequested();
         }
         catch (OperationCanceledException)
@@ -161,6 +166,17 @@ public partial class MarkdownPresenter : Control, ISubtreeInvalidationHost, ILog
         {
             Apply();
         }
+    }
+
+    private MarkdownMappingProfile GetMappingProfile() => GetMappingProfile(Renderers);
+
+    private static MarkdownMappingProfile GetMappingProfile(MarkdownRenderers? renderers) => new(
+        renderers?.CanRenderInline(typeof(HtmlInline)) == true,
+        renderers?.CanRenderBlock(typeof(HtmlBlock)) == true);
+
+    private void OnRenderersChanged(MarkdownRenderers? oldValue, MarkdownRenderers? newValue)
+    {
+        InvalidateDocument(GetMappingProfile(oldValue) != GetMappingProfile(newValue));
     }
 
     private void ApplyParse(int revision, ParsedMarkdown? parsed, Exception? failure)
@@ -307,6 +323,8 @@ public partial class MarkdownPresenter : Control, ISubtreeInvalidationHost, ILog
                 return RenderTable(block);
             case MarkdownBlockKind.DefinitionList:
                 return RenderDefinitionList(block);
+            case MarkdownBlockKind.FootnoteGroup:
+                return RenderFootnoteGroup(block);
             default:
                 return RenderBlocks(block.Children);
         }
@@ -475,12 +493,21 @@ public partial class MarkdownPresenter : Control, ISubtreeInvalidationHost, ILog
             };
             result = new MarkdownTaskPanel(task, result);
         }
+        RegisterAnchors(block, result);
+        return result;
+    }
+
+    private void RegisterAnchors(MarkdownBlock block, FrameworkElement element)
+    {
         if (!string.IsNullOrEmpty(block.Anchor))
         {
-            // Overwrite: a virtualized heading is re-created each time it is realized.
-            _anchors[block.Anchor] = result;
+            // Overwrite: a virtualized block is re-created each time it is realized.
+            _anchors[block.Anchor] = element;
         }
-        return result;
+        foreach (string alias in block.Aliases)
+        {
+            _anchors[alias] = element;
+        }
     }
 
     private sealed class MarkdownTaskPanel : Panel
@@ -543,6 +570,7 @@ public partial class MarkdownPresenter : Control, ISubtreeInvalidationHost, ILog
                 VerticalTextAlignment = TextAlignment.Top
             };
             var content = RenderBlocks(item.Children, block.Loose ? MarkdownTheme.BlockSpacing : 0);
+            RegisterAnchors(item, content);
             content.Margin = new Thickness(0, 0, 0, block.Loose ? 4 : 0);
             Grid.SetRow(marker, rowIndex);
             Grid.SetRow(content, rowIndex);
@@ -551,6 +579,24 @@ public partial class MarkdownPresenter : Control, ISubtreeInvalidationHost, ILog
             grid.Add(content);
         }
         return grid;
+    }
+
+    private FrameworkElement RenderFootnoteGroup(MarkdownBlock block)
+    {
+        var list = new MarkdownBlock
+        {
+            Kind = MarkdownBlockKind.List,
+            Level = 1,
+            Marker = ".",
+            Loose = true,
+            Children = block.Children
+        };
+        return new Border
+        {
+            Padding = new Thickness(0, MarkdownTheme.BlockSpacing, 0, 0),
+            NonUniformBorderThickness = new Thickness(0, 1, 0, 0),
+            Child = RenderList(list)
+        }.WithTheme((theme, border) => border.BorderBrush = theme.Palette.ControlBorder);
     }
 
     private FrameworkElement RenderTable(MarkdownBlock block)

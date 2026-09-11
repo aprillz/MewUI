@@ -268,9 +268,11 @@ internal sealed class MarkdownParagraph : TextElement, ISelectableText
         {
             bool link = span.Url != null && !span.Image;
             int length = GetVisualText(span).Length;
+            Color? htmlBackground = span.HtmlStyle?.Background;
             paints.Add(new TextPaintSpan(new TextRange(offset, length),
-                link ? _theme.LinkForeground ?? Theme.Palette.Accent : null,
-                span.Marked && !span.Code ? _theme.MarkedBackground ?? Theme.Palette.Accent.WithAlpha(64) : null,
+                link ? _theme.LinkForeground ?? Theme.Palette.Accent : span.HtmlStyle?.Foreground,
+                span.Code ? null : htmlBackground ??
+                    (span.Marked ? _theme.MarkedBackground ?? Theme.Palette.Accent.WithAlpha(64) : null),
                 link ? TextDecoration.Underline : TextDecoration.None));
             offset += length;
         }
@@ -321,7 +323,6 @@ internal sealed class MarkdownParagraph : TextElement, ISelectableText
 
     private void DrawInlineCodeBackgrounds(IGraphicsContext context, ITextLayout layout)
     {
-        Color background = _theme.CodeBackground ?? Theme.Palette.ControlBackground;
         int offset = 0;
         foreach (var span in _spans)
         {
@@ -332,7 +333,10 @@ internal sealed class MarkdownParagraph : TextElement, ISelectableText
                 continue;
             }
 
-            var font = GetMetricFont(ResolveSpanStyle(_style, span));
+            var resolvedStyle = ResolveSpanStyle(_style, span);
+            var font = GetMetricFont(resolvedStyle);
+            Color background = span.HtmlStyle?.Background ??
+                _theme.CodeBackground ?? Theme.Palette.ControlBackground;
             _rangeBounds.Clear();
             layout.GetRangeBounds(offset, length, _rangeBounds);
             foreach (var rangeBounds in _rangeBounds)
@@ -344,7 +348,7 @@ internal sealed class MarkdownParagraph : TextElement, ISelectableText
                         continue;
                     }
 
-                    double baseline = line.Bounds.Y + line.Baseline;
+                    double baseline = line.Bounds.Y + line.Baseline - resolvedStyle.BaselineOffset;
                     context.FillRectangle(new Rect(
                         Bounds.X + rangeBounds.X,
                         Bounds.Y + baseline - font.Ascent,
@@ -357,17 +361,33 @@ internal sealed class MarkdownParagraph : TextElement, ISelectableText
         }
     }
 
-    private TextRunStyle ResolveSpanStyle(TextRunStyle style, MarkdownSpan span) => style with
+    private TextRunStyle ResolveSpanStyle(TextRunStyle style, MarkdownSpan span)
     {
-        FontFamily = span.Code ? _theme.CodeFontFamily : style.FontFamily,
-        Weight = span.Bold ? FontWeight.Bold : style.Weight,
-        Italic = span.Italic || style.Italic,
-        Decoration = (span.Strike ? TextDecoration.Strikethrough : TextDecoration.None) |
-            (span.Inserted ? TextDecoration.Underline : TextDecoration.None)
-    };
+        MarkdownHtmlStyle? html = span.HtmlStyle;
+        double referenceSize = style.FontSize;
+        double baselineOffset = style.BaselineOffset;
+        if (html is MarkdownHtmlStyle htmlStyle)
+        {
+            baselineOffset += htmlStyle.BaselineOffset + htmlStyle.BaselineOffsetScale * referenceSize;
+        }
+
+        return style with
+        {
+            FontFamily = html?.FontFamily ??
+                (html?.UsesMonospaceFont == true || span.Code ? _theme.CodeFontFamily : style.FontFamily),
+            FontSize = html?.FontSize ?? referenceSize * (html?.FontSizeScale ?? 1.0),
+            Weight = html?.FontWeight ?? (span.Bold ? FontWeight.Bold : style.Weight),
+            Italic = html?.Italic == true || span.Italic || style.Italic,
+            Decoration = (span.Strike ? TextDecoration.Strikethrough : TextDecoration.None) |
+                (span.Inserted ? TextDecoration.Underline : TextDecoration.None) |
+                (html?.Decoration ?? TextDecoration.None),
+            BaselineOffset = baselineOffset
+        };
+    }
 
     private IFont GetMetricFont(TextRunStyle style)
     {
+        style = style with { BaselineOffset = 0 };
         if (!_metricFonts.TryGetValue(style, out var font))
         {
             font = GetGraphicsFactory().CreateFont(style.FontFamily, style.FontSize, _dpi,

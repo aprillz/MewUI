@@ -32,12 +32,14 @@ public sealed class MarkdownRenderContext
     public FrameworkElement RenderBlocks(ContainerBlock container)
     {
         ArgumentNullException.ThrowIfNull(container);
-        return Presenter.RenderBlocks(MarkdownParser.MapChildren(container, _document.Source, _document.Options, _document.Anchors));
+        return Presenter.RenderBlocks(MarkdownParser.MapChildren(
+            container, _document.Source, _document.Options, _document.MappingProfile, _document.Anchors));
     }
 
     /// <summary>Renders inline content as a paragraph element with the default pipeline.</summary>
     public FrameworkElement RenderInlines(ContainerInline? inlines)
     {
-        return Presenter.CreateParagraph(MarkdownParser.Flatten(inlines, _document.Options));
+        return Presenter.CreateParagraph(MarkdownParser.Flatten(
+            inlines, _document.Options, _document.MappingProfile));
     }
 }

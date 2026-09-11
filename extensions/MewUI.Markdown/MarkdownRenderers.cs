@@ -29,6 +29,30 @@ public sealed class MarkdownRenderers
 
     internal bool HasInlineRenderers => _inlines.Count > 0;
 
+    internal bool CanRenderBlock(Type nodeType)
+    {
+        for (Type? type = nodeType; type != null && type != typeof(object); type = type.BaseType)
+        {
+            if (_blocks.ContainsKey(type))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    internal bool CanRenderInline(Type nodeType)
+    {
+        for (Type? type = nodeType; type != null && type != typeof(object); type = type.BaseType)
+        {
+            if (_inlines.ContainsKey(type))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     internal FrameworkElement? RenderBlock(Block node, MarkdownRenderContext context)
     {
         for (Type? type = node.GetType(); type != null && type != typeof(object); type = type.BaseType)
