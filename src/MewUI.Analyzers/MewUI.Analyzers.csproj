@@ -13,10 +13,15 @@
     <IsRoslynComponent>true</IsRoslynComponent>
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
-    <!-- RS1038: this assembly intentionally bundles the code fix (so it references Workspaces).
-         RS2008: analyzer release tracking not warranted yet. -->
-    <NoWarn>$(NoWarn);RS1038;RS2008</NoWarn>
+    <!-- RS1038: this assembly intentionally bundles the code fix (so it references Workspaces). -->
+    <NoWarn>$(NoWarn);RS1038</NoWarn>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Release tracking ledger for the diagnostic ids (RS2008). -->
+    <AdditionalFiles Include="AnalyzerReleases.Shipped.md" />
+    <AdditionalFiles Include="AnalyzerReleases.Unshipped.md" />
+  </ItemGroup>
 
   <ItemGroup>
     <!-- Pulls in CodeAnalysis.CSharp + Workspaces.Common (needed for the code fix). -->
