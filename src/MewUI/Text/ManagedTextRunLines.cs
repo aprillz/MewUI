@@ -183,9 +183,11 @@ internal sealed partial class ManagedTextEngine
         {
             var font = GetFont(snapshot.DefaultStyle, snapshot.Dpi);
             double fontHeight = GetFontLineHeight(context, font);
-            double height = ResolveLineHeight(snapshot.Paragraph, fontHeight, fontHeight);
-            double baseline = ApplyHalfLeading(
-                context.GetRasterBaseline(font), height, font.Ascent + font.Descent);
+            double offset = snapshot.DefaultStyle.BaselineOffset;
+            double ascent = Math.Max(0, context.GetRasterBaseline(font) + offset);
+            double descent = Math.Max(0, font.Ascent + font.Descent - context.GetRasterBaseline(font) - offset);
+            double height = ResolveLineHeight(snapshot.Paragraph, fontHeight, Math.Max(fontHeight, ascent + descent));
+            double baseline = ApplyHalfLeading(ascent, height, ascent + descent);
             lines.Add(new ManagedTextLine(
                 new TextLayoutLineMetrics(
                     snapshot.Text.Length, 0, 0, new Rect(ResolveLineX(snapshot.Paragraph, 0), y, 0, height), baseline))
@@ -424,27 +426,40 @@ internal sealed partial class ManagedTextEngine
         double measuredHeight = 0;
         double contentAscent = 0;
         double contentDescent = 0;
+        // Ink extent above and below the line baseline once every piece is shifted; the same
+        // sum as measuredHeight when nothing shifts, so it only replaces it when something does.
+        double inkAscent = 0;
+        double inkDescent = 0;
+        bool shifted = false;
         for (int index = start; index < end; index++)
         {
             ref readonly var fragment = ref cells[index].Fragment;
             width += cellWidths[index];
+            double shiftedBaseline = fragment.Baseline + fragment.BaselineOffset;
+            shifted |= fragment.BaselineOffset != 0;
             measuredHeight = Math.Max(measuredHeight, fragment.MeasuredHeight);
-            contentAscent = Math.Max(contentAscent, fragment.Baseline);
+            contentAscent = Math.Max(contentAscent, shiftedBaseline);
+            inkAscent = Math.Max(inkAscent, shiftedBaseline);
+            inkDescent = Math.Max(inkDescent, fragment.MeasuredHeight - shiftedBaseline);
             double alignedHeight = fragment.Kind == ManagedTextRunKind.Inline
                 ? fragment.MeasuredHeight
                 : fragment.Font.Ascent + fragment.Font.Descent;
             contentDescent = Math.Max(
                 contentDescent,
-                Math.Max(0, alignedHeight - fragment.Baseline));
+                Math.Max(0, alignedHeight - shiftedBaseline));
         }
 
+        if (shifted)
+        {
+            measuredHeight = Math.Max(measuredHeight, inkAscent + inkDescent);
+        }
         if (contentAscent <= 0)
         {
-            contentAscent = defaultFont.Ascent;
+            contentAscent = Math.Max(0, defaultFont.Ascent + snapshot.DefaultStyle.BaselineOffset);
         }
         if (contentDescent <= 0 && start == end)
         {
-            contentDescent = defaultFont.Descent;
+            contentDescent = Math.Max(0, defaultFont.Descent - snapshot.DefaultStyle.BaselineOffset);
         }
         double contentHeight = contentAscent + contentDescent;
         double height = ResolveLineHeight(
@@ -536,6 +551,7 @@ internal sealed partial class ManagedTextEngine
             AdvanceBase = advanceBase,
             MeasuredHeight = fragment.MeasuredHeight,
             Baseline = fragment.Baseline,
+            BaselineOffset = fragment.BaselineOffset,
             Kind = fragment.Kind,
             InlineIndex = fragment.InlineIndex
         };

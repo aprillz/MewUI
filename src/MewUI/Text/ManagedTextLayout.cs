@@ -248,6 +248,7 @@ internal sealed class ManagedTextLayout : ITextLayout
                 AdvanceBase = 0,
                 MeasuredHeight = fragment.MeasuredHeight,
                 Baseline = fragment.Baseline,
+                BaselineOffset = fragment.BaselineOffset,
                 Kind = fragment.Kind,
                 InlineIndex = fragment.InlineIndex
             };

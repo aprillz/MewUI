@@ -105,7 +105,7 @@ internal sealed class ManagedTextRenderContext : ITextRenderContext, IDisposable
             {
                 ref readonly var run = ref runs[index];
                 Rect bounds = GetBaselineAlignedBounds(
-                    line, origin, run.X, run.Width, run.Baseline);
+                    line, origin, run.X, run.Width, run.Baseline, run.BaselineOffset, run.MeasuredHeight);
                 if (run.Kind == ManagedTextRunKind.Inline)
                 {
                     managed.GetInline(in run)?.Draw(this, bounds.Position);
@@ -144,17 +144,29 @@ internal sealed class ManagedTextRenderContext : ITextRenderContext, IDisposable
         DrawDecorations(managed, origin, options.PaintSpans.Span);
     }
 
+    /// <summary>
+    /// Box a run's realization draws into: its raster top sits so the run's own baseline meets the
+    /// line's, raised by the run's shift, and the box reaches the line's ink bottom.
+    /// </summary>
     private static Rect GetBaselineAlignedBounds(
         ManagedTextLine line,
         Point origin,
         double x,
         double width,
-        double baseline)
+        double baseline,
+        double baselineOffset,
+        double measuredHeight)
     {
-        double lineBaseline = origin.Y + line.Metrics.Bounds.Y + line.Metrics.Baseline;
+        double lineBaseline = origin.Y + line.Metrics.Bounds.Y + line.Metrics.Baseline - baselineOffset;
         double top = lineBaseline - baseline;
         // The outer trim changes the reported box, not the glyph ink that may overflow it.
         double inkBottom = origin.Y + line.Metrics.Bounds.Bottom + line.TrimBottom;
+        if (baselineOffset != 0)
+        {
+            // A raised run shrinks the line's descent by its shift, so the line bottom alone can
+            // end above the run's raster; an unshifted run keeps the box it always had.
+            inkBottom = Math.Max(inkBottom, top + measuredHeight);
+        }
         return new Rect(origin.X + x, top, Math.Max(1, width), Math.Max(1, inkBottom - top));
     }
 
@@ -241,7 +253,9 @@ internal sealed class ManagedTextRenderContext : ITextRenderContext, IDisposable
         double x = runs.Length > 0 ? runs[^1].X + runs[^1].Width : lineBounds.X;
         double width = Math.Max(1, lineBounds.Right - x);
         double baseline = runs.Length > 0 ? runs[^1].Baseline : font.Ascent;
-        Rect bounds = GetBaselineAlignedBounds(line, origin, x, width, baseline);
+        double baselineOffset = runs.Length > 0 ? runs[^1].BaselineOffset : managed.Snapshot.DefaultStyle.BaselineOffset;
+        double measuredHeight = runs.Length > 0 ? runs[^1].MeasuredHeight : font.Ascent + font.Descent;
+        Rect bounds = GetBaselineAlignedBounds(line, origin, x, width, baseline, baselineOffset, measuredHeight);
         using var run = _backend.CreateRun(ELLIPSIS, font, width, bounds.Height);
         if (run is null)
         {

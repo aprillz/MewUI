@@ -21,7 +21,12 @@ internal struct ManagedTextFragment
 
     /// <summary>Height the backend measured for this piece, which a fallback glyph can raise above the font's own.</summary>
     public double MeasuredHeight;
+
+    /// <summary>Distance from the raster top to the piece's own baseline, before any shift.</summary>
     public double Baseline;
+
+    /// <summary>The style's baseline shift, applied when the piece is placed on a line.</summary>
+    public double BaselineOffset;
 
     /// <summary>Total width. A tab's is resolved while breaking lines, since it depends on where the tab lands.</summary>
     public double Width;
@@ -189,7 +194,7 @@ internal sealed partial class ManagedTextEngine
 
             if (snapshot.TryGetInline(start, out var inline))
             {
-                AddInlineFragment(fragments, snapshot, in inline, start, end - start, styleIndex, font);
+                AddInlineFragment(fragments, snapshot, in inline, start, end - start, styleIndex, font, style.BaselineOffset);
                 int inlineEnd = checked(inline.Position + inline.Length);
                 while (index + 1 < boundaries.Length && boundaries[index + 1] < inlineEnd)
                 {
@@ -212,6 +217,7 @@ internal sealed partial class ManagedTextEngine
                     InlineIndex = -1,
                     MeasuredHeight = font.Ascent + font.Descent,
                     Baseline = context.GetRasterBaseline(font),
+                    BaselineOffset = style.BaselineOffset,
                     Width = 0,
                     AdvanceStart = -1
                 });
@@ -242,7 +248,7 @@ internal sealed partial class ManagedTextEngine
             }
 
             int pieceEnd = last + 1 < boundaries.Length ? boundaries[last + 1] : text.Length;
-            AddTextFragment(fragments, context, snapshot, boundaries, index, last, start, pieceEnd, styleIndex, font);
+            AddTextFragment(fragments, context, snapshot, boundaries, index, last, start, pieceEnd, styleIndex, font, style.BaselineOffset);
             index = last + 1;
         }
     }
@@ -254,7 +260,8 @@ internal sealed partial class ManagedTextEngine
         int start,
         int boundaryLength,
         int styleIndex,
-        IFont font)
+        IFont font,
+        double baselineOffset)
     {
         var metrics = inline.Object.Measure();
         int inlineIndex = Array.IndexOf(snapshot.Inlines, inline);
@@ -268,6 +275,7 @@ internal sealed partial class ManagedTextEngine
             InlineIndex = inlineIndex,
             MeasuredHeight = metrics.Height,
             Baseline = metrics.Baseline,
+            BaselineOffset = baselineOffset,
             // Whole device pixels, as every text advance already is: an object free to report a
             // fractional width would push the rest of the line off the pixel grid.
             Width = LayoutRounding.RoundToPixel(metrics.Width, snapshot.Dpi / 96.0),
@@ -286,7 +294,8 @@ internal sealed partial class ManagedTextEngine
         int start,
         int end,
         int styleIndex,
-        IFont font)
+        IFont font,
+        double baselineOffset)
     {
         int length = end - start;
         var fragment = new ManagedTextFragment
@@ -299,6 +308,7 @@ internal sealed partial class ManagedTextEngine
             InlineIndex = -1,
             MeasuredHeight = font.Ascent + font.Descent,
             Baseline = context.GetRasterBaseline(font),
+            BaselineOffset = baselineOffset,
             AdvanceStart = fragments.AdvanceCount,
             BoundaryStart = fragments.BoundaryCount,
             BoundaryCount = lastBoundary - firstBoundary + 1

@@ -33,6 +33,10 @@ public sealed class Run : MewObject
         MewProperty<TextDecoration>.Register<Run>(nameof(Decoration), TextDecoration.None,
             changed: static (self, _, _) => self.NotifyChanged(RunChange.Layout));
 
+    public static readonly MewProperty<double> BaselineOffsetProperty =
+        MewProperty<double>.Register<Run>(nameof(BaselineOffset), 0,
+            changed: static (self, _, _) => self.NotifyChanged(RunChange.Layout));
+
     public static readonly MewProperty<Color?> ForegroundProperty =
         MewProperty<Color?>.Register<Run>(nameof(Foreground), null,
             changed: static (self, _, _) => self.NotifyChanged(RunChange.Paint));
@@ -89,6 +93,13 @@ public sealed class Run : MewObject
         set => SetValue(DecorationProperty, value);
     }
 
+    /// <summary>Gets or sets the baseline shift in DIPs; positive raises the run above the line's baseline.</summary>
+    public double BaselineOffset
+    {
+        get => GetValue(BaselineOffsetProperty);
+        set => SetValue(BaselineOffsetProperty, value);
+    }
+
     /// <summary>Gets or sets the text color; null inherits from the owning text element.</summary>
     public Color? Foreground
     {
@@ -113,7 +124,8 @@ public sealed class Run : MewObject
             FontSize = FontSize ?? owner.FontSize,
             Weight = FontWeight ?? owner.Weight,
             Italic = Italic,
-            Decoration = Decoration
+            Decoration = Decoration,
+            BaselineOffset = BaselineOffset
         };
 
     private void NotifyChanged(RunChange change) => Changed?.Invoke(this, change);
