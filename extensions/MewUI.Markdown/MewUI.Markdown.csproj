@@ -11,4 +11,9 @@
     <PackageReference Include="Markdig" Version="1.3.2" />
     <InternalsVisibleTo Include="Aprillz.MewUI.Markdown.Test" />
   </ItemGroup>
+  <!-- HTML formatting applies the same tag limits, size ratios and offset limit as core markup; the source link keeps one definition without internal access. -->
+  <ItemGroup>
+    <Compile Include="..\..\src\MewUI\Text\TextLayoutLimits.cs" Link="Shared\TextLayoutLimits.cs" />
+    <Compile Include="..\..\src\MewUI\Text\TextMarkupConstants.cs" Link="Shared\TextMarkupConstants.cs" />
+  </ItemGroup>
 </Project>
