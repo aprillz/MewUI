@@ -21,15 +21,18 @@ public partial class MarkdownPresenter
     private (int Unit, int Offset)? _selectionAnchor;
     private (int Unit, int Offset)? _selectionFocus;
     private bool _dragSelecting;
+    private ContextMenu? _defaultContextMenu;
 
     /// <summary>Gets or sets whether text can be selected with the mouse and keyboard.</summary>
     public bool IsSelectionEnabled { get => GetValue(IsSelectionEnabledProperty); set => SetValue(IsSelectionEnabledProperty, value); }
     /// <summary>Gets whether a non-empty selection exists.</summary>
     public bool HasSelection => GetValue(HasSelectionProperty);
-    /// <summary>Gets the selected text as plain text; blocks are separated by blank lines and table cells by tabs.</summary>
+    /// <summary>Gets the selected text as plain text; blocks and list items are separated by line breaks, table cells by tabs, and a list item that starts inside the selection is preceded by its marker and a tab.</summary>
     public string SelectedText => GetValue(SelectedTextProperty);
     /// <summary>Raised when the selection changes, including when it is cleared.</summary>
     public event Action? SelectionChanged;
+    /// <summary>Raised before the selected text is written to the clipboard; a handler may replace the text or cancel the copy.</summary>
+    public event Action<MarkdownCopyingEventArgs>? Copying;
 
     /// <summary>Selects the whole document.</summary>
     public void SelectAll()
@@ -45,15 +48,21 @@ public partial class MarkdownPresenter
     /// <summary>Clears the selection.</summary>
     public void ClearSelection() => SetSelection(null, null);
 
-    /// <summary>Copies the selected text to the platform clipboard; returns false when nothing is selected or no clipboard is available.</summary>
+    /// <summary>Copies the selected text to the platform clipboard; returns false when nothing is selected, a <see cref="Copying"/> handler cancels, or no clipboard is available.</summary>
     public bool CopySelection()
     {
         string text = SelectedText;
-        if (text.Length == 0 || !Application.IsRunning)
+        if (text.Length == 0)
         {
             return false;
         }
-        return Application.Current?.PlatformServices.Clipboard?.TrySetText(text) == true;
+        var args = new MarkdownCopyingEventArgs(text);
+        Copying?.Invoke(args);
+        if (args.Cancel || string.IsNullOrEmpty(args.Text) || !Application.IsRunning)
+        {
+            return false;
+        }
+        return Application.Current?.PlatformServices.Clipboard?.TrySetText(args.Text) == true;
     }
 
     private void OnSelectionEnabledChanged(bool enabled)
@@ -70,6 +79,13 @@ public partial class MarkdownPresenter
     {
         Focusable = true;
         Cursor = CursorType.IBeam;
+        // Commands rather than key handling, so the platform shortcut, menus and toolbars share one path.
+        Commands.Register(StandardCommands.Copy, this,
+            static presenter => presenter.CopySelection(),
+            static presenter => presenter.IsSelectionEnabled && presenter.HasSelection);
+        Commands.Register(StandardCommands.SelectAll, this,
+            static presenter => presenter.SelectAll(),
+            static presenter => presenter.IsSelectionEnabled && presenter._document != null && presenter._document.TextUnits.Count > 0);
     }
 
     /// <summary>Starts a selection at a window point; exposed for tests that bypass input routing.</summary>
@@ -160,6 +176,11 @@ public partial class MarkdownPresenter
             if (unit > start.Unit)
             {
                 builder.Append(units[unit].Separator);
+            }
+            // The marker belongs to the item's start, so a selection beginning inside the item text leaves it out.
+            if (from == 0)
+            {
+                builder.Append(units[unit].ListMarkerPrefix);
             }
             builder.Append(text, from, Math.Max(0, to - from));
         }
@@ -258,7 +279,16 @@ public partial class MarkdownPresenter
     protected override void OnMouseDown(MouseEventArgs args)
     {
         base.OnMouseDown(args);
-        if (args.Handled || !IsSelectionEnabled || !IsEffectivelyEnabled || args.Button != MouseButton.Left)
+        if (args.Handled || !IsSelectionEnabled || !IsEffectivelyEnabled)
+        {
+            return;
+        }
+        if (args.Button == MouseButton.Right)
+        {
+            ShowDefaultContextMenu(args);
+            return;
+        }
+        if (args.Button != MouseButton.Left)
         {
             return;
         }
@@ -276,6 +306,24 @@ public partial class MarkdownPresenter
         {
             window.CaptureMouse(this);
         }
+        args.Handled = true;
+    }
+
+    /// <summary>Shows the Copy and Select All menu unless the host assigned its own context menu.</summary>
+    private void ShowDefaultContextMenu(MouseEventArgs args)
+    {
+        if (ContextMenu != null)
+        {
+            return;
+        }
+        // Focus first so the menu's commands resolve to this presenter's selection.
+        Focus();
+        var menu = _defaultContextMenu ??= new ContextMenu();
+        menu.Items.Clear();
+        menu.AddItem(StandardCommands.Copy);
+        menu.AddSeparator();
+        menu.AddItem(StandardCommands.SelectAll);
+        menu.Show(this, WindowPoint(args));
         args.Handled = true;
     }
 
@@ -342,20 +390,8 @@ public partial class MarkdownPresenter
             args.Handled = true;
             return;
         }
-        if (!IsSelectionEnabled)
-        {
-            return;
-        }
-        if (args.ControlKey && args.Key == Key.C)
-        {
-            args.Handled = CopySelection();
-        }
-        else if (args.ControlKey && args.Key == Key.A)
-        {
-            SelectAll();
-            args.Handled = true;
-        }
-        else if (args.Key == Key.Escape && HasSelection)
+        // Copy and select all arrive through the input map as commands; only Escape is handled here.
+        if (IsSelectionEnabled && args.Key == Key.Escape && HasSelection)
         {
             ClearSelection();
             args.Handled = true;

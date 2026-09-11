@@ -11,7 +11,7 @@ public sealed class MarkdownSelectionTests
     private const double WIDTH = 400;
 
     [TestMethod]
-    public void DraggingAcrossTwoParagraphsSelectsBothWithABlankLineBetween()
+    public void DraggingAcrossTwoParagraphsSelectsBothWithALineBreakBetween()
     {
         EnsureGdi();
         using var presenter = Layout(new MarkdownPresenter { Markdown = "First paragraph here.\n\nSecond paragraph here." });
@@ -22,7 +22,7 @@ public sealed class MarkdownSelectionTests
         Assert.IsTrue(presenter.BeginSelectionAt(CharacterPoint(paragraphs[0], 6)));
         presenter.ExtendSelectionTo(CharacterPoint(paragraphs[1], 6));
 
-        Assert.AreEqual("paragraph here.\n\nSecond", presenter.SelectedText);
+        Assert.AreEqual("paragraph here.\nSecond", presenter.SelectedText);
         Assert.IsTrue(presenter.HasSelection);
         Assert.IsTrue(changes >= 2);
     }
@@ -37,7 +37,7 @@ public sealed class MarkdownSelectionTests
         presenter.BeginSelectionAt(CharacterPoint(paragraphs[1], 5));
         presenter.ExtendSelectionTo(CharacterPoint(paragraphs[0], 6));
 
-        Assert.AreEqual("beta\n\ngamma", presenter.SelectedText);
+        Assert.AreEqual("beta\ngamma", presenter.SelectedText);
     }
 
     [TestMethod]
@@ -112,7 +112,7 @@ public sealed class MarkdownSelectionTests
         presenter.MarkdownTheme = new MarkdownTheme { BlockSpacing = 20 };
         Layout(presenter);
 
-        Assert.AreEqual("keep me\n\nand me", presenter.SelectedText);
+        Assert.AreEqual("keep me\nand me", presenter.SelectedText);
         Assert.IsTrue(Paragraphs(presenter).All(paragraph => paragraph.IsFullySelected));
     }
 
@@ -139,7 +139,7 @@ public sealed class MarkdownSelectionTests
 
         presenter.SelectAll();
 
-        Assert.AreEqual("intro\n\nvar x = 1;\nvar y = 2;\n\noutro", presenter.SelectedText);
+        Assert.AreEqual("intro\nvar x = 1;\nvar y = 2;\noutro", presenter.SelectedText);
     }
 
     [TestMethod]
@@ -152,7 +152,7 @@ public sealed class MarkdownSelectionTests
 
         presenter.SelectAll();
 
-        Assert.AreEqual("first\n\ncustom block\n\nlast", presenter.SelectedText, "copied text comes from the model, so the skipped block is still in it");
+        Assert.AreEqual("first\ncustom block\nlast", presenter.SelectedText, "copied text comes from the model, so the skipped block is still in it");
         var paragraphs = Paragraphs(presenter);
         Assert.HasCount(2, paragraphs);
         Assert.IsTrue(paragraphs.All(paragraph => paragraph.IsFullySelected));
