@@ -285,7 +285,13 @@ internal sealed class MarkdownParagraph : TextElement, ISelectableText
         context.Save();
         try
         {
-            context.SetClip(Bounds);
+            // Glyph ink may reach past the line boxes, so wrapped text is not clipped at all; unwrapped
+            // code is bounded on the sides only, where its long lines would otherwise run into the margin.
+            if (!Wrap)
+            {
+                double inkMargin = FontSize;
+                context.SetClip(new Rect(Bounds.X, Bounds.Y - inkMargin, Bounds.Width, Bounds.Height + inkMargin * 2));
+            }
             if (!PlainCode)
             {
                 DrawInlineCodeBackgrounds(context, layout);
