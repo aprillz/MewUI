@@ -58,6 +58,14 @@ partial class GalleryView
             "A single logical surface can wrap while <b>bold text remains bold across line boundaries</b>, " +
             "<span background='#403B82F6'>background paint follows the wrapped range</span>, and " +
             "<code>code_with_a_long_identifier()</code> participates in the same text layout.";
+        const string SCRIPTS =
+            "E = mc<sup>2</sup> | H<sub>2</sub>O | x<sup>n<sup>2</sup></sup> | " +
+            "a<sub>i<sub>j</sub></sub> | e<sup>i<sub>k</sub></sup><br>" +
+            "<u>underline x<sup>2</sup></u> | <s>strike H<sub>2</sub>O</s> | " +
+            "<span background='#403B82F6'>background x<sup>2</sup></span> | <code>x<sup>2</sup></code><br>" +
+            "<span size='24px'>24 DIP<sup>sup</sup><sub>sub</sub></span> | " +
+            "<big>big<sup>sup</sup></big> | <sup>outer <span size='20px'>20 DIP</span> outer</sup> | " +
+            "<span font='Georgia'>Georgia<sup>2</sup></span> | 한글<sup>위</sup><sub>아래</sub>";
 
         var liveMarkup = new MarkupTextBlock
             {
@@ -86,6 +94,33 @@ partial class GalleryView
             Card(
                 "Wrapping",
                 MarkupExample(WRAPPING, resultWidth: 430),
+                minWidth: 650),
+            Card("Superscript and Subscript", MarkupExample(SCRIPTS), minWidth: 650),
+            Card(
+                "Run Baseline Offset",
+                new TextBlock
+                    {
+                        FontSize = 16,
+                        TextWrapping = TextWrapping.Wrap
+                    }
+                    .Width(620)
+                    .Inlines(
+                        new Run("Baseline "),
+                        new Run("+6").BaselineOffset(6).Foreground(Color.FromHex("#D83B01")),
+                        new Run(" | "),
+                        new Run("-4").BaselineOffset(-4).Foreground(Color.FromHex("#107C10")),
+                        new Run(" | "),
+                        new Run("+3 underline").BaselineOffset(3).Underline(),
+                        new Run(" | "),
+                        new Run("-3 strike").BaselineOffset(-3).Strikethrough(),
+                        new Run(" | "),
+                        new Run("+1.5 fraction").BaselineOffset(1.5),
+                        new Run(" | "),
+                        new Run("22 DIP +8").FontSize(22).BaselineOffset(8),
+                        new Run(" | "),
+                        new Run("Consolas -5").FontFamily("Consolas").BaselineOffset(-5),
+                        new Run(" | "),
+                        new Run("wrapped text keeps each run on its own shifted baseline across line breaks").BaselineOffset(4)),
                 minWidth: 650),
             Card(
                 "Runtime Markup and Read-only Text",
