@@ -9,6 +9,11 @@ internal static class MarkupTextParser
     private const int MAX_TAG_LENGTH = 4096;
     private const double RELATIVE_SIZE_STEP = 1.2;
 
+    // Synthetic scripts: a script's size relative to its parent, and its baseline shift as a fraction of the parent's size.
+    private const double SCRIPT_SIZE_SCALE = 0.75;
+    private const double SUPERSCRIPT_SHIFT = 0.35;
+    private const double SUBSCRIPT_SHIFT = -0.20;
+
     public static MarkupTextDocument Parse(string source)
     {
         if (source.Length == 0)
@@ -104,7 +109,12 @@ internal static class MarkupTextParser
         }
 
         var previousStyle = style;
-        ApplyOpeningTag(tag, ref style);
+        if (!TryApplyOpeningTag(tag, ref style))
+        {
+            style = previousStyle;
+            return false;
+        }
+
         if (!tag.IsSelfClosing)
         {
             stack.Add(new MarkupTextFrame(tag.Name, previousStyle));
@@ -117,10 +127,15 @@ internal static class MarkupTextParser
         return true;
     }
 
-    private static void ApplyOpeningTag(in ParsedMarkupTag tag, ref MarkupTextStyle style)
+    /// <summary>Applies an opening tag to the style; false when the tag would leave no usable style and stays literal.</summary>
+    private static bool TryApplyOpeningTag(in ParsedMarkupTag tag, ref MarkupTextStyle style)
     {
         switch (tag.Name)
         {
+            case "sup":
+                return TryApplyScript(ref style, SUPERSCRIPT_SHIFT);
+            case "sub":
+                return TryApplyScript(ref style, SUBSCRIPT_SHIFT);
             case "b":
             case "strong":
                 style = style with { FontWeight = MewUI.FontWeight.Bold };
@@ -151,6 +166,8 @@ internal static class MarkupTextParser
                 ApplyAttributes(tag.Attributes, ref style);
                 break;
         }
+
+        return true;
     }
 
     private static void ApplyAttributes(IReadOnlyDictionary<string, string?> attributes, ref MarkupTextStyle style)
@@ -207,6 +224,44 @@ internal static class MarkupTextParser
         }
 
         return style with { FontSizeScale = style.FontSizeScale * scale };
+    }
+
+    /// <summary>
+    /// Shrinks the size for a script and shifts its baseline by a fraction of the size before the
+    /// shrink, so nested scripts accumulate their shifts; false when the result is not a usable style.
+    /// </summary>
+    private static bool TryApplyScript(ref MarkupTextStyle style, double shift)
+    {
+        MarkupTextStyle scripted;
+        if (style.FontSize is double absoluteSize)
+        {
+            scripted = style with
+            {
+                FontSize = absoluteSize * SCRIPT_SIZE_SCALE,
+                BaselineOffset = style.BaselineOffset + shift * absoluteSize
+            };
+        }
+        else
+        {
+            scripted = style with
+            {
+                FontSizeScale = style.FontSizeScale * SCRIPT_SIZE_SCALE,
+                BaselineOffsetScale = style.BaselineOffsetScale + shift * style.FontSizeScale
+            };
+        }
+
+        bool usableSize = scripted.FontSize is double size
+            ? double.IsFinite(size) && size > 0
+            : double.IsFinite(scripted.FontSizeScale) && scripted.FontSizeScale > 0;
+        if (!usableSize ||
+            !TextLayoutRequestSnapshot.IsValidBaselineOffset(scripted.BaselineOffset) ||
+            !TextLayoutRequestSnapshot.IsValidBaselineOffset(scripted.BaselineOffsetScale))
+        {
+            return false;
+        }
+
+        style = scripted;
+        return true;
     }
 
     private static bool TryParseFontSize(string? text, out double value, out bool relative)
@@ -278,7 +333,7 @@ internal static class MarkupTextParser
 
     private static bool IsSupportedTag(string name)
         => name is "b" or "strong" or "i" or "em" or "u" or "s" or "del" or
-            "tt" or "code" or "big" or "small" or "br" or "span" or "font";
+            "tt" or "code" or "big" or "small" or "sub" or "sup" or "br" or "span" or "font";
 
     private static void Append(
         StringBuilder builder,
@@ -609,14 +664,19 @@ internal sealed record MarkupTextDocument(string Text, MarkupTextSpan[] Spans)
         foreach (var span in Spans)
         {
             var markupStyle = span.Style;
+            double referenceSize = defaultStyle.FontSize;
+            double offset = defaultStyle.BaselineOffset + markupStyle.BaselineOffset +
+                markupStyle.BaselineOffsetScale * referenceSize;
             var style = defaultStyle with
             {
                 FontFamily = markupStyle.FontFamily ??
                     (markupStyle.UsesMonospaceFont ? options.MonospaceFontFamily : defaultStyle.FontFamily),
-                FontSize = markupStyle.FontSize ?? defaultStyle.FontSize * markupStyle.FontSizeScale,
+                FontSize = markupStyle.FontSize ?? referenceSize * markupStyle.FontSizeScale,
                 Weight = markupStyle.FontWeight ?? defaultStyle.Weight,
                 Italic = markupStyle.Italic || defaultStyle.Italic,
-                Decoration = markupStyle.Decoration | defaultStyle.Decoration
+                Decoration = markupStyle.Decoration | defaultStyle.Decoration,
+                // An owner size too large for the resolved shift keeps the owner's offset instead of failing the layout.
+                BaselineOffset = TextLayoutRequestSnapshot.IsValidBaselineOffset(offset) ? offset : defaultStyle.BaselineOffset
             };
 
             if (style != defaultStyle)
@@ -648,6 +708,10 @@ internal readonly record struct MarkupTextSpan(int Start, int Length, MarkupText
 
 internal readonly record struct MarkupTextFrame(string Name, MarkupTextStyle PreviousStyle);
 
+/// <summary>
+/// Style of a markup span. A size is absolute DIPs or a scale of the owner's size; a baseline shift keeps
+/// both a DIP part and a part scaled by the owner's size, so scripts under a mix of sizes still resolve.
+/// </summary>
 internal readonly record struct MarkupTextStyle(
     string? FontFamily,
     bool UsesMonospaceFont,
@@ -657,7 +721,10 @@ internal readonly record struct MarkupTextStyle(
     bool Italic,
     TextDecoration Decoration,
     Color? Foreground,
-    Color? Background)
+    Color? Background,
+    double BaselineOffset,
+    double BaselineOffsetScale)
 {
-    public static MarkupTextStyle Empty { get; } = new(null, false, null, 1.0, null, false, TextDecoration.None, null, null);
+    public static MarkupTextStyle Empty { get; } =
+        new(null, false, null, 1.0, null, false, TextDecoration.None, null, null, 0, 0);
 }
