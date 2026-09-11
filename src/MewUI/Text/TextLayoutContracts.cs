@@ -63,6 +63,12 @@ public readonly record struct TextRunStyle(
     string? Language = null)
 {
     public static TextRunStyle Default { get; } = new("Segoe UI", 12);
+
+    /// <summary>
+    /// Shift of the run's baseline from the line's baseline in DIPs; positive raises it. The font
+    /// size is not changed, and the value is final rather than added to a preceding run's shift.
+    /// </summary>
+    public double BaselineOffset { get; init; }
 }
 
 public sealed record TextParagraphStyle

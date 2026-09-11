@@ -54,6 +54,14 @@ public static class TextExtensions
         return run;
     }
 
+    /// <summary>Sets the baseline shift in DIPs; positive raises the run above the line's baseline.</summary>
+    public static Run BaselineOffset(this Run run, double offset)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        run.BaselineOffset = offset;
+        return run;
+    }
+
     /// <summary>Sets the text color; null inherits from the owning text element.</summary>
     public static Run Foreground(this Run run, Color? color)
     {

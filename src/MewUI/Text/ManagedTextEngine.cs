@@ -58,6 +58,7 @@ internal sealed partial class ManagedTextEngine : ITextEngine, IDisposable
                         snapshot.Paragraph.Trimming == TextTrimming.None &&
                         snapshot.Runs.Length == 0 &&
                         snapshot.Inlines.Length == 0 &&
+                        snapshot.DefaultStyle.BaselineOffset == 0 &&
                         snapshot.Text.AsSpan().IndexOfAny('\r', '\n', '\t') < 0;
 
         using var context = CreateMeasurementContext(snapshot.Dpi);
@@ -772,7 +773,11 @@ internal sealed class TextLayoutRequestSnapshot
         hash.Add((int)style.Decoration);
         hash.Add(style.Culture?.Name);
         hash.Add(style.Language);
+        hash.Add(style.BaselineOffset);
     }
+
+    // A quarter of the range keeps every sum with a font metric finite, so no line box can overflow.
+    internal const double MAX_BASELINE_OFFSET = double.MaxValue / 4;
 
     private static void ValidateStyle(TextRunStyle style, string parameterName)
     {
@@ -780,7 +785,15 @@ internal sealed class TextLayoutRequestSnapshot
         {
             throw new ArgumentException("Text styles require a font family and positive font size.", parameterName);
         }
+        if (!IsValidBaselineOffset(style.BaselineOffset))
+        {
+            throw new ArgumentOutOfRangeException(parameterName, "The baseline offset must be finite.");
+        }
     }
+
+    /// <summary>True when a baseline offset is finite and small enough to lay out.</summary>
+    internal static bool IsValidBaselineOffset(double offset)
+        => double.IsFinite(offset) && Math.Abs(offset) <= MAX_BASELINE_OFFSET;
 
     private static void ValidateRange(int start, int length, int textLength, string parameterName)
     {
@@ -830,7 +843,12 @@ internal struct ManagedTextRun
     /// <summary>Advance the run starts at, subtracted from every read so a split fragment still measures from its own left edge.</summary>
     public float AdvanceBase;
     public double MeasuredHeight;
+
+    /// <summary>Distance from the run's raster top to its own baseline, before any shift.</summary>
     public double Baseline;
+
+    /// <summary>Shift of the run's baseline above the line's baseline, kept apart from <see cref="Baseline"/>.</summary>
+    public double BaselineOffset;
     public ManagedTextRunKind Kind;
     public int InlineIndex;
 
