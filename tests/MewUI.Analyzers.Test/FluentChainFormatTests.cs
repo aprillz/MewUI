@@ -18,6 +18,7 @@ public sealed class FluentChainFormatTests
             public Node Add(params Node[] nodes) => this;
             public Node Color(Paint p) => this;
             public Node On(System.Action<int> handler) => this;
+            public Node Bind(string name, System.Action<int> handler) => this;
         }
 
         public class Paint
@@ -97,6 +98,94 @@ public sealed class FluentChainFormatTests
                         {
                             Run(e);
                         });
+                }
+                void Run(int e) { }
+            }
+            """ + NodeApi;
+
+        await RunAsync(source, fixedSource);
+    }
+
+    [TestMethod]
+    public async Task Expand_BreaksArgumentList_WhenAMultiLineArgumentHasSiblings()
+    {
+        // A lambda block alone stays inline (the test above); with a sibling argument it would bury
+        // that sibling, so the list breaks and each argument gets its own line.
+        var source = """
+            class C
+            {
+                void M()
+                {
+                    new Node().Ch[||]ild("x").Bind("a", e =>
+            {
+                Run(e);
+            });
+                }
+                void Run(int e) { }
+            }
+            """ + NodeApi;
+
+        var fixedSource = """
+            class C
+            {
+                void M()
+                {
+                    new Node()
+                        .Child("x")
+                        .Bind(
+                            "a",
+                            e =>
+                            {
+                                Run(e);
+                            }
+                        );
+                }
+                void Run(int e) { }
+            }
+            """ + NodeApi;
+
+        await RunAsync(source, fixedSource);
+    }
+
+    [TestMethod]
+    public async Task Expand_RenormalizesBrokenArgumentList()
+    {
+        // Re-expanding an already-broken list converges on the same layout, so repeated runs are
+        // stable: this input is the expected output of the test above with every argument line
+        // shifted, and it comes back to the canonical indentation.
+        var source = """
+            class C
+            {
+                void M()
+                {
+                    new Node()
+                        .Ch[||]ild("x")
+                        .Bind(
+                    "a",
+                    e =>
+                    {
+                        Run(e);
+                    }
+                );
+                }
+                void Run(int e) { }
+            }
+            """ + NodeApi;
+
+        var fixedSource = """
+            class C
+            {
+                void M()
+                {
+                    new Node()
+                        .Child("x")
+                        .Bind(
+                            "a",
+                            e =>
+                            {
+                                Run(e);
+                            }
+                        );
                 }
                 void Run(int e) { }
             }

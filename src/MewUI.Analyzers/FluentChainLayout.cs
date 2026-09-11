@@ -94,12 +94,21 @@ internal static class FluentChainLayout
             && (identifier.Identifier.ValueText.Length == 0 || !char.IsUpper(identifier.Identifier.ValueText[0]));
     }
 
+    // A child worth giving its own tree: an element chain with something to stack. A single call
+    // (`header.DockTop()`) reads better inline than split over two lines.
+    private static bool IsExpandableChild(ExpressionSyntax expression, SemanticModel model)
+        => ChainLength(expression) >= MinLinks && IsElementChain(expression, model);
+
     // Break the argument list onto its own lines when it has element children, expanding each as a
     // tree (separated by a blank line). Value arguments and type-rooted calls stay inline.
     private static ArgumentListSyntax FormatArguments(ArgumentListSyntax arguments, string callIndent, bool expand, string newline, SemanticModel model)
     {
         var list = arguments.Arguments;
-        var breakList = expand && list.Any(argument => IsElementChain(argument.Expression, model));
+        // A lone multi-line argument (typically a lambda block) stays inline and is only re-indented;
+        // once it shares the list with others, keeping it inline would bury the siblings inside it.
+        var breakList = expand
+            && (list.Any(argument => IsExpandableChild(argument.Expression, model))
+                || (list.Count > 1 && list.Any(argument => SpansLines(argument.Expression))));
 
         if (!breakList)
         {
@@ -113,17 +122,20 @@ internal static class FluentChainLayout
 
         var argIndent = callIndent + Unit;
         var firstLeading = Break(argIndent, newline);
-        // Siblings are separated by a blank line.
+        // Element children are trees, so they get a blank line around them to stay readable; plain
+        // values sit on consecutive lines.
         var siblingLeading = SyntaxFactory.TriviaList(
             SyntaxFactory.EndOfLine(newline), SyntaxFactory.EndOfLine(newline), SyntaxFactory.Whitespace(argIndent));
 
         var formatted = list.Select((argument, index) =>
         {
-            var value = IsElementChain(argument.Expression, model)
+            var isElement = IsExpandableChild(argument.Expression, model);
+            var value = isElement
                 ? Format((InvocationExpressionSyntax)argument.Expression, argIndent, expand: true, newline, model)
                 : InlineValue(argument.Expression, argIndent, newline, model);
+            var separated = isElement || (index > 0 && IsExpandableChild(list[index - 1].Expression, model));
             return SyntaxFactory.Argument(argument.NameColon, argument.RefKindKeyword, value)
-                .WithLeadingTrivia(index == 0 ? firstLeading : siblingLeading);
+                .WithLeadingTrivia(index == 0 ? firstLeading : separated ? siblingLeading : firstLeading);
         });
 
         var commas = Enumerable.Repeat(SyntaxFactory.Token(SyntaxKind.CommaToken), System.Math.Max(0, list.Count - 1));
@@ -133,9 +145,12 @@ internal static class FluentChainLayout
             SyntaxFactory.Token(SyntaxKind.CloseParenToken).WithLeadingTrivia(Break(callIndent, newline)));
     }
 
+    // Whether the argument occupies more than one line as written (a lambda block, a nested initializer).
+    private static bool SpansLines(ExpressionSyntax expression)
+        => expression.ToFullString().IndexOf('\n') >= 0;
+
     // An inline argument: collapse a nested chain back to one line, otherwise just strip outer trivia.
-    // A multi-line value (e.g. a lambda block) is re-indented so its shallowest line sits at the call's
-    // indent, shifting the whole body to match its new position in the chain.
+    // A multi-line value is re-indented to match its new position in the chain.
     private static ExpressionSyntax InlineValue(ExpressionSyntax expression, string targetIndent, string newline, SemanticModel model)
     {
         if (expression is InvocationExpressionSyntax chain && ChainLength(expression) >= 1)
@@ -143,8 +158,14 @@ internal static class FluentChainLayout
             return Format(chain, string.Empty, expand: false, newline, model);
         }
 
-        return Reindent(expression.WithoutTrivia(), targetIndent, newline);
+        // A braced body lines up with the argument itself; anything else continues the first line's
+        // expression and hangs one level deeper, the way it was written relative to its own line.
+        var continuationIndent = HasBracedBody(expression) ? targetIndent : targetIndent + Unit;
+        return Reindent(expression.WithoutTrivia(), continuationIndent, newline);
     }
+
+    private static bool HasBracedBody(ExpressionSyntax expression)
+        => expression is AnonymousFunctionExpressionSyntax { Body: BlockSyntax };
 
     private static ExpressionSyntax Reindent(ExpressionSyntax expression, string targetIndent, string newline)
     {
