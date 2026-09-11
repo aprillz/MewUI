@@ -30,6 +30,8 @@ public static class PanelExtensions
     /// <param name="panel">Target panel.</param>
     /// <param name="children">Child elements.</param>
     /// <returns>The panel for chaining.</returns>
+    [FluentReplacesMember(nameof(Panel.Add))]
+    [FluentReplacesMember(nameof(Panel.AddRange))]
     public static T Children<T>(this T panel, params Element[] children) where T : Panel
     {
         ArgumentNullException.ThrowIfNull(panel);
