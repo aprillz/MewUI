@@ -10,6 +10,7 @@ namespace MewUI.WindowAutomationTest;
 /// One case is generated per scale transition the machine can actually produce.
 /// </summary>
 [TestClass]
+[OSCondition(OperatingSystems.Windows)]
 public sealed class DpiCrossingTests
 {
     [TestMethod]

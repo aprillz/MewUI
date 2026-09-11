@@ -10,11 +10,25 @@
     <RootNamespace>Aprillz.MewUI.WindowAutomationTest</RootNamespace>
   </PropertyGroup>
 
+  <!-- AppKit runs only on the process main thread, so the macOS runner executable uses its own entry point. -->
+  <PropertyGroup Condition="'$(UseVSTest)' == 'false' And $(RuntimeIdentifier.StartsWith('osx-'))">
+    <UseMacMainThreadEntryPoint>true</UseMacMainThreadEntryPoint>
+    <GenerateTestingPlatformEntryPoint>false</GenerateTestingPlatformEntryPoint>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(UseMacMainThreadEntryPoint)' != 'true'">
+    <Compile Remove="MacMainThreadEntryPoint.cs" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\..\src\MewUI\MewUI.csproj" />
     <ProjectReference Include="..\..\src\MewUI.Platform.Win32\MewUI.Platform.Win32.csproj" />
     <ProjectReference Include="..\..\src\MewUI.Backend.Direct2D\MewUI.Backend.Direct2D.csproj" />
     <ProjectReference Include="..\..\src\MewUI.Backend.MewVG.Win32\MewUI.Backend.MewVG.Win32.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Platform.X11\MewUI.Platform.X11.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Backend.MewVG.X11\MewUI.Backend.MewVG.X11.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Platform.MacOS\MewUI.Platform.MacOS.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Backend.MewVG.MacOS\MewUI.Backend.MewVG.MacOS.csproj" />
   </ItemGroup>
 
 </Project>

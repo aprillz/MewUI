@@ -12,6 +12,7 @@ namespace MewUI.WindowAutomationTest;
 /// and the offscreen dump lets one run's pixels be compared with another machine's.
 /// </summary>
 [TestClass]
+[OSCondition(OperatingSystems.Windows)]
 public sealed class ShaderClipOracleTests
 {
     private const double CANVAS_DIP = 200;
