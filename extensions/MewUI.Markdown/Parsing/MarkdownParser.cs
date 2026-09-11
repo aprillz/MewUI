@@ -4,6 +4,7 @@ using Aprillz.MewUI;
 using Markdig;
 using Markdig.Extensions.DefinitionLists;
 using Markdig.Extensions.EmphasisExtras;
+using Markdig.Extensions.Footnotes;
 using Markdig.Extensions.TaskLists;
 using Markdig.Extensions.Tables;
 using Markdig.Syntax;
@@ -26,6 +27,7 @@ internal enum MarkdownBlockKind
     DefinitionList,
     DefinitionItem,
     DefinitionTerm,
+    FootnoteGroup,
     Group
 }
 
@@ -45,7 +47,13 @@ internal sealed record MarkdownSpan(
     bool? TaskChecked = null,
     string? LinkUrl = null,
     string? LinkTitle = null,
-    Inline? Node = null);
+    Inline? Node = null,
+    MarkdownHtmlStyle? HtmlStyle = null,
+    string? Anchor = null);
+
+internal readonly record struct MarkdownMappingProfile(
+    bool PreserveHtmlInlineNodes = false,
+    bool PreserveHtmlBlockNodes = false);
 
 internal sealed class MarkdownBlock
 {
@@ -59,6 +67,7 @@ internal sealed class MarkdownBlock
     public bool Loose { get; init; }
     public TextAlignment Alignment { get; init; }
     public string? Anchor { get; init; }
+    public IReadOnlyList<string> Aliases { get; init; } = [];
     // The Markdig node this block was mapped from, consulted by user renderers.
     public Block? Node { get; set; }
 }
@@ -69,11 +78,13 @@ internal sealed record MarkdownTextUnit(MarkdownBlock Block, string Text, string
 /// <summary>Parse output: the mapped block tree plus the anchor and source bookkeeping renderers need.</summary>
 internal sealed class ParsedMarkdown
 {
-    internal ParsedMarkdown(IReadOnlyList<MarkdownBlock> blocks, string source, MarkdownOptions options, HashSet<string> anchors)
+    internal ParsedMarkdown(IReadOnlyList<MarkdownBlock> blocks, string source, MarkdownOptions options,
+        MarkdownMappingProfile mappingProfile, HashSet<string> anchors)
     {
         Blocks = blocks;
         Source = source;
         Options = options;
+        MappingProfile = mappingProfile;
         Anchors = anchors;
         Dictionary<string, int> anchorBlocks = new(StringComparer.OrdinalIgnoreCase);
         List<MarkdownTextUnit> units = [];
@@ -93,6 +104,7 @@ internal sealed class ParsedMarkdown
     public IReadOnlyList<MarkdownBlock> Blocks { get; }
     public string Source { get; }
     public MarkdownOptions Options { get; }
+    public MarkdownMappingProfile MappingProfile { get; }
     public HashSet<string> Anchors { get; }
     /// <summary>Maps each anchor to the index of the top-level block containing it.</summary>
     public IReadOnlyDictionary<string, int> AnchorBlocks { get; }
@@ -149,6 +161,10 @@ internal sealed class ParsedMarkdown
         {
             anchorBlocks.TryAdd(block.Anchor, topIndex);
         }
+        foreach (string alias in block.Aliases)
+        {
+            anchorBlocks.TryAdd(alias, topIndex);
+        }
         foreach (MarkdownBlock child in block.Children)
         {
             CollectAnchors(child, topIndex, anchorBlocks);
@@ -162,9 +178,13 @@ internal static class MarkdownParser
     // so a strong cache would grow with every assignment.
     private static readonly ConditionalWeakTable<MarkdownOptions, MarkdownPipeline> _pipelines = [];
 
-    internal static IReadOnlyList<MarkdownBlock> Parse(string markdown, MarkdownOptions options) => ParseDocument(markdown, options).Blocks;
+    internal static IReadOnlyList<MarkdownBlock> Parse(string markdown, MarkdownOptions options) =>
+        ParseDocument(markdown, options, default).Blocks;
 
-    internal static ParsedMarkdown ParseDocument(string markdown, MarkdownOptions options)
+    internal static ParsedMarkdown ParseDocument(
+        string markdown,
+        MarkdownOptions options,
+        MarkdownMappingProfile mappingProfile = default)
     {
         ArgumentNullException.ThrowIfNull(markdown);
         ArgumentNullException.ThrowIfNull(options);
@@ -172,8 +192,8 @@ internal static class MarkdownParser
         MarkdownPipeline pipeline = _pipelines.GetValue(options, static value => BuildPipeline(value));
         MarkdownDocument document = global::Markdig.Markdown.Parse(markdown, pipeline);
         HashSet<string> anchors = new(StringComparer.Ordinal);
-        List<MarkdownBlock> blocks = MapChildren(document, markdown, options, anchors);
-        return new ParsedMarkdown(blocks, markdown, options, anchors);
+        List<MarkdownBlock> blocks = MapChildren(document, markdown, options, mappingProfile, anchors);
+        return new ParsedMarkdown(blocks, markdown, options, mappingProfile, anchors);
     }
 
     private static MarkdownPipeline BuildPipeline(MarkdownOptions options)
@@ -200,6 +220,11 @@ internal static class MarkdownParser
             builder.UseDefinitionLists();
         }
 
+        if (options.UseFootnotes)
+        {
+            builder.UseFootnotes().UsePreciseSourceLocation();
+        }
+
         EmphasisExtraOptions emphasisOptions = 0;
         if (options.UseStrikethrough)
         {
@@ -221,9 +246,10 @@ internal static class MarkdownParser
         return builder.Build();
     }
 
-    private static MarkdownBlock? MapBlock(Block block, string source, MarkdownOptions options, HashSet<string> anchors, TextAlignment alignment = TextAlignment.Left)
+    private static MarkdownBlock? MapBlock(Block block, string source, MarkdownOptions options,
+        MarkdownMappingProfile mappingProfile, HashSet<string> anchors, TextAlignment alignment = TextAlignment.Left)
     {
-        MarkdownBlock? mapped = MapBlockCore(block, source, options, anchors, alignment);
+        MarkdownBlock? mapped = MapBlockCore(block, source, options, mappingProfile, anchors, alignment);
         if (mapped is not null)
         {
             mapped.Node = block;
@@ -231,28 +257,31 @@ internal static class MarkdownParser
         return mapped;
     }
 
-    private static MarkdownBlock? MapBlockCore(Block block, string source, MarkdownOptions options, HashSet<string> anchors, TextAlignment alignment)
+    private static MarkdownBlock? MapBlockCore(Block block, string source, MarkdownOptions options,
+        MarkdownMappingProfile mappingProfile, HashSet<string> anchors, TextAlignment alignment)
     {
         switch (block)
         {
             case HeadingBlock heading:
+                IReadOnlyList<MarkdownSpan> headingSpans = Flatten(heading.Inline, options, mappingProfile);
                 return new MarkdownBlock
                 {
                     Kind = MarkdownBlockKind.Heading,
                     Level = heading.Level,
                     Header = true,
                     Alignment = alignment,
-                    Spans = Flatten(heading.Inline, options),
-                    Anchor = GetAnchor(heading, options, anchors)
+                    Spans = headingSpans,
+                    Aliases = GetInlineAnchors(headingSpans),
+                    Anchor = GetAnchor(heading, options, mappingProfile, anchors)
                 };
             case QuoteBlock quote:
                 return new MarkdownBlock
                 {
                     Kind = MarkdownBlockKind.Quote,
-                    Children = MapChildren(quote, source, options, anchors)
+                    Children = MapChildren(quote, source, options, mappingProfile, anchors)
                 };
             case ListBlock list:
-                IReadOnlyList<MarkdownBlock> listChildren = MapChildren(list, source, options, anchors);
+                IReadOnlyList<MarkdownBlock> listChildren = MapChildren(list, source, options, mappingProfile, anchors);
                 string orderedStartText = list.OrderedStart ?? string.Empty;
                 int orderedStartValue = int.TryParse(orderedStartText, out int parsedOrderedStart) ? parsedOrderedStart : 0;
                 if (list.IsOrdered)
@@ -273,6 +302,7 @@ internal static class MarkdownParser
                             Loose = child.Loose,
                             Alignment = child.Alignment,
                             Anchor = child.Anchor,
+                            Aliases = child.Aliases,
                             Node = child.Node
                         });
                     }
@@ -293,7 +323,7 @@ internal static class MarkdownParser
                     Kind = MarkdownBlockKind.ListItem,
                     Level = itemOrder,
                     Marker = item.SourceBullet.ToString(),
-                    Children = MapChildren(item, source, options, anchors)
+                    Children = MapChildren(item, source, options, mappingProfile, anchors)
                 };
             case FencedCodeBlock fenced:
                 return CreateCodeBlock(fenced, source, fenced.Info);
@@ -302,57 +332,99 @@ internal static class MarkdownParser
             case ThematicBreakBlock:
                 return new MarkdownBlock { Kind = MarkdownBlockKind.Rule };
             case Table table:
-                return MapTable(table, source, options, anchors);
+                return MapTable(table, source, options, mappingProfile, anchors);
             case TableRow row:
                 return new MarkdownBlock
                 {
                     Kind = MarkdownBlockKind.TableRow,
                     Header = row.IsHeader,
-                    Children = MapChildren(row, source, options, anchors)
+                    Children = MapChildren(row, source, options, mappingProfile, anchors)
                 };
             case TableCell cell:
                 return new MarkdownBlock
                 {
                     Kind = MarkdownBlockKind.TableCell,
-                    Children = MapChildren(cell, source, options, anchors, alignment),
+                    Children = MapChildren(cell, source, options, mappingProfile, anchors, alignment),
                     Alignment = alignment
                 };
             case DefinitionList definitionList:
                 return new MarkdownBlock
                 {
                     Kind = MarkdownBlockKind.DefinitionList,
-                    Children = MapChildren(definitionList, source, options, anchors)
+                    Children = MapChildren(definitionList, source, options, mappingProfile, anchors)
                 };
             case DefinitionItem definitionItem:
                 return new MarkdownBlock
                 {
                     Kind = MarkdownBlockKind.DefinitionItem,
-                    Children = MapChildren(definitionItem, source, options, anchors)
+                    Children = MapChildren(definitionItem, source, options, mappingProfile, anchors)
                 };
             case DefinitionTerm definitionTerm:
+                IReadOnlyList<MarkdownSpan> termSpans = Flatten(definitionTerm.Inline, options, mappingProfile);
                 return new MarkdownBlock
                 {
                     Kind = MarkdownBlockKind.DefinitionTerm,
-                    Spans = Flatten(definitionTerm.Inline, options)
+                    Spans = termSpans,
+                    Aliases = GetInlineAnchors(termSpans)
                 };
+            case FootnoteGroup footnoteGroup:
+                return new MarkdownBlock
+                {
+                    Kind = MarkdownBlockKind.FootnoteGroup,
+                    Children = MapChildren(footnoteGroup, source, options, mappingProfile, anchors)
+                };
+            case Footnote footnote:
+                return new MarkdownBlock
+                {
+                    Kind = MarkdownBlockKind.ListItem,
+                    Marker = $"{footnote.Order}.",
+                    Anchor = $"fn:{footnote.Order}",
+                    Children = MapChildren(footnote, source, options, mappingProfile, anchors)
+                };
+            case LinkReferenceDefinitionGroup:
+                return null;
             case HtmlBlock html:
+                if (options.UseHtmlFormatting &&
+                    MarkdownHtmlParser.TryParseBlock(GetSourceText(html, source), out MarkdownHtmlBlock htmlBlock))
+                {
+                    if (htmlBlock.Text.Length == 0 &&
+                        htmlBlock.Spans.Length == 0 &&
+                        !mappingProfile.PreserveHtmlBlockNodes)
+                    {
+                        return null;
+                    }
+
+                    int sourceStart = GetStart(html);
+                    int sourceLength = GetLength(html);
+                    return new MarkdownBlock
+                    {
+                        Kind = MarkdownBlockKind.Paragraph,
+                        Spans = htmlBlock.Spans.Select(span => new MarkdownSpan(
+                            htmlBlock.Text.Substring(span.Start, span.Length),
+                            SourceStart: sourceStart,
+                            SourceLength: sourceLength,
+                            HtmlStyle: span.Style == MarkdownHtmlStyle.Empty ? null : span.Style)).ToArray()
+                    };
+                }
                 return new MarkdownBlock
                 {
                     Kind = MarkdownBlockKind.Paragraph,
                     Spans = [RawSpan(html, source)]
                 };
             case LeafBlock leaf when leaf.Inline is not null:
+                IReadOnlyList<MarkdownSpan> leafSpans = Flatten(leaf.Inline, options, mappingProfile);
                 return new MarkdownBlock
                 {
                     Kind = MarkdownBlockKind.Paragraph,
                     Alignment = alignment,
-                    Spans = Flatten(leaf.Inline, options)
+                    Spans = leafSpans,
+                    Aliases = GetInlineAnchors(leafSpans)
                 };
             case ContainerBlock container:
                 return new MarkdownBlock
                 {
                     Kind = MarkdownBlockKind.Group,
-                    Children = MapChildren(container, source, options, anchors)
+                    Children = MapChildren(container, source, options, mappingProfile, anchors)
                 };
             default:
                 return new MarkdownBlock
@@ -374,12 +446,13 @@ internal static class MarkdownParser
         };
     }
 
-    internal static List<MarkdownBlock> MapChildren(ContainerBlock container, string source, MarkdownOptions options, HashSet<string> anchors, TextAlignment alignment = TextAlignment.Left)
+    internal static List<MarkdownBlock> MapChildren(ContainerBlock container, string source, MarkdownOptions options,
+        MarkdownMappingProfile mappingProfile, HashSet<string> anchors, TextAlignment alignment = TextAlignment.Left)
     {
         List<MarkdownBlock> children = [];
         foreach (Block child in container)
         {
-            MarkdownBlock? mapped = MapBlock(child, source, options, anchors, alignment);
+            MarkdownBlock? mapped = MapBlock(child, source, options, mappingProfile, anchors, alignment);
             if (mapped is not null)
             {
                 children.Add(mapped);
@@ -389,14 +462,15 @@ internal static class MarkdownParser
         return children;
     }
 
-    private static MarkdownBlock MapTable(Table table, string source, MarkdownOptions options, HashSet<string> anchors)
+    private static MarkdownBlock MapTable(Table table, string source, MarkdownOptions options,
+        MarkdownMappingProfile mappingProfile, HashSet<string> anchors)
     {
         List<MarkdownBlock> rows = [];
         foreach (Block child in table)
         {
             if (child is not TableRow row)
             {
-                MarkdownBlock? mappedChild = MapBlock(child, source, options, anchors);
+                MarkdownBlock? mappedChild = MapBlock(child, source, options, mappingProfile, anchors);
                 if (mappedChild is not null)
                 {
                     rows.Add(mappedChild);
@@ -410,7 +484,7 @@ internal static class MarkdownParser
                 if (rowChild is TableCell cell)
                 {
                     TextAlignment alignment = GetTableAlignment(table, cells.Count);
-                    MarkdownBlock? mappedCell = MapBlock(cell, source, options, anchors, alignment);
+                    MarkdownBlock? mappedCell = MapBlock(cell, source, options, mappingProfile, anchors, alignment);
                     if (mappedCell is not null)
                     {
                         cells.Add(mappedCell);
@@ -448,156 +522,17 @@ internal static class MarkdownParser
         };
     }
 
-    internal static IReadOnlyList<MarkdownSpan> Flatten(ContainerInline? inline, MarkdownOptions options)
+    internal static IReadOnlyList<MarkdownSpan> Flatten(
+        ContainerInline? inline,
+        MarkdownOptions options,
+        MarkdownMappingProfile mappingProfile = default)
     {
         if (inline is null)
         {
             return [];
         }
 
-        List<MarkdownSpan> spans = [];
-        AppendInline(inline.FirstChild, spans, false, false, false, false, false, false, null, null, false, options);
-        return spans;
-    }
-
-    private static void AppendInline(
-        Inline? inline,
-        List<MarkdownSpan> spans,
-        bool bold,
-        bool italic,
-        bool strike,
-        bool inserted,
-        bool marked,
-        bool code,
-        string? url,
-        string? title,
-        bool image,
-        MarkdownOptions options)
-    {
-        Inline? current = inline;
-        while (current is not null)
-        {
-            switch (current)
-            {
-                case LiteralInline literal:
-                    AddSpan(spans, literal.Content.ToString(), bold, italic, strike, inserted, marked, code, url, title, image, literal);
-                    break;
-                case CodeInline codeInline:
-                    AddSpan(spans, codeInline.Content.ToString(), bold, italic, strike, inserted, marked, true, url, title, image, codeInline);
-                    break;
-                case LineBreakInline lineBreak:
-                    AddSpan(spans, options.SoftBreakAsNewLine || lineBreak.IsHard ? "\n" : " ", bold, italic, strike, inserted, marked, code, url, title, image, lineBreak);
-                    break;
-                case LinkInline link:
-                    string? linkUrl = link.Url?.ToString();
-                    string? linkTitle = link.Title?.ToString();
-                    int linkStart = spans.Count;
-                    AppendInline(link.FirstChild, spans, bold, italic, strike, inserted, marked, code, linkUrl, linkTitle, link.IsImage, options);
-                    if (link.IsImage)
-                    {
-                        string imageText = string.Concat(spans.Skip(linkStart).Select(static span => span.Text));
-                        spans.RemoveRange(linkStart, spans.Count - linkStart);
-                        spans.Add(new MarkdownSpan(
-                            imageText,
-                            bold,
-                            italic,
-                            strike,
-                            inserted,
-                            marked,
-                            code,
-                            linkUrl,
-                            linkTitle,
-                            GetStart(link),
-                            GetLength(link),
-                            true));
-                    }
-                    else
-                    {
-                        for (int spanIndex = linkStart; spanIndex < spans.Count; spanIndex++)
-                        {
-                            MarkdownSpan span = spans[spanIndex];
-                            if (span.Image)
-                            {
-                                spans[spanIndex] = span with
-                                {
-                                    LinkUrl = linkUrl,
-                                    LinkTitle = linkTitle,
-                                    SourceStart = GetStart(link),
-                                    SourceLength = GetLength(link)
-                                };
-                            }
-                            else
-                            {
-                                spans[spanIndex] = span with
-                                {
-                                    Url = linkUrl,
-                                    Title = linkTitle,
-                                    SourceStart = GetStart(link),
-                                    SourceLength = GetLength(link)
-                                };
-                            }
-                        }
-                    }
-                    break;
-                case EmphasisInline emphasis:
-                    bool emphasisBold = bold || ((emphasis.DelimiterChar == '*' || emphasis.DelimiterChar == '_') && emphasis.DelimiterCount >= 2);
-                    bool emphasisItalic = italic || ((emphasis.DelimiterChar == '*' || emphasis.DelimiterChar == '_') && (emphasis.DelimiterCount == 1 || emphasis.DelimiterCount >= 3));
-                    bool emphasisStrike = strike || (emphasis.DelimiterChar == '~' && emphasis.DelimiterCount >= 2);
-                    bool emphasisInserted = inserted || (emphasis.DelimiterChar == '+' && emphasis.DelimiterCount >= 2);
-                    bool emphasisMarked = marked || (emphasis.DelimiterChar == '=' && emphasis.DelimiterCount >= 2);
-                    AppendInline(emphasis.FirstChild, spans, emphasisBold, emphasisItalic, emphasisStrike, emphasisInserted, emphasisMarked, code, url, title, image, options);
-                    break;
-                case AutolinkInline autolink:
-                    string autoLinkUrl = autolink.Url?.ToString() ?? string.Empty;
-                    if (autolink.IsEmail && !autoLinkUrl.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase))
-                    {
-                        autoLinkUrl = $"mailto:{autoLinkUrl}";
-                    }
-                    AddSpan(spans, autolink.Url?.ToString() ?? string.Empty, bold, italic, strike, inserted, marked, code, autoLinkUrl, title, image, autolink);
-                    break;
-                case HtmlEntityInline entity:
-                    AddSpan(spans, entity.Transcoded.ToString(), bold, italic, strike, inserted, marked, code, url, title, image, entity);
-                    break;
-                case TaskList task:
-                    spans.Add(new MarkdownSpan(string.Empty, bold, italic, strike, inserted, marked, code,
-                        url, title, GetStart(task), GetLength(task), image, task.Checked));
-                    break;
-                case HtmlInline html:
-                    AddSpan(spans, html.Tag, bold, italic, strike, inserted, marked, code, url, title, image, html);
-                    break;
-                case ContainerInline container:
-                    AppendInline(container.FirstChild, spans, bold, italic, strike, inserted, marked, code, url, title, image, options);
-                    break;
-                default:
-                    AddSpan(spans, current.ToString() ?? string.Empty, bold, italic, strike, inserted, marked, code, url, title, image, current);
-                    break;
-            }
-
-            current = current.NextSibling;
-        }
-    }
-
-    private static void AddSpan(
-        List<MarkdownSpan> spans,
-        string text,
-        bool bold,
-        bool italic,
-        bool strike,
-        bool inserted,
-        bool marked,
-        bool code,
-        string? url,
-        string? title,
-        bool image,
-        MarkdownObject source)
-    {
-        if (text.Length == 0)
-        {
-            return;
-        }
-
-        spans.Add(new MarkdownSpan(text, bold, italic, strike, inserted, marked, code, url, title,
-            GetStart(source), GetLength(source), image, Node: source as Inline));
+        return new MarkdownInlineBuilder(options, mappingProfile).Build(inline);
     }
 
     private static MarkdownSpan RawSpan(MarkdownObject block, string source)
@@ -606,6 +541,12 @@ internal static class MarkdownParser
         int length = GetLength(block);
         return new MarkdownSpan(GetSourceText(block, source), SourceStart: start, SourceLength: length);
     }
+
+    private static IReadOnlyList<string> GetInlineAnchors(IReadOnlyList<MarkdownSpan> spans)
+        => spans.Where(static span => span.Anchor != null)
+            .Select(static span => span.Anchor!)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
 
     /// <summary>Returns the source slice a node was parsed from, or its string form when the span is unavailable.</summary>
     internal static string GetSourceText(MarkdownObject node, string source)
@@ -622,9 +563,10 @@ internal static class MarkdownParser
         return block.Lines.ToString();
     }
 
-    private static string? GetAnchor(HeadingBlock heading, MarkdownOptions options, HashSet<string> anchors)
+    private static string? GetAnchor(HeadingBlock heading, MarkdownOptions options,
+        MarkdownMappingProfile mappingProfile, HashSet<string> anchors)
     {
-        IReadOnlyList<MarkdownSpan> spans = Flatten(heading.Inline, options);
+        IReadOnlyList<MarkdownSpan> spans = Flatten(heading.Inline, options, mappingProfile);
         string text = string.Concat(spans.Select(static span => span.Text));
         StringBuilder slugBuilder = new();
         bool pendingSeparator = false;
@@ -657,12 +599,12 @@ internal static class MarkdownParser
         return anchor;
     }
 
-    private static int GetStart(MarkdownObject source)
+    internal static int GetStart(MarkdownObject source)
     {
         return source.Span.Start;
     }
 
-    private static int GetLength(MarkdownObject source)
+    internal static int GetLength(MarkdownObject source)
     {
         return source.Span.End >= source.Span.Start ? source.Span.End - source.Span.Start + 1 : 0;
     }

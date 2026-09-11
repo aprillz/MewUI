@@ -19,8 +19,12 @@ public sealed record MarkdownOptions
     public bool UseMarked { get; init; } = true;
     /// <summary>Gets whether definition lists are recognized.</summary>
     public bool UseDefinitionLists { get; init; } = true;
+    /// <summary>Gets whether footnote references and definitions are recognized.</summary>
+    public bool UseFootnotes { get; init; } = true;
     /// <summary>Gets whether soft line breaks are displayed as new lines.</summary>
     public bool SoftBreakAsNewLine { get; init; }
+    /// <summary>Gets whether the supported subset of HTML text is displayed as native text formatting.</summary>
+    public bool UseHtmlFormatting { get; init; }
     /// <summary>Gets an advanced hook that adds Markdig extensions to the pipeline; nodes it produces display as source text unless a renderer is registered for them.</summary>
     public Action<MarkdownPipelineBuilder>? ConfigurePipeline { get; init; }
 }

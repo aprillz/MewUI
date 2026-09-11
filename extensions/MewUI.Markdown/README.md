@@ -2,13 +2,15 @@
 
 `Aprillz.MewUI.Markdown` provides a small Markdown viewer extension for MewUI. `MarkdownViewer` inherits from `MarkdownPresenter`, so both controls expose the same Markdown content and options API.
 
-The sample demonstrates tables, definition lists, Unicode text, mixed and extra emphasis, read-only task checkboxes, inline and fenced code, local anchors, relative links, and resolved images. Tight and loose lists retain their distinct block spacing. Link requests are reported in the sample status line; the sample does not launch a browser.
+The sample demonstrates tables, definition lists, numbered footnotes with return links, Unicode text, mixed and extra emphasis, read-only task checkboxes, inline and fenced code, local anchors, relative links, and resolved images. Tight and loose lists retain their distinct block spacing. Link requests are reported in the sample status line; the sample does not launch a browser.
 
 `MarkdownTheme` is available for public theme configuration. There is no selection or built-in syntax highlighting. An optional `CodeBlockFactory` has the signature `Func<string, string?, FrameworkElement?>`: it receives normalized code text and the first language token. Return an unattached element to replace the default block, or `null` for the plain fallback. This can be used to integrate a host `SyntaxViewer`.
 
 Default fenced code blocks display the normalized language and include an overlaid Copy button. While the application is running it uses the platform clipboard service; clipboard access is otherwise best-effort.
 
-Raw HTML is never executed. Inline HTML and HTML blocks are displayed as literal text, including script, iframe, and style elements.
+Footnotes are enabled by default. `[^label]` references display first-reference-order numbers and jump to the definition list; each definition includes a return link for every reference. Set `MarkdownOptions.UseFootnotes` to `false` to leave footnote syntax to the remaining Markdig reference-link rules.
+
+Raw HTML is never executed. Inline HTML and HTML blocks are displayed as literal text by default. Set `MarkdownOptions.UseHtmlFormatting` to render the limited `b`, `strong`, `i`, `em`, `u`, `s`, `del`, `tt`, `code`, `big`, `small`, `sub`, `sup`, `br`, `span`, and `font` subset as native text formatting and hide complete HTML comments. This mode supports fixed font, size, weight, color, background, underline, and strikethrough attributes; structural HTML, CSS, links, images, script, iframe, event attributes, malformed comments, and other executable content stay literal.
 
 Image loading is disabled by default and requires an application-provided resolver. Resolver work is asynchronous and requires a running UI dispatcher or synchronization context. The host resolver must enforce URI, byte, and pixel limits and may provide caching; the package does not cache images. A resolver returns a lease, for example:
 
