@@ -72,8 +72,8 @@ internal sealed class MarkdownBlock
     public Block? Node { get; set; }
 }
 
-/// <summary>A selectable leaf block: its display text, the separator that precedes it when text is joined, the top-level block it lives in and whether it carries links.</summary>
-internal sealed record MarkdownTextUnit(MarkdownBlock Block, string Text, string Separator, int TopIndex, bool HasLinks);
+/// <summary>A selectable leaf block: its display text, the separator that precedes it when text is joined, the top-level block it lives in and whether it carries links, and the list marker copied before it when its item starts inside the selection.</summary>
+internal sealed record MarkdownTextUnit(MarkdownBlock Block, string Text, string Separator, int TopIndex, bool HasLinks, string ListMarkerPrefix = "");
 
 /// <summary>Parse output: the mapped block tree plus the anchor and source bookkeeping renderers need.</summary>
 internal sealed class ParsedMarkdown
@@ -92,7 +92,7 @@ internal sealed class ParsedMarkdown
         for (int index = 0; index < blocks.Count; index++)
         {
             CollectAnchors(blocks[index], index, anchorBlocks);
-            CollectTextUnits(blocks[index], "\n\n", index, units, unitIndex);
+            CollectTextUnits(blocks[index], "\n", index, units, unitIndex);
         }
         AnchorBlocks = anchorBlocks;
         TextUnits = units;
@@ -143,6 +143,19 @@ internal sealed class ParsedMarkdown
                     }
                 }
                 break;
+            case MarkdownBlockKind.ListItem:
+                int firstUnit = units.Count;
+                foreach (MarkdownBlock child in block.Children)
+                {
+                    CollectTextUnits(child, separator, topIndex, units, unitIndex);
+                }
+                string marker = GetListMarkerText(block);
+                if (marker.Length > 0 && firstUnit < units.Count)
+                {
+                    // An item that opens with a nested list keeps the inner marker after its own.
+                    units[firstUnit] = units[firstUnit] with { ListMarkerPrefix = marker + "\t" + units[firstUnit].ListMarkerPrefix };
+                }
+                break;
             default:
                 foreach (MarkdownBlock child in block.Children)
                 {
@@ -151,6 +164,12 @@ internal sealed class ParsedMarkdown
                 break;
         }
     }
+
+    /// <summary>Returns the marker a list item displays: nothing for a task item, a bullet when the item carries no marker.</summary>
+    internal static string GetListMarkerText(MarkdownBlock item)
+        => item.Children.FirstOrDefault()?.Spans.Any(static span => span.TaskChecked.HasValue) == true
+            ? string.Empty
+            : string.IsNullOrWhiteSpace(item.Marker) ? "•" : item.Marker;
 
     // Mirrors MarkdownParagraph's visual text so offsets match the laid-out text.
     private static string VisualText(MarkdownSpan span) => span.Image && span.Text.Length == 0 ? ((char)0xFFFC).ToString() : span.Text;

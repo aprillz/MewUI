@@ -559,11 +559,10 @@ public partial class MarkdownPresenter : Control, ISubtreeInvalidationHost, ILog
         for (int rowIndex = 0; rowIndex < block.Children.Count; rowIndex++)
         {
             var item = block.Children[rowIndex];
-            bool taskItem = item.Children.FirstOrDefault()?.Spans.Any(span => span.TaskChecked.HasValue) == true;
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             var marker = new TextBlock
             {
-                Text = taskItem ? string.Empty : string.IsNullOrWhiteSpace(item.Marker) ? "•" : item.Marker,
+                Text = ParsedMarkdown.GetListMarkerText(item),
                 Margin = new Thickness(0, 0, LIST_MARKER_SPACING, 0),
                 HorizontalAlignment = HorizontalAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Top,
@@ -769,6 +768,7 @@ public partial class MarkdownPresenter : Control, ISubtreeInvalidationHost, ILog
         }
         _document = null;
         LinkRequested = null;
+        Copying = null;
         base.OnDispose();
     }
 }

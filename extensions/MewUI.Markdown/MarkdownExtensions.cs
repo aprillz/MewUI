@@ -25,6 +25,8 @@ public static class MarkdownExtensions
     public static T IsSelectionEnabled<T>(this T control, bool enabled) where T : MarkdownPresenter { control.IsSelectionEnabled = enabled; return control; }
     /// <summary>Subscribes to selection changes.</summary>
     public static T OnSelectionChanged<T>(this T control, Action handler) where T : MarkdownPresenter { control.SelectionChanged += handler; return control; }
+    /// <summary>Subscribes to pending copies of the selection.</summary>
+    public static T OnCopying<T>(this T control, Action<MarkdownCopyingEventArgs> handler) where T : MarkdownPresenter { control.Copying += handler; return control; }
     /// <summary>Subscribes to background parse failures.</summary>
     public static T OnParseFailed<T>(this T control, Action<Exception> handler) where T : MarkdownPresenter { control.ParseFailed += handler; return control; }
 }
