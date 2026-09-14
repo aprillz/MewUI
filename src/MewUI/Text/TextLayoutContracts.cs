@@ -128,6 +128,11 @@ public sealed record TextLayoutRequest
     public IReadOnlyList<GeometryStyleRun> Runs { get; init; } = [];
     public IReadOnlyList<InlineRun> Inlines { get; init; } = [];
     public TextFidelity Fidelity { get; init; } = TextFidelity.ClusterAdvance;
+
+    /// <summary>
+    /// Rebuilds an owner-cached layout when state the request does not carry changes, such as an
+    /// inline object's content; changes to the text or styles rebuild without it.
+    /// </summary>
     public long Revision { get; init; }
     public bool Transient { get; init; }
 }

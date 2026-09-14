@@ -510,7 +510,7 @@ internal sealed class TextLayoutRequestSnapshot
         }
     }
 
-    /// <summary>64-bit hash of every layout input except the text, for owner-keyed caching.</summary>
+    /// <summary>64-bit hash of every layout input except the text, for owner-keyed caching; a hit still compares the text.</summary>
     public ulong OwnerKey
     {
         get
@@ -905,7 +905,7 @@ internal sealed class ManagedTextLayoutCache : ITextLayoutCache, IDisposable
             if (_owners.TryGetValue(owner, out var entry) &&
                 entry.Revision == snapshot.Revision &&
                 entry.OwnerKey == snapshot.OwnerKey &&
-                entry.Layout.Snapshot.OwnerEquals(snapshot))
+                entry.Layout.Snapshot.ContentEquals(snapshot))
             {
                 return entry.Layout;
             }
