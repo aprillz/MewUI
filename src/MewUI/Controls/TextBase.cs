@@ -33,7 +33,7 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextC
 
     public static readonly MewProperty<string> PlaceholderProperty =
         MewProperty<string>.Register<TextBase>(nameof(Placeholder), string.Empty,
-            MewPropertyOptions.AffectsRender);
+            MewPropertyOptions.AffectsLayout | MewPropertyOptions.AffectsRender);
 
     public static readonly MewProperty<bool> IsReadOnlyProperty =
         MewProperty<bool>.Register<TextBase>(nameof(IsReadOnly), false,
