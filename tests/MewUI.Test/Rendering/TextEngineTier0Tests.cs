@@ -265,6 +265,35 @@ public sealed class TextEngineTier0Tests
             "Text run realizations grew beyond the bounded cache capacity.");
     }
 
+    [TestMethod]
+    public void OwnerCache_RebuildsWhenOnlyTheTextChanges()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("GDI is Windows-only.");
+            return;
+        }
+
+        using var factory = new GdiGraphicsFactory();
+        var owner = new object();
+        var first = factory.TextEngine.GetOrCreateLayout(
+            CreateRequest("first", TextWrapping.NoWrap, double.PositiveInfinity),
+            TextLayoutCachePolicy.Owner,
+            owner);
+        var sameText = factory.TextEngine.GetOrCreateLayout(
+            CreateRequest(new string("first".AsSpan()), TextWrapping.NoWrap, double.PositiveInfinity),
+            TextLayoutCachePolicy.Owner,
+            owner);
+        var changed = factory.TextEngine.GetOrCreateLayout(
+            CreateRequest("second", TextWrapping.NoWrap, double.PositiveInfinity),
+            TextLayoutCachePolicy.Owner,
+            owner);
+
+        Assert.AreSame(first, sameText, "Owner cache rebuilt a layout whose inputs were unchanged.");
+        Assert.AreNotSame(first, changed, "Owner cache kept a layout whose text changed.");
+        Assert.AreEqual("second", ((ManagedTextLayout)changed).Snapshot.Text);
+    }
+
     private static TextLayoutRequest CreateRequest(string text, TextWrapping wrapping, double maxWidth)
         => new()
         {

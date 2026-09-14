@@ -122,9 +122,6 @@ public abstract partial class TextBlockBase : TextElement, IDisposable
     {
         _lastWrapMeasureWidth = null;
         _layout = null;
-
-        // The owner cache key excludes the text, so the revision is what tells the engine that a
-        // layout built for the same constraints is stale.
         _textRevision++;
     }
 
