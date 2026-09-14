@@ -456,13 +456,14 @@ public sealed partial class SplitPanel : Panel
         _dragStartFirst = isHorizontal ? first.RenderSize.Width : first.RenderSize.Height;
         _dragStartSecond = isHorizontal ? second.RenderSize.Width : second.RenderSize.Height;
 
-        _splitter.IsDragging = true;
-
         var root = FindVisualRoot();
         if (root is Window window)
         {
             window.CaptureMouse(_splitter);
         }
+
+        // Only a held capture delivers the release that ends the drag.
+        _splitter.IsDragging = _splitter.IsMouseCaptured;
     }
 
     private void Drag(MouseEventArgs e)
@@ -549,6 +550,17 @@ public sealed partial class SplitPanel : Panel
             return state;
         }
 
+        protected override void OnMewPropertyChanged(MewProperty property)
+        {
+            base.OnMewPropertyChanged(property);
+
+            // A capture taken away never delivers the release that would end the drag.
+            if (property == IsMouseCapturedProperty && !IsMouseCaptured)
+            {
+                IsDragging = false;
+            }
+        }
+
         protected override void OnMouseDown(MouseEventArgs e)
         {
             base.OnMouseDown(e);
@@ -562,7 +574,7 @@ public sealed partial class SplitPanel : Panel
         protected override void OnMouseMove(MouseEventArgs e)
         {
             base.OnMouseMove(e);
-            if (IsDragging)
+            if (IsDragging && IsMouseCaptured && e.LeftButton)
             {
                 _owner.Drag(e);
                 e.Handled = true;
