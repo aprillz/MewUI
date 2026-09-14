@@ -523,6 +523,13 @@ internal sealed class PopupManager
             return;
         }
 
+        // A pointer arriving with a button held is mid-click or mid-drag, not resting on the element;
+        // the tooltip waits for a fresh enter with the buttons up, as WPF does.
+        if (_window.IsLeftOrRightButtonDown)
+        {
+            return;
+        }
+
         _toolTip ??= new ToolTip();
         _toolTip.Content = content;
         _toolTipOwner = owner;
