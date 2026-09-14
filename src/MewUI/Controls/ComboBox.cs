@@ -29,7 +29,8 @@ public sealed partial class ComboBox : DropDownBase, ISelector, IIndexedSelector
             static (self, oldValue, newValue) => self.OnZebraStripingChanged(oldValue, newValue));
 
     public static readonly MewProperty<string> PlaceholderProperty =
-        MewProperty<string>.Register<ComboBox>(nameof(Placeholder), string.Empty, MewPropertyOptions.AffectsRender);
+        MewProperty<string>.Register<ComboBox>(nameof(Placeholder), string.Empty,
+            MewPropertyOptions.AffectsLayout | MewPropertyOptions.AffectsRender);
 
     private ListBox? _popupList;
     private readonly SelectionSync _selection;

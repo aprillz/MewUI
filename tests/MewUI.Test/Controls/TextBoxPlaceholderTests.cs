@@ -38,6 +38,28 @@ public sealed class TextBoxPlaceholderTests
         CollectionAssert.AreEqual(expected, updated, "The updated placeholder rendered differently from a TextBox created with it.");
     }
 
+    [TestMethod]
+    public void ChangingPlaceholder_RemeasuresAnEmptyTextBox()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("GDI backend is Windows-only.");
+            return;
+        }
+
+        var textBox = new TextBox { Placeholder = "i", HorizontalAlignment = HorizontalAlignment.Left };
+        using var window = HeadlessWindow.Create(400, HEIGHT);
+        window.Content = textBox;
+        window.PerformLayout();
+        double narrow = textBox.DesiredSize.Width;
+
+        textBox.Placeholder = "WWWWWWWWWWWW";
+        window.PerformLayout();
+
+        Assert.IsGreaterThan(narrow, textBox.DesiredSize.Width,
+            "An empty TextBox kept the width measured for its previous placeholder.");
+    }
+
     private static byte[] Render(Window window)
     {
         var factory = Application.DefaultGraphicsFactory;
