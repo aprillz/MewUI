@@ -98,6 +98,7 @@ internal static class WindowInputRouter
         positionInWindow = window.SurfacePointToVisualTree(positionInWindow);
         window.UpdateLastMousePosition(positionInWindow, screenPosition);
         window.NoteLastPointerType(pointerType);
+        window.NotePointerButtons(leftDown, rightDown);
 
         // A drag in progress (or a gesture about to be promoted) consumes the move; skip normal routing.
         if (WindowDragDropRouter.OnMouseMove(window, positionInWindow, screenPosition))
@@ -159,6 +160,7 @@ internal static class WindowInputRouter
         positionInWindow = window.SurfacePointToVisualTree(positionInWindow);
         window.UpdateLastMousePosition(positionInWindow, screenPosition);
         window.NoteLastPointerType(pointerType);
+        window.NotePointerButtons(leftDown, rightDown);
 
         // Focus and popup-close policy must react to the real element under the pointer, not the
         // capture target, so clicking elsewhere while capture is active does not re-focus/keep-open

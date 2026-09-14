@@ -427,6 +427,14 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
     internal void NoteLastPointerType(PointerType pointerType) => _lastPointerType = pointerType;
 
+    // Whether the left or right button was held at the most recent pointer event; a press in
+    // progress keeps tooltips away (see PopupManager.ShowToolTip).
+    private bool _isLeftOrRightButtonDown;
+
+    internal bool IsLeftOrRightButtonDown => _isLeftOrRightButtonDown;
+
+    internal void NotePointerButtons(bool leftDown, bool rightDown) => _isLeftOrRightButtonDown = leftDown || rightDown;
+
     internal void UpdateMouseOverChain(UIElement? oldLeaf, UIElement? newLeaf)
     {
         if (ReferenceEquals(oldLeaf, newLeaf))
