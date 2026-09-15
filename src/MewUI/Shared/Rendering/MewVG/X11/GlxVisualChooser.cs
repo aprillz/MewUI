@@ -16,12 +16,17 @@ namespace Aprillz.MewUI.Rendering.OpenGL;
 /// </summary>
 internal sealed class GlxVisualChooser : IX11GLVisualChooser
 {
+    private const int GLX_RGBA = 4;
+    private const int GLX_DOUBLEBUFFER = 5;
+    private const int GLX_RED_SIZE = 8;
+    private const int GLX_GREEN_SIZE = 9;
+    private const int GLX_BLUE_SIZE = 10;
+    private const int GLX_ALPHA_SIZE = 11;
     private const int GLX_X_RENDERABLE = 0x8012;
     private const int GLX_DRAWABLE_TYPE = 0x8010;
     private const int GLX_RENDER_TYPE = 0x8011;
     private const int GLX_WINDOW_BIT = 0x00000001;
     private const int GLX_RGBA_BIT = 0x00000001;
-    private const int GLX_ALPHA_SIZE = 11;
 
     public unsafe bool TryChooseVisual(nint display, int screen, bool allowsTransparency, out X11GLVisualInfo visual)
     {
@@ -41,10 +46,10 @@ internal sealed class GlxVisualChooser : IX11GLVisualChooser
                 GLX_X_RENDERABLE, 1,
                 GLX_DRAWABLE_TYPE, GLX_WINDOW_BIT,
                 GLX_RENDER_TYPE, GLX_RGBA_BIT,
-                5, 1,  // GLX_DOUBLEBUFFER
-                8, 8,  // GLX_RED_SIZE
-                9, 8,  // GLX_GREEN_SIZE
-                10, 8, // GLX_BLUE_SIZE
+                GLX_DOUBLEBUFFER, 1,
+                GLX_RED_SIZE, 8,
+                GLX_GREEN_SIZE, 8,
+                GLX_BLUE_SIZE, 8,
                 GLX_ALPHA_SIZE, 8,
                 0
             };
@@ -100,29 +105,23 @@ internal sealed class GlxVisualChooser : IX11GLVisualChooser
 
         if (!usedFbConfig)
         {
+            // glXChooseVisual takes GLX_RGBA and GLX_DOUBLEBUFFER as bare flags; only the sizes carry values.
             int[] attribs = allowsTransparency
                 ? [
-                    4,  // GLX_RGBA
-                    5,  // GLX_DOUBLEBUFFER
-                    8,  // GLX_RED_SIZE
-                    8,
-                    9,  // GLX_GREEN_SIZE
-                    8,
-                    10, // GLX_BLUE_SIZE
-                    8,
-                    GLX_ALPHA_SIZE,
-                    8,
+                    GLX_RGBA,
+                    GLX_DOUBLEBUFFER,
+                    GLX_RED_SIZE, 8,
+                    GLX_GREEN_SIZE, 8,
+                    GLX_BLUE_SIZE, 8,
+                    GLX_ALPHA_SIZE, 8,
                     0
                 ]
                 : [
-                    4,  // GLX_RGBA
-                    5,  // GLX_DOUBLEBUFFER
-                    8,  // GLX_RED_SIZE
-                    8,
-                    9,  // GLX_GREEN_SIZE
-                    8,
-                    10, // GLX_BLUE_SIZE
-                    8,
+                    GLX_RGBA,
+                    GLX_DOUBLEBUFFER,
+                    GLX_RED_SIZE, 8,
+                    GLX_GREEN_SIZE, 8,
+                    GLX_BLUE_SIZE, 8,
                     0
                 ];
 
@@ -138,14 +137,11 @@ internal sealed class GlxVisualChooser : IX11GLVisualChooser
                 // still comes up (opaque) on servers without ARGB GL visuals.
                 int[] attribsOpaque =
                 {
-                    4,  // GLX_RGBA
-                    5,  // GLX_DOUBLEBUFFER
-                    8,  // GLX_RED_SIZE
-                    8,
-                    9,  // GLX_GREEN_SIZE
-                    8,
-                    10, // GLX_BLUE_SIZE
-                    8,
+                    GLX_RGBA,
+                    GLX_DOUBLEBUFFER,
+                    GLX_RED_SIZE, 8,
+                    GLX_GREEN_SIZE, 8,
+                    GLX_BLUE_SIZE, 8,
                     0
                 };
 
