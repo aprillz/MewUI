@@ -34,21 +34,18 @@ internal sealed class GlxVisualChooser : IX11GLVisualChooser
         // When transparency is requested, prefer a 32-bit ARGB visual via FBConfig.
         if (allowsTransparency)
         {
+            // Every FBConfig attribute takes a value, booleans included, and RGBA is a render type: an implementation
+            // that rejects the bare GLX_RGBA token returns no configs and the window falls back to an opaque visual.
             int[] fbAttribs =
             {
                 GLX_X_RENDERABLE, 1,
                 GLX_DRAWABLE_TYPE, GLX_WINDOW_BIT,
                 GLX_RENDER_TYPE, GLX_RGBA_BIT,
-                4,  // GLX_RGBA
-                5,  // GLX_DOUBLEBUFFER
-                8,  // GLX_RED_SIZE
-                8,
-                9,  // GLX_GREEN_SIZE
-                8,
-                10, // GLX_BLUE_SIZE
-                8,
-                GLX_ALPHA_SIZE,
-                8,
+                5, 1,  // GLX_DOUBLEBUFFER
+                8, 8,  // GLX_RED_SIZE
+                9, 8,  // GLX_GREEN_SIZE
+                10, 8, // GLX_BLUE_SIZE
+                GLX_ALPHA_SIZE, 8,
                 0
             };
 
