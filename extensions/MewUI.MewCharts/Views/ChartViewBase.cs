@@ -344,7 +344,7 @@ public abstract class ChartViewBase : Control, IChartView
         context.Save();
         context.Translate(Bounds.X, Bounds.Y);
         var localBounds = new Rect(0, 0, Bounds.Width, Bounds.Height);
-        //context.IntersectClip(localBounds);
+        context.IntersectClip(localBounds);
 
         if (Background.A > 0) context.FillRectangle(localBounds, Background);
 
