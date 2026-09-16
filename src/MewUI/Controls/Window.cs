@@ -1481,15 +1481,6 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         // may reset when the window is first ordered on screen.
         _backend!.EnsureTheme(Theme.IsDark);
         _lifetimeState = WindowLifetimeState.Shown;
-
-        // Native ownership suppresses the child's own taskbar button on Windows. Keep the
-        // framework owner for positioning/lifetime, but only native-own auxiliary windows
-        // that opted out of the taskbar. The window handle exists only after the surface is
-        // created (Win32 additionally applies the owner at creation itself).
-        if (owner != null && !ShowInTaskbar && owner.Handle != 0 && Handle != 0)
-        {
-            _backend!.SetOwner(owner.Handle);
-        }
     }
 
     // Raises Loaded once, and only after the application's dispatcher is ready. A window shown before
@@ -2687,6 +2678,9 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
         // A fresh backend starts a fresh sizing transaction.
         _hasRequestedClientSize = false;
+        // Before the window is revealed: platforms decide stacking and placement from the owner they see at map time.
+        if (Owner != null && Owner.Handle != 0)
+            _backend.SetOwner(Owner.Handle);
         if (Topmost)
             _backend.SetTopmost(true);
         if (!ShowInTaskbar)

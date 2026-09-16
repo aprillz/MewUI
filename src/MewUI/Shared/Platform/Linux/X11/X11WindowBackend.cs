@@ -146,10 +146,6 @@ internal sealed class X11WindowBackend : IWindowBackend
         ApplyResolvedStartupPosition();
 
         _shown = true;
-        if (Window.Owner is { Handle: not 0 } owner)
-        {
-            SetOwner(owner.Handle);
-        }
 
         if (Window.Kind is Controls.WindowKind.Overlay or Controls.WindowKind.Popup)
         {
