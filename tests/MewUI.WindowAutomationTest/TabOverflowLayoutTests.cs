@@ -66,11 +66,12 @@ public sealed class TabOverflowLayoutTests
         // Tolerances are one DIP: a scaled display snaps every edge to whole device pixels, so an 18 DIP
         // button measures 18.4 at 125%. What must hold is that it keeps its own height instead of
         // filling the strip.
-        Assert.IsTrue(overflowBounds.Height > 0, $"the overflow button was not laid out: {report}");
-        Assert.IsTrue(Math.Abs(overflowBounds.Height - 18) <= 1, $"the chevron is not its own height: {report}");
-        Assert.IsTrue(overflowBounds.Height < headerBounds.Height - 1, $"the chevron stretched to the strip: {report}");
-        Assert.IsTrue(
-            Math.Abs(overflowBounds.Y - (headerBounds.Y + ((headerBounds.Height - overflowBounds.Height) / 2))) <= 1,
+        Assert.IsGreaterThan(0.0, overflowBounds.Height, $"the overflow button was not laid out: {report}");
+        Assert.IsLessThanOrEqualTo(1.0, Math.Abs(overflowBounds.Height - 18), $"the chevron is not its own height: {report}");
+        Assert.IsLessThan(headerBounds.Height - 1, overflowBounds.Height, $"the chevron stretched to the strip: {report}");
+        Assert.IsLessThanOrEqualTo(
+            1.0,
+            Math.Abs(overflowBounds.Y - (headerBounds.Y + ((headerBounds.Height - overflowBounds.Height) / 2))),
             $"the chevron is not centred in the strip: {report}");
     }
 }

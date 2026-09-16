@@ -26,7 +26,7 @@ public sealed class CaptureFlowTests
         await scene.Input.MoveAsync(window, dragged);
         await scene.Input.ReleaseAsync(window, dragged);
 
-        Assert.IsTrue(slider.Value > 50, $"the drag left the value at {slider.Value}");
+        Assert.IsGreaterThan(50.0, slider.Value, $"the drag left the value at {slider.Value}");
         Assert.IsNull(window.CapturedElement, "the slider kept the capture after the drag");
         scene.CheckPlatformCaptureFree(window, "after the drag");
     });
@@ -48,7 +48,7 @@ public sealed class CaptureFlowTests
         await scene.Input.MoveAsync(window, end);
         await scene.Input.ReleaseAsync(window, end);
 
-        Assert.IsTrue(editor.SelectionLength > 0, "the drag selected nothing");
+        Assert.IsGreaterThan(0, editor.SelectionLength, "the drag selected nothing");
         Assert.IsNull(window.CapturedElement, "the text box kept the capture after the drag");
         scene.CheckPlatformCaptureFree(window, "after the drag");
     });
@@ -75,7 +75,7 @@ public sealed class CaptureFlowTests
         await scene.Input.MoveAsync(window, dragged);
         await scene.Input.ReleaseAsync(window, dragged);
 
-        Assert.IsTrue(viewer.VerticalOffset > 0, "the thumb drag did not scroll");
+        Assert.IsGreaterThan(0.0, viewer.VerticalOffset, "the thumb drag did not scroll");
         Assert.IsNull(window.CapturedElement, "the scroll bar kept the capture after the drag");
         scene.CheckPlatformCaptureFree(window, "after the drag");
     });
