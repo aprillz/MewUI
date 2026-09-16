@@ -13,7 +13,7 @@ public sealed class PopupCrossMonitorTests
     {
         Assert.IsTrue(OperatingSystem.IsWindows() && RealAppSession.IsAvailable);
         var monitors = MonitorMatrix.Monitors;
-        Assert.IsTrue(monitors.Select(monitor => monitor.Dpi).Distinct().Count() > 1);
+        Assert.IsGreaterThan(1, monitors.Select(monitor => monitor.Dpi).Distinct().Count());
         foreach (var monitor in monitors)
             Console.WriteLine($"DISPLAY {monitor.Label} bounds={monitor.PixelBounds}");
 
@@ -170,7 +170,7 @@ public sealed class PopupCrossMonitorTests
             });
         }
         foreach (string observation in observations) Console.WriteLine(observation);
-        Assert.IsTrue(observations.Count > 0, "No adjacent horizontal displays to exercise");
+        Assert.IsNotEmpty(observations, "No adjacent horizontal displays to exercise");
     }
 
     private static void Near(double expected, double actual, string label)

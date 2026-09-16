@@ -168,7 +168,7 @@ public sealed class ShaderClipOracleTests
                 pattern.Dispose();
             }
 
-            Assert.IsTrue(failures.Count == 0, string.Join(Environment.NewLine, failures));
+            Assert.IsEmpty(failures, string.Join(Environment.NewLine, failures));
         });
     }
 
@@ -208,7 +208,7 @@ public sealed class ShaderClipOracleTests
                 pattern.Dispose();
             }
 
-            Assert.IsTrue(failures.Count == 0, string.Join(Environment.NewLine, failures));
+            Assert.IsEmpty(failures, string.Join(Environment.NewLine, failures));
             return Task.CompletedTask;
         });
     }

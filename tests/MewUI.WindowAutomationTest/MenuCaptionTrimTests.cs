@@ -28,7 +28,7 @@ public sealed class MenuCaptionTrimTests
             .OrderBy(static monitor => monitor.Dpi)
             .ToList();
 
-        Assert.IsTrue(scales.Count > 0, $"no displays to probe: {MonitorMatrix.Describe()}");
+        Assert.IsNotEmpty(scales, $"no displays to probe: {MonitorMatrix.Describe()}");
 
         var failures = new List<string>();
 
@@ -99,6 +99,6 @@ public sealed class MenuCaptionTrimTests
             });
         }
 
-        Assert.IsTrue(failures.Count == 0, string.Join("; ", failures));
+        Assert.IsEmpty(failures, string.Join("; ", failures));
     }
 }

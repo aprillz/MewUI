@@ -93,7 +93,7 @@ public sealed class SplitterToolTipDragTests
                 await Task.Delay(400);
                 double afterWanderWidth = first.Bounds.Width;
 
-                Assert.IsTrue(heldWidth > startWidth + 100,
+                Assert.IsGreaterThan(startWidth + 100, heldWidth,
                     $"the splitter stopped following the pointer: first pane {startWidth} -> {heldWidth}");
                 Assert.IsFalse(tooltipWhileHeld, "the second button's tooltip appeared while the splitter was being dragged");
                 Assert.IsFalse(tooltipAfterRelease, "a tooltip appeared on release although the pointer rests on the splitter");
