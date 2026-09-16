@@ -115,8 +115,6 @@ public sealed partial class Slider : RangeBase
         }
 
         Focus();
-        _isDragging = true;
-        SetPressed(true);
         SetValueFromPosition(e.Position.X);
 
         var root = FindVisualRoot();
@@ -125,6 +123,9 @@ public sealed partial class Slider : RangeBase
             window.CaptureMouse(this);
         }
 
+        // Only a held capture delivers the release that ends the drag.
+        _isDragging = IsMouseCaptured;
+        SetPressed(_isDragging);
         e.Handled = true;
     }
 
@@ -160,6 +161,18 @@ public sealed partial class Slider : RangeBase
         }
 
         e.Handled = true;
+    }
+
+    protected override void OnMewPropertyChanged(MewProperty property)
+    {
+        base.OnMewPropertyChanged(property);
+
+        // A capture taken away never delivers the release that would end the drag.
+        if (property == IsMouseCapturedProperty && !IsMouseCaptured && _isDragging)
+        {
+            _isDragging = false;
+            SetPressed(false);
+        }
     }
 
     protected override void OnMouseWheel(MouseWheelEventArgs e)
