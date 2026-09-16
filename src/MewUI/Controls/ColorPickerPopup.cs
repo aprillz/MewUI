@@ -373,8 +373,9 @@ internal sealed class ColorPickerPopup : Control, IVisualTreeHost
                 return;
 
             Focus();
-            _isDragging = true;
             BeginCapture();
+            // Only a held capture delivers the release that ends the drag.
+            _isDragging = IsMouseCaptured;
             UpdateAlphaFromPosition(e.Position);
             e.Handled = true;
         }
@@ -396,6 +397,17 @@ internal sealed class ColorPickerPopup : Control, IVisualTreeHost
             _isDragging = false;
             EndCapture();
             e.Handled = true;
+        }
+
+        protected override void OnMewPropertyChanged(MewProperty property)
+        {
+            base.OnMewPropertyChanged(property);
+
+            // A capture taken away never delivers the release that would end the drag.
+            if (property == IsMouseCapturedProperty && !IsMouseCaptured)
+            {
+                _isDragging = false;
+            }
         }
 
         private void UpdateAlphaFromPosition(Point pos)
@@ -750,16 +762,16 @@ internal sealed class ColorPickerPopup : Control, IVisualTreeHost
 
             if (HitTestHueRing(px, py))
             {
-                _isDraggingHue = true;
                 UpdateHueFromPixel(px, py);
                 BeginCapture();
+                _isDraggingHue = IsMouseCaptured;
                 e.Handled = true;
             }
             else if (HitTestTriangle(px, py))
             {
-                _isDraggingTriangle = true;
                 UpdateTriangleFromPixel(px, py);
                 BeginCapture();
+                _isDraggingTriangle = IsMouseCaptured;
                 e.Handled = true;
             }
         }
@@ -796,6 +808,18 @@ internal sealed class ColorPickerPopup : Control, IVisualTreeHost
                 _isDraggingTriangle = false;
                 EndCapture();
                 e.Handled = true;
+            }
+        }
+
+        protected override void OnMewPropertyChanged(MewProperty property)
+        {
+            base.OnMewPropertyChanged(property);
+
+            // A capture taken away never delivers the release that would end the drag.
+            if (property == IsMouseCapturedProperty && !IsMouseCaptured)
+            {
+                _isDraggingHue = false;
+                _isDraggingTriangle = false;
             }
         }
 
