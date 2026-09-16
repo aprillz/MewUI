@@ -135,7 +135,7 @@ internal static unsafe class D2D1VTable
 
     /// <summary>
     /// ID2D1RenderTarget::Flush - submits all batched drawing commands to the GPU. Required
-    /// before <see cref="CopyFromBitmap"/> or <c>MapBitmap</c> on a bitmap that this DC has
+    /// before <see cref="CopyFromBitmap(nint, nint)"/> or <c>MapBitmap</c> on a bitmap that this DC has
     /// pending writes to: without it, the readback may capture pre-flush state. Calls within
     /// an active BeginDraw block are legal - this is the documented escape hatch for
     /// mid-frame readback.
