@@ -2964,11 +2964,27 @@ internal sealed class Win32WindowBackend : IWindowBackend
             return;
         }
 
-        nint effectiveOwner = Window.ShowInTaskbar
-            ? 0
-            : (_nativeOwnerHandle != 0 ? _nativeOwnerHandle : EnsureHiddenTaskbarOwner());
+        // The hidden owner only suppresses the taskbar button of a window that has no owner of its own;
+        // an owned window keeps its button through WS_EX_APPWINDOW.
+        nint effectiveOwner = _nativeOwnerHandle != 0
+            ? _nativeOwnerHandle
+            : (Window.ShowInTaskbar ? 0 : EnsureHiddenTaskbarOwner());
+
+        nint currentOwner = User32.GetWindowLongPtr(Handle, GwlHwndParent);
+        if (currentOwner == effectiveOwner)
+        {
+            return;
+        }
 
         User32.SetWindowLongPtr(Handle, GwlHwndParent, effectiveOwner);
+
+        // The taskbar re-reads the owner and WS_EX_APPWINDOW only when the window is shown again.
+        if (User32.IsWindowVisible(Handle))
+        {
+            bool wasForeground = User32.GetForegroundWindow() == Handle;
+            User32.ShowWindow(Handle, ShowWindowCommands.SW_HIDE);
+            User32.ShowWindow(Handle, wasForeground ? ShowWindowCommands.SW_SHOW : ShowWindowCommands.SW_SHOWNOACTIVATE);
+        }
     }
 
     private static nint EnsureHiddenTaskbarOwner()
