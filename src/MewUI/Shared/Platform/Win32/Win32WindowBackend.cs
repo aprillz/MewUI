@@ -63,6 +63,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
     {
         _host = host;
         Window = window;
+        window.PlatformReportsLostFrames = true;
     }
 
     // SetWindowPos activates the target window unless SWP_NOACTIVATE is passed; a pure style/frame
@@ -1687,6 +1688,9 @@ internal sealed class Win32WindowBackend : IWindowBackend
     {
         var ps = new PAINTSTRUCT();
         nint hdc = User32.BeginPaint(Handle, out ps);
+
+        // The system asks for a paint when what the window showed is gone, whatever the scene changed.
+        Window.NotePresentedFrameLost();
 
         try
         {
