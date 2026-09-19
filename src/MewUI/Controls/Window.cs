@@ -3211,6 +3211,8 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             // the next frame starts clean; the frame surface gets them when it is put on screen.
             if (target is not Rendering.IPersistentFrameSurface)
             {
+            LimitInPlacePresent(context, target, retainedDamage);
+
                 DrawDamageMarks(context);
             }
 
