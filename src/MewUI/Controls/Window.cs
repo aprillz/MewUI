@@ -3018,14 +3018,23 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
             // The scene is brought up to date before anything is cleared, because what the frame has
             // to repaint is decided from the finished scene.
-            // A popup window draws a subtree of its owner under a transform of its own. It keeps a scene
-            // of that subtree, which saves recording it again, but the scene knows the subtree in the
-            // owner's coordinates, so such a window always replays its whole frame.
             Rect? retainedDamage;
             if (_hostedPortalRoot is UIElement portalRoot)
             {
-                UpdateRetainedScene(context, target, portalRoot, isPortal: true);
-                retainedDamage = null;
+                // The subtree stays arranged in the owner's coordinates. Taking the scene under the
+                // transform that puts it on this surface makes what it reports as changed this
+                // surface's coordinates, like any other window's.
+                context.Save();
+                try
+                {
+                    context.Scale(_hostedPortalScale, _hostedPortalScale);
+                    context.Translate(-_hostedPortalOrigin.X, -_hostedPortalOrigin.Y);
+                    retainedDamage = UpdateRetainedScene(context, target, portalRoot, isPortal: true);
+                }
+                finally
+                {
+                    context.Restore();
+                }
             }
             else if (EffectiveVisualRoot is UIElement sceneRoot)
             {
@@ -3042,7 +3051,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             // frame still ends the usual way, so what counts frames keeps counting them.
             int paintedAreaCount = RepaintsNothing(retainedDamage) ? 0 : retainedDamage == null ? 1 : _frameDamageAreas.Count;
             _frameRepaintedNothing = paintedAreaCount == 0;
-            if (paintedAreaCount > 0 && _hostedPortalRoot == null)
+            if (paintedAreaCount > 0)
             {
                 NoteDamageMarks(retainedDamage, clientSize);
             }
@@ -3105,7 +3114,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
                             context.Save();
                             context.Scale(_hostedPortalScale, _hostedPortalScale);
                             context.Translate(-_hostedPortalOrigin.X, -_hostedPortalOrigin.Y);
-                            if (!TryRenderRetainedBody(context, null))
+                            if (!TryRenderRetainedBody(context, paintedArea))
                             {
                                 _hostedPortalRoot.Render(context);
                             }

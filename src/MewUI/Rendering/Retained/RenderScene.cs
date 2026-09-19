@@ -73,6 +73,11 @@ internal sealed class RenderScene : IDisposable
     /// <summary>Turns collecting <see cref="RecordedBounds"/> on or off.</summary>
     internal void CollectRecordedBounds(bool collect)
     {
+        if (_collectRecordedBounds == collect)
+        {
+            return;
+        }
+
         _collectRecordedBounds = collect;
         _recordedBounds.Clear();
     }

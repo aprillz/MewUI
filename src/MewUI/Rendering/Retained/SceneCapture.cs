@@ -154,14 +154,17 @@ internal sealed class SceneCapture
 
         update.StageComposition(node, plan, state, stateBakedIntoContent: false);
 
+        // A pass that only brings the scene up to date draws nothing, so it opens no scope on the
+        // surface either: a backend may realize a scope as a layer that it blends back when the scope
+        // closes, and blending back what the surface already holds changes every translucent pixel.
         var context = recorder.Inner;
-        bool opacityScope = opacity < 1;
+        bool opacityScope = opacity < 1 && recorder.Draws;
         if (opacityScope)
         {
             context.BeginOpacity(opacity);
         }
 
-        bool backdropScope = state.OpaqueBackdrop;
+        bool backdropScope = state.OpaqueBackdrop && recorder.Draws;
         if (backdropScope)
         {
             context.BeginOpaqueBackdrop();

@@ -115,25 +115,41 @@ internal sealed class RenderDataRecorder : IGraphicsContext
     public void BeginOpaqueBackdrop()
     {
         Record(RenderCommandKind.BeginOpaqueBackdrop);
-        _inner.BeginOpaqueBackdrop();
+
+        // A backend may realize this scope as a layer it blends back onto the surface when the scope
+        // closes. Recording without drawing must leave the surface as it is, so the scope stays in the
+        // recording only.
+        if (Draws)
+        {
+            _inner.BeginOpaqueBackdrop();
+        }
     }
 
     public void EndOpaqueBackdrop()
     {
         Record(RenderCommandKind.EndOpaqueBackdrop);
-        _inner.EndOpaqueBackdrop();
+        if (Draws)
+        {
+            _inner.EndOpaqueBackdrop();
+        }
     }
 
     public void BeginOpacity(double opacity)
     {
         Record(RenderCommandKind.BeginOpacity, values: [opacity]);
-        _inner.BeginOpacity(opacity);
+        if (Draws)
+        {
+            _inner.BeginOpacity(opacity);
+        }
     }
 
     public void EndOpacity()
     {
         Record(RenderCommandKind.EndOpacity);
-        _inner.EndOpacity();
+        if (Draws)
+        {
+            _inner.EndOpacity();
+        }
     }
 
     public void SetClipRoundedRect(Rect rect, double radiusX, double radiusY)
