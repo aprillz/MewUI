@@ -41,6 +41,9 @@ internal sealed class RenderData : IDisposable
     /// </summary>
     internal Rect RecordedBounds { get; set; }
 
+    /// <summary>Where this recording reached the surface in the last pass that looked at it.</summary>
+    internal Rect SurfaceExtent { get; set; }
+
     /// <summary>False when the commands replace, rotate or scale the transform, which a moved replay cannot carry.</summary>
     internal bool CanBePlaced { get; set; } = true;
 

@@ -663,11 +663,30 @@ internal sealed class RenderDataRecorder : IGraphicsContext
 
         private void AddTextCommand(RenderCommandKind kind, ITextLayout layout, Point origin, in TextDrawOptions options)
         {
-            recorder.Slot?.AddText(
-                kind,
-                new Rect(origin.X, origin.Y, layout.MeasuredSize.Width, layout.MeasuredSize.Height),
-                layout,
-                in options);
+            recorder.Slot?.AddText(kind, LayoutExtent(layout, origin), layout, in options);
+        }
+
+        /// <summary>
+        /// Where the lines of a layout stand. A layout aligned inside a width puts its lines away from
+        /// its origin (centred text in a cell), so the measured size at the origin is not where the ink is.
+        /// </summary>
+        private static Rect LayoutExtent(ITextLayout layout, Point origin)
+        {
+            var lines = layout.Lines;
+            if (lines.Count == 0)
+            {
+                return new Rect(origin.X, origin.Y, layout.MeasuredSize.Width, layout.MeasuredSize.Height);
+            }
+
+            var extent = lines[0].Bounds;
+            for (int index = 1; index < lines.Count; index++)
+            {
+                extent = extent.Union(lines[index].Bounds);
+            }
+
+            // The measured box still counts: a backend may place glyphs by it instead of by the lines.
+            extent = extent.Union(new Rect(0, 0, layout.MeasuredSize.Width, layout.MeasuredSize.Height));
+            return new Rect(origin.X + extent.X, origin.Y + extent.Y, extent.Width, extent.Height);
         }
     }
 }

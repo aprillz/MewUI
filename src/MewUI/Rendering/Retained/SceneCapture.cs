@@ -286,7 +286,9 @@ internal sealed class SceneCapture
         }
 
         var bounds = default(BoundsAccumulator);
-        bounds.Add(Visible(RetainedGeometry.TransformRect(SlotBounds(update, node, OWN_CONTENT_SLOT), transform)));
+        var subtreeExtent = Visible(RetainedGeometry.TransformRect(SlotBounds(update, node, OWN_CONTENT_SLOT), transform));
+        update.StageSlotExtent(node, OWN_CONTENT_SLOT, subtreeExtent);
+        bounds.Add(subtreeExtent);
         update.StageBounds(node, bounds.Result, bounds.Result, Origin(element), IsClippedAway(element, transform, bounds.Result));
         return bounds.Result;
     }
@@ -326,7 +328,9 @@ internal sealed class SceneCapture
                         ReplaySlot(scene, node, slotIndex, recorder);
                     }
 
-                    ownBounds.Add(Visible(RetainedGeometry.TransformRect(SlotBounds(update, node, slotIndex), transform)));
+                    var slotExtent = Visible(RetainedGeometry.TransformRect(SlotBounds(update, node, slotIndex), transform));
+                    update.StageSlotExtent(node, slotIndex, slotExtent);
+                    ownBounds.Add(slotExtent);
                     entryIndex++;
                     break;
 
