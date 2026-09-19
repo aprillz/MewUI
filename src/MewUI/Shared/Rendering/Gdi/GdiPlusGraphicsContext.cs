@@ -1329,7 +1329,10 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
             return;
         }
 
-        if (!hasTextTransform && (_pixelSurface != null || color.A < 255 || EnableAlphaTextHint))
+        // A surface without alpha is drawn as a window is: its alpha channel means nothing, so the
+        // text path that writes none can be used and text looks the same on both.
+        bool surfaceCarriesAlpha = _pixelSurface != null && _pixelSurface.HasAlpha;
+        if (!hasTextTransform && (surfaceCarriesAlpha || color.A < 255 || EnableAlphaTextHint))
         {
             var r = GetTextLayoutRect(bounds, wrapping);
             uint gdiFormat = BuildTextFormat(horizontalAlignment, verticalAlignment, wrapping, trimming);
@@ -1381,7 +1384,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
             return;
         }
 
-        if (hasTextTransform && _pixelSurface != null)
+        if (hasTextTransform && surfaceCarriesAlpha)
         {
             // Transformed text on a per-pixel-alpha cache: the direct GDI path below writes no
             // alpha, so glyphs end up transparent (reading as the background colour). Render the
