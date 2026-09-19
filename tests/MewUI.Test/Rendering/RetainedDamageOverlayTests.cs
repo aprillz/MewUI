@@ -36,6 +36,67 @@ public sealed class RetainedDamageOverlayTests
         Assert.AreEqual(withoutOverlay, withOverlay);
     }
 
+    [TestMethod]
+    public void OverlayOnASurfaceThatKeepsItsFrame_ShowsAndLeavesNothingBehind()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("GDI backend is Windows-only.");
+        }
+
+        using var factory = new GdiGraphicsFactory();
+        Application.DefaultGraphicsFactory = factory;
+
+        // A popup window presented from a bitmap of its own is handed a surface that keeps its frame.
+        var button = new Button { Content = new TextBlock { Text = "Item" }, Width = 120, Height = 28 };
+        var window = HeadlessWindow.Create(WIDTH, HEIGHT);
+        window.AllowsTransparency = true;
+        window.Background = Color.Transparent;
+        window.Content = button;
+        window.PerformLayout();
+
+        using var surface = factory.CreateSurface(RenderSurfaceDescriptor.Offscreen(WIDTH, HEIGHT, 1.0, hasAlpha: true));
+        window.RenderFrameToSurface(surface);
+        window.RenderFrameToSurface(surface);
+        byte[] plain = Read(surface);
+
+        window.ToggleDamageOverlay();
+        button.Background = Color.FromArgb(255, 200, 60, 60);
+        window.PerformLayout();
+        window.RenderFrameToSurface(surface);
+        byte[] marked = Read(surface);
+
+        button.Background = Color.FromArgb(255, 60, 60, 200);
+        window.ToggleDamageOverlay();
+        window.PerformLayout();
+        window.RenderFrameToSurface(surface);
+        window.RenderFrameToSurface(surface);
+
+        using var reference = factory.CreateSurface(RenderSurfaceDescriptor.Offscreen(WIDTH, HEIGHT, 1.0, hasAlpha: true));
+        window.RenderReferenceFrameToSurface(reference);
+
+        Assert.AreNotEqual(0, CountDifferences(plain, marked), "the overlay drew nothing onto a surface that keeps its frame");
+        Assert.AreEqual(0, CountDifferences(Read(reference), Read(surface)), "pixels differ from the reference after the overlay was turned off: marks were left in the kept frame");
+    }
+
+    private static byte[] Read(IRenderSurface surface)
+        => ((ICpuPixelSurface)surface).GetReadOnlyPixelSpan().ToArray();
+
+    private static int CountDifferences(byte[] first, byte[] second)
+    {
+        int differing = 0;
+        for (int offset = 0; offset + 3 < first.Length; offset += 4)
+        {
+            if (first[offset] != second[offset] || first[offset + 1] != second[offset + 1] ||
+                first[offset + 2] != second[offset + 2] || first[offset + 3] != second[offset + 3])
+            {
+                differing++;
+            }
+        }
+
+        return differing;
+    }
+
     private static string Run(GdiGraphicsFactory factory, bool overlay)
     {
         var first = new Button { Content = new TextBlock { Text = "First" } };
