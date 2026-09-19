@@ -175,6 +175,51 @@ public sealed class RetainedPartialRepaintTests
         });
     });
 
+    [TestMethod]
+    public Task AHover_CopiesOnlyTheChangedAreaToTheWindow() => CaptureScene.RunAsync(async scene =>
+    {
+        var (window, first, _) = await ShowTwoButtonsAsync(scene);
+        if (window.GraphicsFactory is not Aprillz.MewUI.Rendering.IPersistentFrameGraphicsFactory { WindowTargetKeepsPresentedFrame: true })
+        {
+            Assert.Inconclusive("This backend's window target does not keep the frame presented to it, so every frame is copied whole.");
+        }
+
+        await scene.Input.MoveAsync(window, CaptureScene.Away(window));
+        await SettleAsync(window);
+
+        await scene.Input.MoveAsync(window, CaptureScene.Center(first));
+        await Task.Delay(400);
+
+        double clientArea = window.ClientSize.Width * window.ClientSize.Height;
+        Assert.IsTrue(
+            window.LastPresentedArea > 0 && window.LastPresentedArea < clientArea / 2,
+            $"a hover copied {window.LastPresentedArea} of the {clientArea} client area to the window");
+
+        if (OperatingSystem.IsWindows())
+        {
+            // What reached the screen in parts has to be what a whole copy of the same frame shows.
+            var inParts = ScreenCapture.OfClientArea(window.Handle);
+            window.NotePresentedFrameLost();
+            window.InvalidateVisual();
+            await Task.Delay(400);
+            var whole = ScreenCapture.OfClientArea(window.Handle);
+
+            int differing = 0;
+            for (int y = 0; y < whole.Height; y++)
+            {
+                for (int x = 0; x < whole.Width; x++)
+                {
+                    if (whole.At(x, y) != inParts.At(x, y))
+                    {
+                        differing++;
+                    }
+                }
+            }
+
+            Assert.AreEqual(0, differing, $"{differing} pixels differ between the frame copied in parts and the same frame copied whole");
+        }
+    });
+
     /// <summary>Runs the body with the render loop drawing every frame it can, as a profiled app does.</summary>
     private static async Task RenderingContinuouslyAsync(Func<Task> body)
     {

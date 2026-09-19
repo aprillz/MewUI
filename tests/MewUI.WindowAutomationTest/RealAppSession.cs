@@ -140,13 +140,23 @@ public static class RealAppSession
             Win32Platform.Register();
             // Direct2D unless the runner asks for the GL backend, which is the one whose
             // window-level clip and pixel-format choices the clip oracle exercises.
-            if (string.Equals(Environment.GetEnvironmentVariable("MEWUI_AUTOMATION_BACKEND"), "MewVG", StringComparison.OrdinalIgnoreCase))
+            string? backend = Environment.GetEnvironmentVariable("MEWUI_AUTOMATION_BACKEND");
+            if (string.Equals(backend, "MewVG", StringComparison.OrdinalIgnoreCase))
             {
                 MewVGWin32Backend.Register();
             }
-            else
+            else if (string.Equals(backend, "Gdi", StringComparison.OrdinalIgnoreCase))
+            {
+                GdiBackend.Register();
+            }
+            else if (string.IsNullOrEmpty(backend) || string.Equals(backend, "Direct2D", StringComparison.OrdinalIgnoreCase))
             {
                 Direct2DBackend.Register();
+            }
+            else
+            {
+                // A name nobody handles must not quietly run another backend under that name.
+                throw new InvalidOperationException($"MEWUI_AUTOMATION_BACKEND names no backend this suite knows: '{backend}'.");
             }
         }
         else if (OperatingSystem.IsMacOS())
