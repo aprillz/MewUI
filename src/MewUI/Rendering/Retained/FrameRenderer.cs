@@ -40,7 +40,18 @@ internal static class FrameRenderer
         context.Save();
         try
         {
-            context.SetClip(damage.Value);
+            // The damage is in surface coordinates and a clip is set in the context's own, which differ
+            // when the scene is replayed under a transform, as a popup window does.
+            var clip = damage.Value;
+            var transform = context.GetTransform();
+            if (!transform.IsIdentity && System.Numerics.Matrix3x2.Invert(transform, out var toLocal))
+            {
+                // The way there and back is not exact, and the caller has already clipped the surface
+                // to the damage itself, so this clip only has to not fall short of it.
+                clip = RetainedGeometry.TransformRect(clip, toLocal).Inflate(1, 1);
+            }
+
+            context.IntersectClip(clip);
             ReplayRoots(scene, root, context, damage);
         }
         finally

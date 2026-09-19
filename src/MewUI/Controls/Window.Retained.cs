@@ -138,7 +138,7 @@ public partial class Window
     /// is outlined. The overlay only reads what a frame did. It asks for no frame, and it
     /// draws over the frame on its way to the screen, never into the surface that keeps the frame.
     /// </summary>
-    internal bool DamageOverlayEnabled => _damageOverlayEnabled;
+    internal bool DamageOverlayEnabled => _damageOverlayEnabled || (_hostedPortalRoot != null && Owner?.DamageOverlayEnabled == true);
 
     private void RegisterRetainedDiagnostics()
     {
@@ -160,8 +160,17 @@ public partial class Window
     /// <summary>Notes what the frame being built did, to be shown when it reaches the screen.</summary>
     private void NoteDamageMarks(Rect? damage, Size clientSize)
     {
-        if (!_damageOverlayEnabled || _renderScene == null)
+        if (_renderScene == null)
         {
+            return;
+        }
+
+        // A popup window shows the overlay of the window that owns it, which is where it is toggled.
+        bool enabled = DamageOverlayEnabled;
+        _renderScene.CollectRecordedBounds(enabled);
+        if (!enabled)
+        {
+            _damageMarks.Clear();
             return;
         }
 
@@ -204,7 +213,7 @@ public partial class Window
     /// <summary>Draws the marks over a frame on its way to the screen, oldest first.</summary>
     private void DrawDamageMarks(IGraphicsContext context)
     {
-        if (!_damageOverlayEnabled)
+        if (!DamageOverlayEnabled)
         {
             return;
         }
@@ -274,13 +283,6 @@ public partial class Window
         }
 
         _retainedSceneReady = true;
-
-        if (isPortal)
-        {
-            LastWholeFrameReason = "a popup window replays its whole frame";
-            _wholeFrames++;
-            return null;
-        }
 
         if (_renderScene.IsFullDamage || !CanRepaintPartOfTheFrame(context, target))
         {
@@ -489,11 +491,28 @@ public partial class Window
         var view = GraphicsFactory.CreateImageView(frameSurface);
         try
         {
-            using var context = GraphicsFactory.CreateContext(target);
+            // The window's own context presents the frame. A second context made for the same target
+            // every frame costs a context each time, and where contexts of one window share its native
+            // resources, disposing that second one takes them from under the window's own.
+            var context = _renderContext;
             context.BeginFrame(target);
-            context.DrawImage(view, new Rect(0, 0, clientSize.Width, clientSize.Height));
-            DrawDamageMarks(context);
-            context.EndFrame();
+            try
+            {
+                if (AllowsTransparency)
+                {
+                    // The frame is blended onto the target, so whatever the target still holds would
+                    // show through every translucent pixel and build up frame after frame.
+                    context.Clear(Color.Transparent);
+                }
+
+                context.DrawImage(view, new Rect(0, 0, clientSize.Width, clientSize.Height));
+                DrawDamageMarks(context);
+            }
+            finally
+            {
+                // Closed even when drawing throws, or every frame after this one begins inside it.
+                context.EndFrame();
+            }
         }
         finally
         {
