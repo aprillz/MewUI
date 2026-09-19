@@ -31,6 +31,9 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, ITextBackendFactory, 
 
     bool IPersistentFrameGraphicsFactory.IsPersistentFrameRenderingVerified => true;
 
+    // The window is drawn through a back buffer kept per window, which is copied to the screen whole.
+    bool IPersistentFrameGraphicsFactory.WindowTargetKeepsPresentedFrame => true;
+
     IDisposable IPersistentFrameGraphicsFactory.AcquirePersistentFrameRenderScope()
         => PersistentFrameRenderScope.Instance;
 

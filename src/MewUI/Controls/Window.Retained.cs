@@ -428,6 +428,10 @@ public partial class Window
 
     private int _presents;
     private int _skippedPresents;
+    private double _presentedArea;
+
+    /// <summary>How much of the target the last presented frame copied onto it, in layout units squared.</summary>
+    internal double LastPresentedArea => _presentedArea;
 
     /// <summary>
     /// True when the platform calls <see cref="NotePresentedFrameLost"/> whenever the window stops
@@ -485,6 +489,19 @@ public partial class Window
             return true;
         }
 
+        // A target that still holds the last frame needs only what changed copied onto it. The marks
+        // of the overlay are drawn on the target itself, and a transparent window blends onto a target
+        // it clears first, so both copy the whole frame.
+        bool copiesChangedAreasOnly =
+            !_presentedFrameLost &&
+            PlatformReportsLostFrames &&
+            persistentFactory.WindowTargetKeepsPresentedFrame &&
+            !AllowsTransparency &&
+            !DamageOverlayEnabled &&
+            !_frameRepaintedNothing &&
+            LastRetainedDamage is Rect &&
+            _frameDamageAreas.Count > 0;
+
         _presentedFrameLost = false;
         _presents++;
 
@@ -505,7 +522,26 @@ public partial class Window
                     context.Clear(Color.Transparent);
                 }
 
-                context.DrawImage(view, new Rect(0, 0, clientSize.Width, clientSize.Height));
+                var whole = new Rect(0, 0, clientSize.Width, clientSize.Height);
+                if (copiesChangedAreasOnly)
+                {
+                    _presentedArea = 0;
+                    for (int index = 0; index < _frameDamageAreas.Count; index++)
+                    {
+                        var area = _frameDamageAreas[index];
+                        context.Save();
+                        context.SetClip(area);
+                        context.DrawImage(view, whole);
+                        context.Restore();
+                        _presentedArea += area.Width * area.Height;
+                    }
+                }
+                else
+                {
+                    context.DrawImage(view, whole);
+                    _presentedArea = whole.Width * whole.Height;
+                }
+
                 DrawDamageMarks(context);
             }
             finally

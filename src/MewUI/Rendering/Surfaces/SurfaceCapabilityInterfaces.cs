@@ -70,6 +70,13 @@ internal interface IPersistentFrameGraphicsFactory
     /// </summary>
     bool IsPersistentFrameRenderingVerified { get; }
 
+    /// <summary>
+    /// True when a window target still holds the frame presented to it when the next frame begins, so
+    /// only the areas that changed need to be copied onto it. A target whose buffer is swapped or
+    /// discarded on present does not.
+    /// </summary>
+    bool WindowTargetKeepsPresentedFrame => false;
+
     /// <summary>Makes the backend ready to render into a persistent surface; disposing restores the caller's state.</summary>
     IDisposable AcquirePersistentFrameRenderScope();
 }
