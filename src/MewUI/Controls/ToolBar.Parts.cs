@@ -328,6 +328,31 @@ public sealed partial class ToolBar
             }
         }
 
+        /// <summary>Declares what <see cref="Render"/> draws, in the same order.</summary>
+        internal void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
+        {
+            if (IsHidden)
+            {
+                return;
+            }
+
+            builder.Child(Plate);
+            if (Grip.Bounds.Width > 0)
+            {
+                builder.Child(Grip);
+            }
+
+            for (int index = 0; index < VisibleEntryCount; index++)
+            {
+                builder.Child(_entries[index]);
+            }
+
+            if (IsTruncated)
+            {
+                builder.Child(_overflowButton);
+            }
+        }
+
         internal UIElement? HitTest(Point point)
         {
             if (IsHidden)
@@ -649,6 +674,20 @@ public sealed partial class ToolBar
             if (IsOverflowing)
             {
                 _overflow!.Render(context);
+            }
+        }
+
+        /// <summary>Declares what <see cref="Render"/> draws, in the same order.</summary>
+        internal void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
+        {
+            foreach (var group in _groups)
+            {
+                group.WriteComposition(builder);
+            }
+
+            if (IsOverflowing)
+            {
+                builder.Child(_overflow);
             }
         }
 

@@ -400,6 +400,32 @@ public sealed partial class ToolBar : Control, IVisualTreeHost
             BorderThickness, CornerRadius);
     }
 
+    private const int DROP_INDICATOR_SLOT = 1;
+
+    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
+    {
+        builder.Content(0);
+        foreach (var visual in _visuals)
+        {
+            visual.WriteComposition(builder);
+        }
+
+        // The drop indicator lies over the entries, so it is drawing of its own after them.
+        builder.Content(DROP_INDICATOR_SLOT);
+    }
+
+    internal override void WriteOwnContent(IGraphicsContext context, int slotIndex)
+    {
+        if (slotIndex == DROP_INDICATOR_SLOT)
+        {
+            RenderDropIndicator(context);
+        }
+        else
+        {
+            base.WriteOwnContent(context, slotIndex);
+        }
+    }
+
     protected override void RenderSubtree(IGraphicsContext context)
     {
         foreach (var visual in _visuals)

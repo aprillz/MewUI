@@ -15,7 +15,8 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
             static (self, _, _) => self.RefreshRowAlternate());
 
     public static readonly MewProperty<bool> ShowGridLinesProperty =
-        MewProperty<bool>.Register<GridView>(nameof(ShowGridLines), false, MewPropertyOptions.AffectsRender);
+        MewProperty<bool>.Register<GridView>(nameof(ShowGridLines), false, MewPropertyOptions.AffectsRender,
+            static (self, _, _) => self.InvalidateRowVisuals());
 
     public static readonly MewProperty<double> RowHeightProperty =
         MewProperty<double>.Register<GridView>(nameof(RowHeight), double.NaN, MewPropertyOptions.AffectsLayout);
@@ -1054,6 +1055,41 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
             context.Restore();
         }
     }
+
+    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
+    {
+        builder.Content(0);
+
+        var bounds = GetSnappedBorderBounds(Bounds);
+        double dpiScale = GetDpi() / 96.0;
+        double borderInset = GetBorderVisualInset();
+        var clipRect = LayoutRounding.MakeClipRect(
+            bounds.Deflate(new Thickness(borderInset)).Deflate(Padding), dpiScale);
+        double clipRadius = Math.Max(0, LayoutRounding.RoundToPixel(CornerRadius, dpiScale) - borderInset);
+        clipRadius = Math.Min(clipRadius, Math.Min(clipRect.Width, clipRect.Height) / 2);
+        if (clipRadius > 0)
+        {
+            builder.PushClipRoundedRect(clipRect, clipRadius, clipRadius);
+        }
+        else
+        {
+            builder.PushClipRect(clipRect);
+        }
+
+        builder.Child(_header);
+        builder.Child(_scrollViewer);
+        builder.Pop();
+    }
+
+    // Rows draw the grid lines, so they are told when the grid stops or starts showing them.
+    private void InvalidateRowVisuals()
+        => VisualTree.Visit(this, static element =>
+        {
+            if (element is GridViewRow row)
+            {
+                row.InvalidateVisual();
+            }
+        });
 
     private double ComputeColumnsExtentWidth()
     {
