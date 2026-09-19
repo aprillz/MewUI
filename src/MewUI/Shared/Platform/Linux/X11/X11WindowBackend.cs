@@ -110,6 +110,7 @@ internal sealed class X11WindowBackend : IWindowBackend
     {
         _host = host;
         Window = window;
+        window.PlatformReportsLostFrames = true;
     }
 
     internal Window Window { get; }
@@ -1379,6 +1380,9 @@ internal sealed class X11WindowBackend : IWindowBackend
         switch (ev.type)
         {
             case Expose:
+                // An exposed area lost what it showed, whatever the scene changed since.
+                Window.NotePresentedFrameLost();
+
                 // X11 can deliver multiple expose events; render once for the last in the batch.
                 if (ev.xexpose.count == 0)
                 {
