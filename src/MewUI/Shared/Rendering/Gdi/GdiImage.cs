@@ -108,6 +108,10 @@ internal sealed class GdiImage : IImage
             _ownsDib = false;
             _borrowedDc = surface.Hdc;
             _sourceVersion = source.Version;
+
+            // A surface made without alpha holds nothing meaningful in that channel, and the text path
+            // it shares with windows writes none, so blending by it would add instead of cover.
+            IsOpaque = !surface.HasAlpha;
             return;
         }
 
