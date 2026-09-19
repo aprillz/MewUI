@@ -13,6 +13,7 @@ namespace MewUI.WindowAutomationTest;
 public sealed class PresentationPathTextTests
 {
     [TestMethod]
+    [Timeout(60_000)]
     public Task Text_LooksTheSameThroughTheFrameSurfaceAndStraightIntoTheTarget() => CaptureScene.RunAsync(async scene =>
     {
         if (!OperatingSystem.IsWindows())
@@ -31,21 +32,28 @@ public sealed class PresentationPathTextTests
             new Button { Content = new TextBlock { Text = "Button caption" }, HorizontalAlignment = HorizontalAlignment.Left },
             new CheckBox { Content = new TextBlock { Text = "Check box caption" } });
 
+        Step("showing the window");
         var window = await scene.ShowAsync(stack);
+        Step("moving the pointer away");
         await scene.Input.MoveAsync(window, CaptureScene.Away(window));
+        Step("settling");
         await Task.Delay(500);
 
         bool previous = Window.PresentWithoutFrameSurface;
         try
         {
+            Step("presenting through the frame surface");
             Window.PresentWithoutFrameSurface = false;
             window.InvalidateVisual();
             await Task.Delay(400);
+            Step("capturing the frame-surface presentation");
             var throughFrameSurface = ScreenCapture.OfClientArea(window.Handle);
 
+            Step("presenting straight into the target");
             Window.PresentWithoutFrameSurface = true;
             window.InvalidateVisual();
             await Task.Delay(400);
+            Step("capturing the direct presentation");
             var straight = ScreenCapture.OfClientArea(window.Handle);
 
             Assert.AreEqual(straight.Width, throughFrameSurface.Width, "the two captures differ in width");
@@ -77,6 +85,21 @@ public sealed class PresentationPathTextTests
             Window.PresentWithoutFrameSurface = previous;
         }
     });
+
+    // Written as each step starts, so a run that never ends says where it stopped. The test runner
+    // holds console output back until a test ends, so the steps also go to a file beside the suite.
+    private static void Step(string what)
+    {
+        string line = $"[{DateTime.Now:HH:mm:ss.fff}] PresentationPathText: {what}";
+        Console.Error.WriteLine(line);
+        try
+        {
+            File.AppendAllText(Path.Combine(AppContext.BaseDirectory, "test-steps.log"), line + Environment.NewLine);
+        }
+        catch (IOException)
+        {
+        }
+    }
 
     private static int CountDifferences(ScreenCapture expected, ScreenCapture actual, int shiftY)
     {
