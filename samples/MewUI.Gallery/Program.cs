@@ -225,11 +225,6 @@ FrameworkElement SettingsControls() => new StackPanel()
             new TextBlock().WithTheme((t, c) => c.Foreground(t.Palette.Accent)).Text("Rendering").Bold(),
             new WrapPanel().Spacing(12).Children(
                 new CheckBox()
-                    .Content("Cached")
-                    .OnCheckedChanged(v => gallery.SetCardsCached(v == true))
-                    .IsChecked(true)
-                    .CenterVertical(),
-                new CheckBox()
                     .Content("TopMost")
                     .BindIsChecked(topMost)
                     .CenterVertical()))
