@@ -2972,7 +2972,10 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             surface.PixelWidth / Math.Max(1.0, surface.DpiScale),
             surface.PixelHeight / Math.Max(1.0, surface.DpiScale));
 
-        RenderFrameCore(surface, clientSizeDip);
+        if (!TryRenderFrameWithOverlay(surface, clientSizeDip))
+        {
+            RenderFrameCore(surface, clientSizeDip);
+        }
     }
 
     private void RenderFrameCore(IRenderTarget target, Size clientSize)
@@ -3018,6 +3021,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
             // The scene is brought up to date before anything is cleared, because what the frame has
             // to repaint is decided from the finished scene.
+            NoteSceneCountsBeforeUpdate();
             Rect? retainedDamage;
             if (_hostedPortalRoot is UIElement portalRoot)
             {
@@ -3207,12 +3211,12 @@ public partial class Window : ContentControl, ILayoutRoundingHost
                 }
             }
 
+            LimitInPlacePresent(context, target, retainedDamage);
+
             // A target that keeps its contents would keep the marks too, so they are drawn only where
             // the next frame starts clean; the frame surface gets them when it is put on screen.
             if (target is not Rendering.IPersistentFrameSurface)
             {
-            LimitInPlacePresent(context, target, retainedDamage);
-
                 DrawDamageMarks(context);
             }
 
