@@ -16,21 +16,26 @@ public sealed class TreeViewContainerTests
     private const double HEIGHT = 300;
 
     [TestMethod]
-    public void NoHook_PlacesTheTemplateRootInTheContentAreaWithoutAContainer()
+    public void NoHook_StillWrapsEachRowInAContainer()
     {
         var (tree, _, _) = MakeTree();
         Layout(tree);
 
+        int rows = 0;
         int containers = 0;
         tree.VisitRealizedContainers((_, element) =>
         {
+            rows++;
             if (element is ItemContainer)
             {
                 containers++;
             }
         });
 
-        Assert.AreEqual(0, containers, "applications that do not use the hooks must not pay for a wrapper");
+        // The row container draws the expander and the row backgrounds, so a tree without hooks needs
+        // it as much as one with them.
+        Assert.IsTrue(rows > 0, "the tree realized no rows");
+        Assert.AreEqual(rows, containers, "a row without a container has no expander, selection or hover drawn");
     }
 
     [TestMethod]
