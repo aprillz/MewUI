@@ -297,14 +297,12 @@ internal sealed class SceneUpdate
                 // A slot without a recording is drawn live across the visual, before or after this pass.
                 _scene.AddDamage(slot.Node.SurfaceBounds);
                 _scene.AddDamage(slot.Extent);
-                _scene.AddRecordedBounds(slot.Node.SurfaceBounds);
             }
             else
             {
                 // A slot the plan did not have before reached nowhere, which an empty extent says.
                 _scene.AddDamage(previous?.SurfaceExtent ?? default);
                 _scene.AddDamage(slot.Extent);
-                _scene.AddRecordedBounds(slot.Extent);
             }
 
             slot.Node.SetSlot(slot.SlotIndex, slot.Data);

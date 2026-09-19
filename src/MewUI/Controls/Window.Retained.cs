@@ -116,27 +116,24 @@ public partial class Window
         Color.FromArgb(255, 0, 200, 200),
     ];
 
-    // Marks stay until a later one covers them, the way a tint drawn with the content would; the cap
-    // keeps a window that only ever repaints small areas from collecting them without end.
-    private const int MAX_DAMAGE_MARKS = 96;
-
-    private enum DamageMarkKind
-    {
-        Recorded,
-        Repainted,
-    }
-
-    private readonly record struct DamageMark(DamageMarkKind Kind, Rect Area, int ColorIndex);
-
-    private readonly List<DamageMark> _damageMarks = [];
+    // The areas the newest painting frame repainted, in that frame's colour.
+    private readonly List<Rect> _damageMarks = [];
     private bool _damageOverlayEnabled;
     private int _damageMarkColorIndex;
 
+    // What the scene had counted when the newest painting frame began, and what that frame added.
+    private int _visitedAtFrameStart;
+    private int _recordedAtFrameStart;
+    private int _replayedAtFrameStart;
+    private int _frameVisited;
+    private int _frameRecorded;
+    private int _frameReplayed;
+
     /// <summary>
-    /// Shows what frames did, one colour per frame in turn: an area that was painted again is tinted
-    /// and stays so until a later frame paints into it, and what the newest frame also recorded again
-    /// is outlined. The overlay only reads what a frame did. It asks for no frame, and it
-    /// draws over the frame on its way to the screen, never into the surface that keeps the frame.
+    /// Shows what the newest painting frame did: the areas it painted again are tinted, in a colour that
+    /// changes from frame to frame, and one line says how many visuals it looked into, recorded again and
+    /// replayed. The overlay only reads what a frame did. It asks for no frame, and it draws over the
+    /// frame on its way to the screen, never into the surface that keeps the frame.
     /// </summary>
     internal bool DamageOverlayEnabled => _damageOverlayEnabled || (_hostedPortalRoot != null && Owner?.DamageOverlayEnabled == true);
 
@@ -153,64 +150,109 @@ public partial class Window
         _damageOverlayEnabled = !_damageOverlayEnabled;
         _damageMarks.Clear();
         _presentedFrameLost = true;
-        _renderScene?.CollectRecordedBounds(_damageOverlayEnabled);
+
+        // The frame moves between the target's own buffer and a surface of its own, and neither holds
+        // what was drawn into the other since.
+        _preservingTarget = null;
         RequestRender();
     }
 
-    /// <summary>Notes what the frame being built did, to be shown when it reaches the screen.</summary>
-    private void NoteDamageMarks(Rect? damage, Size clientSize)
+    // Whether the overlay was on for the last frame. A popup window follows its owner's toggle, so it
+    // finds out at its next frame, not when the key is pressed.
+    private bool _overlayWasEnabled;
+
+    /// <summary>
+    /// A frame handed a surface that keeps its contents (a window presented from a bitmap of its own)
+    /// would keep the overlay in it too. While the overlay is on, such a frame is kept in a surface of
+    /// this window's own and copied whole onto the one it was handed, with the overlay on top.
+    /// </summary>
+    private bool TryRenderFrameWithOverlay(IRenderSurface surface, Size clientSize)
     {
-        if (_renderScene == null)
+        bool enabled = DamageOverlayEnabled && !_drawingReferenceFrame;
+        if (enabled != _overlayWasEnabled)
         {
-            return;
+            // The frame moves between the handed surface and this window's own, and neither holds what
+            // was drawn into the other since.
+            _overlayWasEnabled = enabled;
+            _preservingTarget = null;
         }
 
-        // A popup window shows the overlay of the window that owns it, which is where it is toggled.
-        bool enabled = DamageOverlayEnabled;
-        _renderScene.CollectRecordedBounds(enabled);
-        if (!enabled)
+        if (!enabled ||
+            surface is not IPersistentFrameSurface handed ||
+            GraphicsFactory is not IPersistentFrameGraphicsFactory { IsPersistentFrameRenderingVerified: true } persistentFactory)
+        {
+            return false;
+        }
+
+        var frameSurface = AcquireRetainedFrameSurface(surface);
+        if (frameSurface == null)
+        {
+            return false;
+        }
+
+        using (persistentFactory.AcquirePersistentFrameRenderScope())
+        {
+            RenderFrameCore(frameSurface, clientSize);
+        }
+
+        var view = GraphicsFactory.CreateImageView(frameSurface);
+        try
+        {
+            handed.PreserveContentsOnBeginFrame = false;
+            using var context = GraphicsFactory.CreateContext(surface);
+            context.BeginFrame(surface);
+            try
+            {
+                context.Clear(AllowsTransparency ? Color.Transparent : EffectiveOpaqueBackground);
+                context.DrawImage(view, new Rect(0, 0, clientSize.Width, clientSize.Height));
+                DrawDamageMarks(context);
+            }
+            finally
+            {
+                context.EndFrame();
+            }
+        }
+        finally
+        {
+            view.Dispose();
+        }
+
+        return true;
+    }
+
+    /// <summary>Notes what the frame being built repaints, to be shown when it reaches the screen.</summary>
+    private void NoteDamageMarks(Rect? damage, Size clientSize)
+    {
+        if (_renderScene == null || !DamageOverlayEnabled)
         {
             _damageMarks.Clear();
             return;
         }
 
+        // Only what the newest painting frame did is shown. Marks of earlier frames pile up into a
+        // picture nobody can read; the colour changing from frame to frame already tells them apart.
         _damageMarkColorIndex = (_damageMarkColorIndex + 1) % _damageMarkColors.Length;
-
-        // Outlines say what the newest frame recorded; those of earlier frames would only pile up.
-        _damageMarks.RemoveAll(static mark => mark.Kind == DamageMarkKind.Recorded);
+        _damageMarks.Clear();
         if (damage == null)
         {
-            AddDamageMark(DamageMarkKind.Repainted, new Rect(0, 0, clientSize.Width, clientSize.Height));
+            _damageMarks.Add(new Rect(0, 0, clientSize.Width, clientSize.Height));
         }
         else
         {
-            for (int index = 0; index < _frameDamageAreas.Count; index++)
-            {
-                AddDamageMark(DamageMarkKind.Repainted, _frameDamageAreas[index]);
-            }
-        }
-
-        var recorded = _renderScene.RecordedBounds;
-        for (int index = 0; index < recorded.Count; index++)
-        {
-            _damageMarks.Add(new DamageMark(DamageMarkKind.Recorded, recorded[index], _damageMarkColorIndex));
-        }
-
-        if (_damageMarks.Count > MAX_DAMAGE_MARKS)
-        {
-            _damageMarks.RemoveRange(0, _damageMarks.Count - MAX_DAMAGE_MARKS);
+            _damageMarks.AddRange(_frameDamageAreas);
         }
     }
 
-    private void AddDamageMark(DamageMarkKind kind, Rect area)
+    /// <summary>Takes the scene's counters before an update, so the overlay can say what one frame added.</summary>
+    private void NoteSceneCountsBeforeUpdate()
     {
-        // One tint per place: a mark this area reaches into is replaced, as a tint drawn with the
-        // content would be, instead of showing through the new one.
-        _damageMarks.RemoveAll(mark => mark.Area.IntersectsWith(area));
-        _damageMarks.Add(new DamageMark(kind, area, _damageMarkColorIndex));
+        var statistics = _renderScene?.Statistics;
+        _visitedAtFrameStart = statistics?.CapturedNodeCount ?? 0;
+        _recordedAtFrameStart = statistics?.ContentRecordCount ?? 0;
+        _replayedAtFrameStart = statistics?.ContentReplayCount ?? 0;
     }
 
-    /// <summary>Draws the marks over a frame on its way to the screen, oldest first.</summary>
+    /// <summary>Draws the tint and the counts over a frame on its way to the screen.</summary>
     private void DrawDamageMarks(IGraphicsContext context)
     {
         if (!DamageOverlayEnabled)
@@ -218,22 +260,39 @@ public partial class Window
             return;
         }
 
-        double thickness = Math.Max(1, 1 / DpiScale);
+        var color = WithAlpha(_damageMarkColors[_damageMarkColorIndex], DAMAGE_TINT_ALPHA);
         for (int index = 0; index < _damageMarks.Count; index++)
         {
-            var mark = _damageMarks[index];
-            var area = LayoutRounding.SnapViewportRectToPixels(mark.Area, DpiScale);
-            var color = _damageMarkColors[mark.ColorIndex];
-            if (mark.Kind == DamageMarkKind.Repainted)
-            {
-                context.FillRectangle(area, WithAlpha(color, 72));
-            }
-            else
-            {
-                context.DrawRectangle(area, color, thickness, strokeInset: true);
-            }
+            context.FillRectangle(LayoutRounding.SnapViewportRectToPixels(_damageMarks[index], DpiScale), color);
         }
+
+        // A frame that painted nothing leaves the counts of the last one that did, like the tint.
+        var statistics = _renderScene?.Statistics;
+        if (statistics != null && _damageMarks.Count > 0)
+        {
+            _frameVisited = Math.Max(0, statistics.CapturedNodeCount - _visitedAtFrameStart);
+            _frameRecorded = Math.Max(0, statistics.ContentRecordCount - _recordedAtFrameStart);
+            _frameReplayed = Math.Max(0, statistics.ContentReplayCount - _replayedAtFrameStart);
+        }
+
+        Span<char> buffer = stackalloc char[64];
+        var text = new StackTextFormatter(buffer);
+        text.Append("V:");
+        text.Append(_frameVisited);
+        text.Append("  R:");
+        text.Append(_frameRecorded);
+        text.Append("  P:");
+        text.Append(_frameReplayed);
+
+        const double PAD = 4;
+        var size = MeasureEngineText(text.WrittenSpan, transient: true);
+        var panel = LayoutRounding.SnapBoundsRectToPixels(
+            new Rect(PAD, PAD, size.Width + PAD * 2, size.Height + PAD * 2), DpiScale);
+        context.FillRectangle(panel, Color.FromArgb(205, 18, 18, 18));
+        DrawEngineText(context, text.WrittenSpan, panel.Deflate(new Thickness(PAD)), Color.White, transient: true);
     }
+
+    private const double DAMAGE_TINT_ALPHA = 96;
 
     private static Color WithAlpha(Color color, double alpha)
         => Color.FromArgb((byte)Math.Clamp(alpha, 0, 255), color.R, color.G, color.B);
@@ -424,65 +483,6 @@ public partial class Window
         return preservedIntoThisFrame;
     }
 
-    // True when the last frame built had no area to paint.
-    private bool _frameRepaintedNothing;
-
-    // True until a frame has been put on screen, and again whenever what the window shows can no longer
-    // be taken for the last frame presented.
-    private bool _presentedFrameLost = true;
-
-    private int _presents;
-    private int _skippedPresents;
-    private double _presentedArea;
-
-    /// <summary>How much of the target the last presented frame copied onto it, in layout units squared.</summary>
-    internal double LastPresentedArea => _presentedArea;
-
-    /// <summary>
-    /// True when the platform calls <see cref="NotePresentedFrameLost"/> whenever the window stops
-    /// showing the last frame presented to it. Only then can a frame that changed nothing skip being
-    /// presented.
-    /// </summary>
-    internal bool PlatformReportsLostFrames { get; set; }
-
-    /// <summary>How many frames were put on screen through the frame surface, and how many were not because nothing changed.</summary>
-    internal (int Presented, int Skipped) PresentCounts => (_presents, _skippedPresents);
-
-    /// <summary>Tells the window that what it shows is no longer the last frame presented, so the next frame is presented whatever it changed.</summary>
-    internal void NotePresentedFrameLost() => _presentedFrameLost = true;
-
-    /// <summary>
-    /// Draws the frame into a surface that keeps its contents and copies that surface to
-    /// <paramref name="target"/>, which is what lets a window repaint part of its frame even though
-    /// its own target does not survive a frame. Returns false when the frame must be drawn straight
-    /// into the target instead.
-    /// </summary>
-    internal bool TryRenderFrameThroughRetainedSurface(IRenderTarget target, Size clientSize)
-    {
-        // A target that already keeps its contents is repainted in place, and a backend that has not
-        // been checked against a surface which keeps them draws straight into the target.
-        if (PresentWithoutFrameSurface ||
-            target is IPersistentFrameSurface ||
-            GraphicsFactory is not IPersistentFrameGraphicsFactory { IsPersistentFrameRenderingVerified: true } persistentFactory)
-        {
-            return false;
-        }
-
-        // The window's own context comes first even though the frame is drawn elsewhere: creating it
-        // is what gives the backend this window's resources, and a backend whose drawing is bound to
-        // a per-thread context has none to offer until then.
-        _renderContext ??= GraphicsFactory.CreateContext(target);
-
-        var frameSurface = AcquireRetainedFrameSurface(target);
-        if (frameSurface == null)
-        {
-            return false;
-        }
-
-        // A backend that binds its drawing to a per-thread context needs that context put on this
-        // thread before the frame surface is drawn into.
-        using (persistentFactory.AcquirePersistentFrameRenderScope())
-        {
     /// <summary>
     /// Whether this window's frames are kept in the buffer its own target draws into. Transparent
     /// windows blend onto a target they clear first, and the damage overlay draws on the target, so both
@@ -529,6 +529,77 @@ public partial class Window
         }
     }
 
+    // True when the last frame built had no area to paint.
+    private bool _frameRepaintedNothing;
+
+    // True until a frame has been put on screen, and again whenever what the window shows can no longer
+    // be taken for the last frame presented.
+    private bool _presentedFrameLost = true;
+
+    private int _presents;
+    private int _skippedPresents;
+    private double _presentedArea;
+
+    /// <summary>How much of the target the last presented frame copied onto it, in layout units squared.</summary>
+    internal double LastPresentedArea => _presentedArea;
+
+    /// <summary>
+    /// True when the platform calls <see cref="NotePresentedFrameLost"/> whenever the window stops
+    /// showing the last frame presented to it. Only then can a frame that changed nothing skip being
+    /// presented.
+    /// </summary>
+    internal bool PlatformReportsLostFrames { get; set; }
+
+    /// <summary>How many frames were put on screen through the frame surface, and how many were not because nothing changed.</summary>
+    internal (int Presented, int Skipped) PresentCounts => (_presents, _skippedPresents);
+
+    /// <summary>Tells the window that what it shows is no longer the last frame presented, so the next frame is presented whatever it changed.</summary>
+    internal void NotePresentedFrameLost() => _presentedFrameLost = true;
+
+    /// <summary>
+    /// Draws the frame into a surface that keeps its contents and copies that surface to
+    /// <paramref name="target"/>, which is what lets a window repaint part of its frame even though
+    /// its own target does not survive a frame. Returns false when the frame must be drawn straight
+    /// into the target instead.
+    /// </summary>
+    internal bool TryRenderFrameThroughRetainedSurface(IRenderTarget target, Size clientSize)
+    {
+        // A target that already keeps its contents is repainted in place, and a backend that has not
+        // been checked against a surface which keeps them draws straight into the target.
+        if (PresentWithoutFrameSurface ||
+            target is IPersistentFrameSurface ||
+            GraphicsFactory is not IPersistentFrameGraphicsFactory { IsPersistentFrameRenderingVerified: true } persistentFactory)
+        {
+            return false;
+        }
+
+        if (DrawsInPlace(target))
+        {
+            // The target keeps its own frame, so a second surface of the same size would only be a copy.
+            // Releasing also forgets which target was kept, so it is done once, not every frame.
+            if (_retainedFrameSurface != null)
+            {
+                ReleaseRetainedFrameSurface();
+            }
+
+            return false;
+        }
+
+        // The window's own context comes first even though the frame is drawn elsewhere: creating it
+        // is what gives the backend this window's resources, and a backend whose drawing is bound to
+        // a per-thread context has none to offer until then.
+        _renderContext ??= GraphicsFactory.CreateContext(target);
+
+        var frameSurface = AcquireRetainedFrameSurface(target);
+        if (frameSurface == null)
+        {
+            return false;
+        }
+
+        // A backend that binds its drawing to a per-thread context needs that context put on this
+        // thread before the frame surface is drawn into.
+        using (persistentFactory.AcquirePersistentFrameRenderScope())
+        {
             RenderFrameCore(frameSurface, clientSize);
         }
 
@@ -572,18 +643,6 @@ public partial class Window
                     // show through every translucent pixel and build up frame after frame.
                     context.Clear(Color.Transparent);
                 }
-
-        if (DrawsInPlace(target))
-        {
-            // The target keeps its own frame, so a second surface of the same size would only be a copy.
-            // Releasing also forgets which target was kept, so it is done once, not every frame.
-            if (_retainedFrameSurface != null)
-            {
-                ReleaseRetainedFrameSurface();
-            }
-
-            return false;
-        }
 
                 var whole = new Rect(0, 0, clientSize.Width, clientSize.Height);
                 if (copiesChangedAreasOnly)

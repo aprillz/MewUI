@@ -36,10 +36,8 @@ internal sealed class RenderSceneStatistics
 internal sealed class RenderScene : IDisposable
 {
     private readonly Dictionary<UIElement, VisualNode> _nodes = new(ReferenceEqualityComparer.Instance);
-    private readonly List<Rect> _recordedBounds = [];
     private BoundsAccumulator _damage;
     private readonly DamageRegion _damageRegion = new();
-    private bool _collectRecordedBounds;
 
     internal UIElement? Root { get; set; }
 
@@ -71,29 +69,6 @@ internal sealed class RenderScene : IDisposable
 
     internal bool HasDamage => IsFullDamage || DamageBounds.Width > 0;
 
-    /// <summary>Areas the last update re-recorded, collected only while a diagnostic asks for them.</summary>
-    internal IReadOnlyList<Rect> RecordedBounds => _recordedBounds;
-
-    /// <summary>Turns collecting <see cref="RecordedBounds"/> on or off.</summary>
-    internal void CollectRecordedBounds(bool collect)
-    {
-        if (_collectRecordedBounds == collect)
-        {
-            return;
-        }
-
-        _collectRecordedBounds = collect;
-        _recordedBounds.Clear();
-    }
-
-    internal void AddRecordedBounds(Rect bounds)
-    {
-        if (_collectRecordedBounds && bounds.Width > 0 && bounds.Height > 0)
-        {
-            _recordedBounds.Add(bounds);
-        }
-    }
-
     /// <summary>Records that an area of the surface no longer matches the scene.</summary>
     internal void AddDamage(Rect bounds)
     {
@@ -108,7 +83,6 @@ internal sealed class RenderScene : IDisposable
         _damage = default;
         _damageRegion.Clear();
         IsFullDamage = false;
-        _recordedBounds.Clear();
     }
 
     /// <summary>Opens the pass an update lands in and returns its id.</summary>
