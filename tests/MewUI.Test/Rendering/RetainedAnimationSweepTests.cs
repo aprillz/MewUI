@@ -101,6 +101,97 @@ public sealed class RetainedAnimationSweepTests
         }
     }
 
+    /// <summary>
+    /// Keyboard focus moving from control to control starts and ends a transition on each of them, and
+    /// keys change their state without the pointer ever being near.
+    /// </summary>
+    [TestMethod]
+    [DataRow("buttons")]
+    [DataRow("inputs")]
+    [DataRow("lists")]
+    [DataRow("containers")]
+    public void FocusAndKeys_MatchTheReferenceAtEveryFrame(string group)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("GDI backend is Windows-only.");
+        }
+
+        using var factory = new GdiGraphicsFactory();
+        Application.DefaultGraphicsFactory = factory;
+
+        string[] names = group switch
+        {
+            "buttons" => ["Button", "ToggleButton", "CheckBox", "RadioButton", "ToggleSwitch", "SplitButton", "DropDownButton"],
+            "inputs" => ["TextBox", "PasswordBox", "NumericUpDown", "ComboBox", "Slider", "DatePicker"],
+            "lists" => ["ListBox", "TreeView"],
+            _ => ["TabControl", "SegmentedControl", "ButtonGroup", "Expander"],
+        };
+
+        var stack = new StackPanel { Orientation = Orientation.Vertical, Spacing = 6, Margin = new Thickness(12) };
+        foreach (string controlName in names)
+        {
+            var control = Create(controlName);
+            control.HorizontalAlignment = HorizontalAlignment.Left;
+            if (control.Height > 120 || double.IsNaN(control.Height) && controlName is "ListBox" or "TreeView" or "TabControl")
+            {
+                control.Height = 110;
+            }
+
+            stack.Children(control);
+        }
+
+        var window = HeadlessWindow.Create(WIDTH, HEIGHT + 120);
+        window.Content = stack;
+        window.PerformLayout();
+        using var surface = factory.CreateSurface(RenderSurfaceDescriptor.Offscreen(WIDTH, HEIGHT + 120, 1.0, hasAlpha: false));
+
+        long start = System.Diagnostics.Stopwatch.GetTimestamp();
+        long frame = System.Diagnostics.Stopwatch.Frequency / 60;
+        int step = 0;
+        void Run(string state)
+        {
+            for (int index = 0; index < 10; index++)
+            {
+                step++;
+                Aprillz.MewUI.Animation.AnimationManager.Instance.UpdateAt(start + (frame * step));
+                window.UpdateVisualStates();
+                window.PerformLayout();
+                window.RenderFrameToSurface(surface);
+                AssertMatchesReference(factory, window, surface, $"{group}, {state}, frame {index + 1}", WIDTH, HEIGHT + 120);
+            }
+        }
+
+        var focused = new HashSet<UIElement>(ReferenceEqualityComparer.Instance);
+        Run("at rest");
+        for (int stop = 0; stop < names.Length + 2; stop++)
+        {
+            window.FocusManager.MoveFocusNext();
+            if (window.FocusManager.FocusedElement is UIElement holder)
+            {
+                focused.Add(holder);
+            }
+
+            Run($"focus moved {stop + 1} times");
+
+            window.SendKeyDown(Key.Space);
+            Run($"Space down at focus stop {stop + 1}");
+            window.SendKeyUp(Key.Space);
+            Run($"Space up at focus stop {stop + 1}");
+
+            window.SendKeyPress(Key.Down);
+            Run($"Down at focus stop {stop + 1}");
+            window.SendKeyPress(Key.Right);
+            Run($"Right at focus stop {stop + 1}");
+            window.SendKeyPress(Key.Escape);
+            Run($"Escape at focus stop {stop + 1}");
+        }
+
+        window.FocusManager.MoveFocusPrevious();
+        Run("focus moved back");
+        Assert.IsTrue(focused.Count >= 2, $"{group}: focus reached {focused.Count} visuals, so the keys proved nothing");
+    }
+
     private static FrameworkElement Create(string name)
     {
         switch (name)
@@ -178,8 +269,11 @@ public sealed class RetainedAnimationSweepTests
         => new(new Command(id, id)) { Presentation = CommandPresentationMode.Text };
 
     private static void AssertMatchesReference(GdiGraphicsFactory factory, Window window, IRenderSurface actual, string label)
+        => AssertMatchesReference(factory, window, actual, label, WIDTH, HEIGHT);
+
+    private static void AssertMatchesReference(GdiGraphicsFactory factory, Window window, IRenderSurface actual, string label, int width, int height)
     {
-        using var reference = factory.CreateSurface(RenderSurfaceDescriptor.Offscreen(WIDTH, HEIGHT, 1.0, hasAlpha: false));
+        using var reference = factory.CreateSurface(RenderSurfaceDescriptor.Offscreen(width, height, 1.0, hasAlpha: false));
         window.RenderReferenceFrameToSurface(reference);
         ReadOnlySpan<byte> expected = ((ICpuPixelSurface)reference).GetReadOnlyPixelSpan();
         ReadOnlySpan<byte> shown = ((ICpuPixelSurface)actual).GetReadOnlyPixelSpan();
@@ -191,10 +285,10 @@ public sealed class RetainedAnimationSweepTests
             {
                 differing++;
                 int pixel = offset / 4;
-                minX = Math.Min(minX, pixel % WIDTH);
-                maxX = Math.Max(maxX, pixel % WIDTH);
-                minY = Math.Min(minY, pixel / WIDTH);
-                maxY = Math.Max(maxY, pixel / WIDTH);
+                minX = Math.Min(minX, pixel % width);
+                maxX = Math.Max(maxX, pixel % width);
+                minY = Math.Min(minY, pixel / width);
+                maxY = Math.Max(maxY, pixel / width);
             }
         }
 
