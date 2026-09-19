@@ -13,7 +13,7 @@ namespace Aprillz.MewUI.Rendering.Gdi;
 /// <summary>
 /// GDI+ graphics context (vector/clip quality), while keeping GDI text measurement/rendering.
 /// </summary>
-internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparentDamageContext, IOpaqueDamageContext
+internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparentDamageContext, IOpaqueDamageContext, IPartialPresentContext
 {
     private readonly nint _hwnd;
     private readonly bool _ownsDc;
@@ -140,6 +140,18 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
         GdiPlusInterop.EnsureInitialized();
     }
 
+    // Areas the caller said this frame changed; empty means the whole buffer is copied to the window.
+    private readonly List<Rect> _presentAreas = [];
+
+    void IPartialPresentContext.LimitPresentTo(IReadOnlyList<Rect> areas)
+    {
+        _presentAreas.Clear();
+        for (int index = 0; index < areas.Count; index++)
+        {
+            _presentAreas.Add(areas[index]);
+        }
+    }
+
     protected override void OnBeginFrame(IRenderTarget target)
     {
         if (_pixelSurface != null &&
@@ -189,6 +201,20 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
                     _backBuffer.MemDc, 0, 0, _pixelWidth, _pixelHeight,
                     Native.Structs.BLENDFUNCTION.SourceOver(255));
             }
+            else if (_presentAreas.Count > 0)
+            {
+                // The window still shows the previous frame, so only what this one changed is copied.
+                for (int index = 0; index < _presentAreas.Count; index++)
+                {
+                    var area = ToDeviceRect(_presentAreas[index]);
+                    int left = Math.Clamp(area.left, 0, _pixelWidth);
+                    int top = Math.Clamp(area.top, 0, _pixelHeight);
+                    int right = Math.Clamp(area.right, left, _pixelWidth);
+                    int bottom = Math.Clamp(area.bottom, top, _pixelHeight);
+                    Gdi32.BitBlt(_screenDc, left, top, right - left, bottom - top,
+                        _backBuffer.MemDc, left, top, 0x00CC0020); // SRCCOPY
+                }
+            }
             else
             {
                 Gdi32.BitBlt(_screenDc, 0, 0, _pixelWidth, _pixelHeight,
@@ -196,6 +222,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
             }
         }
 
+        _presentAreas.Clear();
         _states.Clear();
     }
 
