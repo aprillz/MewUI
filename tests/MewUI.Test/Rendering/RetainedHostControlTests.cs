@@ -116,16 +116,20 @@ public sealed class RetainedHostControlTests
             window.RenderReferenceFrameToSurface(reference);
             ReadOnlySpan<byte> expected = ((ICpuPixelSurface)reference).GetReadOnlyPixelSpan();
             ReadOnlySpan<byte> shown = ((ICpuPixelSurface)surface).GetReadOnlyPixelSpan();
+            int minX = int.MaxValue, minY = int.MaxValue, maxX = -1, maxY = -1;
             int differing = 0;
             for (int offset = 0; offset + 3 < expected.Length; offset += 4)
             {
                 if (expected[offset] != shown[offset] || expected[offset + 1] != shown[offset + 1] || expected[offset + 2] != shown[offset + 2])
                 {
                     differing++;
+                    int pixel = offset / 4;
+                    minX = Math.Min(minX, pixel % WIDTH); maxX = Math.Max(maxX, pixel % WIDTH);
+                    minY = Math.Min(minY, pixel / WIDTH); maxY = Math.Max(maxY, pixel / WIDTH);
                 }
             }
 
-            Assert.AreEqual(0, differing, $"{label}: {differing} pixels differ from a frame drawn straight from the visuals");
+            Assert.AreEqual(0, differing, $"{label}: {differing} pixels differ from a frame drawn straight from the visuals, inside ({minX},{minY})-({maxX},{maxY}); damage {string.Join(" ", window.LastRetainedDamageAreas)}");
         }
 
         CheckCalendar("first frames");
