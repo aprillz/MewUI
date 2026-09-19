@@ -32,7 +32,11 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, ITextBackendFactory, 
     bool IPersistentFrameGraphicsFactory.IsPersistentFrameRenderingVerified => true;
 
     // The window is drawn through a back buffer kept per window, which is copied to the screen whole.
-    bool IPersistentFrameGraphicsFactory.WindowTargetKeepsPresentedFrame => true;
+    bool IPersistentFrameGraphicsFactory.WindowTargetKeepsPresentedFrame => IsDoubleBuffered;
+
+    // The back buffer kept per window is the frame itself, so an opaque window is repainted in place
+    // instead of through a second surface of the same size.
+    bool IPersistentFrameGraphicsFactory.DrawsWindowFramesInPlace => IsDoubleBuffered;
 
     IDisposable IPersistentFrameGraphicsFactory.AcquirePersistentFrameRenderScope()
         => PersistentFrameRenderScope.Instance;
