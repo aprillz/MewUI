@@ -4,8 +4,8 @@ using Aprillz.MewUI.Controls;
 namespace MewUI.Test.Controls;
 
 /// <summary>
-/// An items control wraps each item in an <see cref="ItemContainer"/> only while a container hook is
-/// registered, and keeps that container free of the previous item's state.
+/// An items control wraps every realized item in an <see cref="ItemContainer"/>, which owns that
+/// item's visual state, and keeps the container free of the previous item's state when recycled.
 /// </summary>
 [TestClass]
 public sealed class ItemContainerTests
@@ -14,14 +14,14 @@ public sealed class ItemContainerTests
     private const double HEIGHT = 300;
 
     [TestMethod]
-    public void NoHook_LeavesTheTemplateRootAsTheContainer()
+    public void WithoutAHook_EveryRealizedItemStillHasAContainer()
     {
         var box = MakeListBox();
         Layout(box);
 
-        Assert.AreEqual(0, CountRealized<ItemContainer>(box),
-            "Applications that do not use the hooks must not pay for a wrapper element.");
-        Assert.IsGreaterThan(0, CountRealized<TextBlock>(box));
+        Assert.IsGreaterThan(0, CountRealized<ItemContainer>(box),
+            "The container owns the item's visual state, so it exists whether or not a hook is registered.");
+        Assert.AreEqual(0, CountRealized<TextBlock>(box), "the template root is inside the container");
     }
 
     [TestMethod]
@@ -50,9 +50,10 @@ public sealed class ItemContainerTests
     {
         var box = MakeListBox();
         Layout(box);
-        Assert.AreEqual(0, CountRealized<ItemContainer>(box));
+        Assert.IsGreaterThan(0, CountRealized<ItemContainer>(box));
 
-        box.PrepareContainer<string>((_, _, _, _) => { });
+        int prepared = 0;
+        box.PrepareContainer<string>((_, _, _, _) => prepared++);
 
         // Registering a hook drops the pooled containers, exactly as assigning a new ItemTemplate
         // does. Realization resumes on the next layout that actually re-arranges the range.
@@ -60,6 +61,7 @@ public sealed class ItemContainerTests
         Layout(box);
 
         Assert.IsGreaterThan(0, CountRealized<ItemContainer>(box));
+        Assert.IsGreaterThan(0, prepared, "the newly registered hook did not run against the containers");
         Assert.AreEqual(0, CountRealized<TextBlock>(box), "every realized container is now wrapped");
     }
 
