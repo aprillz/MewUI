@@ -140,12 +140,14 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
         GdiPlusInterop.EnsureInitialized();
     }
 
-    // Areas the caller said this frame changed; empty means the whole buffer is copied to the window.
+    // Areas the caller said this frame changed. Unless the caller said so, the whole buffer is copied.
     private readonly List<Rect> _presentAreas = [];
+    private bool _presentLimited;
 
     void IPartialPresentContext.LimitPresentTo(IReadOnlyList<Rect> areas)
     {
         _presentAreas.Clear();
+        _presentLimited = true;
         for (int index = 0; index < areas.Count; index++)
         {
             _presentAreas.Add(areas[index]);
@@ -201,7 +203,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
                     _backBuffer.MemDc, 0, 0, _pixelWidth, _pixelHeight,
                     Native.Structs.BLENDFUNCTION.SourceOver(255));
             }
-            else if (_presentAreas.Count > 0)
+            else if (_presentLimited)
             {
                 // The window still shows the previous frame, so only what this one changed is copied.
                 for (int index = 0; index < _presentAreas.Count; index++)
@@ -223,6 +225,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
         }
 
         _presentAreas.Clear();
+        _presentLimited = false;
         _states.Clear();
     }
 
@@ -454,24 +457,37 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
 
     private void ClearRectangleCore(Rect rect, Color color)
     {
-        if (_pixelSurface == null)
-        {
-            return;
-        }
-
-        // GDI batches calls against the DC that shares this DIB; a pending one would land after the
-        // memory write below.
-        Gdi32.GdiFlush();
         // The caller hands over whole pixels expressed in layout units, and the way back to pixels
         // lands a hair off them. Covering outward from there would erase a pixel the clip that follows
         // does not repaint, so an edge that close to a pixel is that pixel.
-        _pixelSurface.ClearRectangle(
-            (int)Math.Floor(ToDevicePx(rect.Left) + ERASE_EDGE_TOLERANCE_PX),
-            (int)Math.Floor(ToDevicePx(rect.Top) + ERASE_EDGE_TOLERANCE_PX),
-            (int)Math.Ceiling(ToDevicePx(rect.Right) - ERASE_EDGE_TOLERANCE_PX),
-            (int)Math.Ceiling(ToDevicePx(rect.Bottom) - ERASE_EDGE_TOLERANCE_PX),
-            color);
-        _pixelSurfaceDirtied = true;
+        int left = (int)Math.Floor(ToDevicePx(rect.Left) + ERASE_EDGE_TOLERANCE_PX);
+        int top = (int)Math.Floor(ToDevicePx(rect.Top) + ERASE_EDGE_TOLERANCE_PX);
+        int right = (int)Math.Ceiling(ToDevicePx(rect.Right) - ERASE_EDGE_TOLERANCE_PX);
+        int bottom = (int)Math.Ceiling(ToDevicePx(rect.Bottom) - ERASE_EDGE_TOLERANCE_PX);
+
+        if (_pixelSurface == null)
+        {
+            // A window is drawn through a buffer kept per window, which has no alpha to erase: the
+            // area is filled with the colour the window is cleared to.
+            var area = new RECT(left, top, right, bottom);
+            nint brush = Gdi32.CreateSolidBrush(color.ToCOLORREF());
+            try
+            {
+                Gdi32.FillRect(Hdc, ref area, brush);
+            }
+            finally
+            {
+                Gdi32.DeleteObject(brush);
+            }
+        }
+        else
+        {
+            // GDI batches calls against the DC that shares this DIB; a pending one would land after
+            // the memory write below.
+            Gdi32.GdiFlush();
+            _pixelSurface.ClearRectangle(left, top, right, bottom, color);
+            _pixelSurfaceDirtied = true;
+        }
     }
 
     protected override void DrawLineCore(Point start, Point end, Color color, double thickness = 1)
