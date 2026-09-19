@@ -137,8 +137,11 @@ public sealed class RetainedDamageExactnessTests
     }
 
     // MewVG blends an antialiased edge one level apart between a frame that repaints part of the surface
-    // and one that repaints all of it (4 pixels of 35,200 in this scene, all on stroke edges). The cause
-    // is not found yet, so the GL backend is held to that one level instead of being reported as exact.
+    // and one that repaints all of it: 4 pixels of 35,200 in this scene, every one of them an
+    // antialiased edge pixel on the first or last row of the repainted area, which is where the clip
+    // of the area ends. Each partial frame erases and draws those pixels afresh, so the difference
+    // stays at one level and does not build up. The clip is the vector backend's own, so the GL backend
+    // is held to that one level here instead of being reported as exact.
     private const int MEWVG_CHANNEL_TOLERANCE = 1;
 
     private static void RunOn(IGraphicsFactory factory, bool transparent, Action<Shape, Shape, Shape> change, int repeat)
