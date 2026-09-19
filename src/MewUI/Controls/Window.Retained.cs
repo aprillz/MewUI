@@ -397,7 +397,8 @@ public partial class Window
     /// </summary>
     private bool CanRepaintPartOfTheFrame(IGraphicsContext context, IRenderTarget target)
     {
-        if (target is not IPersistentFrameSurface persistent ||
+        var persistent = target as IPersistentFrameSurface;
+        if ((persistent == null && !DrawsInPlace(target)) ||
             GraphicsFactory is not IPersistentFrameGraphicsFactory { IsPersistentFrameRenderingVerified: true })
         {
             return false;
@@ -414,7 +415,11 @@ public partial class Window
         // The flag takes effect at the next BeginFrame, so only a target that already carried it into
         // this frame still holds the pixels a partial repaint draws onto.
         bool preservedIntoThisFrame = ReferenceEquals(_preservingTarget, target);
-        persistent.PreserveContentsOnBeginFrame = true;
+        if (persistent != null)
+        {
+            persistent.PreserveContentsOnBeginFrame = true;
+        }
+
         _preservingTarget = target;
         return preservedIntoThisFrame;
     }
@@ -478,6 +483,52 @@ public partial class Window
         // thread before the frame surface is drawn into.
         using (persistentFactory.AcquirePersistentFrameRenderScope())
         {
+    /// <summary>
+    /// Whether this window's frames are kept in the buffer its own target draws into. Transparent
+    /// windows blend onto a target they clear first, and the damage overlay draws on the target, so both
+    /// keep their frame in a surface of their own instead.
+    /// </summary>
+    private bool DrawsInPlace(IRenderTarget target)
+        => target is WindowRenderTarget &&
+           !AllowsTransparency &&
+           !DamageOverlayEnabled &&
+           !PresentWithoutFrameSurface &&
+           PlatformReportsLostFrames &&
+           GraphicsFactory is IPersistentFrameGraphicsFactory { IsPersistentFrameRenderingVerified: true, DrawsWindowFramesInPlace: true };
+
+    /// <summary>Tells a target drawn in place how much of its buffer this frame has to put on screen.</summary>
+    private void LimitInPlacePresent(IGraphicsContext context, IRenderTarget target, Rect? damage)
+    {
+        if (!DrawsInPlace(target) || context is not IPartialPresentContext partial)
+        {
+            return;
+        }
+
+        _presents++;
+        if (_presentedFrameLost || damage == null)
+        {
+            // The screen lost the frame, or the whole of it was painted: the default copies everything.
+            _presentedFrameLost = false;
+            _presentedArea = ClientSize.Width * ClientSize.Height;
+        }
+        else if (_frameRepaintedNothing)
+        {
+            // What the last presented frame copied stays on record; this frame copies nothing.
+            _presents--;
+            _skippedPresents++;
+            partial.LimitPresentTo([]);
+        }
+        else
+        {
+            partial.LimitPresentTo(_frameDamageAreas);
+            _presentedArea = 0;
+            for (int index = 0; index < _frameDamageAreas.Count; index++)
+            {
+                _presentedArea += _frameDamageAreas[index].Width * _frameDamageAreas[index].Height;
+            }
+        }
+    }
+
             RenderFrameCore(frameSurface, clientSize);
         }
 
@@ -521,6 +572,18 @@ public partial class Window
                     // show through every translucent pixel and build up frame after frame.
                     context.Clear(Color.Transparent);
                 }
+
+        if (DrawsInPlace(target))
+        {
+            // The target keeps its own frame, so a second surface of the same size would only be a copy.
+            // Releasing also forgets which target was kept, so it is done once, not every frame.
+            if (_retainedFrameSurface != null)
+            {
+                ReleaseRetainedFrameSurface();
+            }
+
+            return false;
+        }
 
                 var whole = new Rect(0, 0, clientSize.Width, clientSize.Height);
                 if (copiesChangedAreasOnly)

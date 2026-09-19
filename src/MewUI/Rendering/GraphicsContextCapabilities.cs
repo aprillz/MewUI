@@ -34,7 +34,8 @@ internal interface IOpaqueDamageContext
 /// <summary>
 /// A context whose frame ends by copying a buffer of its own to the window. When the window still
 /// shows the previous frame, the caller can say which areas this frame changed so that only those
-/// are copied. The areas are in the target's own coordinates and hold for the current frame only.
+/// are copied; no areas means nothing is. The areas are in the target's own coordinates and hold for
+/// the current frame only.
 /// </summary>
 internal interface IPartialPresentContext
 {

@@ -77,6 +77,12 @@ internal interface IPersistentFrameGraphicsFactory
     /// </summary>
     bool WindowTargetKeepsPresentedFrame => false;
 
+    /// <summary>
+    /// True when the buffer a window target draws into is kept from frame to frame and can be erased in
+    /// part, so an opaque window needs no separate surface to keep its frame in.
+    /// </summary>
+    bool DrawsWindowFramesInPlace => false;
+
     /// <summary>Makes the backend ready to render into a persistent surface; disposing restores the caller's state.</summary>
     IDisposable AcquirePersistentFrameRenderScope();
 }
