@@ -56,6 +56,7 @@ internal sealed class SceneCapture
         ArgumentNullException.ThrowIfNull(registry);
         ArgumentNullException.ThrowIfNull(layerRoots);
 
+        PromoteChangesOfVisualsWithoutNodes(scene, registry);
         registry.BeginPass();
         try
         {
@@ -65,6 +66,43 @@ internal sealed class SceneCapture
         {
             registry.EndPass();
         }
+    }
+
+    private readonly List<UIElement> _withoutNodes = [];
+
+    /// <summary>
+    /// A control may draw visuals of its own inside its own drawing instead of declaring them (the
+    /// headers of a tab control, the segments of a segmented control). Such a visual has no node, so a
+    /// change of it is a change of the recording that holds its pixels: the nearest visual above it that
+    /// has a node. A visual that is merely new gets its node in this pass; its parent then records
+    /// again for nothing, finds the same drawing and repaints nothing.
+    /// </summary>
+    private void PromoteChangesOfVisualsWithoutNodes(RenderScene scene, RenderDirtyRegistry registry)
+    {
+        _withoutNodes.Clear();
+        foreach (var queued in registry.Queued)
+        {
+            if (scene.FindNode(queued.Key) == null)
+            {
+                _withoutNodes.Add(queued.Key);
+            }
+        }
+
+        for (int index = 0; index < _withoutNodes.Count; index++)
+        {
+            Element? ancestor = _withoutNodes[index].Parent;
+            while (ancestor != null && (ancestor is not UIElement visual || scene.FindNode(visual) == null))
+            {
+                ancestor = ancestor.Parent;
+            }
+
+            if (ancestor is UIElement owner)
+            {
+                registry.Add(owner, RenderDirtyKind.Content);
+            }
+        }
+
+        _withoutNodes.Clear();
     }
 
     private void Capture(
