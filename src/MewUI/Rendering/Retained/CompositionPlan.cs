@@ -70,6 +70,12 @@ internal sealed class CompositionPlanBuilder
         _slotCount = Math.Max(_slotCount, slotIndex + 1);
     }
 
+    /// <summary>
+    /// Says that what the visual draws right now cannot be put as a plan, so this pass records it
+    /// together with its subtree as one drawing. The visual declares again once it can.
+    /// </summary>
+    internal void DrawnAsOneForNow() => _unsupported = true;
+
     internal void Child(Element? child)
     {
         if (child == null)

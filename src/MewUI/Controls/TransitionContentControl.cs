@@ -203,6 +203,21 @@ public class TransitionContentControl : Control, IVisualTreeHost
 
     #region Rendering
 
+    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
+    {
+        // At rest this shows its content and nothing else. While a transition runs, two contents are
+        // drawn under transforms and alphas that change every frame, which is drawn as one.
+        if (_progress >= 1.0 || Transition.Kind == ContentTransitionKind.None)
+        {
+            builder.Content(0);
+            builder.Child(_currentContent);
+        }
+        else
+        {
+            builder.DrawnAsOneForNow();
+        }
+    }
+
     protected override void RenderSubtree(IGraphicsContext context)
     {
         var transition = Transition;

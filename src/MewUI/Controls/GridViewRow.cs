@@ -364,6 +364,21 @@ public sealed class GridViewRow : Panel, ICommandArgumentSource
         }
     }
 
+    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
+    {
+        builder.Content(0);
+        for (int index = 0; index < _cells.Count; index++)
+        {
+            // The same cells RenderSubtree draws: a collapsed column keeps its cell but shows none of it.
+            if (_owner._core.Columns[index].ActualWidth <= 0.01)
+            {
+                continue;
+            }
+
+            builder.Child(_cells[index].View);
+        }
+    }
+
     private sealed class Cell
     {
         private readonly GridViewRow _row;
