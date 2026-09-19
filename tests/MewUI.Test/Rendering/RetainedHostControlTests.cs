@@ -88,6 +88,67 @@ public sealed class RetainedHostControlTests
         Check(factory, window, surface, "after the content was replaced");
     }
 
+    [TestMethod]
+    public void Calendar_MatchesTheReferenceThroughItsStates()
+    {
+        using var factory = Start();
+        var calendar = new Calendar
+        {
+            DisplayDate = new DateTime(2026, 3, 15),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Top,
+        };
+
+        var window = HeadlessWindow.Create(WIDTH, HEIGHT + 80);
+        window.Content = calendar;
+        window.PerformLayout();
+        using var surface = factory.CreateSurface(RenderSurfaceDescriptor.Offscreen(WIDTH, HEIGHT + 80, 1.0, hasAlpha: false));
+
+        void CheckCalendar(string label)
+        {
+            for (int index = 0; index < 2; index++)
+            {
+                window.PerformLayout();
+                window.RenderFrameToSurface(surface);
+            }
+
+            using var reference = factory.CreateSurface(RenderSurfaceDescriptor.Offscreen(WIDTH, HEIGHT + 80, 1.0, hasAlpha: false));
+            window.RenderReferenceFrameToSurface(reference);
+            ReadOnlySpan<byte> expected = ((ICpuPixelSurface)reference).GetReadOnlyPixelSpan();
+            ReadOnlySpan<byte> shown = ((ICpuPixelSurface)surface).GetReadOnlyPixelSpan();
+            int differing = 0;
+            for (int offset = 0; offset + 3 < expected.Length; offset += 4)
+            {
+                if (expected[offset] != shown[offset] || expected[offset + 1] != shown[offset + 1] || expected[offset + 2] != shown[offset + 2])
+                {
+                    differing++;
+                }
+            }
+
+            Assert.AreEqual(0, differing, $"{label}: {differing} pixels differ from a frame drawn straight from the visuals");
+        }
+
+        CheckCalendar("first frames");
+
+        window.SendMouseMove(new Point(calendar.Bounds.X + 60, calendar.Bounds.Y + 90));
+        CheckCalendar("pointer over a day");
+
+        calendar.SelectedDate = new DateTime(2026, 3, 20);
+        CheckCalendar("after a day was selected");
+
+        calendar.DisplayDate = new DateTime(2026, 4, 1);
+        CheckCalendar("after the month changed");
+
+        calendar.DisplayMode = CalendarMode.Year;
+        CheckCalendar("in the year view");
+
+        calendar.DisplayMode = CalendarMode.Decade;
+        CheckCalendar("in the decade view");
+
+        window.SendMouseMove(new Point(WIDTH - 4, HEIGHT + 70));
+        CheckCalendar("pointer moved away");
+    }
+
     private static ToolBarItem Item(string id)
         => new(new Command(id, id)) { Presentation = CommandPresentationMode.Text };
 

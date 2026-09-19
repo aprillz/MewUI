@@ -269,6 +269,49 @@ public sealed partial class Calendar : Control, IVisualTreeHost
         DrawBackgroundAndBorder(context, Bounds, Background, BorderBrush, BorderThickness, Math.Max(0, CornerRadius));
     }
 
+    private const int GRID_SLOT = 1;
+
+    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
+    {
+        // The header shows the displayed month, which is settled here as RenderSubtree settles it.
+        UpdateHeaderText();
+
+        builder.Content(0);
+        builder.Child(_prevButton);
+        builder.Child(_headerButton);
+        builder.Child(_nextButton);
+        builder.Content(GRID_SLOT);
+    }
+
+    internal override void WriteOwnContent(IGraphicsContext context, int slotIndex)
+    {
+        if (slotIndex == GRID_SLOT)
+        {
+            ComputeCellRects(GetInnerBounds());
+            RenderGrid(context);
+        }
+        else
+        {
+            base.WriteOwnContent(context, slotIndex);
+        }
+    }
+
+    private void RenderGrid(IGraphicsContext context)
+    {
+        switch (DisplayMode)
+        {
+            case CalendarMode.Month:
+                RenderMonthView(context);
+                break;
+            case CalendarMode.Year:
+                RenderYearView(context);
+                break;
+            case CalendarMode.Decade:
+                RenderDecadeView(context);
+                break;
+        }
+    }
+
     protected override void RenderSubtree(IGraphicsContext context)
     {
         // Ensure cell rects match current display mode (mode may change between Arrange and Render).
