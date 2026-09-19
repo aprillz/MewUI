@@ -8,7 +8,7 @@ namespace Aprillz.MewUI.Rendering.Gdi;
 /// GDI pixel render surface.
 /// Manages DIB section and memory DC for offscreen rendering.
 /// </summary>
-internal sealed class GdiPixelRenderSurface : IPixelBufferSource, ICpuPixelSurface, IDeferredCpuReadableSurface, IDisposable
+internal sealed class GdiPixelRenderSurface : IPixelBufferSource, ICpuPixelSurface, IDeferredCpuReadableSurface, IRetainableSurface, IPersistentFrameSurface, IDisposable
 {
     private readonly nint _dibSection;
     private readonly nint _oldBitmap;
@@ -68,6 +68,8 @@ internal sealed class GdiPixelRenderSurface : IPixelBufferSource, ICpuPixelSurfa
     public bool IsPremultiplied => true;
 
     public bool HasAlpha { get; }
+
+    public bool PreserveContentsOnBeginFrame { get; set; }
 
     RenderPixelFormat IRenderSurface.Format => RenderSurfaceDefaults.GetBgraFormat(IsPremultiplied);
 
@@ -168,6 +170,42 @@ internal sealed class GdiPixelRenderSurface : IPixelBufferSource, ICpuPixelSurfa
         IncrementVersion();
     }
 
+    /// <summary>Overwrites the pixel rectangle, clipped to the surface, with the premultiplied colour.</summary>
+    public void ClearRectangle(int left, int top, int right, int bottom, Color color)
+    {
+        if (_disposed || _dibBits == 0)
+        {
+            return;
+        }
+
+        left = Math.Max(0, left);
+        top = Math.Max(0, top);
+        right = Math.Min(PixelWidth, right);
+        bottom = Math.Min(PixelHeight, bottom);
+        if (left >= right || top >= bottom)
+        {
+            return;
+        }
+
+        byte a = color.A;
+        byte r = (byte)((color.R * a + 127) / 255);
+        byte g = (byte)((color.G * a + 127) / 255);
+        byte b = (byte)((color.B * a + 127) / 255);
+        uint packed = (uint)(b | (g << 8) | (r << 16) | (a << 24));
+
+        int rectWidth = right - left;
+        unsafe
+        {
+            for (int row = top; row < bottom; row++)
+            {
+                var span = new Span<uint>((void*)(_dibBits + (nint)((row * PixelWidth + left) * 4)), rectWidth);
+                span.Fill(packed);
+            }
+        }
+
+        IncrementVersion();
+    }
+
     public PixelBufferLock Lock()
     {
         Monitor.Enter(_gate);
@@ -209,7 +247,31 @@ internal sealed class GdiPixelRenderSurface : IPixelBufferSource, ICpuPixelSurfa
         Interlocked.Increment(ref _version);
     }
 
+    // Image views alias this surface's DIB, and a recorded frame can outlive the owner that made
+    // them, so the DIB is freed only once the last view is gone.
+    private SurfaceViewTracker _surfaceViews;
+
+    bool IRetainableSurface.HasSurfaceViews => _surfaceViews.HasViews;
+
+    void IRetainableSurface.AddSurfaceView() => _surfaceViews.AddView();
+
+    void IRetainableSurface.ReleaseSurfaceView()
+    {
+        if (_surfaceViews.ReleaseView())
+        {
+            ReleaseResources();
+        }
+    }
+
     public void Dispose()
+    {
+        if (_surfaceViews.RequestRelease())
+        {
+            ReleaseResources();
+        }
+    }
+
+    private void ReleaseResources()
     {
         if (_disposed)
         {

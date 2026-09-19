@@ -11,7 +11,7 @@ using Aprillz.MewUI.Text;
 
 namespace Aprillz.MewUI.Rendering.MewVG;
 
-public sealed partial class MewVGWin32GraphicsFactory
+public sealed partial class MewVGWin32GraphicsFactory : IPersistentFrameGraphicsFactory
 {
     public const string BackendIdentifier = "MewVG.Win32";
 
@@ -441,6 +441,27 @@ public sealed partial class MewVGWin32GraphicsFactory
             throw;
         }
         return new Win32WorkerContextScope(_workerActivationLock);
+    }
+
+    bool IPersistentFrameGraphicsFactory.IsPersistentFrameRenderingVerified => true;
+
+    IDisposable IPersistentFrameGraphicsFactory.AcquirePersistentFrameRenderScope()
+    {
+        nint currentContext = OpenGL32.wglGetCurrentContext();
+        if (currentContext == SharedWorkerContext)
+        {
+            return PersistentFrameRenderScope.Instance;
+        }
+
+        // The worker scope declines when a context is already current, so the window context is
+        // released first to let the worker context take over this thread.
+        if (currentContext != 0 && !OpenGL32.wglMakeCurrent(0, 0))
+        {
+            throw new InvalidOperationException(
+                $"wglMakeCurrent (release before persistent frame render) failed: {Marshal.GetLastWin32Error()}");
+        }
+
+        return AcquireBackgroundRenderScopeCore();
     }
 
     private sealed class Win32WorkerContextScope : IDisposable

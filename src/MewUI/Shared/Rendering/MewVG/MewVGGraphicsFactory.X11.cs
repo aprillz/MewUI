@@ -12,7 +12,7 @@ using NativeX11 = Aprillz.MewUI.Native.X11;
 
 namespace Aprillz.MewUI.Rendering.MewVG;
 
-public sealed partial class MewVGX11GraphicsFactory
+public sealed partial class MewVGX11GraphicsFactory : IPersistentFrameGraphicsFactory
 {
     public const string BackendIdentifier = "MewVG.X11";
 
@@ -360,6 +360,16 @@ public sealed partial class MewVGX11GraphicsFactory
             return MewVGNoOpRenderScope.Instance;
         }
         return new X11WorkerContextScope(_workerActivationLock, this);
+    }
+
+    bool IPersistentFrameGraphicsFactory.IsPersistentFrameRenderingVerified => true;
+
+    IDisposable IPersistentFrameGraphicsFactory.AcquirePersistentFrameRenderScope()
+    {
+        // The window's own context draws the frame surface: it is already current and its FBO is
+        // what the following blit samples. Only the first frame of a window, which runs before any
+        // MakeCurrent, has no context, and there the shared worker context takes the thread.
+        return AcquireBackgroundRenderScopeCore();
     }
 
     private bool MakeWorkerCurrent()

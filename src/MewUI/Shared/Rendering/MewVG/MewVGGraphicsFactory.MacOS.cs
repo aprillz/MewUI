@@ -5,7 +5,7 @@ using Aprillz.MewUI.Text;
 
 namespace Aprillz.MewUI.Rendering.MewVG;
 
-public sealed partial class MewVGMacOSGraphicsFactory
+public sealed partial class MewVGMacOSGraphicsFactory : IPersistentFrameGraphicsFactory
 {
     public const string BackendIdentifier = "MewVG.MacOS";
 
@@ -141,4 +141,9 @@ public sealed partial class MewVGMacOSGraphicsFactory
     // Metal: MTLDevice / MTLCommandQueue are thread-safe. Worker threads can
     // submit command buffers without per-thread setup, so this is a no-op.
     private partial IDisposable AcquireBackgroundRenderScopeCore() => MewVGNoOpRenderScope.Instance;
+
+    bool IPersistentFrameGraphicsFactory.IsPersistentFrameRenderingVerified => true;
+
+    IDisposable IPersistentFrameGraphicsFactory.AcquirePersistentFrameRenderScope()
+        => PersistentFrameRenderScope.Instance;
 }

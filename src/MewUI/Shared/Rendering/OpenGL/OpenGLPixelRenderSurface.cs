@@ -7,7 +7,7 @@ namespace Aprillz.MewUI.Rendering.OpenGL;
 /// OpenGL pixel render surface using FBO (Framebuffer Object).
 /// Provides offscreen rendering with CPU-side pixel buffer access.
 /// </summary>
-internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSurface, IDeferredCpuReadableSurface, IDisposable, IGLTextureSource, IExternalWritableGpuSurface, IGpuResourceAffinityProvider
+internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSurface, IDeferredCpuReadableSurface, IRetainableSurface, IDisposable, IGLTextureSource, IExternalWritableGpuSurface, IGpuResourceAffinityProvider, IPersistentFrameSurface
 {
     // Lazily allocated - only when a CPU consumer (Lock / CopyPixels / GetPixelSpan)
     // actually requests pixel bytes. The pure GPU-only path (MewVGImage zero-copy via
@@ -93,6 +93,8 @@ internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSu
     public int StrideBytes => PixelWidth * 4;
 
     public int Version => Volatile.Read(ref _version);
+
+    public bool PreserveContentsOnBeginFrame { get; set; }
 
     /// <summary>Content width of the last render pass, or the full width when never set.</summary>
     internal int ContentWidthPx => _contentWidthPx > 0 ? Math.Min(_contentWidthPx, PixelWidth) : PixelWidth;
@@ -442,7 +444,31 @@ internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSu
         IncrementVersion();
     }
 
+    // Image views alias this surface's texture, and a recorded frame can outlive the owner that
+    // made them, so the GL resources are freed only once the last view is gone.
+    private SurfaceViewTracker _surfaceViews;
+
+    bool IRetainableSurface.HasSurfaceViews => _surfaceViews.HasViews;
+
+    void IRetainableSurface.AddSurfaceView() => _surfaceViews.AddView();
+
+    void IRetainableSurface.ReleaseSurfaceView()
+    {
+        if (_surfaceViews.ReleaseView())
+        {
+            ReleaseResources();
+        }
+    }
+
     public void Dispose()
+    {
+        if (_surfaceViews.RequestRelease())
+        {
+            ReleaseResources();
+        }
+    }
+
+    private void ReleaseResources()
     {
         if (_disposed)
         {

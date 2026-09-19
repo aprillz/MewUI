@@ -13,7 +13,7 @@ namespace Aprillz.MewUI.Rendering.Gdi;
 /// <summary>
 /// GDI+ graphics context (vector/clip quality), while keeping GDI text measurement/rendering.
 /// </summary>
-internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
+internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparentDamageContext, IOpaqueDamageContext
 {
     private readonly nint _hwnd;
     private readonly bool _ownsDc;
@@ -142,7 +142,9 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
 
     protected override void OnBeginFrame(IRenderTarget target)
     {
-        if (_pixelSurface != null && _pixelSurface.DibBits != 0)
+        if (_pixelSurface != null &&
+            _pixelSurface.DibBits != 0 &&
+            !_pixelSurface.PreserveContentsOnBeginFrame)
         {
             _pixelSurface.GetPixelSpan().Clear();
             _pixelSurfaceDirtied = true;
@@ -413,6 +415,36 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         {
             _primitiveRenderer.Clear(_pixelWidth, _pixelHeight, color);
         }
+    }
+
+    void ITransparentDamageContext.ClearRectangleToTransparent(Rect rect)
+        => ClearRectangleCore(rect, Color.FromArgb(0, 0, 0, 0));
+
+    void IOpaqueDamageContext.ClearRectangle(Rect rect, Color color)
+        => ClearRectangleCore(rect, color);
+
+    private const double ERASE_EDGE_TOLERANCE_PX = 0.001;
+
+    private void ClearRectangleCore(Rect rect, Color color)
+    {
+        if (_pixelSurface == null)
+        {
+            return;
+        }
+
+        // GDI batches calls against the DC that shares this DIB; a pending one would land after the
+        // memory write below.
+        Gdi32.GdiFlush();
+        // The caller hands over whole pixels expressed in layout units, and the way back to pixels
+        // lands a hair off them. Covering outward from there would erase a pixel the clip that follows
+        // does not repaint, so an edge that close to a pixel is that pixel.
+        _pixelSurface.ClearRectangle(
+            (int)Math.Floor(ToDevicePx(rect.Left) + ERASE_EDGE_TOLERANCE_PX),
+            (int)Math.Floor(ToDevicePx(rect.Top) + ERASE_EDGE_TOLERANCE_PX),
+            (int)Math.Ceiling(ToDevicePx(rect.Right) - ERASE_EDGE_TOLERANCE_PX),
+            (int)Math.Ceiling(ToDevicePx(rect.Bottom) - ERASE_EDGE_TOLERANCE_PX),
+            color);
+        _pixelSurfaceDirtied = true;
     }
 
     protected override void DrawLineCore(Point start, Point end, Color color, double thickness = 1)

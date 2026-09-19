@@ -7,11 +7,11 @@ using Aprillz.MewVG.Tess;
 namespace Aprillz.MewUI.Rendering.MewVG;
 
 #if MEWUI_MEWVG_MACOS
-internal sealed partial class MewVGMacOSGraphicsContext : GraphicsContextBase
+internal sealed partial class MewVGMacOSGraphicsContext : GraphicsContextBase, ITransparentDamageContext, IOpaqueDamageContext
 #elif MEWUI_MEWVG_X11
-internal sealed partial class MewVGX11GraphicsContext : GraphicsContextBase
+internal sealed partial class MewVGX11GraphicsContext : GraphicsContextBase, ITransparentDamageContext, IOpaqueDamageContext
 #else
-internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
+internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, ITransparentDamageContext, IOpaqueDamageContext
 #endif
 {
 #if MEWUI_MEWVG_MACOS
@@ -367,6 +367,28 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
         _vg.Rect(0, 0, (float)_viewportWidthDip, (float)_viewportHeightDip);
 
         _vg.FillColor(ToNvgColor(color));
+        _vg.Fill();
+        _vg.Restore();
+    }
+
+    void ITransparentDamageContext.ClearRectangleToTransparent(Rect rect)
+        => ClearRectangleCore(rect, new NVGcolor(0, 0, 0, 0));
+
+    void IOpaqueDamageContext.ClearRectangle(Rect rect, Color color)
+        => ClearRectangleCore(rect, ToNvgColor(color));
+
+    private void ClearRectangleCore(Rect rect, NVGcolor color)
+    {
+        _vg.Save();
+        _vg.ResetTransform();
+        _vg.ResetScissor();
+        _vg.ShapeAntiAlias(false);
+        // Copy replaces the destination channels instead of blending over them, which is what makes
+        // this an erase; source-over would leave the old alpha behind.
+        _vg.GlobalCompositeOperation(NVGcompositeOperation.Copy);
+        _vg.BeginPath();
+        _vg.Rect((float)rect.X, (float)rect.Y, (float)rect.Width, (float)rect.Height);
+        _vg.FillColor(color);
         _vg.Fill();
         _vg.Restore();
     }

@@ -10,7 +10,7 @@ using Aprillz.MewUI.Text;
 namespace Aprillz.MewUI.Rendering.Direct2D;
 
 public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, ITextBackendFactory, IRenderDevice, IGpuInteropInvalidationSource, IWindowResourceReleaser, IWin32TransparencyCapabilities, IWindowSurfacePresenter,
-    IBackendRenderCacheMaintenance, IDisposable
+    IBackendRenderCacheMaintenance, IPersistentFrameGraphicsFactory, IDisposable
 {
     public const string BackendIdentifier = "Direct2D";
 
@@ -19,6 +19,11 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
     public ITextEngine TextEngine => TextServices.GetEngine(this);
 
     public event EventHandler<GpuInteropInvalidatedEventArgs>? GpuInteropInvalidated;
+
+    bool IPersistentFrameGraphicsFactory.IsPersistentFrameRenderingVerified => true;
+
+    IDisposable IPersistentFrameGraphicsFactory.AcquirePersistentFrameRenderScope()
+        => AcquireBackgroundRenderScope();
 
     /// <summary>
     /// When DirectComposition is present (Win8+), D2D presents transparent windows via a DXGI
@@ -703,14 +708,26 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
         // on the SharedFilterDC) shows stale cached pixels when drawn from a window DC.
         // surface.DpiScale is forwarded so the bridge bitmap reports the correct logical
         // size when sampled from an RT with a different dpi.
+        IImage? view = null;
         if (surface is IExternalRasterSource externalSource)
-            return ImageResource.WrapLogical(
-                CreateImageView(externalSource, surface.DpiScale),
-                logicalWidth,
-                logicalHeight);
+        {
+            view = CreateImageView(externalSource, surface.DpiScale);
+        }
+        else if (surface is IPixelBufferSource pixelSource)
+        {
+            view = CreateImageView(pixelSource);
+        }
 
-        if (surface is IPixelBufferSource pixelSource)
-            return ImageResource.WrapLogical(CreateImageView(pixelSource), logicalWidth, logicalHeight);
+        if (view != null)
+        {
+            // A recorded frame outlives the owner that made this view, so the surface release waits
+            // for the last view instead of freeing the pixels the tree still draws.
+            if (surface is IRetainableSurface retainableSurface)
+            {
+                view = ImageResource.WrapSurfaceView(view, retainableSurface);
+            }
+            return ImageResource.WrapLogical(view, logicalWidth, logicalHeight);
+        }
 
         throw new NotSupportedException(
             $"{GetType().Name} can only create image views for pixel-backed or externally-rastered surfaces.");

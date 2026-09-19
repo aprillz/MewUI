@@ -122,7 +122,11 @@ internal sealed partial class MewVGMacOSGraphicsContext
         // The path clip lives in color[2] the same way (see MNVGcontext.ClipPixelFormat).
         nint clipTexture = _vg.EnsureClipMaskTexture(_viewportWidthPx, _viewportHeightPx);
 
-        nint passDesc = CreateRenderPass(frame.ColorTexture, coverageTexture, clipTexture);
+        nint passDesc = CreateRenderPass(
+            frame.ColorTexture,
+            coverageTexture,
+            clipTexture,
+            frame.PreserveColorContents);
         if (passDesc == 0)
         {
             return;
@@ -205,7 +209,8 @@ internal sealed partial class MewVGMacOSGraphicsContext
         nint Device,
         nint ColorTexture,
         nint CommandQueue,
-        nint Drawable);
+        nint Drawable,
+        bool PreserveColorContents);
 
     private interface IMetalFrameSession
     {
@@ -264,7 +269,8 @@ internal sealed partial class MewVGMacOSGraphicsContext
                 _resources.Device,
                 colorTexture,
                 _resources.CommandQueue,
-                drawable);
+                drawable,
+                PreserveColorContents: false);
             return true;
         }
 
@@ -316,7 +322,8 @@ internal sealed partial class MewVGMacOSGraphicsContext
                 _offscreen.Device,
                 _target.ColorTexture,
                 _offscreen.CommandQueue,
-                0);
+                0,
+                _target.PreserveContentsOnBeginFrame);
             return frame.ColorTexture != 0;
         }
 
@@ -348,7 +355,11 @@ internal sealed partial class MewVGMacOSGraphicsContext
             => _offscreenProvider.ReturnSurface(_offscreen);
     }
 
-    private static nint CreateRenderPass(nint drawableTexture, nint coverageTexture, nint clipTexture)
+    private static nint CreateRenderPass(
+        nint drawableTexture,
+        nint coverageTexture,
+        nint clipTexture,
+        bool preserveColorContents)
     {
         if (ClsMTLRenderPassDescriptor == 0 || SelRenderPassDescriptor == 0)
         {
@@ -367,7 +378,10 @@ internal sealed partial class MewVGMacOSGraphicsContext
         if (color0 != 0)
         {
             ObjCRuntime.SendMessageNoReturn(color0, SelSetTexture, drawableTexture);
-            ObjCRuntime.SendMessageNoReturn(color0, SelSetLoadAction, (UInt64)MTLLoadAction.Clear);
+            ObjCRuntime.SendMessageNoReturn(
+                color0,
+                SelSetLoadAction,
+                (UInt64)(preserveColorContents ? MTLLoadAction.Load : MTLLoadAction.Clear));
             ObjCRuntime.SendMessageNoReturn(color0, SelSetStoreAction, (UInt64)MTLStoreAction.Store);
 
             ObjCRuntime.SendMessageNoReturn(color0, SelSetClearColor, new MTLClearColor(0, 0, 0, 0));

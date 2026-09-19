@@ -12,7 +12,7 @@ namespace Aprillz.MewUI.Rendering.MewVG;
 /// CPU-readable pixel surface (used by filter /
 /// pattern uploads, WriteableBitmap-backed controls, etc.).
 /// </summary>
-internal sealed unsafe partial class MewVGMetalPixelRenderSurface : IPixelBufferSource, ICpuPixelSurface, IDeferredCpuReadableSurface, IDisposable, IMetalTextureSource, IExternalWritableGpuSurface, IGpuResourceAffinityProvider
+internal sealed unsafe partial class MewVGMetalPixelRenderSurface : IPixelBufferSource, ICpuPixelSurface, IDeferredCpuReadableSurface, IRetainableSurface, IDisposable, IMetalTextureSource, IExternalWritableGpuSurface, IGpuResourceAffinityProvider, IPersistentFrameSurface
 {
     // -[MTLTexture getBytes:bytesPerRow:fromRegion:mipmapLevel:]
     // MTLRegion is 48 bytes (3 NSInteger origin + 3 NSInteger size). On both
@@ -147,6 +147,8 @@ internal sealed unsafe partial class MewVGMetalPixelRenderSurface : IPixelBuffer
     public int StrideBytes => PixelWidth * 4;
 
     public int Version => Volatile.Read(ref _version);
+
+    public bool PreserveContentsOnBeginFrame { get; set; }
 
     /// <summary>NanoVG (Metal backend) renders with premultiplied blending.</summary>
     public bool IsPremultiplied => true;
@@ -429,7 +431,31 @@ internal sealed unsafe partial class MewVGMetalPixelRenderSurface : IPixelBuffer
         { }
     }
 
+    // Image views alias this surface's texture, and a recorded frame can outlive the owner that
+    // made them, so the texture is released only once the last view is gone.
+    private SurfaceViewTracker _surfaceViews;
+
+    bool IRetainableSurface.HasSurfaceViews => _surfaceViews.HasViews;
+
+    void IRetainableSurface.AddSurfaceView() => _surfaceViews.AddView();
+
+    void IRetainableSurface.ReleaseSurfaceView()
+    {
+        if (_surfaceViews.ReleaseView())
+        {
+            ReleaseResources();
+        }
+    }
+
     public void Dispose()
+    {
+        if (_surfaceViews.RequestRelease())
+        {
+            ReleaseResources();
+        }
+    }
+
+    private void ReleaseResources()
     {
         if (_disposed) return;
         _disposed = true;

@@ -127,8 +127,11 @@ internal sealed partial class MewVGWin32GraphicsContext
         // A previous flush can leave color writes masked, which would make the clear below skip
         // alpha and leave opaque black where the surface should stay transparent.
         GL.ColorMask(true, true, true, true);
-        GL.ClearColor(0f, 0f, 0f, 0f);
-        GL.Clear(GL.GL_COLOR_BUFFER_BIT);
+        if (!pixelSurface.PreserveContentsOnBeginFrame)
+        {
+            GL.ClearColor(0f, 0f, 0f, 0f);
+            GL.Clear(GL.GL_COLOR_BUFFER_BIT);
+        }
     }
 
     partial void DestroyPlatform()
