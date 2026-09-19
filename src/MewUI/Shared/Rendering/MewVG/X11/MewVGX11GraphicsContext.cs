@@ -644,8 +644,10 @@ internal sealed partial class MewVGX11GraphicsContext
         // fresh texture), producing opaque-black filter results in transparent regions.
         // See Win32 PreparePixelSurface.
         GL.ColorMask(true, true, true, true);
-        GL.ClearColor(0f, 0f, 0f, 0f);
-
-        GL.Clear(GL.GL_COLOR_BUFFER_BIT);
+        if (!pixelSurface.PreserveContentsOnBeginFrame)
+        {
+            GL.ClearColor(0f, 0f, 0f, 0f);
+            GL.Clear(GL.GL_COLOR_BUFFER_BIT);
+        }
     }
 }

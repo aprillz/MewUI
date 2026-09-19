@@ -18,8 +18,8 @@ namespace Aprillz.MewUI.Rendering.Direct2D;
 /// undefined in D2D. Falls back to the DIB-backed <see cref="Direct2DPixelRenderSurface"/>
 /// when GPU init fails.
 /// </remarks>
-internal sealed unsafe class Direct2DGpuPixelRenderSurface : IPixelBufferSource, ICpuPixelSurface, IDeferredCpuReadableSurface, IDisposable, ID2DTextureSource, IExternalRasterSource
-    , IReusableScratchSurface, IExternalWritableGpuSurface, IGpuResourceAffinityProvider
+internal sealed unsafe class Direct2DGpuPixelRenderSurface : IPixelBufferSource, ICpuPixelSurface, IDeferredCpuReadableSurface, IRetainableSurface, IDisposable, ID2DTextureSource, IExternalRasterSource
+    , IReusableScratchSurface, IExternalWritableGpuSurface, IGpuResourceAffinityProvider, IPersistentFrameSurface
 {
     private static readonly Guid IID_ID3D11Texture2D = new("6f15aaf2-d208-4e89-9ab4-489535d34f9c");
 
@@ -84,6 +84,7 @@ internal sealed unsafe class Direct2DGpuPixelRenderSurface : IPixelBufferSource,
     public int PixelWidth { get; }
     public int PixelHeight { get; }
     public double DpiScale { get; }
+    public bool PreserveContentsOnBeginFrame { get; set; }
     public int StrideBytes => PixelWidth * 4;
     public int Version => Volatile.Read(ref _version);
     public RenderPixelFormat Format => RenderPixelFormat.Bgra8888Premultiplied;
@@ -509,7 +510,31 @@ internal sealed unsafe class Direct2DGpuPixelRenderSurface : IPixelBufferSource,
         }
     }
 
+    // Image views alias this surface, and a recorded frame can outlive the owner that made them,
+    // so the release waits for the last view.
+    private SurfaceViewTracker _surfaceViews;
+
+    bool IRetainableSurface.HasSurfaceViews => _surfaceViews.HasViews;
+
+    void IRetainableSurface.AddSurfaceView() => _surfaceViews.AddView();
+
+    void IRetainableSurface.ReleaseSurfaceView()
+    {
+        if (_surfaceViews.ReleaseView())
+        {
+            ReleaseResources();
+        }
+    }
+
     public void Dispose()
+    {
+        if (_surfaceViews.RequestRelease())
+        {
+            ReleaseResources();
+        }
+    }
+
+    private void ReleaseResources()
     {
         if (_disposed) return;
         _disposed = true;

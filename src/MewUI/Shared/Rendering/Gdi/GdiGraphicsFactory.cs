@@ -14,7 +14,7 @@ namespace Aprillz.MewUI.Rendering.Gdi;
 /// GDI+ graphics factory implementation.
 /// </summary>
 public sealed class GdiGraphicsFactory : IGraphicsFactory, ITextBackendFactory, IRenderDevice, IWindowResourceReleaser, IWindowSurfacePresenter,
-    IBackendRenderCacheMaintenance, IDisposable
+    IBackendRenderCacheMaintenance, IPersistentFrameGraphicsFactory, IDisposable
 {
     public const string BackendIdentifier = "Gdi";
 
@@ -28,6 +28,11 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, ITextBackendFactory, 
     private readonly ulong _renderDeviceId = RenderDeviceIdentity.AllocateDeviceId();
 
     public RenderDeviceIdentity RenderIdentity => new(_renderDeviceId, 0);
+
+    bool IPersistentFrameGraphicsFactory.IsPersistentFrameRenderingVerified => true;
+
+    IDisposable IPersistentFrameGraphicsFactory.AcquirePersistentFrameRenderScope()
+        => PersistentFrameRenderScope.Instance;
 
     public bool IsDoubleBuffered { get; set; } = true;
 
@@ -188,6 +193,12 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, ITextBackendFactory, 
             ? CreateImageView(pixelSource)
             : throw new NotSupportedException(
                 $"{GetType().Name} can only create image views for pixel-backed surfaces.");
+        // A recorded frame outlives the owner that made this view, so the surface release waits for
+        // the last view instead of freeing the pixels the tree still draws.
+        if (surface is IRetainableSurface retainableSurface)
+        {
+            image = ImageResource.WrapSurfaceView(image, retainableSurface);
+        }
         return ImageResource.WrapLogical(image, logicalWidth, logicalHeight);
     }
 

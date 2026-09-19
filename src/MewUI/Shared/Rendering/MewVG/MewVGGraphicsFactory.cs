@@ -231,6 +231,12 @@ public sealed partial class MewVGWin32GraphicsFactory
             ? CreateImageView(pixelSource)
             : throw new NotSupportedException(
                 $"{GetType().Name} can only create image views for pixel-backed surfaces.");
+        // A recorded frame outlives the owner that made this view, so the surface release waits for
+        // the last view instead of freeing the pixels the tree still draws.
+        if (surface is IRetainableSurface retainableSurface)
+        {
+            image = ImageResource.WrapSurfaceView(image, retainableSurface);
+        }
         return ImageResource.WrapLogical(image, logicalWidth, logicalHeight);
     }
 

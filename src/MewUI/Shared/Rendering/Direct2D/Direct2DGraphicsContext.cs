@@ -11,7 +11,7 @@ using static Aprillz.MewUI.Rendering.GradientBrushHelper;
 
 namespace Aprillz.MewUI.Rendering.Direct2D;
 
-internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
+internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITransparentDamageContext, IOpaqueDamageContext
 {
     private const int D2DERR_RECREATE_TARGET = unchecked((int)0x8899000C);
     private const int D2DERR_WRONG_RESOURCE_DOMAIN = unchecked((int)0x88990015);
@@ -154,7 +154,8 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
             _issuedBeginDraw = true;
             ConfigureRenderTargetForFrame();
 
-            if (target is Direct2DPixelRenderSurface)
+            if (target is Direct2DPixelRenderSurface pixelTarget &&
+                !pixelTarget.PreserveContentsOnBeginFrame)
             {
                 D2D1VTable.Clear((ID2D1RenderTarget*)_renderTarget, new D2D1_COLOR_F(0, 0, 0, 0));
             }
@@ -294,7 +295,10 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         // GPU bitmaps allocate with undefined contents (and a recycled bitmap from the
         // pool may hold the previous filter's residue). Clear to transparent up front so
         // the SVG element renders against a clean slate.
-        D2D1VTable.Clear((ID2D1RenderTarget*)_renderTarget, new D2D1_COLOR_F(0, 0, 0, 0));
+        if (!gpuTarget.PreserveContentsOnBeginFrame)
+        {
+            D2D1VTable.Clear((ID2D1RenderTarget*)_renderTarget, new D2D1_COLOR_F(0, 0, 0, 0));
+        }
         ConfigureRenderTargetForFrame();
     }
 
@@ -499,6 +503,25 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         }
 
         D2D1VTable.Clear((ID2D1RenderTarget*)_renderTarget, ToColorF(color));
+    }
+
+    void ITransparentDamageContext.ClearRectangleToTransparent(Rect rect)
+        => ClearRectangleCore(rect, new D2D1_COLOR_F(0, 0, 0, 0));
+
+    void IOpaqueDamageContext.ClearRectangle(Rect rect, Color color)
+        => ClearRectangleCore(rect, ToColorF(color));
+
+    private void ClearRectangleCore(Rect rect, D2D1_COLOR_F color)
+    {
+        if (_renderTarget == 0)
+        {
+            return;
+        }
+
+        // Clear fills the current clip, so the axis-aligned clip is what bounds the erase.
+        D2D1VTable.PushAxisAlignedClip((ID2D1RenderTarget*)_renderTarget, ToRectF(rect));
+        D2D1VTable.Clear((ID2D1RenderTarget*)_renderTarget, color);
+        D2D1VTable.PopAxisAlignedClip((ID2D1RenderTarget*)_renderTarget);
     }
 
     public override void DrawPath(PathGeometry path, Color color, double thickness = 1)

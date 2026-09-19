@@ -10,7 +10,7 @@ namespace Aprillz.MewUI.Rendering.Direct2D;
 /// Direct2D pixel render surface.
 /// Uses DIB section + DC render target for offscreen rendering.
 /// </summary>
-internal sealed unsafe class Direct2DPixelRenderSurface : IPixelBufferSource, ICpuPixelSurface, IDeferredCpuReadableSurface, IDisposable, IWin32HdcSource
+internal sealed unsafe class Direct2DPixelRenderSurface : IPixelBufferSource, ICpuPixelSurface, IDeferredCpuReadableSurface, IRetainableSurface, IDisposable, IWin32HdcSource, IPersistentFrameSurface
 {
     private static int _generationCounter;
 
@@ -69,6 +69,7 @@ internal sealed unsafe class Direct2DPixelRenderSurface : IPixelBufferSource, IC
     public int PixelWidth { get; }
     public int PixelHeight { get; }
     public double DpiScale { get; }
+    public bool PreserveContentsOnBeginFrame { get; set; }
     public int StrideBytes => PixelWidth * 4;
     public int Version => Volatile.Read(ref _version);
 
@@ -279,7 +280,31 @@ internal sealed unsafe class Direct2DPixelRenderSurface : IPixelBufferSource, IC
         return (_dcRenderTarget, _dcRenderTargetGeneration);
     }
 
+    // Image views alias this surface, and a recorded frame can outlive the owner that made them,
+    // so the release waits for the last view.
+    private SurfaceViewTracker _surfaceViews;
+
+    bool IRetainableSurface.HasSurfaceViews => _surfaceViews.HasViews;
+
+    void IRetainableSurface.AddSurfaceView() => _surfaceViews.AddView();
+
+    void IRetainableSurface.ReleaseSurfaceView()
+    {
+        if (_surfaceViews.ReleaseView())
+        {
+            ReleaseResources();
+        }
+    }
+
     public void Dispose()
+    {
+        if (_surfaceViews.RequestRelease())
+        {
+            ReleaseResources();
+        }
+    }
+
+    private void ReleaseResources()
     {
         if (_disposed)
         {

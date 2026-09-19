@@ -781,8 +781,10 @@ internal sealed partial class MewVGWin32GraphicsContext
         // allocated FBO - rendering as opaque-black filter results downstream when the
         // alpha channel reads as 1 instead of 0.
         GL.ColorMask(true, true, true, true);
-        GL.ClearColor(0f, 0f, 0f, 0f);
-
-        GL.Clear(GL.GL_COLOR_BUFFER_BIT);
+        if (!pixelSurface.PreserveContentsOnBeginFrame)
+        {
+            GL.ClearColor(0f, 0f, 0f, 0f);
+            GL.Clear(GL.GL_COLOR_BUFFER_BIT);
+        }
     }
 }
