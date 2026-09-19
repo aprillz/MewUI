@@ -12,6 +12,8 @@ internal sealed class SceneUpdate
     private readonly List<PendingSlot> _slots = [];
     private readonly List<PendingComposition> _compositions = [];
     private readonly List<PendingBounds> _bounds = [];
+    private readonly List<PendingExtent> _extents = [];
+    private readonly List<CompositionEntry> _removedEntries = [];
     private readonly Dictionary<UIElement, VisualNode> _createdNodes = new(ReferenceEqualityComparer.Instance);
     private readonly List<PendingVisit> _visits = [];
     private readonly List<PendingConsumption> _consumptions = [];
@@ -116,6 +118,21 @@ internal sealed class SceneUpdate
     {
         ArgumentNullException.ThrowIfNull(node);
         _bounds.Add(new PendingBounds(node, surfaceBounds, surfaceSubtreeBounds, placedOrigin, clippedAway, captured));
+    }
+
+    /// <summary>
+    /// Where a slot reaches the surface in this pass, whether it was recorded again or only stands in a
+    /// new place. A recording that changed is repainted there and where it reached before, which can be
+    /// far less than the box of a visual with more than one drawing of its own.
+    /// </summary>
+    internal void StageSlotExtent(VisualNode node, int slotIndex, Rect extent)
+    {
+        _extents.Add(new PendingExtent(node, slotIndex, extent));
+        int last = _slots.Count - 1;
+        if (last >= 0 && ReferenceEquals(_slots[last].Node, node) && _slots[last].SlotIndex == slotIndex)
+        {
+            _slots[last] = _slots[last] with { Extent = extent };
+        }
     }
 
     /// <summary>Finds the data this pass staged for a slot, which is not in the node yet.</summary>
@@ -226,11 +243,31 @@ internal sealed class SceneUpdate
         for (int compositionIndex = 0; compositionIndex < _compositions.Count; compositionIndex++)
         {
             var composition = _compositions[compositionIndex];
+            bool planChanged = !ReferenceEquals(composition.Node.Plan, composition.Plan);
             if (composition.Node.State != composition.State ||
-                !ReferenceEquals(composition.Node.Plan, composition.Plan))
+                (planChanged && !PlanChange.TryFindRemoved(composition.Node.Plan, composition.Plan, _removedEntries)))
             {
                 // What the visual looked like still occupies the surface, so both extents are stale.
                 _scene.AddDamage(composition.Node.SurfaceSubtreeBounds);
+            }
+            else if (planChanged)
+            {
+                // Children and drawings were only put in or taken out. What was put in repaints itself
+                // as it is recorded; what was taken out is repainted from here.
+                for (int removedIndex = 0; removedIndex < _removedEntries.Count; removedIndex++)
+                {
+                    var removedEntry = _removedEntries[removedIndex];
+                    if (removedEntry.Kind == CompositionEntryKind.Child)
+                    {
+                        var removedNode = _scene.FindNode(removedEntry.Child!);
+                        _scene.AddDamage(removedNode?.SurfaceSubtreeBounds ?? composition.Node.SurfaceSubtreeBounds);
+                    }
+                    else
+                    {
+                        var removedData = composition.Node.GetSlot(removedEntry.SlotIndex);
+                        _scene.AddDamage(removedData?.SurfaceExtent ?? composition.Node.SurfaceBounds);
+                    }
+                }
             }
 
             StructureChanged |= !ReferenceEquals(composition.Node.Plan, composition.Plan);
@@ -253,8 +290,23 @@ internal sealed class SceneUpdate
                 continue;
             }
 
-            _scene.AddDamage(slot.Node.SurfaceBounds);
-            _scene.AddRecordedBounds(slot.Node.SurfaceBounds);
+            bool wasDrawnLive = previous == null && slot.Node.NonRecordableReason != null;
+            bool isDrawnLive = slot.Data == null;
+            if (wasDrawnLive || isDrawnLive)
+            {
+                // A slot without a recording is drawn live across the visual, before or after this pass.
+                _scene.AddDamage(slot.Node.SurfaceBounds);
+                _scene.AddDamage(slot.Extent);
+                _scene.AddRecordedBounds(slot.Node.SurfaceBounds);
+            }
+            else
+            {
+                // A slot the plan did not have before reached nowhere, which an empty extent says.
+                _scene.AddDamage(previous?.SurfaceExtent ?? default);
+                _scene.AddDamage(slot.Extent);
+                _scene.AddRecordedBounds(slot.Extent);
+            }
+
             slot.Node.SetSlot(slot.SlotIndex, slot.Data);
             slot.Node.NonRecordableReason = slot.RejectionReason;
             slot.Node.RecordedContentVersion = slot.ContentVersion;
@@ -264,10 +316,12 @@ internal sealed class SceneUpdate
         for (int boundsIndex = 0; boundsIndex < _bounds.Count; boundsIndex++)
         {
             var bounds = _bounds[boundsIndex];
-            if (bounds.Node.SurfaceSubtreeBounds != bounds.SurfaceSubtreeBounds)
+            // Each recording answers for where it was and is (below). Only a visual drawn live has no
+            // recording to do that, so its box does.
+            if (bounds.Node.NonRecordableReason != null && bounds.Node.SurfaceBounds != bounds.SurfaceBounds)
             {
-                _scene.AddDamage(bounds.Node.SurfaceSubtreeBounds);
-                _scene.AddDamage(bounds.SurfaceSubtreeBounds);
+                _scene.AddDamage(bounds.Node.SurfaceBounds);
+                _scene.AddDamage(bounds.SurfaceBounds);
             }
 
             bounds.Node.SurfaceBounds = bounds.SurfaceBounds;
@@ -277,11 +331,30 @@ internal sealed class SceneUpdate
             bounds.Node.Captured = bounds.Captured;
         }
 
+        for (int extentIndex = 0; extentIndex < _extents.Count; extentIndex++)
+        {
+            var extent = _extents[extentIndex];
+            var data = extent.Node.GetSlot(extent.SlotIndex);
+            if (data != null)
+            {
+                // A recording that stands somewhere else now, recorded again or not, leaves where it was
+                // and covers where it is.
+                if (data.SurfaceExtent != extent.Extent)
+                {
+                    _scene.AddDamage(data.SurfaceExtent);
+                    _scene.AddDamage(extent.Extent);
+                }
+
+                data.SurfaceExtent = extent.Extent;
+            }
+        }
+
         DamageLayersFrom(firstReorderedLayer);
 
         _slots.Clear();
         _compositions.Clear();
         _bounds.Clear();
+        _extents.Clear();
         _createdNodes.Clear();
         _visits.Clear();
         _consumptions.Clear();
@@ -355,6 +428,7 @@ internal sealed class SceneUpdate
         _slots.Clear();
         _compositions.Clear();
         _bounds.Clear();
+        _extents.Clear();
 
         foreach (var created in _createdNodes.Values)
         {
@@ -386,7 +460,10 @@ internal sealed class SceneUpdate
         RenderData? Data,
         string? RejectionReason,
         int ContentVersion,
-        int SubtreeVersion);
+        int SubtreeVersion,
+        Rect Extent = default);
+
+    private readonly record struct PendingExtent(VisualNode Node, int SlotIndex, Rect Extent);
 
     private readonly record struct PendingComposition(
         VisualNode Node,
