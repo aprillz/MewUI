@@ -59,4 +59,55 @@ public sealed class RetainedPopupRepaintTests
 
         menu.CloseTree(window);
     });
+
+    [TestMethod]
+    public Task ControlsInsideAPopup_RepaintWhereTheyChange() => CaptureScene.RunAsync(async scene =>
+    {
+        var owner = new Button { Content = new TextBlock { Text = "Owner" }, Width = 140, Height = 30, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(20) };
+        var window = await scene.ShowAsync(owner);
+
+        var list = new ListBox { Width = 220, Height = 200 };
+        list.Items(Enumerable.Range(0, 30).Select(index => $"List item number {index}").ToArray());
+
+        var progress = new ProgressBar { IsIndeterminate = false, Width = 220, Height = 8, Value = 40 };
+        var content = new StackPanel { Orientation = Orientation.Vertical, Spacing = 8, Margin = new Thickness(8) };
+        content.Children(list, progress);
+        var popup = new Popup { Content = content, StaysOpen = true };
+        popup.ShowAt(owner, owner.Bounds);
+        await Task.Delay(600);
+
+        var surface = list.ResolveInputHostWindow();
+        if (surface == null || ReferenceEquals(surface, window))
+        {
+            Assert.Inconclusive("The popup opened inside its owner's surface, so there is no popup window to look at.");
+        }
+
+        double surfaceArea = surface!.ClientSize.Width * surface.ClientSize.Height;
+        await scene.Input.MoveAsync(surface, new Point(surface.ClientSize.Width / 2, surface.ClientSize.Height * 0.15));
+        await Task.Delay(400);
+
+        surface.ResetRetainedFrameCounts();
+        await scene.Input.MoveAsync(surface, new Point(surface.ClientSize.Width / 2, surface.ClientSize.Height * 0.55));
+        await Task.Delay(500);
+
+        var hover = surface.RetainedFrames;
+        Assert.IsTrue(hover.Partial > 0, $"hovering list items in a popup repainted no frame in part (whole {hover.Whole}; {surface.LastWholeFrameReason})");
+        Assert.AreEqual(0, hover.Whole, $"hovering list items in a popup painted {hover.Whole} whole frames ({surface.LastWholeFrameReason})");
+        Assert.IsTrue(
+            surface.LargestPartialRepaintArea < surfaceArea * 0.3,
+            $"hovering a list item repainted {surface.LargestPartialRepaint} of the {surface.ClientSize} popup");
+
+        surface.ResetRetainedFrameCounts();
+        progress.IsIndeterminate = true;
+        await Task.Delay(800);
+
+        var animated = surface.RetainedFrames;
+        Assert.IsTrue(animated.Partial > 3, $"an animation inside a popup painted {animated.Partial} partial frames (whole {animated.Whole}; {surface.LastWholeFrameReason})");
+        Assert.IsTrue(animated.Whole <= 1, $"an animation inside a popup painted {animated.Whole} whole frames ({surface.LastWholeFrameReason})");
+        Assert.IsTrue(
+            surface.LargestPartialRepaintArea < surfaceArea * 0.3,
+            $"an animated bar repainted {surface.LargestPartialRepaint} of the {surface.ClientSize} popup");
+
+        popup.Close();
+    });
 }
