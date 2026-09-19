@@ -36,7 +36,7 @@ public abstract partial class UIElement
 
         // A change on a visual the last render pass culled reaches no pixels, so it must not wake the
         // surface. The versions keep it, and the visual records again when it comes back into view.
-        if (StopsAtCulledVisual())
+        if (ChangesOnlyWhatIsDrawn(kind) && StopsAtCulledVisual())
         {
             return;
         }
@@ -50,12 +50,20 @@ public abstract partial class UIElement
         Parent?.NotifyDescendantRenderDirty(ref request);
     }
 
+    /// <summary>
+    /// A change of what a visual draws reaches no pixels while the visual is out of view, so it can
+    /// wait. A change of where it stands, how it is laid out or what it is composed of can be what
+    /// brings it into view, and the scene only looks where it was told something changed.
+    /// </summary>
+    private static bool ChangesOnlyWhatIsDrawn(RenderDirtyKind kind)
+        => (kind & (RenderDirtyKind.Placement | RenderDirtyKind.Layout | RenderDirtyKind.Composition)) == 0;
+
     internal override void NotifyDescendantRenderDirty(ref RenderDirtyRequest request)
     {
         _subtreeContentVersion++;
         NoteDescendantChangedUnderCache();
 
-        if (StopsAtCulledVisual())
+        if (ChangesOnlyWhatIsDrawn(request.Kind) && StopsAtCulledVisual())
         {
             return;
         }

@@ -106,7 +106,11 @@ internal sealed class SceneCapture
         }
 
         update.Commit(dirty.Registry);
-        scene.PruneUnvisited();
+        if (update.StructureChanged)
+        {
+            scene.PruneUnreachable();
+        }
+
         dirty.Registry?.RemoveWhere(element => scene.FindNode(element) == null);
     }
 
@@ -124,6 +128,31 @@ internal sealed class SceneCapture
         // changes about it is applied when the update lands.
         var node = update.GetOrCreateNode(element);
         bool attachmentChanged = node.ParentElement != null && !ReferenceEquals(node.ParentElement, parent);
+
+        // Read before anything under the visual is looked at, so a change made while the pass is
+        // under way shows as a newer version next time instead of being taken for seen.
+        var key = new CaptureKey(
+            true,
+            element.SubtreeContentVersion,
+            element.Bounds,
+            transform,
+            _ambientClip,
+            recorder.DpiScale);
+
+        // Every change under a visual bumps its subtree version on the way to the surface, and every
+        // visual draws where its bounds put it. Reached the same way, standing in the same place and
+        // with the same version, nothing the scene knows about this subtree can have changed. A pass
+        // that draws has to replay it all the same, so only an update passes over it.
+        if (!recorder.Draws &&
+            !attachmentChanged &&
+            ReferenceEquals(node.ParentElement, parent) &&
+            node.Captured.IsValid &&
+            node.Captured == key)
+        {
+            return node.SurfaceSubtreeBounds;
+        }
+
+        scene.Statistics.CapturedNodeCount++;
         update.StageVisit(node, parent, attachmentChanged);
 
         double opacity = element.Opacity;
@@ -133,7 +162,7 @@ internal sealed class SceneCapture
         if (!isVisible)
         {
             update.StageComposition(node, CompositionPlan.Empty, state, stateBakedIntoContent: false);
-            update.StageBounds(node, default, default, Origin(element));
+            update.StageBounds(node, default, default, Origin(element), captured: key);
             return default;
         }
 
@@ -204,7 +233,12 @@ internal sealed class SceneCapture
 
         subtreeBounds.Add(ownBounds.Result);
         update.StageBounds(
-            node, ownBounds.Result, subtreeBounds.Result, Origin(element), IsClippedAway(element, transform, subtreeBounds.Result));
+            node,
+            ownBounds.Result,
+            subtreeBounds.Result,
+            Origin(element),
+            IsClippedAway(element, transform, subtreeBounds.Result),
+            key);
         return subtreeBounds.Result;
     }
 

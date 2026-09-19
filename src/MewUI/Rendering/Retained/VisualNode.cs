@@ -35,6 +35,15 @@ internal sealed class VisualNode : IDisposable
     /// <summary>Pass in which the scene last reached this node.</summary>
     internal int LastVisitedPass { get; set; } = -1;
 
+    /// <summary>
+    /// What the last update that looked into this node saw. While the visual still answers the same
+    /// to all of it, nothing under the node can have changed, and an update passes over it.
+    /// </summary>
+    internal CaptureKey Captured { get; set; }
+
+    /// <summary>Stamp of the last reachability sweep that found this node.</summary>
+    internal int ReachMark { get; set; }
+
     /// <summary>Own-content version the recorded slots were taken from.</summary>
     internal int RecordedContentVersion { get; set; } = -1;
 
