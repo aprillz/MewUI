@@ -150,6 +150,12 @@ internal sealed class ToastPresenter : Control, IVisualTreeHost
         _transition.Render(context);
     }
 
+    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
+    {
+        builder.Content(0);
+        builder.Child(_transition);
+    }
+
     #endregion
 
     #region HitTest

@@ -20,7 +20,7 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
     private readonly Stack<FrameworkElement> _pool = new();
     private readonly Dictionary<int, FrameworkElement> _recycledByIndex = new();
     private readonly List<int> _recycleScratch = new();
-    private readonly List<(int Index, Rect ItemRect)> _arrangedItems = new();
+    private readonly List<int> _arrangedItems = new();
     private readonly List<(int OldIndex, FrameworkElement Element)> _remapScratch = new();
     private readonly List<double> _insertHeightScratch = new(); // reused -1 fill buffer for InsertRange, avoids Enumerable.Repeat allocation
     private double[] _oldPrefixScratch = Array.Empty<double>(); // reused prefix-sum buffer for OnItemsChanged anchor calc, grow-only
@@ -187,8 +187,6 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
             }
         }
     }
-
-    public Action<IGraphicsContext, int, Rect>? BeforeItemRender { get; set; }
 
     public Func<int, Rect, Rect>? GetContainerRect { get; set; }
 
@@ -491,7 +489,7 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
                 containerRect = LayoutRounding.RoundRectToPixels(containerRect, dpiScale);
 
                 element.Arrange(containerRect);
-                _arrangedItems.Add((i, itemRect));
+                _arrangedItems.Add(i);
 
                 y += alignedH;
             }
@@ -592,17 +590,30 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
 
     protected override void OnRender(IGraphicsContext context)
     {
-        var beforeItemRender = BeforeItemRender;
         for (int i = 0; i < _arrangedItems.Count; i++)
         {
-            var (index, itemRect) = _arrangedItems[i];
+            int index = _arrangedItems[i];
             if (!_realized.TryGetValue(index, out var element))
             {
                 continue;
             }
 
-            beforeItemRender?.Invoke(context, index, itemRect);
             element.Render(context);
+        }
+    }
+
+    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
+    {
+        // No own content slot: OnRender draws only the arranged containers.
+        for (int ordinal = 0; ordinal < _arrangedItems.Count; ordinal++)
+        {
+            int index = _arrangedItems[ordinal];
+            if (!_realized.TryGetValue(index, out var element))
+            {
+                continue;
+            }
+
+            builder.Child(element);
         }
     }
 

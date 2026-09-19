@@ -151,6 +151,8 @@ public abstract partial class UIElement : Element
     {
         if (property.AffectsLayout)
             InvalidateMeasure();
+        else if (property == OpacityProperty)
+            RaiseRenderDirty(Rendering.Retained.RenderDirtyKind.State);
         else if (property.AffectsRender)
             InvalidateVisual();
 
@@ -162,6 +164,7 @@ public abstract partial class UIElement : Element
 
         if (property == IsVisibleProperty)
         {
+            RaiseRenderDirty(Rendering.Retained.RenderDirtyKind.State);
             if (!IsVisible)
             {
                 MarkSubtreeCulled();

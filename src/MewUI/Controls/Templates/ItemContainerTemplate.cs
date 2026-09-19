@@ -12,28 +12,39 @@ internal sealed class ItemContainerTemplate : IDataTemplate
 {
     private readonly IDataTemplate _inner;
     private readonly Func<int, bool> _isSelected;
+    private readonly Func<ItemContainer> _create;
+    private readonly Action<ItemContainer, int> _configure;
     private readonly PrepareContainerHandler<ItemContainer, object?>? _prepare;
     private readonly PrepareContainerHandler<ItemContainer, object?>? _clear;
 
     public ItemContainerTemplate(
         IDataTemplate inner,
         Func<int, bool> isSelected,
+        Action<ItemContainer, int> configure,
         PrepareContainerHandler<ItemContainer, object?>? prepare,
-        PrepareContainerHandler<ItemContainer, object?>? clear)
+        PrepareContainerHandler<ItemContainer, object?>? clear,
+        Func<ItemContainer>? create = null)
     {
         ArgumentNullException.ThrowIfNull(inner);
         ArgumentNullException.ThrowIfNull(isSelected);
+        ArgumentNullException.ThrowIfNull(configure);
 
         _inner = inner;
         _isSelected = isSelected;
+        _configure = configure;
         _prepare = prepare;
         _clear = clear;
+        _create = create ?? CreateDefaultContainer;
     }
 
     public IDataTemplate Inner => _inner;
 
     public FrameworkElement Build(TemplateContext context)
-        => new ItemContainer { Content = _inner.Build(context) };
+    {
+        var container = _create();
+        container.Content = _inner.Build(context);
+        return container;
+    }
 
     public void Bind(FrameworkElement view, object? item, int index, TemplateContext context)
     {
@@ -42,6 +53,7 @@ internal sealed class ItemContainerTemplate : IDataTemplate
         container.SetIndex(index);
         container.SetItem(item);
         container.SetIsSelected(_isSelected(index));
+        _configure(container, index);
 
         _inner.Bind(ContentOf(container), item, index, context);
         _prepare?.Invoke(container, item, index, context);
@@ -56,6 +68,8 @@ internal sealed class ItemContainerTemplate : IDataTemplate
         container.SetItem(null);
         container.SetIsSelected(false);
     }
+
+    private static ItemContainer CreateDefaultContainer() => new();
 
     private static FrameworkElement ContentOf(ItemContainer container)
         => (FrameworkElement)container.Content!;

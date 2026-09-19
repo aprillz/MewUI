@@ -155,6 +155,22 @@ public partial class Expander : HeaderedContentControl, IVisualTreeHost
         }
     }
 
+    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
+    {
+        if (HasTemplateInstance)
+        {
+            base.WriteComposition(builder);
+            return;
+        }
+
+        builder.Content(0);
+        builder.Child(Header);
+        if (IsExpanded)
+        {
+            builder.Child(Content);
+        }
+    }
+
     protected override void OnRender(IGraphicsContext context)
     {
         if (HasTemplateInstance)

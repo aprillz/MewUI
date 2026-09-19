@@ -115,9 +115,14 @@ public abstract partial class Element : MewObject
                     OnDetaching(oldRoot);
                 }
 
+                var previousParent = field;
                 field = value;
                 BumpContextVersionDeep();
                 OnParentChanged();
+
+                // Which children a visual draws, and in what order, is its composition.
+                (previousParent as UIElement)?.RaiseRenderDirty(Rendering.Retained.RenderDirtyKind.Composition);
+                (value as UIElement)?.RaiseRenderDirty(Rendering.Retained.RenderDirtyKind.Composition);
 
                 // A subtree already dirty (new elements default dirty, or invalidated while
                 // detached) must re-propagate into the new parent chain on attach - the Window
@@ -467,12 +472,32 @@ public abstract partial class Element : MewObject
             return;
         }
 
+        // A visual arranged only because it was moved keeps everything inside it where it was, and one
+        // arranged only to reach a descendant draws what it drew unless that moved one of its children.
+        bool layoutInvalidated = _ownLayoutInvalidated;
+        _ownLayoutInvalidated = false;
+        _childBoundsChanged = false;
+        var previousBounds = Bounds;
         Bounds = arrangedRect;
+        if (previousBounds != arrangedRect)
+        {
+            if (Parent is Element parent)
+            {
+                parent._childBoundsChanged = true;
+            }
+
+            OnBoundsChanged(previousBounds);
+        }
+
         using (DevToolsGate.IsSupported ? PerformanceProfiler.Instance.SampleElement(GetType(), ProfilerSampleCategory.Arrange) : default)
         {
             ArrangeCore(arrangedRect);
         }
         IsArrangeDirty = false;
+        if (layoutInvalidated || _childBoundsChanged)
+        {
+            OnArrangeCompleted();
+        }
     }
 
     /// <summary>
@@ -493,18 +518,24 @@ public abstract partial class Element : MewObject
     /// </remarks>
     public virtual void InvalidateMeasure()
     {
+        bool raisedByDescendant = TakeLayoutInvalidationHandOff();
+        if (!raisedByDescendant)
+        {
+            _ownLayoutInvalidated = true;
+        }
+
         if (IsMeasureDirty)
         {
             // Unconditional on purpose: an already-dirty parent's flag can be stale (a
             // virtualizing presenter may have skipped a still-dirty child), so it cannot be
             // trusted to have already notified its own ancestors. This walk also doubles as the
             // render-request wake up to the Window, which must run every time.
-            Parent?.InvalidateMeasure();
+            PropagateMeasureInvalidation();
             return;
         }
         IsMeasureDirty = true;
         IsArrangeDirty = true;
-        Parent?.InvalidateMeasure();
+        PropagateMeasureInvalidation();
 
         // The marker gates the *entry* of a cascade. Once started, the subtree is descended
         // unconditionally via the helper - otherwise a non-marker intermediate like ScrollViewer
@@ -514,7 +545,12 @@ public abstract partial class Element : MewObject
             CascadeMeasureInvalidationToSubtree();
         }
 
-        InvalidateVisual();
+        // The visual this was called on changed something about itself. An ancestor reached on the way
+        // up is only laid out again, and says so itself once that layout has run.
+        if (!raisedByDescendant)
+        {
+            InvalidateVisual();
+        }
     }
 
     private void CascadeMeasureInvalidationToSubtree()
@@ -544,20 +580,74 @@ public abstract partial class Element : MewObject
     /// </remarks>
     public virtual void InvalidateArrange()
     {
+        if (!TakeLayoutInvalidationHandOff())
+        {
+            _ownLayoutInvalidated = true;
+        }
+
         if (IsArrangeDirty)
         {
-            Parent?.InvalidateArrange();
+            PropagateArrangeInvalidation();
             return;
         }
         IsArrangeDirty = true;
-        Parent?.InvalidateArrange();
+        PropagateArrangeInvalidation();
 
         if (this is ISubtreeInvalidationHost)
         {
             CascadeArrangeInvalidationToSubtree();
         }
 
-        InvalidateVisual();
+        // Arranging again moves things; whether any drawing changed is settled when the arrange runs.
+        RequestRepaintAfterLayout();
+    }
+
+    // Set by a child right before it passes a layout invalidation up, so this element knows the call
+    // is not about itself without having to work that out from how it was reached.
+    private bool _layoutInvalidationHandedOff;
+
+    // True when this element asked for its own layout, as opposed to being on the way up from a descendant.
+    private bool _ownLayoutInvalidated = true;
+
+    // Set by a child whose bounds changed, so the parent knows its arrange moved something.
+    private bool _childBoundsChanged;
+
+    private bool TakeLayoutInvalidationHandOff()
+    {
+        bool handedOff = _layoutInvalidationHandedOff;
+        _layoutInvalidationHandedOff = false;
+        return handedOff;
+    }
+
+    private void PropagateMeasureInvalidation()
+    {
+        if (Parent is Element parent)
+        {
+            parent._layoutInvalidationHandedOff = true;
+            parent.InvalidateMeasure();
+
+            // An override that does not reach the base never takes the hand-off, and a hand-off left
+            // standing would make the parent's next invalidation of its own look like this one.
+            parent._layoutInvalidationHandedOff = false;
+        }
+    }
+
+    private void PropagateArrangeInvalidation()
+    {
+        if (Parent is Element parent)
+        {
+            parent._layoutInvalidationHandedOff = true;
+            parent.InvalidateArrange();
+            parent._layoutInvalidationHandedOff = false;
+        }
+    }
+
+    /// <summary>Wakes the surface for a layout that has yet to run, claiming no change of its own.</summary>
+    internal virtual void RequestRepaintAfterLayout() => Parent?.RequestRepaintAfterLayout();
+
+    /// <summary>Called after <see cref="ArrangeCore"/> ran because this element's layout was invalidated.</summary>
+    internal virtual void OnArrangeCompleted()
+    {
     }
 
     /// <summary>
@@ -600,6 +690,18 @@ public abstract partial class Element : MewObject
     /// </remarks>
     public virtual void InvalidateVisual() =>
         Parent?.InvalidateVisual();
+
+    /// <summary>
+    /// Carries a descendant's invalidation up to the surface that draws it. This is a separate path from
+    /// <see cref="InvalidateVisual"/> so that an ancestor is never told its own drawing changed.
+    /// </summary>
+    internal virtual void NotifyDescendantRenderDirty(ref Rendering.Retained.RenderDirtyRequest request)
+        => Parent?.NotifyDescendantRenderDirty(ref request);
+
+    /// <summary>Called after an arrange changed <see cref="Bounds"/>.</summary>
+    internal virtual void OnBoundsChanged(Rect previousBounds)
+    {
+    }
 
     /// <summary>
     /// Called when the parent element changes.

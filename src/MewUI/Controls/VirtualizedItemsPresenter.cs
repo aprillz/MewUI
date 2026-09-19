@@ -173,7 +173,6 @@ internal sealed class VirtualizedItemsPresenter
         int lastExclusive,
         double itemHeight,
         double yStart,
-        Action<IGraphicsContext, int, Rect>? beforeItemRender = null,
         Func<int, Rect, Rect>? getContainerRect = null,
         uint itemBindingGeneration = 0)
     {
@@ -192,19 +191,10 @@ internal sealed class VirtualizedItemsPresenter
             getContainerRect,
             itemBindingGeneration);
 
-        double dpiScale = _owner.GetDpiScaleCached();
-        int baseYPx = LayoutRounding.RoundToPixelInt(yStart, dpiScale);
-        int itemHeightPx = LayoutRounding.RoundToPixelInt(itemHeight, dpiScale);
-        double itemHeightDip = itemHeightPx / dpiScale;
-
         for (int i = first; i < lastExclusive; i++)
         {
             if (!_realized.TryGetValue(i, out var element)) continue;
 
-            int yPx = baseYPx + (i - first) * itemHeightPx;
-            double y = yPx / dpiScale;
-            var itemRect = new Rect(contentBounds.X, y, contentBounds.Width, itemHeightDip);
-            beforeItemRender?.Invoke(context, i, itemRect);
             element.Render(context);
         }
     }
@@ -215,22 +205,13 @@ internal sealed class VirtualizedItemsPresenter
     /// </summary>
     public void RenderArrangedRange(
         IGraphicsContext context,
-        Rect contentBounds,
         int first,
-        int lastExclusive,
-        double itemHeight,
-        double yStart,
-        Action<IGraphicsContext, int, Rect>? beforeItemRender = null)
+        int lastExclusive)
     {
         if (lastExclusive <= first)
         {
             return;
         }
-
-        double dpiScale = _owner.GetDpiScaleCached();
-        int baseYPx = LayoutRounding.RoundToPixelInt(yStart, dpiScale);
-        int itemHeightPx = LayoutRounding.RoundToPixelInt(itemHeight, dpiScale);
-        double itemHeightDip = itemHeightPx / dpiScale;
 
         for (int i = first; i < lastExclusive; i++)
         {
@@ -239,11 +220,32 @@ internal sealed class VirtualizedItemsPresenter
                 continue;
             }
 
-            int yPx = baseYPx + (i - first) * itemHeightPx;
-            double y = yPx / dpiScale;
-            var itemRect = new Rect(contentBounds.X, y, contentBounds.Width, itemHeightDip);
-            beforeItemRender?.Invoke(context, i, itemRect);
             element.Render(context);
+        }
+    }
+
+    /// <summary>
+    /// Declares the realized containers of an already arranged range, in the same order and with the
+    /// same skips as <see cref="RenderArrangedRange"/>.
+    /// </summary>
+    internal void WriteArrangedRangeComposition(
+        Rendering.Retained.CompositionPlanBuilder builder,
+        int first,
+        int lastExclusive)
+    {
+        if (lastExclusive <= first)
+        {
+            return;
+        }
+
+        for (int index = first; index < lastExclusive; index++)
+        {
+            if (!_realized.TryGetValue(index, out var element))
+            {
+                continue;
+            }
+
+            builder.Child(element);
         }
     }
 

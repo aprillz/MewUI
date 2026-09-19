@@ -23,7 +23,6 @@ internal sealed class WrapItemsPresenter : Control, IItemsPresenter
     private int _renderCols;
     private Rect _renderBounds;
     private Thickness _renderPad;
-    private Action<IGraphicsContext, int, Rect>? _cachedBeforeItemRender;
     private Func<int, Rect, Rect>? _cachedGetContainerRect;
 
     private IItemsView _itemsSource = ItemsView.Empty;
@@ -63,7 +62,6 @@ internal sealed class WrapItemsPresenter : Control, IItemsPresenter
 
     public double ExtentWidth { get; set; }
     public double ItemRadius { get => _itemRadius; set { if (Set(ref _itemRadius, value)) InvalidateVisual(); } }
-    public Action<IGraphicsContext, int, Rect>? BeforeItemRender { get; set; }
     public Func<int, Rect, Rect>? GetContainerRect { get; set; }
     public Thickness ItemPadding { get; set; }
     public uint ItemBindingGeneration { get; set; }
@@ -114,6 +112,7 @@ internal sealed class WrapItemsPresenter : Control, IItemsPresenter
     {
         if (_viewport == viewport) return;
         _viewport = viewport;
+        InvalidateArrange();
         RecomputeExtent();
         InvalidateVisual();
     }
@@ -126,7 +125,7 @@ internal sealed class WrapItemsPresenter : Control, IItemsPresenter
 
         if (_offset == clamped) return;
         _offset = clamped;
-        InvalidateVisual();
+        InvalidateArrange();
     }
 
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
@@ -144,8 +143,25 @@ internal sealed class WrapItemsPresenter : Control, IItemsPresenter
 
     protected override void OnRender(IGraphicsContext context)
     {
+        _itemsHost.RenderArranged(context);
+    }
+
+    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
+    {
+        // No own content slot: OnRender draws only the realized containers.
+        _itemsHost.WriteArrangedComposition(builder);
+    }
+
+    protected override void ArrangeContent(Rect bounds)
+    {
+        // Which cells are realized and where they stand is settled here, so each of them is a visual of
+        // its own by the time anything is drawn: a scroll then moves them instead of drawing them again.
         int count = ItemsSource.Count;
-        if (count == 0) return;
+        if (count == 0)
+        {
+            _itemsHost.RecycleAll();
+            return;
+        }
 
         double itemW = Math.Max(0, ItemWidth);
         double itemH = Math.Max(0, ItemHeight);
@@ -218,12 +234,8 @@ internal sealed class WrapItemsPresenter : Control, IItemsPresenter
             ItemBindingGeneration = ItemBindingGeneration,
         };
 
-        var userBeforeItemRender = BeforeItemRender;
         _itemsHost.Options = new TemplatedItemsHost.ItemsRangeOptions
         {
-            BeforeItemRender = userBeforeItemRender != null
-                ? (_cachedBeforeItemRender ??= (ctx, index, _) => BeforeItemRender?.Invoke(ctx, index, RenderCellRect(index)))
-                : null,
             GetContainerRect = _cachedGetContainerRect ??= (index, _) =>
             {
                 var cell = RenderCellRect(index);
@@ -231,7 +243,7 @@ internal sealed class WrapItemsPresenter : Control, IItemsPresenter
             },
         };
 
-        _itemsHost.Render(context);
+        _itemsHost.Arrange();
     }
 
     private Rect RenderCellRect(int index)
@@ -332,7 +344,7 @@ internal sealed class WrapItemsPresenter : Control, IItemsPresenter
         int count = ItemsSource.Count;
         if (count <= 0 || index < 0 || index >= count) return;
         _pendingScrollIntoViewIndex = index;
-        InvalidateVisual();
+        InvalidateArrange();
     }
 
     /// <summary>

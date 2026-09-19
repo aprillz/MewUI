@@ -16,7 +16,23 @@ public sealed partial class ItemsControl : ScrollableItemsBase
     private IItemsPresenter _presenter;
     private IDataTemplate _itemTemplate;
 
-    internal bool ShowRowHover { get; set; } = false;
+    private bool _showRowHover;
+
+    internal bool ShowRowHover
+    {
+        get => _showRowHover;
+        set
+        {
+            if (_showRowHover == value)
+            {
+                return;
+            }
+
+            _showRowHover = value;
+            RefreshContainerConfiguration(_presenter);
+            InvalidateVisual();
+        }
+    }
 
     private int _hoverIndex = -1;
     private bool _hasLastMousePosition;
@@ -245,12 +261,41 @@ public sealed partial class ItemsControl : ScrollableItemsBase
         var borderInset = GetBorderVisualInset();
         var innerBounds = snapped.Deflate(new Thickness(borderInset));
         _presenter.ItemBindingGeneration = ItemBindingGeneration;
+
+        UpdateItemCornerRadius();
+
         _scrollViewer.Arrange(innerBounds);
 
         if (TryConsumeScrollIntoViewRequest(out var request) &&
             request.Kind == ScrollIntoViewRequestKind.Index)
         {
             ScrollIntoView(request.Index);
+        }
+    }
+
+    /// <summary>Re-derives the item corner radius from the control's own radius, before the items bind.</summary>
+    private void UpdateItemCornerRadius()
+    {
+        var dpiScale = GetDpi() / 96.0;
+        var clipRadius = Math.Max(0, LayoutRounding.RoundToPixel(CornerRadius, dpiScale) - GetBorderVisualInset());
+        if (clipRadius == _presenter.ItemRadius && clipRadius == _scrollViewer.CornerRadius)
+        {
+            return;
+        }
+
+        _scrollViewer.CornerRadius = clipRadius;
+        _presenter.ItemRadius = clipRadius;
+        RefreshContainerConfiguration(_presenter);
+    }
+
+    protected override void OnMewPropertyChanged(MewProperty property)
+    {
+        base.OnMewPropertyChanged(property);
+
+        // CornerRadius only affects render, so nothing re-arranges on its own to pick the item radius up.
+        if (property.Id == CornerRadiusProperty.Id)
+        {
+            InvalidateArrange();
         }
     }
 
@@ -262,16 +307,17 @@ public sealed partial class ItemsControl : ScrollableItemsBase
         var bg = GetValue(BackgroundProperty);
         var borderColor = GetValue(BorderBrushProperty);
         DrawBackgroundAndBorder(context, bounds, bg, borderColor, BorderThickness, radius);
-
-        var dpiScale = GetDpi() / 96.0;
-        var clipR = Math.Max(0, LayoutRounding.RoundToPixel(radius, dpiScale) - GetBorderVisualInset());
-        _scrollViewer.CornerRadius = clipR;
-        _presenter.ItemRadius = clipR;
     }
 
     protected override void RenderSubtree(IGraphicsContext context)
     {
         _scrollViewer.Render(context);
+    }
+
+    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
+    {
+        builder.Content(0);
+        builder.Child(_scrollViewer);
     }
 
     protected override void OnMouseMove(MouseEventArgs e)
@@ -288,12 +334,7 @@ public sealed partial class ItemsControl : ScrollableItemsBase
         if (e.PointerType == PointerType.Touch)
         {
             _hasLastMousePosition = false;
-            if (_hoverIndex != -1)
-            {
-                _hoverIndex = -1;
-                InvalidateVisual();
-            }
-
+            SetHoverIndex(-1);
             return;
         }
 
@@ -302,19 +343,11 @@ public sealed partial class ItemsControl : ScrollableItemsBase
 
         if (!TryGetItemIndexAtCore(_lastMousePosition, out int index))
         {
-            if (_hoverIndex != -1)
-            {
-                _hoverIndex = -1;
-                InvalidateVisual();
-            }
+            SetHoverIndex(-1);
             return;
         }
 
-        if (_hoverIndex != index)
-        {
-            _hoverIndex = index;
-            InvalidateVisual();
-        }
+        SetHoverIndex(index);
     }
 
     protected override void OnMouseLeave()
@@ -322,11 +355,7 @@ public sealed partial class ItemsControl : ScrollableItemsBase
         base.OnMouseLeave();
 
         _hasLastMousePosition = false;
-        if (_hoverIndex != -1)
-        {
-            _hoverIndex = -1;
-            InvalidateVisual();
-        }
+        SetHoverIndex(-1);
     }
 
     public void ScrollIntoView(int index)
@@ -363,25 +392,38 @@ public sealed partial class ItemsControl : ScrollableItemsBase
 
     private void OnScrollViewerChanged()
     {
-        if (_hasLastMousePosition && TryGetItemIndexAtCore(_lastMousePosition, out int idx))
+        if (_hasLastMousePosition && TryGetItemIndexAtCore(_lastMousePosition, out int hover))
         {
-            _hoverIndex = idx;
+            SetHoverIndex(hover);
         }
         else
         {
-            _hoverIndex = -1;
+            SetHoverIndex(-1);
         }
-
-        InvalidateVisual();
     }
 
-    private void OnBeforeItemRender(IGraphicsContext context, int i, Rect itemRect)
+    private protected override void ConfigureItemContainer(ItemContainer container, int index)
     {
-        if (ShowRowHover && i == _hoverIndex && IsEffectivelyEnabled)
+        var palette = Theme.Palette;
+        container.HoverBackground = ShowRowHover && IsEffectivelyEnabled
+            ? palette.ControlBackground.Lerp(palette.Accent, 0.10)
+            : Color.Transparent;
+        // The row hover always filled a square rectangle, whatever the control's own corner radius.
+        container.RowPadding = _presenter.ItemPadding;
+        container.CornerRadius = 0;
+        container.SetIsHovered(index == _hoverIndex);
+    }
+
+    /// <summary>Moves the hover to one item, repainting only the containers that change.</summary>
+    private void SetHoverIndex(int index)
+    {
+        if (_hoverIndex == index)
         {
-            var hoverBg = Theme.Palette.ControlBackground.Lerp(Theme.Palette.Accent, 0.10);
-            context.FillRectangle(itemRect, hoverBg);
+            return;
         }
+
+        _hoverIndex = index;
+        RefreshContainerHover(_presenter, index);
     }
 
     private IDataTemplate CreateDefaultItemTemplate()
@@ -490,7 +532,6 @@ public sealed partial class ItemsControl : ScrollableItemsBase
     {
         presenter.ItemsSource = _itemsSource;
         presenter.ItemTemplate = WrapItemTemplate(_itemTemplate);
-        presenter.BeforeItemRender = OnBeforeItemRender;
         presenter.ItemPadding = ItemPadding;
         presenter.ItemBindingGeneration = ItemBindingGeneration;
         presenter.ItemHeightHint = ResolveItemHeight();

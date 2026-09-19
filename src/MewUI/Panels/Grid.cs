@@ -517,6 +517,17 @@ public class Grid : Panel
         CalculateOffsets(columns, spacing);
         CalculateOffsets(rows, spacing);
 
+        if (ShowGridLine)
+        {
+            // The lines follow the tracks, and tracks can move while every child stays where it was.
+            double trackSignature = TrackSignature(columns) * 31 + TrackSignature(rows);
+            if (trackSignature != _drawnTrackSignature)
+            {
+                _drawnTrackSignature = trackSignature;
+                InvalidateVisual();
+            }
+        }
+
         foreach (var placement in placements)
         {
             double x = contentBounds.X + columns[placement.Column].Offset;
@@ -527,6 +538,21 @@ public class Grid : Panel
         }
 
         CollectionPool.Return(placements);
+    }
+
+    // What the grid lines were last arranged from; NaN until they have been.
+    private double _drawnTrackSignature = double.NaN;
+
+    private static double TrackSignature<TDefinition>(IReadOnlyList<TDefinition> definitions)
+        where TDefinition : GridDefinitionBase
+    {
+        double signature = definitions.Count;
+        for (int index = 0; index < definitions.Count; index++)
+        {
+            signature = signature * 31 + definitions[index].Offset;
+        }
+
+        return signature;
     }
 
     protected override void OnRender(IGraphicsContext context)

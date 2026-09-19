@@ -21,8 +21,13 @@ public sealed class GridViewRow : Panel, ICommandArgumentSource
     private int _lastColumnsVersion = -1;
     private Theme? _lastTheme;
 
+    // Alternating-row fill, pushed by the grid on every bind; drawn under selection and hover.
+    private bool _isAlternate;
+    private Color _alternateBackground;
+
     private static readonly MewPropertyKey<bool> IsSelectedPropertyKey =
-        MewProperty<bool>.RegisterReadOnly<GridViewRow>(nameof(IsSelected), false);
+        MewProperty<bool>.RegisterReadOnly<GridViewRow>(nameof(IsSelected), false,
+            MewPropertyOptions.AffectsRender);
 
     /// <summary>Whether the item this row holds is selected.</summary>
     public static readonly MewProperty<bool> IsSelectedProperty = IsSelectedPropertyKey.Property;
@@ -42,10 +47,7 @@ public sealed class GridViewRow : Panel, ICommandArgumentSource
     /// <summary>Gets the index of the item this row currently holds, or -1 when it holds none.</summary>
     public int Index => _rowIndex;
 
-    /// <summary>
-    /// Gets whether the item this row holds is selected. The grid keeps this current; the row draws
-    /// the selection from the grid's own state, not from this property.
-    /// </summary>
+    /// <summary>Gets whether the item this row holds is selected; the row draws its selection from it.</summary>
     public bool IsSelected => GetValue(IsSelectedProperty);
 
     /// <summary>
@@ -56,6 +58,19 @@ public sealed class GridViewRow : Panel, ICommandArgumentSource
     object? ICommandArgumentSource.CommandArgument => Item;
 
     internal void SetIsSelected(bool isSelected) => SetValue(IsSelectedPropertyKey, isSelected);
+
+    /// <summary>Sets whether this row is an alternating row and the background it fills when it is.</summary>
+    internal void SetAlternate(bool isAlternate, Color background)
+    {
+        if (_isAlternate == isAlternate && _alternateBackground == background)
+        {
+            return;
+        }
+
+        _isAlternate = isAlternate;
+        _alternateBackground = background;
+        InvalidateVisual();
+    }
 
     /// <summary>
     /// Clears the local values a prepare hook may have assigned, so a recycled row does not carry
@@ -203,6 +218,7 @@ public sealed class GridViewRow : Panel, ICommandArgumentSource
         }
 
         SetValue(ItemPropertyKey, null);
+        SetAlternate(false, Color.Transparent);
         InvalidateMeasure();
     }
 
@@ -280,14 +296,19 @@ public sealed class GridViewRow : Panel, ICommandArgumentSource
     {
         var theme = Theme;
         var snapped = GetSnappedBorderBounds(Bounds);
-        var isSelected = _owner._core.IsItemSelected(_rowIndex);
 
-        var r = theme.Metrics.ControlCornerRadius - 2;
-        if (isSelected)
+        // The alternating fill sits under the selection and hover backgrounds, which cover it.
+        if (_isAlternate && _alternateBackground.A != 0)
         {
-            if (r > 0)
+            context.FillRectangle(snapped, _alternateBackground);
+        }
+
+        var cornerRadius = theme.Metrics.ControlCornerRadius - 2;
+        if (IsSelected)
+        {
+            if (cornerRadius > 0)
             {
-                context.FillRoundedRectangle(snapped, r, r, theme.Palette.SelectionBackground);
+                context.FillRoundedRectangle(snapped, cornerRadius, cornerRadius, theme.Palette.SelectionBackground);
             }
             else
             {
@@ -296,15 +317,15 @@ public sealed class GridViewRow : Panel, ICommandArgumentSource
         }
         else if (IsMouseOver && _owner.IsEffectivelyEnabled)
         {
-            var hoverBg = theme.Palette.ControlBackground.Lerp(theme.Palette.Accent, 0.15);
+            var hoverBackground = theme.Palette.ControlBackground.Lerp(theme.Palette.Accent, 0.15);
 
-            if (r > 0)
+            if (cornerRadius > 0)
             {
-                context.FillRoundedRectangle(snapped, r, r, hoverBg);
+                context.FillRoundedRectangle(snapped, cornerRadius, cornerRadius, hoverBackground);
             }
             else
             {
-                context.FillRectangle(snapped, hoverBg);
+                context.FillRectangle(snapped, hoverBackground);
             }
         }
 

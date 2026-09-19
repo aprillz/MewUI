@@ -107,8 +107,6 @@ internal sealed class FixedHeightItemsPresenter : Control, IItemsPresenter
         }
     }
 
-    public Action<IGraphicsContext, int, Rect>? BeforeItemRender { get; set; }
-
     public Func<int, Rect, Rect>? GetContainerRect { get; set; }
 
     public Thickness ItemPadding { get; set; }
@@ -366,7 +364,6 @@ internal sealed class FixedHeightItemsPresenter : Control, IItemsPresenter
 
         _itemsHost.Options = new TemplatedItemsHost.ItemsRangeOptions
         {
-            BeforeItemRender = BeforeItemRender,
             GetContainerRect = effectiveGetContainerRect,
         };
 
@@ -376,6 +373,12 @@ internal sealed class FixedHeightItemsPresenter : Control, IItemsPresenter
     protected override void OnRender(IGraphicsContext context)
     {
         _itemsHost.RenderArranged(context);
+    }
+
+    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
+    {
+        // No own content slot: OnRender draws only the realized containers.
+        _itemsHost.WriteArrangedComposition(builder);
     }
 
     protected override UIElement? OnHitTest(Point point)

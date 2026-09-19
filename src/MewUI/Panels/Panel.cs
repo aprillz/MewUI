@@ -197,6 +197,27 @@ public abstract class Panel : FrameworkElement
         }
     }
 
+    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
+    {
+        builder.Content(0);
+
+        bool clipToBounds = ClipToBounds;
+        if (clipToBounds)
+        {
+            builder.PushClipRect(Bounds);
+        }
+
+        foreach (var child in _children)
+        {
+            builder.Child(child);
+        }
+
+        if (clipToBounds)
+        {
+            builder.Pop();
+        }
+    }
+
     protected override UIElement? OnHitTest(Point point)
     {
         // Subtree cull. Children are arranged within this panel's layout slot, so a point

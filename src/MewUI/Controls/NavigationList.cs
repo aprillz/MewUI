@@ -57,8 +57,7 @@ public class NavigationList : ScrollableItemsBase, ISelector, IIndexedSelector
         _presenter = new StackItemsPresenter();
         _presenter.ItemsSource = _itemsSource;
         // Each row is wrapped in a host that owns the padding and the per-kind min-height.
-        _presenter.ItemTemplate = new RowTemplate(this, _itemTemplate);
-        _presenter.BeforeItemRender = OnBeforeItemRender;
+        _presenter.ItemTemplate = WrapItemTemplate(new RowTemplate(this, _itemTemplate));
         _presenter.OffsetCorrectionRequested += OnPresenterOffsetCorrectionRequested;
 
         // Base creates the ScrollViewer (chrome, hit-test delegation); nav rows never scroll horizontally.
@@ -91,7 +90,7 @@ public class NavigationList : ScrollableItemsBase, ISelector, IIndexedSelector
             ArgumentNullException.ThrowIfNull(value);
             _itemTemplate = value;
             // Re-wrap so pooled containers rebuild against the new inner template.
-            _presenter.ItemTemplate = new RowTemplate(this, _itemTemplate);
+            ReapplyItemTemplate();
             InvalidateItemBindings();
             InvalidateMeasure();
             InvalidateVisual();
@@ -268,11 +267,41 @@ public class NavigationList : ScrollableItemsBase, ISelector, IIndexedSelector
         var innerBounds = snapped.Deflate(new Thickness(borderInset));
 
         _presenter.ItemBindingGeneration = ItemBindingGeneration;
+
+        UpdateItemCornerRadius();
+
         _scrollViewer.Arrange(innerBounds);
 
         if (TryConsumeScrollIntoViewRequest(out var request) && request.Kind == ScrollIntoViewRequestKind.Index)
         {
             _presenter.RequestScrollIntoView(request.Index);
+        }
+    }
+
+    /// <summary>Re-derives the item corner radius from the control's own radius, before the items bind.</summary>
+    private void UpdateItemCornerRadius()
+    {
+        var borderInset = GetBorderVisualInset();
+        var dpiScale = GetDpi() / 96.0;
+        var clipRadius = Math.Max(0, LayoutRounding.RoundToPixel(CornerRadius, dpiScale) - borderInset);
+        if (clipRadius == _presenter.ItemRadius && clipRadius == _scrollViewer.CornerRadius)
+        {
+            return;
+        }
+
+        _scrollViewer.CornerRadius = clipRadius;
+        _presenter.ItemRadius = clipRadius;
+        RefreshContainerConfiguration(_presenter);
+    }
+
+    protected override void OnMewPropertyChanged(MewProperty property)
+    {
+        base.OnMewPropertyChanged(property);
+
+        // CornerRadius only affects render, so nothing re-arranges on its own to pick the item radius up.
+        if (property.Id == CornerRadiusProperty.Id)
+        {
+            InvalidateArrange();
         }
     }
 
@@ -283,56 +312,45 @@ public class NavigationList : ScrollableItemsBase, ISelector, IIndexedSelector
 
         DrawBackgroundAndBorder(context, bounds, GetValue(BackgroundProperty), GetValue(BorderBrushProperty),
             BorderThickness, radius);
-
-        var borderInset = GetBorderVisualInset();
-        var dpiScale = GetDpi() / 96.0;
-        var clipR = Math.Max(0, LayoutRounding.RoundToPixel(radius, dpiScale) - borderInset);
-        _scrollViewer.CornerRadius = clipR;
-        _presenter.ItemRadius = clipR;
-
-        _scrollViewer.Render(context);
     }
 
-    // The scroll viewer is rendered explicitly in OnRender so background/border layer correctly.
-    protected override void RenderSubtree(IGraphicsContext context)
+    protected override void RenderSubtree(IGraphicsContext context) => _scrollViewer.Render(context);
+
+    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
     {
+        builder.Content(0);
+        builder.Child(_scrollViewer);
     }
 
-    private void OnBeforeItemRender(IGraphicsContext context, int i, Rect itemRect)
+    private protected override bool IsItemSelectedForContainer(int index) => index == SelectedIndex;
+
+    private protected override void ReapplyItemTemplate()
+        => _presenter.ItemTemplate = WrapItemTemplate(new RowTemplate(this, _itemTemplate));
+
+    private protected override void ConfigureItemContainer(ItemContainer container, int index)
     {
         // Selection/hover backgrounds apply to selectable items only; headers/separators stay flat.
-        if (KindAt(i) != NavigationItemKind.Item)
+        bool selectable = KindAt(index) == NavigationItemKind.Item;
+        var palette = Theme.Palette;
+        container.SelectionBackground = selectable ? palette.SelectionBackground : Color.Transparent;
+        container.HoverBackground = selectable
+            ? palette.ControlBackground.Lerp(palette.Accent, 0.15)
+            : Color.Transparent;
+        container.RowPadding = _presenter.ItemPadding;
+        container.CornerRadius = _presenter.ItemRadius;
+        container.SetIsHovered(index == _hoverIndex);
+    }
+
+    /// <summary>Moves the hover to one row, repainting only the containers that change.</summary>
+    private void SetHoverIndex(int index)
+    {
+        if (_hoverIndex == index)
         {
             return;
         }
 
-        double itemRadius = _presenter.ItemRadius;
-        bool selected = i == SelectedIndex;
-
-        if (selected)
-        {
-            var bg = Theme.Palette.SelectionBackground;
-            if (itemRadius > 0)
-            {
-                context.FillRoundedRectangle(itemRect, itemRadius, itemRadius, bg);
-            }
-            else
-            {
-                context.FillRectangle(itemRect, bg);
-            }
-        }
-        else if (i == _hoverIndex)
-        {
-            var bg = Theme.Palette.ControlBackground.Lerp(Theme.Palette.Accent, 0.15);
-            if (itemRadius > 0)
-            {
-                context.FillRoundedRectangle(itemRect, itemRadius, itemRadius, bg);
-            }
-            else
-            {
-                context.FillRectangle(itemRect, bg);
-            }
-        }
+        _hoverIndex = index;
+        RefreshContainerHover(_presenter, index);
     }
 
     protected override void OnMouseMove(MouseEventArgs e)
@@ -348,12 +366,7 @@ public class NavigationList : ScrollableItemsBase, ISelector, IIndexedSelector
         if (e.PointerType == PointerType.Touch)
         {
             _hasLastMousePosition = false;
-            if (_hoverIndex != -1)
-            {
-                _hoverIndex = -1;
-                InvalidateVisual();
-            }
-
+            SetHoverIndex(-1);
             return;
         }
 
@@ -361,22 +374,14 @@ public class NavigationList : ScrollableItemsBase, ISelector, IIndexedSelector
         _lastMousePosition = e.GetPosition(this);
 
         int hover = TryGetItemIndexAtCore(_lastMousePosition, out int index) && KindAt(index) == NavigationItemKind.Item ? index : -1;
-        if (_hoverIndex != hover)
-        {
-            _hoverIndex = hover;
-            InvalidateVisual();
-        }
+        SetHoverIndex(hover);
     }
 
     protected override void OnMouseLeave()
     {
         base.OnMouseLeave();
         _hasLastMousePosition = false;
-        if (_hoverIndex != -1)
-        {
-            _hoverIndex = -1;
-            InvalidateVisual();
-        }
+        SetHoverIndex(-1);
     }
 
     protected override void OnMouseDown(MouseEventArgs e)
@@ -587,16 +592,15 @@ public class NavigationList : ScrollableItemsBase, ISelector, IIndexedSelector
         // Bring the selection fully into view (covers click / keyboard / programmatic paths), so selecting
         // a row that sits on the scroll edge is not left clipped.
         ScrollIntoView(index);
+        RefreshContainerSelection(_presenter);
         InvalidateVisual();
     }
 
     private void OnScrollViewerChanged()
-    {
-        _hoverIndex = _hasLastMousePosition && TryGetItemIndexAtCore(_lastMousePosition, out int hover) && KindAt(hover) == NavigationItemKind.Item
-            ? hover
-            : -1;
-        InvalidateVisual();
-    }
+        => SetHoverIndex(
+            _hasLastMousePosition && TryGetItemIndexAtCore(_lastMousePosition, out int hover) && KindAt(hover) == NavigationItemKind.Item
+                ? hover
+                : -1);
 
     private IDataTemplate CreateDefaultItemTemplate()
         => new DelegateTemplate<object?>(

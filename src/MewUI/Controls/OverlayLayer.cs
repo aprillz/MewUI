@@ -29,6 +29,8 @@ public sealed class OverlayLayer
     /// </summary>
     public int Count => _layer.Count;
 
+    internal UIElement ElementAt(int index) => _layer[index];
+
     /// <summary>
     /// Adds an overlay. Later-added overlays render on top.
     /// </summary>
