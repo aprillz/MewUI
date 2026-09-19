@@ -1351,7 +1351,8 @@ public sealed partial class TreeView : Control, ISubtreeInvalidationHost, IFocus
             return ItemHeight;
         }
 
-        return Math.Max(Theme.Metrics.BaseControlHeight, 24);
+        // The same default as a list box row, so a tree and a list side by side line up.
+        return Math.Max(18, Theme.Metrics.BaseControlHeight - 2);
     }
 
     // Pixel-aligned item height matching the FixedHeightItemsPresenter's visual layout.
