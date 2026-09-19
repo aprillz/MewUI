@@ -525,6 +525,9 @@ public partial class Window
                 var whole = new Rect(0, 0, clientSize.Width, clientSize.Height);
                 if (copiesChangedAreasOnly)
                 {
+                    // A context that ends its frame by copying a buffer of its own to the window copies
+                    // only these areas too.
+                    (context as IPartialPresentContext)?.LimitPresentTo(_frameDamageAreas);
                     _presentedArea = 0;
                     for (int index = 0; index < _frameDamageAreas.Count; index++)
                     {
