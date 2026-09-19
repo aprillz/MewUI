@@ -124,6 +124,98 @@ public sealed class RetainedDrawnInsideOwnerTests
 
     private static void MoveOver(Window window, UIElement element) => window.SendMouseMove(element.CenterOf());
 
+    [TestMethod]
+    public void TabHeaderColourTransition_ShowsOnTheSurfaceAtEveryStep()
+    {
+        using var factory = Start();
+        var tabs = new TabControl().TabItems(
+            new TabItem().Header("First").Content(new TextBlock { Text = "one" }),
+            new TabItem().Header("Second").Content(new TextBlock { Text = "two" }),
+            new TabItem().Header("Third").Content(new TextBlock { Text = "three" }));
+        var window = Show(tabs);
+        using var surface = Surface(factory);
+        Check(factory, window, surface, "first frames");
+
+        long start = System.Diagnostics.Stopwatch.GetTimestamp();
+        long frame = System.Diagnostics.Stopwatch.Frequency / 60;
+        int step = 0;
+        void Advance(int frames, string label)
+        {
+            for (int index = 0; index < frames; index++)
+            {
+                step++;
+                Aprillz.MewUI.Animation.AnimationManager.Instance.UpdateAt(start + (frame * step));
+                window.UpdateVisualStates();
+                CheckOnce(factory, window, surface, $"{label}, animation step {step}");
+            }
+        }
+
+        window.SendMouseMove(new Point(tabs.Bounds.X + 90, tabs.Bounds.Y + 12));
+        Advance(12, "pointer over the second header");
+
+        window.SendClick(new Point(tabs.Bounds.X + 90, tabs.Bounds.Y + 12));
+        Advance(16, "second tab selected");
+
+        window.SendMouseMove(new Point(WIDTH - 4, HEIGHT - 4));
+        Advance(12, "pointer moved away");
+    }
+
+    [TestMethod]
+    public void SegmentColourTransition_ShowsOnTheSurfaceAtEveryStep()
+    {
+        using var factory = Start();
+        var segments = new SegmentedControl().Items("Day", "Week", "Month").SelectedIndex(0);
+        segments.HorizontalAlignment = HorizontalAlignment.Left;
+        segments.VerticalAlignment = VerticalAlignment.Top;
+        segments.Margin = new Thickness(12);
+        var window = Show(segments);
+        using var surface = Surface(factory);
+        Check(factory, window, surface, "first frames");
+
+        long start = System.Diagnostics.Stopwatch.GetTimestamp();
+        long frame = System.Diagnostics.Stopwatch.Frequency / 60;
+        int step = 0;
+        var last = new Point(segments.Bounds.Right - 14, segments.Bounds.Y + segments.Bounds.Height / 2);
+
+        window.SendMouseMove(last);
+        for (int index = 0; index < 12; index++)
+        {
+            Aprillz.MewUI.Animation.AnimationManager.Instance.UpdateAt(start + (frame * ++step));
+            window.UpdateVisualStates();
+            CheckOnce(factory, window, surface, $"pointer over the last segment, animation step {step}");
+        }
+
+        window.SendClick(last);
+        for (int index = 0; index < 16; index++)
+        {
+            Aprillz.MewUI.Animation.AnimationManager.Instance.UpdateAt(start + (frame * ++step));
+            window.UpdateVisualStates();
+            CheckOnce(factory, window, surface, $"last segment selected, animation step {step}");
+        }
+    }
+
+    /// <summary>One frame, then the comparison: a step of an animation must show in the frame it happens in.</summary>
+    private static void CheckOnce(GdiGraphicsFactory factory, Window window, IRenderSurface surface, string label)
+    {
+        window.PerformLayout();
+        window.RenderFrameToSurface(surface);
+
+        using var reference = Surface(factory);
+        window.RenderReferenceFrameToSurface(reference);
+        ReadOnlySpan<byte> expected = ((ICpuPixelSurface)reference).GetReadOnlyPixelSpan();
+        ReadOnlySpan<byte> shown = ((ICpuPixelSurface)surface).GetReadOnlyPixelSpan();
+        int differing = 0;
+        for (int offset = 0; offset + 3 < expected.Length; offset += 4)
+        {
+            if (expected[offset] != shown[offset] || expected[offset + 1] != shown[offset + 1] || expected[offset + 2] != shown[offset + 2])
+            {
+                differing++;
+            }
+        }
+
+        Assert.AreEqual(0, differing, $"{label}: {differing} pixels differ from a frame drawn straight from the visuals");
+    }
+
     private static GdiGraphicsFactory Start()
     {
         if (!OperatingSystem.IsWindows())
