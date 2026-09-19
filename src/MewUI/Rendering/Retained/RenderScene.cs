@@ -16,12 +16,16 @@ internal sealed class RenderSceneStatistics
     /// <summary>Slots a replay had to draw through the live element because no data was recorded.</summary>
     internal int LiveFallbackCount { get; set; }
 
+    /// <summary>Visuals an update looked into, as opposed to passing over because nothing under them changed.</summary>
+    internal int CapturedNodeCount { get; set; }
+
     internal void Reset()
     {
         ContentRecordCount = 0;
         ContentReplayCount = 0;
         RejectedSlotCount = 0;
         LiveFallbackCount = 0;
+        CapturedNodeCount = 0;
     }
 }
 
@@ -131,16 +135,53 @@ internal sealed class RenderScene : IDisposable
             node.ClearSlots();
             node.RecordedContentVersion = -1;
             node.RecordedSubtreeVersion = -1;
+            node.Captured = default;
         }
     }
 
-    /// <summary>Drops the nodes the last pass did not reach, releasing what they held.</summary>
-    internal void PruneUnvisited()
+    private int _reachMark;
+
+    private void MarkReachable(UIElement element)
     {
+        var node = FindNode(element);
+        if (node == null || node.ReachMark == _reachMark)
+        {
+            return;
+        }
+
+        node.ReachMark = _reachMark;
+        var entries = node.Plan.Entries;
+        for (int index = 0; index < entries.Length; index++)
+        {
+            if (entries[index].Kind == CompositionEntryKind.Child && entries[index].Child is UIElement child)
+            {
+                MarkReachable(child);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Drops the nodes no root reaches any more, releasing what they held. An update passes over
+    /// subtrees in which nothing changed, so which nodes it reached says nothing about which are still
+    /// in the scene; what the plans compose does.
+    /// </summary>
+    internal void PruneUnreachable()
+    {
+        _reachMark++;
+        if (Root != null)
+        {
+            MarkReachable(Root);
+        }
+
+        for (int index = 0; index < LayerRoots.Count; index++)
+        {
+            MarkReachable(LayerRoots[index]);
+        }
+
         List<UIElement>? removed = null;
         foreach (var entry in _nodes)
         {
-            if (entry.Value.LastVisitedPass != PassId)
+            if (entry.Value.ReachMark != _reachMark)
             {
                 removed ??= [];
                 removed.Add(entry.Key);

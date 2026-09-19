@@ -106,10 +106,16 @@ internal sealed class SceneUpdate
         _compositions.Add(new PendingComposition(node, plan, state, stateBakedIntoContent));
     }
 
-    internal void StageBounds(VisualNode node, Rect surfaceBounds, Rect surfaceSubtreeBounds, Point placedOrigin, bool clippedAway = false)
+    internal void StageBounds(
+        VisualNode node,
+        Rect surfaceBounds,
+        Rect surfaceSubtreeBounds,
+        Point placedOrigin,
+        bool clippedAway = false,
+        CaptureKey captured = default)
     {
         ArgumentNullException.ThrowIfNull(node);
-        _bounds.Add(new PendingBounds(node, surfaceBounds, surfaceSubtreeBounds, placedOrigin, clippedAway));
+        _bounds.Add(new PendingBounds(node, surfaceBounds, surfaceSubtreeBounds, placedOrigin, clippedAway, captured));
     }
 
     /// <summary>Finds the data this pass staged for a slot, which is not in the node yet.</summary>
@@ -168,16 +174,25 @@ internal sealed class SceneUpdate
         return true;
     }
 
+    /// <summary>True when the last commit changed which visuals the scene holds or who composes them.</summary>
+    internal bool StructureChanged { get; private set; }
+
     /// <summary>Applies everything staged. Nothing before this call has touched the scene.</summary>
     internal void Commit(RenderDirtyRegistry? registry)
     {
         int passId = _scene.BeginPass();
+
+        // What the scene holds can only change where a root, a parent or a plan did; an update that
+        // changed none of them has nothing to prune.
+        StructureChanged = _createdNodes.Count > 0;
         if (_root != null)
         {
+            StructureChanged |= !ReferenceEquals(_scene.Root, _root);
             _scene.Root = _root;
         }
 
         int firstReorderedLayer = CommitLayerRoots();
+        StructureChanged |= firstReorderedLayer >= 0;
 
         foreach (var created in _createdNodes.Values)
         {
@@ -193,6 +208,7 @@ internal sealed class SceneUpdate
                 // The recorded coordinates belong to the previous parent, so nothing of them survives.
                 _scene.AddDamage(visit.Node.SurfaceSubtreeBounds);
                 visit.Node.AttachmentGeneration++;
+                StructureChanged = true;
                 visit.Node.ClearSlots();
             }
 
@@ -217,6 +233,7 @@ internal sealed class SceneUpdate
                 _scene.AddDamage(composition.Node.SurfaceSubtreeBounds);
             }
 
+            StructureChanged |= !ReferenceEquals(composition.Node.Plan, composition.Plan);
             composition.Node.Plan = composition.Plan;
             composition.Node.State = composition.State;
             composition.Node.StateBakedIntoContent = composition.StateBakedIntoContent;
@@ -257,6 +274,7 @@ internal sealed class SceneUpdate
             bounds.Node.SurfaceSubtreeBounds = bounds.SurfaceSubtreeBounds;
             bounds.Node.PlacedOrigin = bounds.PlacedOrigin;
             bounds.Node.Element.NoteReachesSurface(!bounds.ClippedAway);
+            bounds.Node.Captured = bounds.Captured;
         }
 
         DamageLayersFrom(firstReorderedLayer);
@@ -359,7 +377,8 @@ internal sealed class SceneUpdate
         Rect SurfaceBounds,
         Rect SurfaceSubtreeBounds,
         Point PlacedOrigin,
-        bool ClippedAway);
+        bool ClippedAway,
+        CaptureKey Captured);
 
     private readonly record struct PendingSlot(
         VisualNode Node,
