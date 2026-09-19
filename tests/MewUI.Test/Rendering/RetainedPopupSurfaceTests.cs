@@ -52,6 +52,7 @@ public sealed class RetainedPopupSurfaceTests
         // The subtree stands where its owner arranged it, far from the popup surface's own origin.
         var origin = new Point(300, 220);
         var chrome = new PopupChrome(items);
+        chrome.AttachChild();
         chrome.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         chrome.Arrange(new Rect(origin.X, origin.Y, chrome.DesiredSize.Width, chrome.DesiredSize.Height));
 
