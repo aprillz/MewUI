@@ -14,17 +14,22 @@ internal sealed class RenderData : IDisposable
     private readonly double[] _values;
     private readonly object?[] _resources;
     private readonly IDisposable[] _leases;
+
+    // Where each command reaches in the owning visual's local space, under the transform and clip it was recorded in.
+    private readonly Rect[] _extents;
     private bool _disposed;
 
-    internal static RenderData Empty { get; } = new([], [], [], [], default);
+    internal static RenderData Empty { get; } = new([], [], [], [], [], default);
 
     private RenderData(
         RenderCommand[] commands,
         double[] values,
         object?[] resources,
         IDisposable[] leases,
+        Rect[] extents,
         Rect localBounds)
     {
+        _extents = extents;
         _commands = commands;
         _values = values;
         _resources = resources;
@@ -44,6 +49,9 @@ internal sealed class RenderData : IDisposable
     /// <summary>Where this recording reached the surface in the last pass that looked at it.</summary>
     internal Rect SurfaceExtent { get; set; }
 
+    /// <summary>The transform to the surface this was recorded under.</summary>
+    internal Matrix3x2 SurfaceTransform { get; set; }
+
     /// <summary>False when the commands replace, rotate or scale the transform, which a moved replay cannot carry.</summary>
     internal bool CanBePlaced { get; set; } = true;
 
@@ -55,6 +63,7 @@ internal sealed class RenderData : IDisposable
     internal long EstimatedBytes
         => ((long)_commands.Length * Unsafe.SizeOf<RenderCommand>()) +
             ((long)_values.Length * sizeof(double)) +
+            ((long)_extents.Length * Unsafe.SizeOf<Rect>()) +
             ((long)_resources.Length * IntPtr.Size);
 
     /// <summary>
@@ -95,6 +104,86 @@ internal sealed class RenderData : IDisposable
 
         return true;
     }
+
+    /// <summary>
+    /// Finds where this draws differently from <paramref name="previous"/>, in the owning visual's local
+    /// space. Succeeds only when the two differ by drawing calls alone: a differing call that sets a clip,
+    /// a transform or a scope changes what the calls after it do, which leaves the difference unbounded.
+    /// </summary>
+    internal bool TryFindChange(RenderData previous, out Rect change)
+    {
+        change = default;
+        if (RecordedBounds != previous.RecordedBounds || CanBePlaced != previous.CanBePlaced)
+        {
+            return false;
+        }
+
+        int commonLength = Math.Min(_commands.Length, previous._commands.Length);
+        int leading = 0;
+        while (leading < commonLength && IsSameCommand(leading, previous, leading))
+        {
+            leading++;
+        }
+
+        int trailing = 0;
+        while (trailing < commonLength - leading &&
+            IsSameCommand(_commands.Length - 1 - trailing, previous, previous._commands.Length - 1 - trailing))
+        {
+            trailing++;
+        }
+
+        var accumulator = default(BoundsAccumulator);
+        if (!TryAddDrawnExtents(leading, _commands.Length - trailing, ref accumulator) ||
+            !previous.TryAddDrawnExtents(leading, previous._commands.Length - trailing, ref accumulator))
+        {
+            return false;
+        }
+
+        change = accumulator.Result;
+        return true;
+    }
+
+    private bool TryAddDrawnExtents(int startIndex, int endIndex, ref BoundsAccumulator accumulator)
+    {
+        for (int commandIndex = startIndex; commandIndex < endIndex; commandIndex++)
+        {
+            if (_commands[commandIndex].Kind < RenderCommandKind.DrawLine)
+            {
+                return false;
+            }
+
+            accumulator.Add(_extents[commandIndex]);
+        }
+
+        return true;
+    }
+
+    private bool IsSameCommand(int commandIndex, RenderData other, int otherIndex)
+    {
+        ref readonly var command = ref _commands[commandIndex];
+        ref readonly var otherCommand = ref other._commands[otherIndex];
+        if (command.Kind != otherCommand.Kind ||
+            command.Bounds != otherCommand.Bounds ||
+            command.Color != otherCommand.Color ||
+            command.Flags != otherCommand.Flags ||
+            command.ResourcePolicy != otherCommand.ResourcePolicy ||
+            command.ValueCount != otherCommand.ValueCount ||
+            _extents[commandIndex] != other._extents[otherIndex])
+        {
+            return false;
+        }
+
+        if (!_values.AsSpan(command.ValueOffset, command.ValueCount)
+                .SequenceEqual(other._values.AsSpan(otherCommand.ValueOffset, otherCommand.ValueCount)))
+        {
+            return false;
+        }
+
+        return IsSameResource(ResourceAt(command.ResourceIndex), other.ResourceAt(otherCommand.ResourceIndex)) &&
+            IsSameResource(ResourceAt(command.PaintIndex), other.ResourceAt(otherCommand.PaintIndex));
+    }
+
+    private object? ResourceAt(int resourceIndex) => resourceIndex < 0 ? null : _resources[resourceIndex];
 
     private static bool IsSameResource(object? first, object? second)
     {
@@ -177,8 +266,11 @@ internal sealed class RenderData : IDisposable
         double[] values,
         object?[] resources,
         IDisposable[] leases,
+        Rect[] extents,
         Rect localBounds)
-        => commands.Length == 0 ? new RenderData([], [], [], [], default) : new RenderData(commands, values, resources, leases, localBounds);
+        => commands.Length == 0
+            ? new RenderData([], [], [], [], [], default)
+            : new RenderData(commands, values, resources, leases, extents, localBounds);
 }
 
 /// <summary>
@@ -193,6 +285,7 @@ internal sealed class RenderDataBuilder
     private readonly List<double> _values = [];
     private readonly List<object?> _resources = [];
     private readonly List<IDisposable> _leases = [];
+    private readonly List<Rect> _extents = [];
     private readonly Dictionary<object, int> _resourceIndices = new(ReferenceEqualityComparer.Instance);
     private Matrix3x2[] _transformStack = new Matrix3x2[TRANSFORM_STACK_CAPACITY];
 
@@ -324,7 +417,7 @@ internal sealed class RenderDataBuilder
             return false;
         }
 
-        data = RenderData.Create([.. _commands], [.. _values], [.. _resources], [.. _leases], _localBounds);
+        data = RenderData.Create([.. _commands], [.. _values], [.. _resources], [.. _leases], [.. _extents], _localBounds);
         data.CanBePlaced = !_replacesTransform;
 
         // The built data owns the leases from here on, so they must be dropped without releasing.
@@ -358,6 +451,7 @@ internal sealed class RenderDataBuilder
     {
         _commands.Clear();
         _values.Clear();
+        _extents.Clear();
         _resources.Clear();
         _resourceIndices.Clear();
     }
@@ -396,6 +490,7 @@ internal sealed class RenderDataBuilder
         // is wider wherever a stroke straddles the shape's edge.
         var inkArea = inkBounds.IsEmpty ? bounds : inkBounds;
         bool isClip = TrackClip(kind, bounds);
+        var extent = default(Rect);
         if (!isClip && !inkArea.IsEmpty)
         {
             var transformed = RetainedGeometry.TransformRect(inkArea, _transform);
@@ -406,6 +501,7 @@ internal sealed class RenderDataBuilder
 
             if (transformed.Width > 0 && transformed.Height > 0)
             {
+                extent = transformed;
                 if (_hasBounds)
                 {
                     _localBounds = _localBounds.Union(transformed);
@@ -424,6 +520,7 @@ internal sealed class RenderDataBuilder
             _values.Add(values[valueIndex]);
         }
 
+        _extents.Add(extent);
         _commands.Add(new RenderCommand(
             kind,
             bounds,

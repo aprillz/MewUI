@@ -135,6 +135,19 @@ internal sealed class SceneUpdate
         }
     }
 
+    /// <summary>
+    /// Narrows the damage of the slot staged last to where its new recording draws differently from the
+    /// one it replaces. Without it the slot answers for everything either recording reaches.
+    /// </summary>
+    internal void StageSlotChange(VisualNode node, int slotIndex, Rect change)
+    {
+        int last = _slots.Count - 1;
+        if (last >= 0 && ReferenceEquals(_slots[last].Node, node) && _slots[last].SlotIndex == slotIndex)
+        {
+            _slots[last] = _slots[last] with { Change = change };
+        }
+    }
+
     /// <summary>Finds the data this pass staged for a slot, which is not in the node yet.</summary>
     internal bool TryGetStagedSlot(VisualNode node, int slotIndex, out RenderData? data)
     {
@@ -298,6 +311,13 @@ internal sealed class SceneUpdate
                 _scene.AddDamage(slot.Node.SurfaceBounds);
                 _scene.AddDamage(slot.Extent);
             }
+            else if (previous != null && slot.Data != null && slot.Change is Rect change)
+            {
+                // Only some of the drawing calls differ, and the rest already stands on the surface.
+                // The margin around them never reaches past what the two recordings answer for as a whole.
+                _scene.AddDamage(change.Intersect(previous.SurfaceExtent.Union(slot.Extent)));
+                slot.Data.SurfaceExtent = previous.SurfaceExtent;
+            }
             else
             {
                 // A slot the plan did not have before reached nowhere, which an empty extent says.
@@ -459,7 +479,8 @@ internal sealed class SceneUpdate
         string? RejectionReason,
         int ContentVersion,
         int SubtreeVersion,
-        Rect Extent = default);
+        Rect Extent = default,
+        Rect? Change = null);
 
     private readonly record struct PendingExtent(VisualNode Node, int SlotIndex, Rect Extent);
 

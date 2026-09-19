@@ -326,6 +326,7 @@ internal sealed class SceneCapture
         var bounds = default(BoundsAccumulator);
         var subtreeExtent = Visible(RetainedGeometry.TransformRect(SlotBounds(update, node, OWN_CONTENT_SLOT), transform));
         update.StageSlotExtent(node, OWN_CONTENT_SLOT, subtreeExtent);
+        StageChangeWithinSlot(update, node, OWN_CONTENT_SLOT, transform);
         bounds.Add(subtreeExtent);
         update.StageBounds(node, bounds.Result, bounds.Result, Origin(element), IsClippedAway(element, transform, bounds.Result));
         return bounds.Result;
@@ -368,6 +369,7 @@ internal sealed class SceneCapture
 
                     var slotExtent = Visible(RetainedGeometry.TransformRect(SlotBounds(update, node, slotIndex), transform));
                     update.StageSlotExtent(node, slotIndex, slotExtent);
+                    StageChangeWithinSlot(update, node, slotIndex, transform);
                     ownBounds.Add(slotExtent);
                     entryIndex++;
                     break;
@@ -550,6 +552,26 @@ internal sealed class SceneCapture
     }
 
     /// <summary>The part of an extent that the clips around it let reach the surface.</summary>
+    private const double CHANGED_CALL_MARGIN = 1;
+
+    private void StageChangeWithinSlot(SceneUpdate update, VisualNode node, int slotIndex, Matrix3x2 transform)
+    {
+        if (!update.TryGetStagedSlot(node, slotIndex, out var staged) || staged == null)
+        {
+            return;
+        }
+
+        // A recording that also stands elsewhere on the surface differs everywhere, whatever its commands say.
+        staged.SurfaceTransform = transform;
+        var previous = node.GetSlot(slotIndex);
+        if (previous != null && previous.SurfaceTransform == transform && staged.TryFindChange(previous, out var change))
+        {
+            // Antialiasing blends a call into the pixels beside it, where the calls left as they were also reach.
+            var reached = RetainedGeometry.TransformRect(change, transform);
+            update.StageSlotChange(node, slotIndex, Visible(reached.IsEmpty ? reached : reached.Inflate(CHANGED_CALL_MARGIN, CHANGED_CALL_MARGIN)));
+        }
+    }
+
     private Rect Visible(Rect extent)
     {
         if (_ambientClip is not Rect clip || extent.IsEmpty)
