@@ -18,7 +18,6 @@ internal sealed class TemplatedItemsHost : IDisposable
 
     internal struct ItemsRangeOptions
     {
-        public Action<IGraphicsContext, int, Rect>? BeforeItemRender;
         public Func<int, Rect, Rect>? GetContainerRect;
     }
 
@@ -94,7 +93,6 @@ internal sealed class TemplatedItemsHost : IDisposable
             Layout.LastExclusive,
             Layout.ItemHeight,
             Layout.YStart,
-            Options.BeforeItemRender,
             Options.GetContainerRect,
             Layout.ItemBindingGeneration);
     }
@@ -103,12 +101,17 @@ internal sealed class TemplatedItemsHost : IDisposable
     {
         _presenter.RenderArrangedRange(
             context,
-            Layout.ContentBounds,
             Layout.First,
-            Layout.LastExclusive,
-            Layout.ItemHeight,
-            Layout.YStart,
-            Options.BeforeItemRender);
+            Layout.LastExclusive);
+    }
+
+    /// <summary>Declares the realized containers of the arranged range in render order.</summary>
+    public void WriteArrangedComposition(Rendering.Retained.CompositionPlanBuilder builder)
+    {
+        _presenter.WriteArrangedRangeComposition(
+            builder,
+            Layout.First,
+            Layout.LastExclusive);
     }
 
     public void Arrange()

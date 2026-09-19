@@ -320,6 +320,19 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
         }
     }
 
+    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
+    {
+        builder.Content(0);
+        if (_verticalScrollBar.IsVisible)
+        {
+            builder.Child(_verticalScrollBar);
+        }
+        if (_horizontalScrollBar.IsVisible)
+        {
+            builder.Child(_horizontalScrollBar);
+        }
+    }
+
     protected override UIElement? OnHitTest(Point point)
     {
         if (!IsVisible || !IsHitTestVisible || !IsEffectivelyEnabled)

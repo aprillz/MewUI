@@ -51,6 +51,14 @@ internal sealed class PopupChrome : FrameworkElement, IVisualTreeHost
         HostSurface?.InvalidateVisual();
     }
 
+    internal override void NotifyDescendantRenderDirty(ref Rendering.Retained.RenderDirtyRequest request)
+    {
+        base.NotifyDescendantRenderDirty(ref request);
+
+        // The popup window is the surface that draws this subtree, so it queues the change as well.
+        HostSurface?.NotifyDescendantRenderDirty(ref request);
+    }
+
     /// <inheritdoc/>
     public override void InvalidateMeasure()
     {
@@ -109,6 +117,12 @@ internal sealed class PopupChrome : FrameworkElement, IVisualTreeHost
     protected override void RenderSubtree(IGraphicsContext context)
     {
         _child.Render(context);
+    }
+
+    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
+    {
+        builder.Content(0);
+        builder.Child(_child);
     }
 
     protected override UIElement? OnHitTest(Point point)

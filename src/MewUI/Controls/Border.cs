@@ -7,6 +7,9 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public sealed partial class Border : Control, IVisualTreeHost, ILogicalTreeHost
 {
+    private const int BACKGROUND_SLOT = 0;
+    private const int BORDER_STROKE_SLOT = 1;
+
     static Border() { }
 
     private static readonly bool _defaultStyleRegistered =
@@ -237,45 +240,14 @@ public sealed partial class Border : Control, IVisualTreeHost, ILogicalTreeHost
             if (ClipToBounds)
             {
                 context.Save();
-
-                if (metrics.IsSimple)
+                GetChildClip(in metrics, out var clipRect, out double radiusX, out double radiusY);
+                if (radiusX > 0 || radiusY > 0)
                 {
-                    var bt = metrics.UniformThickness;
-                    var clipRect = bt > 0
-                        ? new Rect(metrics.Bounds.X + bt, metrics.Bounds.Y + bt,
-                            Math.Max(0, metrics.Bounds.Width - bt * 2),
-                            Math.Max(0, metrics.Bounds.Height - bt * 2))
-                        : metrics.Bounds;
-                    clipRect = clipRect.Deflate(Padding);
-
-                    if (metrics.UniformRadius > 0)
-                    {
-                        var clipRadius = metrics.UniformInnerRadius;
-                        context.SetClipRoundedRect(clipRect, clipRadius, clipRadius);
-                    }
-                    else
-                    {
-                        context.SetClip(clipRect);
-                    }
+                    context.SetClipRoundedRect(clipRect, radiusX, radiusY);
                 }
                 else
                 {
-                    var clipRect = metrics.InnerBounds.Deflate(Padding);
-                    double minRX = Math.Min(
-                        Math.Min(metrics.InnerTopLeftX, metrics.InnerTopRightX),
-                        Math.Min(metrics.InnerBottomRightX, metrics.InnerBottomLeftX));
-                    double minRY = Math.Min(
-                        Math.Min(metrics.InnerTopLeftY, metrics.InnerTopRightY),
-                        Math.Min(metrics.InnerBottomRightY, metrics.InnerBottomLeftY));
-
-                    if (minRX > 0 || minRY > 0)
-                    {
-                        context.SetClipRoundedRect(clipRect, minRX, minRY);
-                    }
-                    else
-                    {
-                        context.SetClip(clipRect);
-                    }
+                    context.SetClip(clipRect);
                 }
 
                 Child.Render(context);
@@ -287,27 +259,103 @@ public sealed partial class Border : Control, IVisualTreeHost, ILogicalTreeHost
             }
         }
 
-        // Simple case: border stroke drawn after child (on top).
-        // Non-uniform case: already painted in OnRender (border under background under child).
+        RenderBorderStroke(context, in metrics);
+    }
+
+    private void GetChildClip(in BorderRenderMetrics metrics, out Rect clipRect, out double radiusX, out double radiusY)
+    {
         if (metrics.IsSimple)
         {
-            var borderBrush = BorderBrush;
-            if (metrics.UniformThickness > 0 && borderBrush.A > 0)
-            {
-                var bounds = metrics.Bounds;
-                var radius = metrics.UniformRadius;
-                var thickness = metrics.UniformThickness;
+            var borderThickness = metrics.UniformThickness;
+            clipRect = borderThickness > 0
+                ? new Rect(metrics.Bounds.X + borderThickness, metrics.Bounds.Y + borderThickness,
+                    Math.Max(0, metrics.Bounds.Width - borderThickness * 2),
+                    Math.Max(0, metrics.Bounds.Height - borderThickness * 2))
+                : metrics.Bounds;
+            clipRect = clipRect.Deflate(Padding);
+            radiusX = metrics.UniformRadius > 0 ? metrics.UniformInnerRadius : 0;
+            radiusY = radiusX;
+        }
+        else
+        {
+            clipRect = metrics.InnerBounds.Deflate(Padding);
+            radiusX = Math.Min(
+                Math.Min(metrics.InnerTopLeftX, metrics.InnerTopRightX),
+                Math.Min(metrics.InnerBottomRightX, metrics.InnerBottomLeftX));
+            radiusY = Math.Min(
+                Math.Min(metrics.InnerTopLeftY, metrics.InnerTopRightY),
+                Math.Min(metrics.InnerBottomRightY, metrics.InnerBottomLeftY));
+        }
+    }
 
-                if (radius > 0)
+    private void RenderBorderStroke(IGraphicsContext context, in BorderRenderMetrics metrics)
+    {
+        // The non-uniform case paints its ring in OnRender, under the background and the child.
+        if (!metrics.IsSimple)
+        {
+            return;
+        }
+
+        var borderBrush = BorderBrush;
+        if (metrics.UniformThickness > 0 && borderBrush.A > 0)
+        {
+            var bounds = metrics.Bounds;
+            var radius = metrics.UniformRadius;
+            var thickness = metrics.UniformThickness;
+
+            if (radius > 0)
+            {
+                context.DrawRoundedRectangle(bounds, radius, radius, borderBrush, thickness, strokeInset: true);
+            }
+            else
+            {
+                context.DrawRectangle(bounds, borderBrush, thickness, strokeInset: true);
+            }
+        }
+    }
+
+    internal override void WriteOwnContent(IGraphicsContext context, int slotIndex)
+    {
+        if (slotIndex == BORDER_STROKE_SLOT)
+        {
+            var metrics = CreateMetrics(Bounds);
+            RenderBorderStroke(context, in metrics);
+        }
+        else
+        {
+            OnRender(context);
+        }
+    }
+
+    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
+    {
+        builder.Content(BACKGROUND_SLOT);
+
+        if (Child != null)
+        {
+            var metrics = CreateMetrics(Bounds);
+            if (ClipToBounds)
+            {
+                GetChildClip(in metrics, out var clipRect, out double radiusX, out double radiusY);
+                if (radiusX > 0 || radiusY > 0)
                 {
-                    context.DrawRoundedRectangle(bounds, radius, radius, borderBrush, thickness, strokeInset: true);
+                    builder.PushClipRoundedRect(clipRect, radiusX, radiusY);
                 }
                 else
                 {
-                    context.DrawRectangle(bounds, borderBrush, thickness, strokeInset: true);
+                    builder.PushClipRect(clipRect);
                 }
+
+                builder.Child(Child);
+                builder.Pop();
+            }
+            else
+            {
+                builder.Child(Child);
             }
         }
+
+        builder.Content(BORDER_STROKE_SLOT);
     }
 
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)

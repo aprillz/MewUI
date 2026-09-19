@@ -185,6 +185,15 @@ public class HeaderedContentControl : ContentControl
         }
     }
 
+    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
+    {
+        base.WriteComposition(builder);
+        if (!HasTemplateInstance)
+        {
+            builder.Child(Header);
+        }
+    }
+
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
     {
         var templateRoot = TemplateVisualRoot;

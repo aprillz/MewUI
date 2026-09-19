@@ -489,6 +489,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         OverlayLayer = new OverlayLayer(this);
         _popupManager = new PopupManager(this);
         InitializeBitmapCacheDiagnostics();
+        RegisterRetainedDiagnostics();
 
         // The tree window targets another window; giving it its own DevTools would nest them.
         if (DevToolsGate.IsSupported && this is not DebugVisualTreeWindow)
@@ -2487,6 +2488,14 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     /// </summary>
     public override void InvalidateVisual() => RequestRender();
 
+    internal override void NotifyDescendantRenderDirty(ref Rendering.Retained.RenderDirtyRequest request)
+    {
+        QueueRenderDirty(in request);
+
+        // Waking goes through the public entry point so a window that observes it still does.
+        InvalidateVisual();
+    }
+
     private void InvalidateBackend()
     {
         if (_backend == null)
@@ -2931,6 +2940,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         if (target == null || !target.TryUpdateSurface(surface))
         {
             // Surface or pixel size changed - cached context references stale handles.
+            NotePresentedFrameLost();
             _renderContext?.Dispose();
             _renderContext = null;
             target = new WindowRenderTarget(surface);
@@ -2940,7 +2950,10 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         _renderFrameActive = true;
         try
         {
-            RenderFrameCore(target, clientSize);
+            if (!TryRenderFrameThroughRetainedSurface(target, clientSize))
+            {
+                RenderFrameCore(target, clientSize);
+            }
         }
         finally
         {
@@ -3003,73 +3016,57 @@ public partial class Window : ContentControl, ILayoutRoundingHost
                 clearColor = EffectiveOpaqueBackground;
             }
 
-            phaseStart = profiling ? Stopwatch.GetTimestamp() : 0;
-            using (profiling ? ProfilerMarkers.Clear.Auto() : default)
+            // The scene is brought up to date before anything is cleared, because what the frame has
+            // to repaint is decided from the finished scene.
+            // A popup window draws a subtree of its owner under a transform of its own. It keeps a scene
+            // of that subtree, which saves recording it again, but the scene knows the subtree in the
+            // owner's coordinates, so such a window always replays its whole frame.
+            Rect? retainedDamage;
+            if (_hostedPortalRoot is UIElement portalRoot)
             {
-                context.Clear(clearColor);
-
-                if (AllowsTransparency && Background.A > 0)
-                {
-                    // Draw the background through the normal pipeline so alpha is handled consistently.
-                    context.FillRectangle(new Rect(0, 0, clientSize.Width, clientSize.Height), Background);
-                }
+                UpdateRetainedScene(context, target, portalRoot, isPortal: true);
+                retainedDamage = null;
             }
-            if (profiling)
+            else if (EffectiveVisualRoot is UIElement sceneRoot)
             {
-                frameTiming.RenderBodyTicks += Stopwatch.GetTimestamp() - phaseStart;
+                retainedDamage = UpdateRetainedScene(context, target, sceneRoot, isPortal: false);
+            }
+            else
+            {
+                retainedDamage = null;
             }
 
-            // Cull viewport in layout coordinates: this window's client rect, offset into the owner's
-            // coordinate space when hosting a portal subtree so popup content that lies outside the
-            // owner but inside this surface is not culled by the viewport-bounds check in Render.
-            var previousCullViewport = UIElement.RenderCullViewport;
-            UIElement.RenderCullViewport = new Rect(
-                _hostedPortalOrigin.X, _hostedPortalOrigin.Y, clientSize.Width / _hostedPortalScale, clientSize.Height / _hostedPortalScale);
-
-            // Ensure nothing paints outside the client area.
-            context.Save();
-            // Clip should not shrink due to edge rounding; snap outward to avoid 1px clipping at non-100% DPI.
-            context.SetClip(LayoutRounding.SnapViewportRectToPixels(new Rect(0, 0, clientSize.Width, clientSize.Height), DpiScale));
-
-            try
+            // A frame that repaints areas paints each one on its own: erase it, clip to it, and replay
+            // what touches it. Areas far apart then cost what they cover, not what lies between them.
+            // When the target still holds the frame this one would draw, no area is painted at all. The
+            // frame still ends the usual way, so what counts frames keeps counting them.
+            int paintedAreaCount = RepaintsNothing(retainedDamage) ? 0 : retainedDamage == null ? 1 : _frameDamageAreas.Count;
+            _frameRepaintedNothing = paintedAreaCount == 0;
+            if (paintedAreaCount > 0 && _hostedPortalRoot == null)
             {
+                NoteDamageMarks(retainedDamage, clientSize);
+            }
+
+            for (int paintedAreaIndex = 0; paintedAreaIndex < paintedAreaCount; paintedAreaIndex++)
+            {
+                Rect? paintedArea = retainedDamage == null ? null : _frameDamageAreas[paintedAreaIndex];
+
                 phaseStart = profiling ? Stopwatch.GetTimestamp() : 0;
-                using (profiling ? ProfilerMarkers.ContentRender.Auto() : default)
+                using (profiling ? ProfilerMarkers.Clear.Auto() : default)
                 {
-                    if (_hostedPortalRoot != null)
+                    if (paintedArea is Rect damageToErase)
                     {
-                        // The portal subtree is arranged in the owner's coordinate space; shift it back
-                        // to this surface's origin for painting.
-                        context.Save();
-                        context.Scale(_hostedPortalScale, _hostedPortalScale);
-                        context.Translate(-_hostedPortalOrigin.X, -_hostedPortalOrigin.Y);
-                        _hostedPortalRoot.Render(context);
-                        context.Restore();
+                        EraseRetainedDamage(context, damageToErase, clearColor);
                     }
                     else
                     {
-                        EffectiveVisualRoot?.Render(context);
+                        context.Clear(clearColor);
                     }
-                }
-                if (profiling)
-                {
-                    frameTiming.RenderBodyTicks += Stopwatch.GetTimestamp() - phaseStart;
-                }
 
-                phaseStart = profiling ? Stopwatch.GetTimestamp() : 0;
-                using (profiling ? ProfilerMarkers.AdornerRender.Auto() : default)
-                {
-                    for (int i = 0; i < _adorners.Count; i++)
+                    if (AllowsTransparency && Background.A > 0)
                     {
-                        var adorner = _adorners[i].Element;
-
-                        // The performance monitor draws last so it can report this frame's own cost.
-                        if (DevToolsGate.IsSupported && ReferenceEquals(adorner, _devTools?.PerformanceAdorner))
-                        {
-                            continue;
-                        }
-
-                        adorner.Render(context);
+                        // Draw the background through the normal pipeline so alpha is handled consistently.
+                        context.FillRectangle(paintedArea ?? new Rect(0, 0, clientSize.Width, clientSize.Height), Background);
                     }
                 }
                 if (profiling)
@@ -3077,43 +3074,135 @@ public partial class Window : ContentControl, ILayoutRoundingHost
                     frameTiming.RenderBodyTicks += Stopwatch.GetTimestamp() - phaseStart;
                 }
 
-                phaseStart = profiling ? Stopwatch.GetTimestamp() : 0;
-                using (profiling ? ProfilerMarkers.PopupRender.Auto() : default)
+                // Cull viewport in layout coordinates: this window's client rect, offset into the owner's
+                // coordinate space when hosting a portal subtree so popup content that lies outside the
+                // owner but inside this surface is not culled by the viewport-bounds check in Render.
+                var previousCullViewport = UIElement.RenderCullViewport;
+                UIElement.RenderCullViewport = new Rect(
+                    _hostedPortalOrigin.X, _hostedPortalOrigin.Y, clientSize.Width / _hostedPortalScale, clientSize.Height / _hostedPortalScale);
+
+                // Ensure nothing paints outside the client area.
+                context.Save();
+                // Clip should not shrink due to edge rounding; snap outward to avoid 1px clipping at non-100% DPI.
+                context.SetClip(LayoutRounding.SnapViewportRectToPixels(new Rect(0, 0, clientSize.Width, clientSize.Height), DpiScale));
+
+                // A frame that repaints part of the surface keeps every layer inside the area it erased.
+                if (paintedArea is Rect damageClip)
                 {
-                    _popupManager.Render(context);
-                }
-                if (profiling)
-                {
-                    frameTiming.RenderBodyTicks += Stopwatch.GetTimestamp() - phaseStart;
+                    context.IntersectClip(damageClip);
                 }
 
-                phaseStart = profiling ? Stopwatch.GetTimestamp() : 0;
-                using (profiling ? ProfilerMarkers.OverlayRender.Auto() : default)
+                try
                 {
-                    OverlayLayer.Render(context);
-                }
-                if (profiling)
-                {
-                    frameTiming.RenderBodyTicks += Stopwatch.GetTimestamp() - phaseStart;
-                }
-
-                if (DevToolsGate.IsSupported && _devTools?.PerformanceAdorner is Adorner performanceAdorner)
-                {
+                    bool sceneDrewTheSurface = false;
                     phaseStart = profiling ? Stopwatch.GetTimestamp() : 0;
-                    using (profiling ? ProfilerMarkers.DevToolsRender.Auto() : default)
+                    using (profiling ? ProfilerMarkers.ContentRender.Auto() : default)
                     {
-                        performanceAdorner.Render(context);
+                        if (_hostedPortalRoot != null)
+                        {
+                            // The portal subtree is arranged in the owner's coordinate space; shift it back
+                            // to this surface's origin for painting.
+                            context.Save();
+                            context.Scale(_hostedPortalScale, _hostedPortalScale);
+                            context.Translate(-_hostedPortalOrigin.X, -_hostedPortalOrigin.Y);
+                            if (!TryRenderRetainedBody(context, null))
+                            {
+                                _hostedPortalRoot.Render(context);
+                            }
+                            context.Restore();
+                        }
+                        else if (EffectiveVisualRoot is UIElement bodyRoot)
+                        {
+                            // The scene holds the body and every layer over it, so one replay draws them all.
+                            sceneDrewTheSurface = TryRenderRetainedBody(context, paintedArea);
+                            if (!sceneDrewTheSurface)
+                            {
+                                bodyRoot.Render(context);
+                            }
+                        }
+                        else
+                        {
+                            EffectiveVisualRoot?.Render(context);
+                        }
                     }
                     if (profiling)
                     {
-                        frameTiming.DevToolsTicks += Stopwatch.GetTimestamp() - phaseStart;
+                        frameTiming.RenderBodyTicks += Stopwatch.GetTimestamp() - phaseStart;
                     }
+
+                    phaseStart = profiling ? Stopwatch.GetTimestamp() : 0;
+                    using (profiling ? ProfilerMarkers.AdornerRender.Auto() : default)
+                    {
+                        for (int i = 0; !sceneDrewTheSurface && i < _adorners.Count; i++)
+                        {
+                            var adorner = _adorners[i].Element;
+
+                            // The performance monitor draws last so it can report this frame's own cost.
+                            if (DevToolsGate.IsSupported && ReferenceEquals(adorner, _devTools?.PerformanceAdorner))
+                            {
+                                continue;
+                            }
+
+                            adorner.Render(context);
+                        }
+                    }
+                    if (profiling)
+                    {
+                        frameTiming.RenderBodyTicks += Stopwatch.GetTimestamp() - phaseStart;
+                    }
+
+                    phaseStart = profiling ? Stopwatch.GetTimestamp() : 0;
+                    using (profiling ? ProfilerMarkers.PopupRender.Auto() : default)
+                    {
+                        if (!sceneDrewTheSurface)
+                        {
+                            _popupManager.Render(context);
+                        }
+                    }
+                    if (profiling)
+                    {
+                        frameTiming.RenderBodyTicks += Stopwatch.GetTimestamp() - phaseStart;
+                    }
+
+                    phaseStart = profiling ? Stopwatch.GetTimestamp() : 0;
+                    using (profiling ? ProfilerMarkers.OverlayRender.Auto() : default)
+                    {
+                        if (!sceneDrewTheSurface)
+                        {
+                            OverlayLayer.Render(context);
+                        }
+                    }
+                    if (profiling)
+                    {
+                        frameTiming.RenderBodyTicks += Stopwatch.GetTimestamp() - phaseStart;
+                    }
+
+                    if (!sceneDrewTheSurface && DevToolsGate.IsSupported && _devTools?.PerformanceAdorner is Adorner performanceAdorner)
+                    {
+                        phaseStart = profiling ? Stopwatch.GetTimestamp() : 0;
+                        using (profiling ? ProfilerMarkers.DevToolsRender.Auto() : default)
+                        {
+                            performanceAdorner.Render(context);
+                        }
+                        if (profiling)
+                        {
+                            frameTiming.DevToolsTicks += Stopwatch.GetTimestamp() - phaseStart;
+                        }
+                    }
+
+                }
+                finally
+                {
+                    context.Restore();
+                    UIElement.RenderCullViewport = previousCullViewport;
                 }
             }
-            finally
+
+            // A target that keeps its contents would keep the marks too, so they are drawn only where
+            // the next frame starts clean; the frame surface gets them when it is put on screen.
+            if (target is not Rendering.IPersistentFrameSurface)
             {
-                context.Restore();
-                UIElement.RenderCullViewport = previousCullViewport;
+                DrawDamageMarks(context);
             }
 
             if (context is GraphicsContextBase gcb)

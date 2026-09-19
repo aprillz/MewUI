@@ -31,6 +31,9 @@ public abstract partial class UIElement
     // property-store lookup on every call.
     private bool _hasBitmapCache;
 
+    /// <summary>True while a <see cref="BitmapCache"/> serves this element's pixels.</summary>
+    internal bool HasBitmapCache => _hasBitmapCache;
+
     // Monotonic content version, bumped whenever this element invalidates its visual (directly or
     // via a descendant bubbling up through here). The cache stores the version it captured; a
     // mismatch triggers a re-snapshot. Using a version instead of a bool avoids losing an
@@ -71,6 +74,9 @@ public abstract partial class UIElement
             }
         });
     }
+
+    /// <summary>Told by the scene whether any part of this visual or of what is under it reaches the surface.</summary>
+    internal void NoteReachesSurface(bool reaches) => _culledSinceLastRender = !reaches;
 
     private void MarkRendered()
     {
@@ -122,23 +128,40 @@ public abstract partial class UIElement
 
     public override void InvalidateVisual()
     {
-        // The version is bumped even when the walk stops here, so a cache rebuilt after this element
-        // comes back into view carries the content this repaint asked for.
+        // The version is bumped even when the walk stops at a culled visual, so a cache rebuilt after
+        // this element comes back into view carries the content this repaint asked for.
         if (_hasBitmapCache)
         {
             _contentVersion++;
         }
 
-        // A repaint from an element the last render pass culled reaches no pixels, so it must not wake
-        // the window. SkipViewportCull is read live: an element that set it after being marked is
-        // drawn again and has to be able to ask for it.
-        if (_culledSinceLastRender && !SkipViewportCull && !IsRenderingToCache)
+        RaiseRenderDirty(Rendering.Retained.RenderDirtyKind.Content);
+    }
+
+    /// <summary>A cached bitmap holds its descendants' pixels, so a change under it makes it stale.</summary>
+    private void NoteDescendantChangedUnderCache()
+    {
+        if (_hasBitmapCache)
         {
-            StaleCachedAncestors();
-            return;
+            _contentVersion++;
+        }
+    }
+
+    /// <summary>
+    /// Whether an invalidation stops here because the last render pass culled this visual. The cached
+    /// ancestors are still told, since a cache rebuilt later must not serve the pixels from before.
+    /// </summary>
+    private bool StopsAtCulledVisual()
+    {
+        // SkipViewportCull is read live: an element that set it after being marked is drawn again and
+        // has to be able to ask for it.
+        if (!_culledSinceLastRender || SkipViewportCull || IsRenderingToCache)
+        {
+            return false;
         }
 
-        base.InvalidateVisual();
+        StaleCachedAncestors();
+        return true;
     }
 
     /// <summary>

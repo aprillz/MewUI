@@ -113,6 +113,12 @@ public sealed class ContentPresenter : FrameworkElement, IVisualTreeHost
         projected?.Render(context);
     }
 
+    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
+    {
+        builder.Content(0);
+        builder.Child(ActiveProjection);
+    }
+
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
     {
         var projected = ActiveProjection;

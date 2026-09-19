@@ -79,10 +79,10 @@ public sealed partial class NavigationView : Control, IVisualTreeHost
 
     public NavigationView()
     {
-        _pane = new NavigationList { BorderThickness = 0, Background = Color.Transparent, ItemHeight = CompactSlot }.Cached();
+        _pane = new NavigationList { BorderThickness = 0, Background = Color.Transparent, ItemHeight = CompactSlot };
         _pane.SelectionChanged += OnMainSelectionChanged;
 
-        _footerPane = new NavigationList { BorderThickness = 0, Background = Color.Transparent, ItemHeight = CompactSlot }.Cached();
+        _footerPane = new NavigationList { BorderThickness = 0, Background = Color.Transparent, ItemHeight = CompactSlot };
         _footerPane.SelectionChanged += OnFooterSelectionChanged;
 
         // The hamburger is a standalone element pinned to the top-left in every mode, so the pane can slide
@@ -527,6 +527,34 @@ public sealed partial class NavigationView : Control, IVisualTreeHost
 
         // The pinned hamburger always renders on top so it never moves and is never covered by the pane.
         _paneToggle.Render(context);
+    }
+
+    private const int PANE_SEPARATOR_SLOT = 1;
+
+    internal override void WriteOwnContent(IGraphicsContext context, int slotIndex)
+    {
+        if (slotIndex == PANE_SEPARATOR_SLOT)
+        {
+            DrawPaneSeparator(context);
+        }
+        else
+        {
+            base.WriteOwnContent(context, slotIndex);
+        }
+    }
+
+    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
+    {
+        builder.Content(0);
+        builder.Child(_contentHost);
+
+        if (_effectiveMode != PaneDisplayMode.Overlay || _overlayProgress > 0.001)
+        {
+            builder.Child(_paneHost);
+            builder.Content(PANE_SEPARATOR_SLOT);
+        }
+
+        builder.Child(_paneToggle);
     }
 
     private void DrawPaneSeparator(IGraphicsContext context)

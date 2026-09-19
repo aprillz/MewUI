@@ -1,5 +1,3 @@
-using Aprillz.MewUI.Rendering;
-
 namespace Aprillz.MewUI.Controls;
 
 internal interface IItemsPresenter : IScrollContent, IVisualTreeHost
@@ -7,8 +5,6 @@ internal interface IItemsPresenter : IScrollContent, IVisualTreeHost
     IItemsView ItemsSource { get; set; }
 
     IDataTemplate ItemTemplate { get; set; }
-
-    Action<IGraphicsContext, int, Rect>? BeforeItemRender { get; set; }
 
     Func<int, Rect, Rect>? GetContainerRect { get; set; }
 

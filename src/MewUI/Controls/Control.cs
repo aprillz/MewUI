@@ -505,6 +505,12 @@ public abstract partial class Control : TextElement
         }
     }
 
+    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
+    {
+        builder.Content(0);
+        builder.Child(_templateInstance?.VisualRoot);
+    }
+
     /// <summary>
     /// Queues a visual-state reconciliation that re-applies style values even when the state
     /// flags compare equal, snapping instead of animating. Used when a virtualization-pinned

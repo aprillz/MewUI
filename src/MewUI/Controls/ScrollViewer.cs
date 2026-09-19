@@ -165,7 +165,7 @@ public sealed class ScrollViewer : ContentControl
         HorizontalOffset = horizontalOffset;
         VerticalOffset = verticalOffset;
         SyncBars();
-        InvalidateVisual();
+        RaiseScrolled();
         ReevaluateMouseOverAfterScroll();
         NotifyScrollChanged();
     }
@@ -263,7 +263,7 @@ public sealed class ScrollViewer : ContentControl
         _vBar.ValueChanged += v =>
         {
             VerticalOffset = v;
-            InvalidateVisual();
+            RaiseScrolled();
             ReevaluateMouseOverAfterScroll();
             NotifyScrollChanged();
         };
@@ -271,7 +271,7 @@ public sealed class ScrollViewer : ContentControl
         _hBar.ValueChanged += v =>
         {
             HorizontalOffset = v;
-            InvalidateVisual();
+            RaiseScrolled();
             ReevaluateMouseOverAfterScroll();
             NotifyScrollChanged();
         };
@@ -465,17 +465,13 @@ public sealed class ScrollViewer : ContentControl
 
     protected override void RenderSubtree(IGraphicsContext context)
     {
-        var borderInset = GetBorderVisualInset();
-        var viewport = GetContentViewportBounds(Bounds, borderInset);
-        var clip = GetContentClipBounds(viewport);
+        GetContentClip(out var clip, out double clipRadius);
 
         // Render content clipped to viewport.
         context.Save();
-        double r = Math.Max(0, CornerRadius - Math.Min(Padding.Left, Math.Min(Padding.Right, Math.Min(Padding.Top, Padding.Bottom))));
-        if (r > 0)
+        if (clipRadius > 0)
         {
-            r = Math.Min(r, Math.Min(clip.Width, clip.Height) / 2);
-            context.SetClipRoundedRect(clip, r, r);
+            context.SetClipRoundedRect(clip, clipRadius, clipRadius);
         }
         else
         {
@@ -493,6 +489,47 @@ public sealed class ScrollViewer : ContentControl
         if (_hBar.IsVisible)
         {
             _hBar.Render(context);
+        }
+    }
+
+    private void GetContentClip(out Rect clip, out double clipRadius)
+    {
+        var borderInset = GetBorderVisualInset();
+        var viewport = GetContentViewportBounds(Bounds, borderInset);
+        clip = GetContentClipBounds(viewport);
+
+        clipRadius = Math.Max(0, CornerRadius - Math.Min(Padding.Left, Math.Min(Padding.Right, Math.Min(Padding.Top, Padding.Bottom))));
+        if (clipRadius > 0)
+        {
+            clipRadius = Math.Min(clipRadius, Math.Min(clip.Width, clip.Height) / 2);
+        }
+    }
+
+    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
+    {
+        builder.Content(0);
+
+        GetContentClip(out var clip, out double clipRadius);
+        if (clipRadius > 0)
+        {
+            builder.PushClipRoundedRect(clip, clipRadius, clipRadius);
+        }
+        else
+        {
+            builder.PushClipRect(clip);
+        }
+
+        builder.Child(Content);
+        builder.Pop();
+
+        if (_vBar.IsVisible)
+        {
+            builder.Child(_vBar);
+        }
+
+        if (_hBar.IsVisible)
+        {
+            builder.Child(_hBar);
         }
     }
 
@@ -632,7 +669,7 @@ public sealed class ScrollViewer : ContentControl
             InvalidateArrange();
         }
         SyncBars();
-        InvalidateVisual();
+        RaiseScrolled();
         ReevaluateMouseOverAfterScroll();
         NotifyScrollChanged();
     }
@@ -720,6 +757,12 @@ public sealed class ScrollViewer : ContentControl
             ScrollMode.Auto => needed,
             _ => false
         };
+
+    /// <summary>
+    /// A scroll moves the content and the bars; nothing this viewer draws itself changes, so it reports
+    /// a change of what is applied around its children and lets the moved visuals report their own.
+    /// </summary>
+    private void RaiseScrolled() => RaiseRenderDirty(Rendering.Retained.RenderDirtyKind.State);
 
     private void SyncBars()
     {

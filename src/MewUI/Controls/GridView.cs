@@ -11,7 +11,8 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
         DefaultStyles.Register<GridView>(DefaultStyles.CreateGridViewStyle);
 
     public static readonly MewProperty<bool> ZebraStripingProperty =
-        MewProperty<bool>.Register<GridView>(nameof(ZebraStriping), true, MewPropertyOptions.AffectsRender);
+        MewProperty<bool>.Register<GridView>(nameof(ZebraStriping), true, MewPropertyOptions.AffectsRender,
+            static (self, _, _) => self.RefreshRowAlternate());
 
     public static readonly MewProperty<bool> ShowGridLinesProperty =
         MewProperty<bool>.Register<GridView>(nameof(ShowGridLines), false, MewPropertyOptions.AffectsRender);
@@ -1054,21 +1055,6 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
         }
     }
 
-    private void BeforeRowRender(IGraphicsContext context, int index, Rect itemRect)
-    {
-        if (!ZebraStriping)
-        {
-            return;
-        }
-
-        if ((index & 1) == 1)
-        {
-            var theme = Theme;
-            var snapped = LayoutRounding.SnapViewportRectToPixels(itemRect, GetDpi() / 96.0);
-            context.FillRectangle(snapped, theme.Palette.ControlBackground.Lerp(theme.Palette.ButtonFace, theme.IsDark ? 0.45 : 0.33));
-        }
-    }
-
     private double ComputeColumnsExtentWidth()
     {
         double total = 0;
@@ -1124,6 +1110,7 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
         row.ResetForItem();
         row.Bind(item, index);
         row.SetIsSelected(_core.IsItemSelected(index));
+        ConfigureRowAlternate(row, index);
         _prepareRow?.Invoke(row, item, index, context);
     }
 
@@ -1167,6 +1154,27 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
                 visitor(index, row);
             }
         });
+
+    /// <summary>Gives a row the alternating-row state and color it draws with.</summary>
+    private void ConfigureRowAlternate(GridViewRow row, int index)
+    {
+        var theme = Theme;
+        var background = ZebraStriping
+            ? theme.Palette.ControlBackground.Lerp(theme.Palette.ButtonFace, theme.IsDark ? 0.45 : 0.33)
+            : Color.Transparent;
+        row.SetAlternate((index & 1) == 1, background);
+    }
+
+    private void RefreshRowAlternate()
+    {
+        _presenter.VisitRealized((index, element) =>
+        {
+            if (element is GridViewRow row)
+            {
+                ConfigureRowAlternate(row, index);
+            }
+        });
+    }
 
     private void RefreshRowSelection()
     {
@@ -1240,7 +1248,6 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
     {
         presenter.ItemTemplate = _rowTemplate;
         presenter.ItemsSource = _core.ItemsSource;
-        presenter.BeforeItemRender = BeforeRowRender;
         presenter.UseHorizontalExtentForLayout = true;
         // Variable-height virtualization requests scroll offset corrections during INCC bursts
         // (insert/remove above the anchor) and after re-measurement refines heights. Without

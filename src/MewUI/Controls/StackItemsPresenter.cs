@@ -14,7 +14,7 @@ internal sealed class StackItemsPresenter : Control, IItemsPresenter
     private readonly ConditionalWeakTable<FrameworkElement, TemplateContext> _contexts = new();
     private readonly Dictionary<FrameworkElement, uint> _itemBindingGenerations = new();
     private readonly List<double> _measuredHeights = new();
-    private readonly List<(int Index, Rect ItemRect)> _arrangedItems = new();
+    private readonly List<int> _arrangedItems = new();
 
     private IItemsView _itemsSource = ItemsView.Empty;
     private IDataTemplate _itemTemplate;
@@ -72,8 +72,6 @@ internal sealed class StackItemsPresenter : Control, IItemsPresenter
             InvalidateVisual();
         }
     }
-
-    public Action<IGraphicsContext, int, Rect>? BeforeItemRender { get; set; }
 
     public Func<int, Rect, Rect>? GetContainerRect { get; set; }
 
@@ -424,7 +422,7 @@ internal sealed class StackItemsPresenter : Control, IItemsPresenter
 
             var container = _containers[i];
             container.Arrange(containerRect);
-            _arrangedItems.Add((i, itemRect));
+            _arrangedItems.Add(i);
 
             y += snappedH;
         }
@@ -432,17 +430,30 @@ internal sealed class StackItemsPresenter : Control, IItemsPresenter
 
     protected override void OnRender(IGraphicsContext context)
     {
-        var beforeItemRender = BeforeItemRender;
         for (int i = 0; i < _arrangedItems.Count; i++)
         {
-            var (index, itemRect) = _arrangedItems[i];
+            int index = _arrangedItems[i];
             if (index >= _containers.Count)
             {
                 continue;
             }
 
-            beforeItemRender?.Invoke(context, index, itemRect);
             _containers[index].Render(context);
+        }
+    }
+
+    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
+    {
+        // No own content slot: OnRender draws only the arranged containers.
+        for (int ordinal = 0; ordinal < _arrangedItems.Count; ordinal++)
+        {
+            int index = _arrangedItems[ordinal];
+            if (index >= _containers.Count)
+            {
+                continue;
+            }
+
+            builder.Child(_containers[index]);
         }
     }
 

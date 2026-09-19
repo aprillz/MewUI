@@ -225,6 +225,12 @@ public class Popup : FrameworkElement, IVisualTreeHost, ILogicalTreeHost
 
     protected override void RenderSubtree(IGraphicsContext context) => Content?.Render(context);
 
+    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
+    {
+        builder.Content(0);
+        builder.Child(Content);
+    }
+
     protected override UIElement? OnHitTest(Point point)
     {
         if (!IsVisible || !IsHitTestVisible || !IsEffectivelyEnabled)

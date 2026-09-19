@@ -382,7 +382,6 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
     {
         presenter.ItemsSource = _itemsSource;
         presenter.ItemTemplate = WrapItemTemplate(_itemTemplate);
-        presenter.BeforeItemRender = OnBeforeItemRender;
         presenter.ItemPadding = ItemPadding;
         presenter.ItemHeightHint = ResolveItemHeight();
         presenter.UseHorizontalExtentForLayout = HorizontalScroll != ScrollMode.Disabled;
@@ -514,12 +513,41 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
 
         _presenter.ItemBindingGeneration = ItemBindingGeneration;
 
+        UpdateItemCornerRadius();
+
         _scrollViewer.Arrange(innerBounds);
 
         if (TryConsumeScrollIntoViewRequest(out var request) &&
             request.Kind == ScrollIntoViewRequestKind.Index)
         {
             ScrollIntoView(request.Index);
+        }
+    }
+
+    /// <summary>Re-derives the item corner radius from the control's own radius, before the items bind.</summary>
+    private void UpdateItemCornerRadius()
+    {
+        var borderInset = GetBorderVisualInset();
+        var dpiScale = GetDpi() / 96.0;
+        var clipRadius = Math.Max(0, LayoutRounding.RoundToPixel(CornerRadius, dpiScale) - borderInset);
+        if (clipRadius == _presenter.ItemRadius && clipRadius == _scrollViewer.CornerRadius)
+        {
+            return;
+        }
+
+        _scrollViewer.CornerRadius = clipRadius;
+        _presenter.ItemRadius = clipRadius;
+        RefreshContainerConfiguration(_presenter);
+    }
+
+    protected override void OnMewPropertyChanged(MewProperty property)
+    {
+        base.OnMewPropertyChanged(property);
+
+        // CornerRadius only affects render, so nothing re-arranges on its own to pick the item radius up.
+        if (property.Id == CornerRadiusProperty.Id)
+        {
+            InvalidateArrange();
         }
     }
 
@@ -535,14 +563,18 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
             GetValue(BorderBrushProperty),
             BorderThickness,
             radius);
+    }
 
-        var borderInset = GetBorderVisualInset();
-        var dpiScale = GetDpi() / 96.0;
-        var clipR = Math.Max(0, LayoutRounding.RoundToPixel(radius, dpiScale) - borderInset);
-        _scrollViewer.CornerRadius = clipR;
-        _presenter.ItemRadius = clipR;
-
+    protected override void RenderSubtree(IGraphicsContext context)
+    {
+        base.RenderSubtree(context);
         _scrollViewer.Render(context);
+    }
+
+    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
+    {
+        base.WriteComposition(builder);
+        builder.Child(_scrollViewer);
     }
 
     protected override void OnMouseMove(MouseEventArgs e)
@@ -559,12 +591,7 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
         if (e.PointerType == PointerType.Touch)
         {
             _hasLastMousePosition = false;
-            if (_hoverIndex != -1)
-            {
-                _hoverIndex = -1;
-                InvalidateVisual();
-            }
-
+            SetHoverIndex(-1);
             return;
         }
 
@@ -573,19 +600,11 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
 
         if (!TryGetItemIndexAtCore(_lastMousePosition, out int index))
         {
-            if (_hoverIndex != -1)
-            {
-                _hoverIndex = -1;
-                InvalidateVisual();
-            }
+            SetHoverIndex(-1);
             return;
         }
 
-        if (_hoverIndex != index)
-        {
-            _hoverIndex = index;
-            InvalidateVisual();
-        }
+        SetHoverIndex(index);
     }
 
     protected override void OnMouseLeave()
@@ -593,11 +612,7 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
         base.OnMouseLeave();
 
         _hasLastMousePosition = false;
-        if (_hoverIndex != -1)
-        {
-            _hoverIndex = -1;
-            InvalidateVisual();
-        }
+        SetHoverIndex(-1);
     }
 
     protected override void OnMouseDown(MouseEventArgs e)
@@ -762,43 +777,30 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
         return TryMapPointToItemIndex(position, _presenter, out index);
     }
 
-    private void OnBeforeItemRender(IGraphicsContext context, int i, Rect itemRect)
+    private protected override void ConfigureItemContainer(ItemContainer container, int index)
     {
-        double itemRadius = _presenter.ItemRadius;
+        var theme = Theme;
+        container.SelectionBackground = theme.Palette.SelectionBackground;
+        container.HoverBackground = theme.Palette.ControlBackground.Lerp(theme.Palette.Accent, 0.15);
+        container.AlternateBackground = ZebraStriping
+            ? theme.Palette.ControlBackground.Lerp(theme.Palette.ButtonFace, theme.IsDark ? 0.45 : 0.33)
+            : Color.Transparent;
+        container.RowPadding = _presenter.ItemPadding;
+        container.CornerRadius = _presenter.ItemRadius;
+        container.SetIsAlternate((index & 1) == 1);
+        container.SetIsHovered(index == _hoverIndex);
+    }
 
-        bool selected = IsSelected(i);
-
-        if (ZebraStriping && (i & 1) == 1 && !selected && i != _hoverIndex)
+    /// <summary>Moves the hover to one item, repainting only the containers that change.</summary>
+    private void SetHoverIndex(int index)
+    {
+        if (_hoverIndex == index)
         {
-            var theme = Theme;
-            var bg = theme.Palette.ControlBackground.Lerp(theme.Palette.ButtonFace, theme.IsDark ? 0.45 : 0.33);
-            context.FillRectangle(itemRect, bg);
+            return;
         }
 
-        if (selected)
-        {
-            var selectionBg = Theme.Palette.SelectionBackground;
-            if (itemRadius > 0)
-            {
-                context.FillRoundedRectangle(itemRect, itemRadius, itemRadius, selectionBg);
-            }
-            else
-            {
-                context.FillRectangle(itemRect, selectionBg);
-            }
-        }
-        else if (i == _hoverIndex)
-        {
-            var hoverBg = Theme.Palette.ControlBackground.Lerp(Theme.Palette.Accent, 0.15);
-            if (itemRadius > 0)
-            {
-                context.FillRoundedRectangle(itemRect, itemRadius, itemRadius, hoverBg);
-            }
-            else
-            {
-                context.FillRectangle(itemRect, hoverBg);
-            }
-        }
+        _hoverIndex = index;
+        RefreshContainerHover(_presenter, index);
     }
 
     private IDataTemplate CreateDefaultItemTemplate()
@@ -886,16 +888,7 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
 
     private void OnScrollViewerChanged()
     {
-        if (_hasLastMousePosition && TryGetItemIndexAtCore(_lastMousePosition, out int hover))
-        {
-            _hoverIndex = hover;
-        }
-        else
-        {
-            _hoverIndex = -1;
-        }
-
-        InvalidateVisual();
+        SetHoverIndex(_hasLastMousePosition && TryGetItemIndexAtCore(_lastMousePosition, out int hover) ? hover : -1);
     }
 
     private double ResolveItemHeight()

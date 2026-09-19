@@ -346,18 +346,58 @@ public sealed partial class TreeView : Control, ISubtreeInvalidationHost, IFocus
         InvalidateItemBindings();
     }
 
-    private bool HasContainerHooks => _prepareContainer != null || _clearContainer != null;
-
     /// <summary>
-    /// Wraps the template in a row-wide <see cref="ItemContainer"/> while a hook is registered. The
-    /// container spans the indent and the expander too, and pads its content past them, so a menu or
-    /// tooltip attached to it covers the whole row. Without a hook the template root sits in the
-    /// content area as before and no extra element exists.
+    /// Wraps the template in a row-wide <see cref="ItemContainer"/>. The container spans the indent
+    /// and the expander too, and pads its content past them, so a menu or tooltip attached to it
+    /// covers the whole row.
     /// </summary>
     private IDataTemplate WrapItemTemplate(IDataTemplate template)
-        => HasContainerHooks
-            ? new ItemContainerTemplate(template, IsSelected, PrepareRowContainer, _clearContainer)
-            : template;
+        => new ItemContainerTemplate(
+            template,
+            IsSelected,
+            ConfigureRowContainer,
+            PrepareRowContainer,
+            _clearContainer,
+            static () => new TreeRowContainer());
+
+    private void ConfigureRowContainer(ItemContainer container, int index)
+    {
+        var theme = Theme;
+        container.SelectionBackground = theme.Palette.SelectionBackground;
+        container.HoverBackground = theme.Palette.ControlBackground.Lerp(theme.Palette.Accent, 0.15);
+        container.RowPadding = _presenter.ItemPadding;
+        container.CornerRadius = _presenter.ItemRadius;
+        container.SetIsHovered(index == _hoverVisibleIndex);
+
+        if (container is TreeRowContainer row)
+        {
+            row.Indent = Indent;
+            row.Depth = _itemsSource.GetDepth(index);
+            row.HasChildren = _itemsSource.GetHasChildren(index);
+            row.IsExpanded = _itemsSource.GetIsExpanded(index);
+            row.GlyphColor = !IsEffectivelyEnabled
+                ? theme.Palette.DisabledText
+                : IsSelected(index) ? theme.Palette.SelectionText : theme.Palette.WindowText;
+        }
+    }
+
+    /// <summary>Moves the hover to one row, repainting only the containers that change.</summary>
+    private void SetHoverVisibleIndex(int index)
+    {
+        if (_hoverVisibleIndex == index)
+        {
+            return;
+        }
+
+        _hoverVisibleIndex = index;
+        _presenter.VisitRealized((visibleIndex, element) =>
+        {
+            if (element is ItemContainer container)
+            {
+                container.SetIsHovered(visibleIndex == index);
+            }
+        });
+    }
 
     private void PrepareRowContainer(ItemContainer container, object? item, int index, TemplateContext context)
     {
@@ -368,20 +408,24 @@ public sealed partial class TreeView : Control, ISubtreeInvalidationHost, IFocus
     }
 
     private void RefreshContainerSelection()
-    {
-        if (!HasContainerHooks)
-        {
-            return;
-        }
-
-        _presenter.VisitRealized((index, element) =>
+        => _presenter.VisitRealized((index, element) =>
         {
             if (element is ItemContainer container)
             {
                 container.SetIsSelected(IsSelected(index));
+                ConfigureRowContainer(container, index);
             }
         });
-    }
+
+    /// <summary>Re-applies the palette and row state to every realized row container.</summary>
+    private void RefreshRowContainerConfiguration()
+        => _presenter.VisitRealized((index, element) =>
+        {
+            if (element is ItemContainer container)
+            {
+                ConfigureRowContainer(container, index);
+            }
+        });
 
     internal void VisitRealizedContainers(Action<int, FrameworkElement> visitor)
         => _presenter.VisitRealized(visitor);
@@ -456,8 +500,9 @@ public sealed partial class TreeView : Control, ISubtreeInvalidationHost, IFocus
         _presenter = new FixedHeightItemsPresenter
         {
             ItemsSource = _itemsSource,
-            ItemTemplate = _itemTemplate,
-            BeforeItemRender = OnBeforeItemRender,
+            // The row container draws the expander and the row backgrounds, so the default template is
+            // wrapped like any other.
+            ItemTemplate = WrapItemTemplate(_itemTemplate),
             GetContainerRect = OnGetContainerRect,
             ItemPadding = ItemPadding,
             ItemHeight = ResolveItemHeight(),
@@ -487,66 +532,9 @@ public sealed partial class TreeView : Control, ISubtreeInvalidationHost, IFocus
             });
     }
 
-    private Rect OnGetContainerRect(int i, Rect rowRect)
-    {
-        if (HasContainerHooks)
-        {
-            // The row container takes the whole row; PrepareRowContainer pads its content past the indent.
-            return rowRect;
-        }
-
-        int depth = _itemsSource.GetDepth(i);
-        double indentX = rowRect.X + depth * Indent;
-        double glyphW = Indent;
-        var contentX = indentX + glyphW;
-        return new Rect(
-            contentX,
-            rowRect.Y,
-            Math.Max(0, rowRect.Right - contentX),
-            rowRect.Height);
-    }
-
-    private void OnBeforeItemRender(IGraphicsContext context, int i, Rect itemRect)
-    {
-        double itemRadius = _presenter.ItemRadius;
-
-        bool selected = IsSelected(i);
-        if (selected)
-        {
-            var selectionBg = Theme.Palette.SelectionBackground;
-            if (itemRadius > 0)
-            {
-                context.FillRoundedRectangle(itemRect, itemRadius, itemRadius, selectionBg);
-            }
-            else
-            {
-                context.FillRectangle(itemRect, selectionBg);
-            }
-        }
-        else if (i == _hoverVisibleIndex)
-        {
-            var hoverBg = Theme.Palette.ControlBackground.Lerp(Theme.Palette.Accent, 0.15);
-            if (itemRadius > 0)
-            {
-                context.FillRoundedRectangle(itemRect, itemRadius, itemRadius, hoverBg);
-            }
-            else
-            {
-                context.FillRectangle(itemRect, hoverBg);
-            }
-        }
-
-        int depth = _itemsSource.GetDepth(i);
-        double indentX = itemRect.X + depth * Indent;
-        var glyphRect = new Rect(indentX, itemRect.Y, Indent, itemRect.Height);
-        var textColor = !IsEffectivelyEnabled
-            ? Theme.Palette.DisabledText
-            : selected ? Theme.Palette.SelectionText : Theme.Palette.WindowText;
-        if (_itemsSource.GetHasChildren(i))
-        {
-            DrawExpanderGlyph(context, glyphRect, _itemsSource.GetIsExpanded(i), textColor);
-        }
-    }
+    // Every row has a container, which takes the whole row and pads its content past the indent and
+    // the expander it draws.
+    private Rect OnGetContainerRect(int i, Rect rowRect) => rowRect;
 
     private void OnItemsChanged(ItemsChange change)
     {
@@ -818,6 +806,9 @@ public sealed partial class TreeView : Control, ISubtreeInvalidationHost, IFocus
         var snapped = GetSnappedBorderBounds(Bounds);
         var borderInset = GetBorderVisualInset();
         var innerBounds = snapped.Deflate(new Thickness(borderInset));
+
+        UpdateItemCornerRadius();
+
         _scrollViewer.Arrange(innerBounds);
 
         if (TryConsumeScrollIntoViewRequest(out var request))
@@ -837,23 +828,58 @@ public sealed partial class TreeView : Control, ISubtreeInvalidationHost, IFocus
     {
         var bounds = GetSnappedBorderBounds(Bounds);
         double radius = CornerRadius;
-        var borderInset = GetBorderVisualInset();
 
         var bg = GetValue(BackgroundProperty);
         var borderColor = GetValue(BorderBrushProperty);
         DrawBackgroundAndBorder(context, bounds, bg, borderColor, BorderThickness, radius);
+    }
 
+    protected override void RenderSubtree(IGraphicsContext context)
+    {
+        // An empty tree draws its chrome only; the scroll viewer has nothing to show.
         if (_itemsSource.Count == 0)
         {
             return;
         }
 
-        var dpiScale = GetDpi() / 96.0;
-        var clipR = Math.Max(0, LayoutRounding.RoundToPixel(radius, dpiScale) - borderInset);
-        _scrollViewer.CornerRadius = clipR;
-        _presenter.ItemRadius = clipR;
-
         _scrollViewer.Render(context);
+    }
+
+    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
+    {
+        builder.Content(0);
+
+        if (_itemsSource.Count > 0)
+        {
+            builder.Child(_scrollViewer);
+        }
+    }
+
+    /// <summary>Re-derives the row corner radius from the control's own radius, before the rows bind.</summary>
+    private void UpdateItemCornerRadius()
+    {
+        var borderInset = GetBorderVisualInset();
+        var dpiScale = GetDpi() / 96.0;
+        var clipRadius = Math.Max(0, LayoutRounding.RoundToPixel(CornerRadius, dpiScale) - borderInset);
+        if (clipRadius == _presenter.ItemRadius && clipRadius == _scrollViewer.CornerRadius)
+        {
+            return;
+        }
+
+        _scrollViewer.CornerRadius = clipRadius;
+        _presenter.ItemRadius = clipRadius;
+        RefreshRowContainerConfiguration();
+    }
+
+    protected override void OnMewPropertyChanged(MewProperty property)
+    {
+        base.OnMewPropertyChanged(property);
+
+        // CornerRadius only affects render, so nothing re-arranges on its own to pick the row radius up.
+        if (property.Id == CornerRadiusProperty.Id)
+        {
+            InvalidateArrange();
+        }
     }
 
     /// <summary>
@@ -1075,16 +1101,7 @@ public sealed partial class TreeView : Control, ISubtreeInvalidationHost, IFocus
 
     private void OnScrollViewerChanged()
     {
-        if (_hasLastMousePosition && TryHitRow(_lastMousePosition, out int hover, out _))
-        {
-            _hoverVisibleIndex = hover;
-        }
-        else
-        {
-            _hoverVisibleIndex = -1;
-        }
-
-        InvalidateVisual();
+        SetHoverVisibleIndex(_hasLastMousePosition && TryHitRow(_lastMousePosition, out int hover, out _) ? hover : -1);
     }
 
     protected override void OnMouseMove(MouseEventArgs e)
@@ -1105,11 +1122,7 @@ public sealed partial class TreeView : Control, ISubtreeInvalidationHost, IFocus
             newHover = index;
         }
 
-        if (_hoverVisibleIndex != newHover)
-        {
-            _hoverVisibleIndex = newHover;
-            InvalidateVisual();
-        }
+        SetHoverVisibleIndex(newHover);
     }
 
     protected override void OnMouseLeave()
@@ -1117,12 +1130,7 @@ public sealed partial class TreeView : Control, ISubtreeInvalidationHost, IFocus
         base.OnMouseLeave();
 
         _hasLastMousePosition = false;
-
-        if (_hoverVisibleIndex != -1)
-        {
-            _hoverVisibleIndex = -1;
-            InvalidateVisual();
-        }
+        SetHoverVisibleIndex(-1);
     }
 
     protected override void OnKeyDown(KeyEventArgs e)
@@ -1471,7 +1479,7 @@ public sealed partial class TreeView : Control, ISubtreeInvalidationHost, IFocus
         return -1;
     }
 
-    private static void DrawExpanderGlyph(IGraphicsContext context, Rect glyphRect, bool expanded, Color color)
+    internal static void DrawExpanderGlyph(IGraphicsContext context, Rect glyphRect, bool expanded, Color color)
     {
         var center = new Point(glyphRect.X + glyphRect.Width / 2, glyphRect.Y + glyphRect.Height / 2);
         double size = 4;
@@ -1511,4 +1519,73 @@ public sealed class TreeViewExpansionEventArgs
     }
 
     public object? Item { get; }
+}
+
+/// <summary>
+/// Row container of a <see cref="TreeView"/>. It spans the whole row, so it owns the expander
+/// chevron and the indent the row draws under its content.
+/// </summary>
+internal sealed class TreeRowContainer : ItemContainer
+{
+    private double _indent;
+    private int _depth;
+    private bool _hasChildren;
+    private bool _isExpanded;
+    private Color _glyphColor;
+
+    internal double Indent
+    {
+        get => _indent;
+        set => SetGlyphValue(ref _indent, value);
+    }
+
+    internal int Depth
+    {
+        get => _depth;
+        set => SetGlyphValue(ref _depth, value);
+    }
+
+    internal bool HasChildren
+    {
+        get => _hasChildren;
+        set => SetGlyphValue(ref _hasChildren, value);
+    }
+
+    internal bool IsExpanded
+    {
+        get => _isExpanded;
+        set => SetGlyphValue(ref _isExpanded, value);
+    }
+
+    internal Color GlyphColor
+    {
+        get => _glyphColor;
+        set => SetGlyphValue(ref _glyphColor, value);
+    }
+
+    protected override void OnRender(IGraphicsContext context)
+    {
+        base.OnRender(context);
+
+        if (!_hasChildren || _indent <= 0)
+        {
+            return;
+        }
+
+        // The expander sits in the row, which starts before the padding this container is inset by.
+        var row = Bounds.Inflate(RowPadding);
+        var glyphRect = new Rect(row.X + _depth * _indent, row.Y, _indent, row.Height);
+        TreeView.DrawExpanderGlyph(context, glyphRect, _isExpanded, _glyphColor);
+    }
+
+    private void SetGlyphValue<T>(ref T field, T value)
+    {
+        if (EqualityComparer<T>.Default.Equals(field, value))
+        {
+            return;
+        }
+
+        field = value;
+        InvalidateVisual();
+    }
 }

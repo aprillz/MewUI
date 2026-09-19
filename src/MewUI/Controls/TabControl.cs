@@ -486,6 +486,12 @@ public sealed partial class TabControl : Control, ISelector, IIndexedSelector, I
         SelectedTab?.Content?.Render(context);
     }
 
+    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
+    {
+        builder.Content(0);
+        builder.Child(SelectedTab?.Content);
+    }
+
     protected override UIElement? OnHitTest(Point point)
     {
         if (!IsVisible || !IsHitTestVisible || !IsEffectivelyEnabled)

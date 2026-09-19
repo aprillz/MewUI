@@ -307,6 +307,8 @@ public abstract class SegmentedBase : Control, IVisualTreeHost
         // The segment panel is rendered inside OnRender so dividers can be layered above it.
     }
 
+    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder) => builder.Content(0);
+
     private void DrawDividers(IGraphicsContext context)
     {
         if (_panel.Count < 2 || BorderThickness <= 0)

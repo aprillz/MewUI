@@ -526,7 +526,11 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
 
         lock (_gate)
         {
-            if (_disposed)
+            // A surface an image view still aliases cannot be handed to the next renter: whoever
+            // draws into it would overwrite pixels a recorded frame is still replaying. Disposing it
+            // is the request to release, which the surface itself defers until that view is gone.
+            if (_disposed ||
+                RenderSurfaceResource.ResolveBackendSurface(surface) is IRetainableSurface { HasSurfaceViews: true })
             {
                 surface.Dispose();
                 RenderResourceMetrics.ScratchDisposedOutsidePool();

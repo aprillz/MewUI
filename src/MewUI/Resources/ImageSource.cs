@@ -921,8 +921,9 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource, ID
         ImageSource source,
         SharedImageRealization realization,
         int pixelWidth,
-        int pixelHeight) : IImage, IBackendImageProvider
+        int pixelHeight) : IImage, IBackendImageProvider, IRetainableImage
     {
+        private readonly object _gate = new();
         private ImageSource? _source = source;
         private SharedImageRealization? _realization = realization;
 
@@ -932,10 +933,28 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource, ID
         IImage IBackendImageProvider.BackendImage => _realization?.BackendImage
             ?? throw new ObjectDisposedException(nameof(SharedImageLease));
 
+        IImage IRetainableImage.Retain()
+        {
+            lock (_gate)
+            {
+                var owner = _source ?? throw new ObjectDisposedException(nameof(SharedImageLease));
+                var entry = _realization ?? throw new ObjectDisposedException(nameof(SharedImageLease));
+                return entry.Acquire(owner);
+            }
+        }
+
         public void Dispose()
         {
-            var owner = Interlocked.Exchange(ref _source, null);
-            var entry = Interlocked.Exchange(ref _realization, null);
+            ImageSource? owner;
+            SharedImageRealization? entry;
+            // The retain path reads both fields together, so the clear has to be one step for it.
+            lock (_gate)
+            {
+                owner = _source;
+                entry = _realization;
+                _source = null;
+                _realization = null;
+            }
             if (owner != null && entry != null)
             {
                 owner.ReleaseRealization(entry);

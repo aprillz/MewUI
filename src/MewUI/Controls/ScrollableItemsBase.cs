@@ -122,16 +122,47 @@ public abstract partial class ScrollableItemsBase : Control, ISubtreeInvalidatio
     }
 
     /// <summary>
-    /// Returns the template to hand the presenter: the caller's template as-is when no hook is
-    /// registered, so applications that do not use the hooks pay for no extra element per item.
+    /// Returns the template to hand the presenter. Every realized item gets a container, because the
+    /// container owns that item's visual state and draws it.
     /// </summary>
     private protected IDataTemplate WrapItemTemplate(IDataTemplate template)
-        => _prepareContainer == null && _clearContainer == null
-            ? template
-            : new ItemContainerTemplate(template, IsItemSelectedForContainer, _prepareContainer, _clearContainer);
+        => new ItemContainerTemplate(
+            template,
+            IsItemSelectedForContainer,
+            ConfigureItemContainer,
+            _prepareContainer,
+            _clearContainer);
 
     /// <summary>Whether the item at that index is selected, for <see cref="ItemContainer.IsSelected"/>.</summary>
     private protected virtual bool IsItemSelectedForContainer(int index) => false;
+
+    /// <summary>
+    /// Gives a container the palette and row state it draws with. Called on every bind, before the
+    /// application's prepare hook, so a hook can still override what it sets.
+    /// </summary>
+    private protected virtual void ConfigureItemContainer(ItemContainer container, int index)
+    {
+    }
+
+    /// <summary>Re-applies the palette and row state to every realized container.</summary>
+    private protected void RefreshContainerConfiguration(IItemsPresenter presenter)
+        => presenter.VisitRealized((index, element) =>
+        {
+            if (element is ItemContainer container)
+            {
+                ConfigureItemContainer(container, index);
+            }
+        });
+
+    /// <summary>Points the hover state at one item, or at none when the index is negative.</summary>
+    private protected static void RefreshContainerHover(IItemsPresenter presenter, int hoverIndex)
+        => presenter.VisitRealized((index, element) =>
+        {
+            if (element is ItemContainer container)
+            {
+                container.SetIsHovered(index == hoverIndex);
+            }
+        });
 
     /// <summary>Re-pushes the effective item template to the presenter. Override where hooks are supported.</summary>
     private protected virtual void ReapplyItemTemplate()
@@ -144,11 +175,6 @@ public abstract partial class ScrollableItemsBase : Control, ISubtreeInvalidatio
     /// </summary>
     private protected void RefreshContainerSelection(IItemsPresenter presenter)
     {
-        if (_prepareContainer == null && _clearContainer == null)
-        {
-            return;
-        }
-
         presenter.VisitRealized((index, element) =>
         {
             if (element is ItemContainer container)

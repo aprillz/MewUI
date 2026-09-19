@@ -52,6 +52,19 @@ internal sealed class PopupManager
     // Native popups draw into their own windows, so only the in-surface host paints/hit-tests the owner surface.
     internal void Render(IGraphicsContext context) => _inSurfaceHost.Render(context);
 
+    /// <summary>Adds what each popup shown inside the owner surface draws, in the order they are drawn.</summary>
+    internal void CollectInSurfaceRoots(List<UIElement> roots)
+    {
+        for (int index = 0; index < _popups.Count; index++)
+        {
+            var entry = _popups[index];
+            if (ReferenceEquals(entry.Host, _inSurfaceHost))
+            {
+                roots.Add(entry.Chrome ?? entry.Element);
+            }
+        }
+    }
+
     internal UIElement? HitTest(Point point) => _inSurfaceHost.HitTest(point);
 
     internal void NotifyThemeChanged(Theme oldTheme, Theme newTheme)

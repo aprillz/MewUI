@@ -51,6 +51,39 @@ public interface INativeRenderSurface : IRenderSurface
     nint NativeHandle { get; }
 }
 
+/// <summary>
+/// A surface whose contents can survive into the next frame instead of being cleared when a frame
+/// begins on it, which is what lets a repaint redraw only the damaged part.
+/// </summary>
+internal interface IPersistentFrameSurface
+{
+    /// <summary>When true the surface keeps the previous frame's pixels at the next BeginFrame.</summary>
+    bool PreserveContentsOnBeginFrame { get; set; }
+}
+
+/// <summary>A factory whose surfaces can be rendered into while their contents are preserved.</summary>
+internal interface IPersistentFrameGraphicsFactory
+{
+    /// <summary>
+    /// True once the backend's persistent-surface replay has passed a real pixel check on its
+    /// platform; a backend that only wires the plumbing keeps the window on the immediate path.
+    /// </summary>
+    bool IsPersistentFrameRenderingVerified { get; }
+
+    /// <summary>Makes the backend ready to render into a persistent surface; disposing restores the caller's state.</summary>
+    IDisposable AcquirePersistentFrameRenderScope();
+}
+
+/// <summary>Scope for the backends whose persistent-frame rendering needs no extra setup.</summary>
+internal sealed class PersistentFrameRenderScope : IDisposable
+{
+    internal static PersistentFrameRenderScope Instance { get; } = new();
+
+    public void Dispose()
+    {
+    }
+}
+
 public interface IDeferredCpuReadableSurface : IRenderSurface
 {
     bool HasPendingReadback { get; }

@@ -240,6 +240,18 @@ public class ContentControl : Control
         EffectiveContent?.Render(context);
     }
 
+    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
+    {
+        if (HasTemplateInstance)
+        {
+            base.WriteComposition(builder);
+            return;
+        }
+
+        builder.Content(0);
+        builder.Child(EffectiveContent);
+    }
+
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
     {
         var templateRoot = TemplateVisualRoot;

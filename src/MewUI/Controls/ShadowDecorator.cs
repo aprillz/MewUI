@@ -123,6 +123,12 @@ public sealed class ShadowDecorator : FrameworkElement, IVisualTreeHost
         Child?.Render(context);
     }
 
+    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
+    {
+        builder.Content(0);
+        builder.Child(Child);
+    }
+
     protected override UIElement? OnHitTest(Point point)
     {
         if (!IsVisible || !IsHitTestVisible || !IsEffectivelyEnabled) return null;

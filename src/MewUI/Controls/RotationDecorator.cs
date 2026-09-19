@@ -1,3 +1,4 @@
+using System.Numerics;
 using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
@@ -107,6 +108,30 @@ public sealed class RotationDecorator : FrameworkElement, IVisualTreeHost
         context.Translate(-centerX, -centerY);
         Child.Render(context);
         context.Restore();
+    }
+
+    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
+    {
+        builder.Content(0);
+
+        if (Child == null)
+        {
+            return;
+        }
+
+        double centerX = Bounds.X + Bounds.Width / 2;
+        double centerY = Bounds.Y + Bounds.Height / 2;
+
+        // Matches the Translate/Rotate/Translate sequence of the immediate path, where each call
+        // pre-multiplies the current transform.
+        var rotation =
+            Matrix3x2.CreateTranslation((float)-centerX, (float)-centerY) *
+            Matrix3x2.CreateRotation((float)Angle) *
+            Matrix3x2.CreateTranslation((float)centerX, (float)centerY);
+
+        builder.PushTransform(rotation);
+        builder.Child(Child);
+        builder.Pop();
     }
 
     protected override UIElement? OnHitTest(Point point)
