@@ -1989,32 +1989,19 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITra
             UNBOUNDED_CLIP_EXTENT,
             UNBOUNDED_CLIP_EXTENT);
 
-        if (_deviceContext != 0)
-        {
-            var parameters1 = new D2D1_LAYER_PARAMETERS1(
-                contentBounds: contentBounds,
-                geometricMask: 0,
-                maskAntialiasMode: D2D1_ANTIALIAS_MODE.PER_PRIMITIVE,
-                maskTransform: D2D1_MATRIX_3X2_F.Identity,
-                opacity: 1.0f,
-                opacityBrush: 0,
-                layerOptions: D2D1_LAYER_OPTIONS1.INITIALIZE_FROM_BACKGROUND);
+        // The layer starts empty. One that starts as a copy of what is under it is blended back over
+        // that same content when the scope closes, which darkens every translucent pixel of the target,
+        // far outside this scope, once per scope.
+        var parameters = new D2D1_LAYER_PARAMETERS(
+            contentBounds: contentBounds,
+            geometricMask: 0,
+            maskAntialiasMode: D2D1_ANTIALIAS_MODE.PER_PRIMITIVE,
+            maskTransform: D2D1_MATRIX_3X2_F.Identity,
+            opacity: 1.0f,
+            opacityBrush: 0,
+            layerOptions: D2D1_LAYER_OPTIONS.INITIALIZE_FOR_CLEARTYPE);
 
-            D2D1VTable.PushLayer((ID2D1DeviceContext*)_deviceContext, parameters1, layer);
-        }
-        else
-        {
-            var parameters = new D2D1_LAYER_PARAMETERS(
-                contentBounds: contentBounds,
-                geometricMask: 0,
-                maskAntialiasMode: D2D1_ANTIALIAS_MODE.PER_PRIMITIVE,
-                maskTransform: D2D1_MATRIX_3X2_F.Identity,
-                opacity: 1.0f,
-                opacityBrush: 0,
-                layerOptions: D2D1_LAYER_OPTIONS.INITIALIZE_FOR_CLEARTYPE);
-
-            D2D1VTable.PushLayer((ID2D1RenderTarget*)_renderTarget, parameters, layer);
-        }
+        D2D1VTable.PushLayer((ID2D1RenderTarget*)_renderTarget, parameters, layer);
 
         D2D1VTable.SetTextAntialiasMode((ID2D1RenderTarget*)_renderTarget, D2D1_TEXT_ANTIALIAS_MODE.CLEARTYPE);
         _opaqueBackdropLayers.Push(layer);
