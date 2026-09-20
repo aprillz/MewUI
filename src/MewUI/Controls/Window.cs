@@ -2978,6 +2978,34 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         }
     }
 
+    /// <summary>Ends the frame and releases a context made for this frame alone, even when ending it throws.</summary>
+    private static void EndFrameAndRelease(IGraphicsContext context, bool oneShot, bool profiling)
+    {
+        // Kept out of RenderFrameCore: a trimmed build dropped the release when it sat in that method's finally.
+        try
+        {
+            if (profiling)
+            {
+                bool presentWait = Application.IsRunning && Application.Current.RenderLoopSettings.VSyncEnabled;
+                using (presentWait ? ProfilerMarkers.Present.Auto() : ProfilerMarkers.EndFrame.Auto())
+                {
+                    context.EndFrame();
+                }
+            }
+            else
+            {
+                context.EndFrame();
+            }
+        }
+        finally
+        {
+            if (oneShot)
+            {
+                context.Dispose();
+            }
+        }
+    }
+
     private void RenderFrameCore(IRenderTarget target, Size clientSize)
     {
         var frameTiming = DevToolsGate.IsSupported && !_excludeFromProfiler
@@ -3228,15 +3256,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             // EndFrame must run even if rendering throws so backend GPU/COM state is closed.
             // For oneShot contexts, Dispose must also run to return pooled collections.
             phaseStart = profiling ? Stopwatch.GetTimestamp() : 0;
-            try
-            {
-                bool presentWait = Application.IsRunning && Application.Current.RenderLoopSettings.VSyncEnabled;
-                using (profiling ? (presentWait ? ProfilerMarkers.Present.Auto() : ProfilerMarkers.EndFrame.Auto()) : default)
-                {
-                    context.EndFrame();
-                }
-            }
-            finally { if (oneShot) context.Dispose(); }
+            EndFrameAndRelease(context, oneShot, profiling);
             GraphicsFactory.ResourceCache?.Maintain(RenderCacheMaintenanceMode.Frame);
             if (profiling)
             {
