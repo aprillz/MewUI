@@ -2428,7 +2428,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
             nint linearMatrix = CreateGdipGradientMatrix(brush.GradientTransform);
             if (linearMatrix != 0)
             {
-                try { GdiPlusInterop.GdipSetLineTransform(gradBrush, linearMatrix); }
+                try { GdiPlusInterop.GdipMultiplyLineTransform(gradBrush, linearMatrix, GdiPlusInterop.MatrixOrder.Append); }
                 finally { GdiPlusInterop.GdipDeleteMatrix(linearMatrix); }
             }
             return gradBrush;
@@ -2558,8 +2558,8 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
         var stops = brush.Stops;
         if (stops == null || stops.Count == 0) return;
 
-        // Max stops: original + 2 endpoints + 1 expansion entry
-        int maxStops = stops.Count + 3;
+        // Max stops: original + 2 endpoints + 2 clamp entries added when a Pad line is stretched
+        int maxStops = stops.Count + 4;
         Span<uint> colors = maxStops <= 16 ? stackalloc uint[16] : new uint[maxStops];
         Span<float> positions = maxStops <= 16 ? stackalloc float[16] : new float[maxStops];
         int count = FillEndpointStops(stops, colors, positions);
@@ -2570,7 +2570,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
             colors[i] = BlendGlobalAlpha(Color.FromArgb(colors[i])).ToArgb();
         }
 
-        // GDI+ LinearGradientBrush does NOT support WrapMode.Clamp;
+        // GDI+ has no WrapMode.Clamp;
         // use TileFlipXY as the closest approximation for SpreadMethod.Pad.
         var wrapMode = brush.SpreadMethod switch
         {
@@ -2585,18 +2585,39 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
             var p2 = ResolveGradientPoint(linear.EndPoint, brush.GradientUnits, objectBounds);
             var (ax, ay) = ToDeviceCoords(p1.X, p1.Y);
             var (bx, by) = ToDeviceCoords(p2.X, p2.Y);
+
+            Span<uint> stretchedColors = count + 2 <= 16 ? stackalloc uint[16] : new uint[count + 2];
+            Span<float> stretchedPositions = count + 2 <= 16 ? stackalloc float[16] : new float[count + 2];
+            var lineColors = colors;
+            var linePositions = positions;
+
+            // Pad is approximated with TileFlipXY because GDI+ has no clamp wrap mode, so wherever the
+            // filled area runs past the gradient line the mirrored tile shows instead of the end color.
+            // Stretching the line to cover the fill and remapping the stops onto it restores clamping.
+            if (brush.SpreadMethod == SpreadMethod.Pad)
+            {
+                int stretched = StretchLinearGradientOverFill(
+                    brush, fillBounds, ref ax, ref ay, ref bx, ref by,
+                    colors, positions, count, stretchedColors, stretchedPositions);
+                if (stretched > 0)
+                {
+                    lineColors = stretchedColors[..stretched];
+                    linePositions = stretchedPositions[..stretched];
+                }
+            }
+
             var gp1 = new GdiPlusInterop.PointF((float)ax, (float)ay);
             var gp2 = new GdiPlusInterop.PointF((float)bx, (float)by);
 
             if (GdiPlusInterop.GdipCreateLineBrush(ref gp1, ref gp2,
-                    colors[0], colors[^1], wrapMode, out nint gradBrush) != 0 || gradBrush == 0) return;
+                    lineColors[0], lineColors[^1], wrapMode, out nint gradBrush) != 0 || gradBrush == 0) return;
             try
             {
-                GdiPlusInterop.SetLinePresetBlend(gradBrush, colors, positions);
+                GdiPlusInterop.SetLinePresetBlend(gradBrush, lineColors, linePositions);
                 nint linearMatrix = CreateGdipGradientMatrix(brush.GradientTransform);
                 if (linearMatrix != 0)
                 {
-                    try { GdiPlusInterop.GdipSetLineTransform(gradBrush, linearMatrix); }
+                    try { GdiPlusInterop.GdipMultiplyLineTransform(gradBrush, linearMatrix, GdiPlusInterop.MatrixOrder.Append); }
                     finally { GdiPlusInterop.GdipDeleteMatrix(linearMatrix); }
                 }
                 fillAction(gradBrush);
@@ -2771,6 +2792,96 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
     /// inserting endpoint stops at 0.0 and 1.0 if missing. Returns the actual count used.
     /// Caller must provide spans of at least <c>stops.Count + 2</c> elements.
     /// </summary>
+    /// <summary>
+    /// Stretches a Pad gradient's line until the filled area projects inside it, and rewrites the stops
+    /// onto the longer line. Returns the new stop count, or 0 when the line already covers the fill.
+    /// </summary>
+    private int StretchLinearGradientOverFill(
+        GradientBrush brush, Rect fillBounds,
+        ref double ax, ref double ay, ref double bx, ref double by,
+        ReadOnlySpan<uint> colors, ReadOnlySpan<float> positions, int count,
+        Span<uint> stretchedColors, Span<float> stretchedPositions)
+    {
+        if (fillBounds.Width <= 0 || fillBounds.Height <= 0 || count == 0)
+        {
+            return 0;
+        }
+
+        double dirX = bx - ax;
+        double dirY = by - ay;
+        double lengthSquared = dirX * dirX + dirY * dirY;
+        if (lengthSquared < 1e-9)
+        {
+            return 0;
+        }
+
+        // The line lives in the gradient's own space, so the fill corners are mapped back through the
+        // gradientTransform before they are projected onto it.
+        var inverse = Matrix3x2.Identity;
+        if (brush.GradientTransform is Matrix3x2 gradientTransform &&
+            !Matrix3x2.Invert(gradientTransform, out inverse))
+        {
+            inverse = Matrix3x2.Identity;
+        }
+
+        var (left, top) = ToDeviceCoords(fillBounds.X, fillBounds.Y);
+        var (right, bottom) = ToDeviceCoords(fillBounds.Right, fillBounds.Bottom);
+        ReadOnlySpan<(double X, double Y)> corners =
+            [(left, top), (right, top), (right, bottom), (left, bottom)];
+
+        double minT = double.MaxValue;
+        double maxT = double.MinValue;
+        foreach (var (cornerX, cornerY) in corners)
+        {
+            // M31/M32 are in user-space units, so they scale by dpi to match the (*dpi) input.
+            double canonicalX = inverse.M11 * cornerX + inverse.M21 * cornerY + inverse.M31 * _dpiScale;
+            double canonicalY = inverse.M12 * cornerX + inverse.M22 * cornerY + inverse.M32 * _dpiScale;
+            double t = ((canonicalX - ax) * dirX + (canonicalY - ay) * dirY) / lengthSquared;
+            if (t < minT) minT = t;
+            if (t > maxT) maxT = t;
+        }
+
+        // A pixel of slack keeps the mirrored tile off the edge where GDI+ samples the boundary.
+        double margin = 1.0 / Math.Sqrt(lengthSquared);
+        minT = Math.Min(0.0, minT - margin);
+        maxT = Math.Max(1.0, maxT + margin);
+
+        double span = maxT - minT;
+        if (span <= 1.0 + 1e-6 || span > 1e6)
+        {
+            return 0;
+        }
+
+        ax += dirX * minT;
+        ay += dirY * minT;
+        bx = ax + dirX * span;
+        by = ay + dirY * span;
+
+        int written = 0;
+        if (-minT / span > 0.0)
+        {
+            stretchedColors[written] = colors[0];
+            stretchedPositions[written] = 0f;
+            written++;
+        }
+
+        for (int i = 0; i < count; i++)
+        {
+            stretchedColors[written] = colors[i];
+            stretchedPositions[written] = (float)Math.Clamp((positions[i] - minT) / span, 0.0, 1.0);
+            written++;
+        }
+
+        if (stretchedPositions[written - 1] < 1f)
+        {
+            stretchedColors[written] = colors[count - 1];
+            stretchedPositions[written] = 1f;
+            written++;
+        }
+
+        return written;
+    }
+
     private static int FillEndpointStops(IReadOnlyList<GradientStop> stops,
         Span<uint> colors, Span<float> positions)
     {
