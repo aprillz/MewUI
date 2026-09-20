@@ -25,7 +25,10 @@ PROJECT="$HERE/../../tests/MewUI.WindowAutomationTest/MewUI.WindowAutomationTest
 PUBLISH_DIR="$HERE/publish"
 REMOTE_ROOT="${MEWUI_REMOTE_ROOT:-C:\\Workspace\\Dev}"
 JOB_ID="run-$(date +%Y%m%d-%H%M%S)"
-TIMEOUT_SECONDS=900
+# The whole suite takes a little over five minutes on the test machine, and a filtered run seconds.
+# The wait ends that much sooner when a run hangs; MEWUI_REMOTE_TIMEOUT overrides both.
+if [[ "$RUNNER_ARGS" == *--filter* ]]; then DEFAULT_TIMEOUT_SECONDS=120; else DEFAULT_TIMEOUT_SECONDS=480; fi
+TIMEOUT_SECONDS="${MEWUI_REMOTE_TIMEOUT:-$DEFAULT_TIMEOUT_SECONDS}"
 
 # UseVSTest=false selects the MSTest runner, which produces a plain executable: the remote machine then
 # needs no SDK, and self-contained means it needs no .NET at all.
@@ -55,7 +58,7 @@ if [[ -n "${MEWUI_REMOTE_ENV:-}" ]]; then
 fi
 cat > "$HERE/$JOB_ID.cmd" <<EOF
 @echo off
-${ENV_LINES}"$REMOTE_ROOT\\publish\\Aprillz.MewUI.WindowAutomationTest.exe" $RUNNER_ARGS
+${ENV_LINES}"$REMOTE_ROOT\\publish\\Aprillz.MewUI.WindowAutomationTest.exe" --settings "$REMOTE_ROOT\\publish\\test.runsettings" $RUNNER_ARGS
 EOF
 scp -q "$HERE/$JOB_ID.cmd" "$SSH_TARGET:$REMOTE_ROOT\\jobs\\$JOB_ID.staging"
 rm "$HERE/$JOB_ID.cmd"
@@ -63,4 +66,11 @@ ssh "$SSH_TARGET" "powershell -NoProfile -Command \"Move-Item '$REMOTE_ROOT\\job
 
 echo "== waiting for the console session to finish"
 # Double quotes, not single: powershell -File takes a single-quoted path literally, quotes included.
-ssh "$SSH_TARGET" "powershell -NoProfile -ExecutionPolicy Bypass -File \"$REMOTE_ROOT\\wait-job.ps1\" -Id \"$JOB_ID\" -Root \"$REMOTE_ROOT\" -TimeoutSeconds $TIMEOUT_SECONDS"
+STATUS=0
+ssh "$SSH_TARGET" "powershell -NoProfile -ExecutionPolicy Bypass -File \"$REMOTE_ROOT\\wait-job.ps1\" -Id \"$JOB_ID\" -Root \"$REMOTE_ROOT\" -TimeoutSeconds $TIMEOUT_SECONDS" || STATUS=$?
+if [[ $STATUS -eq 99 ]]; then
+  # The job outlived its wait. The runner still holds the console session, and the next job would queue behind it.
+  echo "== timed out after $TIMEOUT_SECONDS s; stopping the runner"
+  ssh "$SSH_TARGET" "powershell -NoProfile -Command \"Get-Process Aprillz.MewUI.WindowAutomationTest -ErrorAction SilentlyContinue | Stop-Process -Force\"" || true
+fi
+exit $STATUS

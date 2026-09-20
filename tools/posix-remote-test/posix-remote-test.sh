@@ -69,5 +69,17 @@ if [[ "$RID" == linux-* ]]; then
   SESSION_ENV="export DISPLAY='${MEWUI_REMOTE_DISPLAY:-:0}'; export XAUTHORITY=\"\$(ls -t /run/user/\$(id -u)/xauth_* 2>/dev/null | head -1)\"; [ -n \"\$XAUTHORITY\" ] || export XAUTHORITY=\"\$HOME/.Xauthority\"; "
 fi
 
+# The whole suite takes three to six minutes on the test machines, and a filtered run seconds. A run
+# that hangs is given up that much sooner; MEWUI_REMOTE_TIMEOUT overrides both.
+if [[ "$RUNNER_ARGS" == *--filter* ]]; then DEFAULT_TIMEOUT_SECONDS=120; else DEFAULT_TIMEOUT_SECONDS=480; fi
+TIMEOUT_SECONDS="${MEWUI_REMOTE_TIMEOUT:-$DEFAULT_TIMEOUT_SECONDS}"
+
 echo "== running in the remote GUI session"
-ssh "$SSH_TARGET" "$REMOTE_PATH; $SESSION_ENV$ENV_EXPORTS cd ~/$REMOTE_ROOT/$PUBLISH_NAME && dotnet Aprillz.MewUI.WindowAutomationTest.dll $RUNNER_ARGS"
+STATUS=0
+timeout "$TIMEOUT_SECONDS" ssh "$SSH_TARGET" "$REMOTE_PATH; $SESSION_ENV$ENV_EXPORTS cd ~/$REMOTE_ROOT/$PUBLISH_NAME && dotnet Aprillz.MewUI.WindowAutomationTest.dll --settings test.runsettings $RUNNER_ARGS" || STATUS=$?
+if [[ $STATUS -eq 124 ]]; then
+  # Giving up on the connection leaves the runner, and the windows it opened, on the remote desktop.
+  echo "== timed out after $TIMEOUT_SECONDS s; stopping the runner"
+  ssh "$SSH_TARGET" "pkill -f Aprillz.MewUI.WindowAutomationTest.dll" || true
+fi
+exit $STATUS

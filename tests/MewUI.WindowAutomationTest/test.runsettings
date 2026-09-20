@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+  <MSTest>
+    <!-- A test that hangs fails by itself after this long (milliseconds) and the run goes on, instead of
+         holding the whole run until the remote job times out. -->
+    <TestTimeout>60000</TestTimeout>
+  </MSTest>
+</RunSettings>
