@@ -67,17 +67,38 @@ public sealed class CaptureHoverTests
         var thumbPoint = new Point(bar.Bounds.X + bar.Bounds.Width / 2, bar.Bounds.Y + 6);
 
         await scene.Input.MoveAsync(window, thumbPoint);
-        Assert.IsTrue(IsFadeHot(viewer), "precondition: hovering the bar reveals it");
+        Assert.IsTrue(
+            await CaptureScene.WaitUntilAsync(() => IsFadeHot(viewer)),
+            $"precondition: hovering the bar reveals it ({DescribeHover(scene, window, viewer, bar, thumbPoint)})");
 
         await scene.Input.PressAsync(window, thumbPoint);
-        Assert.IsTrue(bar.IsMouseCaptured, "precondition: the thumb press captured");
+        Assert.IsTrue(
+            await CaptureScene.WaitUntilAsync(() => bar.IsMouseCaptured),
+            $"precondition: the thumb press captured ({DescribeHover(scene, window, viewer, bar, thumbPoint)})");
 
-        await scene.Input.MoveAsync(window, CaptureScene.Away(window));
+        // The bar stops being over only once the move away has arrived, so the fade is judged after it.
+        var away = CaptureScene.Away(window);
+        await scene.Input.MoveAsync(window, away);
+        Assert.IsTrue(
+            await CaptureScene.WaitUntilAsync(() => !bar.IsMouseOver),
+            $"precondition: the drag left the bar ({DescribeHover(scene, window, viewer, bar, away)})");
         Assert.IsTrue(IsFadeHot(viewer), "the bar started fading out while its thumb was being dragged");
 
-        await scene.Input.ReleaseAsync(window, CaptureScene.Away(window));
-        Assert.IsFalse(IsFadeHot(viewer), "the bar stayed revealed after the drag ended away from it");
+        await scene.Input.ReleaseAsync(window, away);
+        Assert.IsTrue(
+            await CaptureScene.WaitUntilAsync(() => !IsFadeHot(viewer)),
+            $"the bar stayed revealed after the drag ended away from it ({DescribeHover(scene, window, viewer, bar, away)})");
     });
+
+    /// <summary>What the window and the platform report about the pointer, for a wait that ran out.</summary>
+    private static string DescribeHover(CaptureScene scene, Window window, ScrollViewer viewer, ScrollBar bar, Point sentTo)
+    {
+        var sentToScreen = window.ClientToScreen(sentTo);
+        string pointer = scene.Input.PointerScreenPosition is Point actual ? $"{actual.X:0},{actual.Y:0}" : "unknown";
+        return $"pointer sent to {sentTo} = screen {sentToScreen.X:0},{sentToScreen.Y:0}, platform reports {pointer}; " +
+            $"bar at {bar.Bounds} visible {bar.IsVisible} over {bar.IsMouseOver} captured {bar.IsMouseCaptured}; " +
+            $"viewer over {viewer.IsMouseOver}; window mouse-over element {window.MouseOverElement?.GetType().Name ?? "none"}";
+    }
 
     private static bool IsFadeHot(ScrollViewer viewer)
     {

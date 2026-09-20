@@ -46,6 +46,9 @@ internal abstract class RealInput
 
     public abstract OsCaptureState OsCapture(Window window);
 
+    /// <summary>Where the platform says the pointer is, in screen pixels; null where the driver cannot ask.</summary>
+    public virtual Point? PointerScreenPosition => null;
+
     /// <summary>Clicks a window that stands in for another application's.</summary>
     public virtual Task ClickForeignWindowAsync()
     {
@@ -147,6 +150,9 @@ internal sealed class Win32Input : RealInput
 
         return holder == window.Handle ? OsCaptureState.Held : OsCaptureState.HeldByAnotherWindow;
     }
+
+    public override Point? PointerScreenPosition
+        => GetCursorPos(out var cursor) ? new Point(cursor.X, cursor.Y) : null;
 
     /// <summary>Clicks a window owned by another thread, which Win32 capture treats as another application's.</summary>
     public override async Task ClickForeignWindowAsync()
