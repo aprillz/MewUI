@@ -79,6 +79,80 @@ public sealed class RetainedSceneResourceTests
         AssertPixelsEqual(captured, replayed);
     }
 
+    private sealed class Thrower : Control
+    {
+        internal bool Throws { get; set; }
+
+        protected override Size MeasureContent(Size availableSize) => new(20, 20);
+
+        protected override void OnRender(IGraphicsContext context)
+        {
+            if (Throws)
+            {
+                throw new InvalidOperationException("this visual cannot draw");
+            }
+
+            context.FillRectangle(Bounds, Color.FromArgb(255, 200, 200, 40));
+        }
+    }
+
+    [TestMethod]
+    public void UpdateThatThrowsAfterAnImageWasReplaced_ReplaysTheOldPictureFromItsOwnLease()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("GDI backend is Windows-only.");
+            return;
+        }
+
+        using var factory = new GdiGraphicsFactory();
+        Application.DefaultGraphicsFactory = factory;
+
+        var first = NewPicture(factory, Color.FromArgb(255, 20, 140, 220));
+        var firstView = factory.CreateImageView(first);
+        var box = new ImageBox { Image = firstView };
+        var thrower = new Thrower();
+        var stack = new StackPanel { Orientation = Orientation.Vertical };
+        stack.Children(box, thrower);
+        var root = new Border { Width = 80, Height = 70, Child = stack };
+        root.Measure(new Size(SURFACE_WIDTH, SURFACE_HEIGHT));
+        root.Arrange(new Rect(0, 0, SURFACE_WIDTH, SURFACE_HEIGHT));
+
+        using var scene = new RenderScene();
+        var capture = new SceneCapture();
+        byte[] captured = Render(factory, context => capture.Capture(scene, root, context));
+
+        // One update swaps the picture, lets the old one go, and then fails further down the tree. The
+        // scene keeps what it had, and what it had still draws the old picture: from the lease the
+        // recording took, not from the handle its owner has released.
+        var second = NewPicture(factory, Color.FromArgb(255, 220, 60, 40));
+        using var secondView = factory.CreateImageView(second);
+        box.Image = secondView;
+        box.InvalidateVisual();
+        firstView.Dispose();
+        first.Dispose();
+        thrower.Throws = true;
+        thrower.InvalidateVisual();
+        Assert.ThrowsExactly<InvalidOperationException>(() => Render(factory, context => capture.Capture(scene, root, context)));
+
+        scene.Statistics.Reset();
+        byte[] replayed = Render(factory, context => FrameRenderer.Replay(scene, context));
+        Assert.AreEqual(0, scene.Statistics.LiveFallbackCount, "the replay fell back to the live element");
+        AssertPixelsEqual(captured, replayed);
+
+        second.Dispose();
+    }
+
+    private static IRenderSurface NewPicture(GdiGraphicsFactory factory, Color color)
+    {
+        var picture = factory.CreateSurface(RenderSurfaceDescriptor.Offscreen(40, 30, 1.0, hasAlpha: false));
+        using var pictureContext = factory.CreateContext(picture);
+        pictureContext.BeginFrame(picture);
+        pictureContext.Clear(color);
+        pictureContext.EndFrame();
+        return picture;
+    }
+
     [TestMethod]
     public void UnpreservableResource_IsReportedInsteadOfReplayed()
     {
