@@ -13,7 +13,7 @@ namespace MewUI.Test.Rendering;
 public sealed class TextBaselinePlacementTests
 {
     [TestMethod]
-    public void Direct2D_NativeRunBaselineMatchesFontAscent()
+    public void Direct2D_RunOriginAlignsNativeAndManagedBaselines()
     {
         if (!OperatingSystem.IsWindows())
         {
@@ -22,32 +22,61 @@ public sealed class TextBaselinePlacementTests
         }
 
         using var factory = new Direct2DGraphicsFactory();
-        using var surface = factory.CreateSurface(RenderSurfaceDescriptor.CachedImage(160, 48, 1));
-        using var context = factory.CreateContext(surface);
-        context.BeginFrame(surface);
-        try
+        foreach ((string family, double size, uint dpi) in new[]
         {
-            foreach (string family in new[] { "Segoe UI", "Consolas" })
+            ("Segoe UI", 16d, 96u),
+            ("Consolas", 16d, 96u),
+            ("Malgun Gothic", 12d, 96u),
+            ("Malgun Gothic", 12d, 144u),
+            ("Malgun Gothic", 12d, 192u),
+        })
+        {
+            double scale = dpi / 96.0;
+            using var surface = factory.CreateSurface(RenderSurfaceDescriptor.CachedImage(240, 72, scale));
+            using var context = factory.CreateContext(surface);
+            context.BeginFrame(surface);
+            try
             {
-                using var font = factory.CreateFont(family, 16, 96);
-                using var run = ((ITextBackendRenderContext)context).CreateRun("Hg", font, 120, 40);
-                Assert.IsNotNull(run);
-                var captured = DWriteGlyphRunExtractor.Capture(run.NativeHandle);
-                Assert.IsNotEmpty(captured);
-                double nativeBaseline = captured[0].BaselineOriginY;
-                var layout = (ManagedTextLayout)factory.TextEngine.CreateLayout(
-                    CreateRequest("Hg") with { DefaultStyle = new TextRunStyle(family, 16) });
-                double managedBaseline = layout.GetRunsForTest(0)[0].Baseline;
-                Console.Error.WriteLine(
-                    $"{family}: font ascent={font.Ascent:F3}, managed baseline={managedBaseline:F3}, " +
-                    $"native baseline={nativeBaseline:F3}");
-                Assert.AreEqual(nativeBaseline, managedBaseline, 0.01,
-                    $"{family} managed run baseline differs from its DirectWrite realization.");
+                using var font = factory.CreateFont(family, size, dpi);
+                var format = new BackendTextFormat
+                {
+                    Font = font,
+                    HorizontalAlignment = TextAlignment.Left,
+                    VerticalAlignment = TextAlignment.Top,
+                    Wrapping = TextWrapping.NoWrap,
+                    Trimming = TextTrimming.None
+                };
+                var constraints = new BackendTextLayoutConstraints(new Rect(0, 0, 120, 40));
+                var nativeLayout = ((GraphicsContextBase)context).CreateBackendTextLayout("Hg", format, in constraints);
+                Assert.IsNotNull(nativeLayout);
+                try
+                {
+                    var captured = DWriteGlyphRunExtractor.Capture(nativeLayout.BackendHandle);
+                    Assert.IsNotEmpty(captured);
+                    double nativeBaseline = captured[0].BaselineOriginY;
+                    var layout = (ManagedTextLayout)factory.TextEngine.CreateLayout(
+                        CreateRequest("Hg") with
+                        {
+                            Dpi = dpi,
+                            DefaultStyle = new TextRunStyle(family, size)
+                        });
+                    double managedBaseline = layout.GetRunsForTest(0)[0].Baseline;
+                    double drawnBaseline = nativeBaseline + nativeLayout.RasterOriginOffsetY;
+                    Console.Error.WriteLine(
+                        $"{family} {size} at {dpi} DPI: font ascent={font.Ascent:F3}, managed baseline={managedBaseline:F3}, " +
+                        $"native baseline={nativeBaseline:F3}, origin offset={nativeLayout.RasterOriginOffsetY:F3}");
+                    Assert.AreEqual(managedBaseline, drawnBaseline, 0.01,
+                        $"{family} {size} at {dpi} DPI: shifted DirectWrite run misses the managed baseline.");
+                }
+                finally
+                {
+                    nativeLayout.ReleaseBackendHandle();
+                }
             }
-        }
-        finally
-        {
-            context.EndFrame();
+            finally
+            {
+                context.EndFrame();
+            }
         }
     }
 

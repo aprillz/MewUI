@@ -1062,13 +1062,20 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITra
 
         var measured = new Size(metrics.widthIncludingTrailingWhitespace, height);
         double effectiveMaxWidth = bounds.Width > 0 && !double.IsPositiveInfinity(bounds.Width) ? bounds.Width : measured.Width;
+        double rasterOriginOffsetY = 0;
+        if (DWriteVTable.GetFirstLineMetrics(nativeLayout, out var lineMetrics) >= 0)
+        {
+            double layoutBaseline = Math.Round(dwFont.Ascent * DpiScale, MidpointRounding.AwayFromZero) / DpiScale;
+            rasterOriginOffsetY = layoutBaseline - lineMetrics.baseline;
+        }
 
         var result = new BackendTextLayout
         {
             MeasuredSize = measured,
             EffectiveBounds = bounds,
             EffectiveMaxWidth = effectiveMaxWidth,
-            ContentHeight = measured.Height
+            ContentHeight = measured.Height,
+            RasterOriginOffsetY = rasterOriginOffsetY
         };
         result.AttachBackendHandle(nativeLayout, static handle => ComHelpers.Release(handle));
         TextTracker?.TrackLayout(result);
@@ -1114,7 +1121,8 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITra
             : D2D1_DRAW_TEXT_OPTIONS.NO_SNAP | _colorFontOption;
 
         var rt = _deviceContext != 0 ? _deviceContext : _renderTarget;
-        var origin = new D2D1_POINT_2F((float)bounds.X, (float)bounds.Y);
+        double rasterOriginOffsetY = layout.InkOverhang.HasValue ? layout.RasterOriginOffsetY : 0;
+        var origin = new D2D1_POINT_2F((float)bounds.X, (float)(bounds.Y + rasterOriginOffsetY));
 
         if (layout.InkOverhang.HasValue)
         {
@@ -1156,7 +1164,11 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITra
             return TextInkOverhang.None;
         }
 
-        return TextInkOverhang.FromEdges(overhangs.left, overhangs.top, overhangs.right, overhangs.bottom);
+        return TextInkOverhang.FromEdges(
+            overhangs.left,
+            overhangs.top - layout.RasterOriginOffsetY,
+            overhangs.right,
+            overhangs.bottom + layout.RasterOriginOffsetY);
     }
 
     public override Size MeasureText(ReadOnlySpan<char> text, IFont font)

@@ -17,6 +17,9 @@ internal sealed class BackendTextLayout
 
     public required double ContentHeight { get; init; }
 
+    // Offsets a native run to the baseline reported to the managed engine without changing line-box geometry.
+    internal double RasterOriginOffsetY { get; init; }
+
     /// <summary>
     /// Set on text-engine run realizations: ink the backend draws outside <see cref="EffectiveBounds"/>
     /// instead of clipping it. Null for immediate-mode layouts, which keep their box as the clip.
