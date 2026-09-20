@@ -275,6 +275,13 @@ public partial class Window
             _frameReplayed = Math.Max(0, statistics.ContentReplayCount - _replayedAtFrameStart);
         }
 
+        // The counts are text, and a window that draws text carries the text engine whether or not the
+        // application shows any. Only a build with the developer tools pays for that; others get the tint.
+        if (!DevToolsGate.IsSupported)
+        {
+            return;
+        }
+
         Span<char> buffer = stackalloc char[64];
         var text = new StackTextFormatter(buffer);
         text.Append("V:");
