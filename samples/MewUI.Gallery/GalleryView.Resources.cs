@@ -1,4 +1,5 @@
 using Aprillz.MewUI.Rendering;
+using Aprillz.MewUI.Resources;
 
 namespace Aprillz.MewUI.Gallery;
 
@@ -8,7 +9,11 @@ namespace Aprillz.MewUI.Gallery;
 /// </summary>
 sealed class GalleryResources
 {
+    /// <summary>The horizontal logo as pixels, for the pages that demonstrate raster images.</summary>
     public ObservableValue<IImageSource?> Logo { get; } = new(null);
+
+    /// <summary>The same logo as vector art, which is what the app's own chrome draws.</summary>
+    public ObservableValue<IImageSource?> LogoVector { get; } = new(null);
 
     public ObservableValue<IImageSource?> April { get; } = new(null);
 
@@ -26,6 +31,7 @@ sealed class GalleryResources
     /// <summary>File names the hosts fetch, in the order the pages need them.</summary>
     public static string[] FileNames { get; } =
     [
+        "logo_h.svg",
         "logo_h-480.png",
         "april.jpg",
         "soonduk.jpg",
@@ -43,6 +49,7 @@ sealed class GalleryResources
     {
         switch (fileName)
         {
+            case "logo_h.svg": LogoVector.Value = SimpleSvgSource.FromBytes(content); break;
             case "logo_h-480.png": Logo.Value = ImageSource.FromBytes(content); break;
             case "april.jpg": April.Value = ImageSource.FromBytes(content); break;
             case "soonduk.jpg": Soonduk.Value = ImageSource.FromBytes(content); break;

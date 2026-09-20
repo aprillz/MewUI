@@ -75,6 +75,7 @@
   <Import Project="..\..\build\Aprillz.MewUI.targets" />
 
   <ItemGroup>
+    <None Include="..\..\assets\logo\logo_h.svg" CopyToOutputDirectory="PreserveNewest" TargetPath="Resources\logo_h.svg" />
     <None Include="..\..\assets\logo\logo_h-480.png" CopyToOutputDirectory="PreserveNewest" TargetPath="Resources\logo_h-480.png" />
     <None Include="..\..\assets\images\april.jpg" CopyToOutputDirectory="PreserveNewest" TargetPath="Resources\april.jpg" />
     <None Include="..\..\assets\images\soonduk.jpg" CopyToOutputDirectory="PreserveNewest" TargetPath="Resources\soonduk.jpg" />
