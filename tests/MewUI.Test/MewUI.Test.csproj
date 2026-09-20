@@ -19,6 +19,8 @@
                       Aliases="MewVGWin32" />
     <ProjectReference Include="..\..\src\MewUI.Backend.MewVG.X11\MewUI.Backend.MewVG.X11.csproj"
                       Aliases="MewVGX11" />
+    <ProjectReference Include="..\..\src\MewUI.Backend.MewVG.MacOS\MewUI.Backend.MewVG.MacOS.csproj"
+                      Aliases="MewVGMacOS" />
     <ProjectReference Include="..\..\src\MewUI.Platform.X11\MewUI.Platform.X11.csproj" />
     <ProjectReference Include="..\..\src\MewUI.Platform.Win32\MewUI.Platform.Win32.csproj" />
     <ProjectReference Include="..\..\src\MewUI.Preview\MewUI.Preview.csproj" />

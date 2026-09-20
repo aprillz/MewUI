@@ -14,6 +14,10 @@ internal abstract class MeasureGraphicsContextBase : ITextBackendMeasurementCont
 
     public abstract Size MeasureText(ReadOnlySpan<char> text, IFont font, double maxWidth);
 
+    /// <summary>
+    /// Returns the rasterizer's unshifted baseline in DIPs; backends override when device-pixel
+    /// quantization or a DPI-specific native font changes it from the stored ascent.
+    /// </summary>
     public virtual double GetRasterBaseline(IFont font) => font.Ascent;
 
     bool ITextBackendMeasurementContext.SupportsUtf16PrefixAdvances => this is ITextAdvanceSource;

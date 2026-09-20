@@ -14,6 +14,11 @@ internal sealed class MewVGMetalMeasurementContext : MeasureGraphicsContextBase,
 
     public override double DpiScale => _dpi / 96.0;
 
+    public override double GetRasterBaseline(IFont font)
+        => font is CoreTextFont coreTextFont
+            ? CoreTextText.GetRasterBaseline(coreTextFont, _dpi)
+            : base.GetRasterBaseline(font);
+
     bool ITextAdvanceSource.TryGetUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font, Span<double> destination)
     {
         if (text.IsEmpty || font is not CoreTextFont ct || destination.Length < text.Length ||
