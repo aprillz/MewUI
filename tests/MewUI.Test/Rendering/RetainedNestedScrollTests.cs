@@ -190,7 +190,12 @@ public sealed class RetainedNestedScrollTests
             return;
         }
 
-        var factory = new GdiGraphicsFactory();
+        using var factory = new GdiGraphicsFactory();
+        AssertAlternatingNestedScrollMatchesImmediateFrame(factory);
+    }
+
+    private static void AssertAlternatingNestedScrollMatchesImmediateFrame(IGraphicsFactory factory)
+    {
         Application.DefaultGraphicsFactory = factory;
         var (window, outer, inner) = CreateNestedScene();
         using var surface = factory.CreateSurface(RenderSurfaceDescriptor.CachedImage(WIDTH, HEIGHT, 1));
@@ -283,7 +288,12 @@ public sealed class RetainedNestedScrollTests
             return;
         }
 
-        var factory = new GdiGraphicsFactory();
+        using var factory = new GdiGraphicsFactory();
+        AssertRepeatedOuterScrollMatchesImmediateFrame(factory);
+    }
+
+    private static void AssertRepeatedOuterScrollMatchesImmediateFrame(IGraphicsFactory factory)
+    {
         Application.DefaultGraphicsFactory = factory;
         var (window, outer, _) = CreateNestedScene();
         using var surface = factory.CreateSurface(RenderSurfaceDescriptor.CachedImage(WIDTH, HEIGHT, 1));
@@ -309,7 +319,12 @@ public sealed class RetainedNestedScrollTests
             return;
         }
 
-        var factory = new GdiGraphicsFactory();
+        using var factory = new GdiGraphicsFactory();
+        AssertOuterScrollWithContentChangeMatchesImmediateFrame(factory);
+    }
+
+    private static void AssertOuterScrollWithContentChangeMatchesImmediateFrame(IGraphicsFactory factory)
+    {
         Application.DefaultGraphicsFactory = factory;
         var (window, outer, inner) = CreateNestedScene();
         var animated = (Leaf)((StackPanel)inner.Content!).Children[0];
@@ -327,5 +342,41 @@ public sealed class RetainedNestedScrollTests
 
         string difference = Compare(factory, window, surface);
         Assert.AreEqual(string.Empty, difference, $"scroll-with-content-change: {difference}");
+    }
+
+    [TestMethod]
+    [DataRow("Direct2D", "Alternating")]
+    [DataRow("Direct2D", "RoundTrip")]
+    [DataRow("Direct2D", "RepeatedOuter")]
+    [DataRow("Direct2D", "ContentChange")]
+    [DataRow("MewVG", "Alternating")]
+    [DataRow("MewVG", "RepeatedOuter")]
+    [DataRow("MewVG", "ContentChange")]
+    public void OtherBackends_NestedScrollMatchesImmediateFrame(string backend, string scenario)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("These backends are Windows-only.");
+            return;
+        }
+
+        IGraphicsFactory factory = backend == "Direct2D" ? new Direct2DGraphicsFactory() : new MewVGWin32GraphicsFactory();
+        using var disposable = factory as IDisposable;
+        using var renderScope = factory is MewVGWin32GraphicsFactory ? factory.AcquireBackgroundRenderScope() : null;
+        switch (scenario)
+        {
+            case "Alternating":
+                AssertAlternatingNestedScrollMatchesImmediateFrame(factory);
+                break;
+            case "RoundTrip":
+                AssertRoundTripScrollMatchesImmediateFrame(factory);
+                break;
+            case "RepeatedOuter":
+                AssertRepeatedOuterScrollMatchesImmediateFrame(factory);
+                break;
+            default:
+                AssertOuterScrollWithContentChangeMatchesImmediateFrame(factory);
+                break;
+        }
     }
 }

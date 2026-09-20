@@ -1,8 +1,12 @@
+extern alias MewVGWin32;
+
 using Aprillz.MewUI;
 using Aprillz.MewUI.Controls;
 using Aprillz.MewUI.Rendering;
 using Aprillz.MewUI.Rendering.Gdi;
 using MewUI.Test.Infrastructure;
+
+using MewVGWin32GraphicsFactory = MewVGWin32::Aprillz.MewUI.Rendering.MewVG.MewVGWin32GraphicsFactory;
 
 namespace MewUI.Test.Rendering;
 
@@ -86,6 +90,29 @@ public sealed class RetainedPlacementTests
 
         using var factory = new GdiGraphicsFactory();
         RunTextScroll(factory, 120);
+    }
+
+    [TestMethod]
+    [DataRow("Gdi")]
+    [DataRow("Direct2D")]
+    [DataRow("MewVG")]
+    public void TextScrollAtOneAndAHalfScale_MatchesTheReferenceFrame(string backend)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("These backends are Windows-only.");
+            return;
+        }
+
+        IGraphicsFactory factory = backend switch
+        {
+            "Gdi" => new GdiGraphicsFactory(),
+            "Direct2D" => new Aprillz.MewUI.Rendering.Direct2D.Direct2DGraphicsFactory(),
+            _ => new MewVGWin32GraphicsFactory(),
+        };
+        using var disposable = factory as IDisposable;
+        using var renderScope = factory is MewVGWin32GraphicsFactory ? factory.AcquireBackgroundRenderScope() : null;
+        RunTextScroll(factory, DPI_150_PERCENT);
     }
 
     private static void RunTextScroll(IGraphicsFactory factory, uint dpi)
