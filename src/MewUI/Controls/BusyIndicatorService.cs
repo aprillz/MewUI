@@ -339,8 +339,7 @@ internal sealed class BusyIndicatorPresenter : Control, IVisualTreeHost
             .AttachTo(this);
         _fadeClock.TickCallback = progress =>
         {
-            _opacity = (float)progress;
-            InvalidateVisual();
+            SetFadeOpacity((float)progress);
         };
         _fadeClock.Start();
     }
@@ -352,11 +351,23 @@ internal sealed class BusyIndicatorPresenter : Control, IVisualTreeHost
             .AttachTo(this);
         _fadeClock.TickCallback = progress =>
         {
-            _opacity = 1.0 - progress;
-            InvalidateVisual();
+            SetFadeOpacity(1.0 - progress);
         };
         _fadeClock.CompletedCallback = onCompleted;
         _fadeClock.Start();
+    }
+
+    private void SetFadeOpacity(double opacity)
+    {
+        bool drewBefore = _opacity > 0;
+        _opacity = opacity;
+        if (drewBefore != (_opacity > 0))
+        {
+            // The ring and the message are composed only while something of the fade shows.
+            RaiseRenderDirty(Rendering.Retained.RenderDirtyKind.Composition);
+        }
+
+        InvalidateVisual();
     }
 
     protected override void OnRender(IGraphicsContext context)
@@ -402,13 +413,10 @@ internal sealed class BusyIndicatorPresenter : Control, IVisualTreeHost
     internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
     {
         builder.Content(0);
-        if (_opacity <= 0)
+        if (_opacity > 0)
         {
-            return;
+            builder.Child(_child);
         }
-
-        base.WriteComposition(builder);
-        builder.Child(_child);
     }
 
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor) => visitor(_child);

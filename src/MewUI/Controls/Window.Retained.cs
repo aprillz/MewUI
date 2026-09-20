@@ -328,14 +328,14 @@ public partial class Window
         {
             _sceneCapture.Capture(_renderScene, root, isPortal ? [] : CollectLayerRoots(), recorder, RenderDirtyQueue);
         }
-        catch (InvalidOperationException)
+        catch (InvalidOperationException rejection)
         {
             // A rejected update changed nothing: the scene still is the last one that landed and the
             // queue still holds what this update was meant to serve, so the next frame tries again.
             // Until then the frame shows that last scene. A window that has none yet draws its visuals
             // directly.
             _rejectedSceneUpdates++;
-            LastWholeFrameReason = "the scene update was rejected";
+            LastWholeFrameReason = rejection.Message;
             _retainedSceneReady = _renderScene.Root != null;
             _wholeFrames++;
             return null;
