@@ -87,10 +87,15 @@ foreach ($probeName in $Probe) {
         "-p:PublishDir=$publishDir\"
     )
 
-    & dotnet @arguments
+    # Trimming and ahead-of-time analysis speak through warnings: code they cannot follow still publishes,
+    # and then fails or loses members at run time. A probe therefore has to publish without any.
+    $publishOutput = & dotnet @arguments 2>&1 | ForEach-Object { "$_" }
+    $publishOutput | Write-Host
     if ($LASTEXITCODE -ne 0) {
         throw "NativeAOT publish failed for probe '$probeName'."
     }
+
+    $analysisWarnings = @($publishOutput | Where-Object { $_ -match 'warning (IL|ILC)\d+' } | Sort-Object -Unique)
 
     $executable = Get-ChildItem $publishDir -File |
         Where-Object { $_.Extension -in @('.exe', '') -and $_.Name -notlike '*.dbg' } |
@@ -120,6 +125,7 @@ foreach ($probeName in $Probe) {
         metadataBytes = $mapSummary.metadataBytes
         methodCount = $mapSummary.methodCount
         constructedTypeCount = $mapSummary.constructedTypeCount
+        analysisWarnings = $analysisWarnings.Count
         executable = $executable.FullName.Substring($repoRoot.Length + 1)
         map = $mapCopy.Substring($repoRoot.Length + 1)
     }
@@ -147,7 +153,12 @@ $reportPath = Join-Path $OutputRoot 'report.json'
 $reportJson = $report | ConvertTo-Json -Depth 8
 [IO.File]::WriteAllText($reportPath, $reportJson + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
 Write-Host "NativeAOT size report: $reportPath"
-$results | Format-Table probe, executableBytes, methodCodeBytes, constructedTypeBytes, metadataBytes
+$results | Format-Table probe, executableBytes, methodCodeBytes, constructedTypeBytes, metadataBytes, analysisWarnings
+
+$warned = @($results | Where-Object { $_.analysisWarnings -gt 0 })
+if ($warned.Count -ne 0) {
+    throw ("Trimming or ahead-of-time analysis warned while publishing: " + (($warned | ForEach-Object { "$($_.probe) $($_.analysisWarnings)" }) -join ", ") + ". The warnings are in the publish output above.")
+}
 
 if (-not [string]::IsNullOrWhiteSpace($BaselinePath)) {
     $baseline = Get-Content -LiteralPath $BaselinePath -Raw | ConvertFrom-Json
