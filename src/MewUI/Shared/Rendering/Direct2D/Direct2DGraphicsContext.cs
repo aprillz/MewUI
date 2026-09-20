@@ -1122,8 +1122,35 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITra
 
         var rt = _deviceContext != 0 ? _deviceContext : _renderTarget;
         double rasterOriginOffsetY = layout.InkOverhang.HasValue ? layout.RasterOriginOffsetY : 0;
-        var origin = new D2D1_POINT_2F((float)bounds.X, (float)(bounds.Y + rasterOriginOffsetY));
+        // Glyphs are snapped to the pixel grid only while the translation in effect is a whole number of
+        // layout units. Above 100% a whole device pixel is a fraction of a unit, so text scrolled or hosted
+        // at such an offset (a popup window) would be drawn unsnapped and come out soft. The translation is
+        // therefore taken out of the transform and put into the origin, which may be any fraction.
+        bool foldsTranslation = _textPixelSnap && _transform.M11 == 1 && _transform.M22 == 1 && _transform.M12 == 0 && _transform.M21 == 0 &&
+            (_transform.M31 != MathF.Floor(_transform.M31) || _transform.M32 != MathF.Floor(_transform.M32));
+        double foldedX = foldsTranslation ? _transform.M31 : 0;
+        double foldedY = foldsTranslation ? _transform.M32 : 0;
+        var origin = new D2D1_POINT_2F((float)(bounds.X + foldedX), (float)(bounds.Y + rasterOriginOffsetY + foldedY));
+        if (foldsTranslation)
+        {
+            D2D1VTable.SetTransform((ID2D1RenderTarget*)_renderTarget, new D2D1_MATRIX_3X2_F(1, 0, 0, 1, 0, 0));
+        }
 
+        try
+        {
+            DrawTextLayoutAt(rt, layout, bounds, origin, foldedX, brush, options);
+        }
+        finally
+        {
+            if (foldsTranslation)
+            {
+                SyncNativeTransform();
+            }
+        }
+    }
+
+    private void DrawTextLayoutAt(nint rt, BackendTextLayout layout, Rect bounds, D2D1_POINT_2F origin, double foldedX, nint brush, D2D1_DRAW_TEXT_OPTIONS options)
+    {
         if (layout.InkOverhang.HasValue)
         {
             D2D1VTable.DrawTextLayout((ID2D1RenderTarget*)rt, origin, layout.BackendHandle, brush, options);
@@ -1140,9 +1167,9 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITra
         // Clipping at the line box shaves the antialiased edge row of a flush descender, so text that
         // fits is bounded horizontally only.
         var horizontalClip = new D2D1_RECT_F(
-            (float)bounds.X,
+            (float)(bounds.X + foldedX),
             -UNBOUNDED_CLIP_EXTENT,
-            (float)bounds.Right,
+            (float)(bounds.Right + foldedX),
             UNBOUNDED_CLIP_EXTENT);
         D2D1VTable.PushAxisAlignedClip((ID2D1RenderTarget*)rt, horizontalClip);
         try
