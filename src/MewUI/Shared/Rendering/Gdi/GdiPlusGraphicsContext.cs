@@ -156,6 +156,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
 
     protected override void OnBeginFrame(IRenderTarget target)
     {
+        _opaqueBackdropDepth = 0;
         if (_pixelSurface != null &&
             _pixelSurface.DibBits != 0 &&
             !_pixelSurface.PreserveContentsOnBeginFrame)
@@ -1375,7 +1376,12 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
         // A surface without alpha is drawn as a window is: its alpha channel means nothing, so the
         // text path that writes none can be used and text looks the same on both.
         bool surfaceCarriesAlpha = _pixelSurface != null && _pixelSurface.HasAlpha;
-        if (!hasTextTransform && (surfaceCarriesAlpha || color.A < 255 || EnableAlphaTextHint))
+
+        // Inside an opaque backdrop the pixels under the text are known, so the text is drawn as it is
+        // on a window, with subpixel antialiasing, and the alpha that drawing clobbers is put back.
+        bool overOpaqueBackdrop = surfaceCarriesAlpha && _opaqueBackdropDepth > 0 && !hasTextTransform &&
+            color.A == 255 && !EnableAlphaTextHint;
+        if (!hasTextTransform && !overOpaqueBackdrop && (surfaceCarriesAlpha || color.A < 255 || EnableAlphaTextHint))
         {
             var r = GetTextLayoutRect(bounds, wrapping);
             uint gdiFormat = BuildTextFormat(horizontalAlignment, verticalAlignment, wrapping, trimming);
@@ -1489,7 +1495,9 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
                     out textHeightPx);
             }
 
-            int clipState = ApplyTextClip(inkInset.HasInset ? inkInset.Inflate(r) : r);
+            var inkRect = inkInset.HasInset ? inkInset.Inflate(r) : r;
+            int clipState = ApplyTextClip(inkRect);
+            byte[]? keptAlpha = overOpaqueBackdrop ? KeepAlpha(inkRect) : null;
             if (inkInset.HasInset)
             {
                 gdiFormat |= GdiConstants.DT_NOCLIP;
@@ -1510,6 +1518,11 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
                 }
             }
 
+            if (keptAlpha != null)
+            {
+                PutAlphaBack(inkRect, keptAlpha);
+            }
+
             RestoreTextClip(clipState);
         }
         finally
@@ -1524,6 +1537,80 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
                 Gdi32.SelectObject(Hdc, oldFont);
             }
         }
+    }
+
+    private int _opaqueBackdropDepth;
+
+    public override void BeginOpaqueBackdrop() => _opaqueBackdropDepth++;
+
+    public override void EndOpaqueBackdrop()
+    {
+        if (_opaqueBackdropDepth > 0)
+        {
+            _opaqueBackdropDepth--;
+        }
+    }
+
+    private bool TryClampToSurface(RECT area, out int left, out int top, out int right, out int bottom)
+    {
+        left = Math.Max(0, area.left);
+        top = Math.Max(0, area.top);
+        right = Math.Min(_pixelSurface!.PixelWidth, area.right);
+        bottom = Math.Min(_pixelSurface.PixelHeight, area.bottom);
+        return right > left && bottom > top;
+    }
+
+    /// <summary>Copies the alpha of the area before text is drawn over it; the text call writes zero there.</summary>
+    private byte[]? KeepAlpha(RECT area)
+    {
+        if (!TryClampToSurface(area, out int left, out int top, out int right, out int bottom))
+        {
+            return null;
+        }
+
+        // Calls still batched against the DC would land after this read.
+        Gdi32.GdiFlush();
+        int width = right - left;
+        var kept = System.Buffers.ArrayPool<byte>.Shared.Rent(width * (bottom - top));
+        var pixels = _pixelSurface!.GetPixelSpan();
+        int stride = _pixelSurface.StrideBytes;
+        int index = 0;
+        for (int row = top; row < bottom; row++)
+        {
+            int offset = (row * stride) + (left * 4) + 3;
+            for (int column = 0; column < width; column++)
+            {
+                kept[index++] = pixels[offset];
+                offset += 4;
+            }
+        }
+
+        return kept;
+    }
+
+    private void PutAlphaBack(RECT area, byte[] kept)
+    {
+        if (TryClampToSurface(area, out int left, out int top, out int right, out int bottom))
+        {
+            Gdi32.GdiFlush();
+            int width = right - left;
+            var pixels = _pixelSurface!.GetPixelSpan();
+            int stride = _pixelSurface.StrideBytes;
+            int index = 0;
+            for (int row = top; row < bottom; row++)
+            {
+                int offset = (row * stride) + (left * 4) + 3;
+                for (int column = 0; column < width; column++)
+                {
+                    pixels[offset] = kept[index++];
+                    offset += 4;
+                }
+            }
+
+            _pixelSurfaceDirtied = true;
+        }
+
+        System.Buffers.ArrayPool<byte>.Shared.Return(kept);
     }
 
     protected override TextInkOverhang MeasureRunInkOverhang(ReadOnlySpan<char> text, IFont font, BackendTextLayout layout)
