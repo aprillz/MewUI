@@ -68,6 +68,8 @@ public partial class Window
     internal readonly record struct RetainedFrameCounts(int Whole, int Partial, int Untouched);
 
     private int _rejectedSceneUpdates;
+    private int _consecutiveRejectedUpdates;
+    private const int REJECTIONS_BEFORE_DRAWING_DIRECTLY = 2;
 
     /// <summary>How many scene updates were rejected and left the previous scene in place.</summary>
     internal int RejectedSceneUpdates => _rejectedSceneUpdates;
@@ -339,15 +341,24 @@ public partial class Window
         {
             // A rejected update changed nothing: the scene still is the last one that landed and the
             // queue still holds what this update was meant to serve, so the next frame tries again.
-            // Until then the frame shows that last scene. A window that has none yet draws its visuals
-            // directly.
+            // Until then the frame shows that last scene. An update rejected again is not going to land
+            // by itself, and showing the old scene any longer would freeze the window on it, so from
+            // then on, as in a window that has no scene yet, the frame draws its visuals directly.
             _rejectedSceneUpdates++;
+            _consecutiveRejectedUpdates++;
             LastWholeFrameReason = rejection.Message;
-            _retainedSceneReady = _renderScene.Root != null;
+            _retainedSceneReady = _renderScene.Root != null && _consecutiveRejectedUpdates < REJECTIONS_BEFORE_DRAWING_DIRECTLY;
             _wholeFrames++;
             return null;
         }
 
+        if (_consecutiveRejectedUpdates >= REJECTIONS_BEFORE_DRAWING_DIRECTLY)
+        {
+            // The frames drawn directly meanwhile are not what the target was keeping for the scene.
+            _renderScene.RequestFullDamage();
+        }
+
+        _consecutiveRejectedUpdates = 0;
         _retainedSceneReady = true;
 
         if (_renderScene.IsFullDamage || !CanRepaintPartOfTheFrame(context, target))
