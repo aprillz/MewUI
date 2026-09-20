@@ -195,6 +195,9 @@ internal static partial class GdiPlusInterop
     public static partial int GdipSetLineTransform(nint brush, nint matrix);
 
     [LibraryImport("gdiplus.dll")]
+    public static partial int GdipMultiplyLineTransform(nint brush, nint matrix, MatrixOrder order);
+
+    [LibraryImport("gdiplus.dll")]
     private static unsafe partial int GdipSetLinePresetBlend(
         nint brush, uint* blend, float* positions, int count);
 
