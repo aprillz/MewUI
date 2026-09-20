@@ -1,4 +1,5 @@
 extern alias MewVGWin32;
+extern alias MewVGX11;
 
 using Aprillz.MewUI;
 using Aprillz.MewUI.Controls;
@@ -7,6 +8,7 @@ using Aprillz.MewUI.Rendering.Direct2D;
 using Aprillz.MewUI.Rendering.Gdi;
 using MewUI.Test.Infrastructure;
 using MewVGWin32GraphicsFactory = MewVGWin32::Aprillz.MewUI.Rendering.MewVG.MewVGWin32GraphicsFactory;
+using MewVGX11GraphicsFactory = MewVGX11::Aprillz.MewUI.Rendering.MewVG.MewVGX11GraphicsFactory;
 
 namespace MewUI.Test.Rendering;
 
@@ -148,6 +150,20 @@ public sealed class RetainedTextScrollTests
         }
 
         using var factory = new MewVGWin32GraphicsFactory();
+        using var renderScope = factory.AcquireBackgroundRenderScope();
+        AssertTextScrollMatchesImmediateFrame(factory);
+    }
+
+    [TestMethod]
+    public void MewVGX11WindowComparisonPath_TextScrollMatchesImmediateFrame()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            Assert.Inconclusive("The MewVG X11 retained text scroll comparison needs an X11 session.");
+            return;
+        }
+
+        using var factory = new MewVGX11GraphicsFactory();
         using var renderScope = factory.AcquireBackgroundRenderScope();
         AssertTextScrollMatchesImmediateFrame(factory);
     }
