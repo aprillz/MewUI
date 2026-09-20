@@ -181,11 +181,12 @@ public sealed class SvgView : FrameworkElement
             return renderBounds;
         }
 
-        var clientSize = window.ClientSize;
-        var p0 = Vector2.Transform(new Vector2(0, 0), inverse);
-        var p1 = Vector2.Transform(new Vector2((float)clientSize.Width, 0), inverse);
-        var p2 = Vector2.Transform(new Vector2(0, (float)clientSize.Height), inverse);
-        var p3 = Vector2.Transform(new Vector2((float)clientSize.Width, (float)clientSize.Height), inverse);
+        // Only what the enclosing scroll viewer lets through reaches the screen; the whole window would stretch the cached region.
+        var visible = GetVisibleRectInWindow(window);
+        var p0 = Vector2.Transform(new Vector2((float)visible.X, (float)visible.Y), inverse);
+        var p1 = Vector2.Transform(new Vector2((float)visible.Right, (float)visible.Y), inverse);
+        var p2 = Vector2.Transform(new Vector2((float)visible.X, (float)visible.Bottom), inverse);
+        var p3 = Vector2.Transform(new Vector2((float)visible.Right, (float)visible.Bottom), inverse);
 
         double minX = Math.Min(Math.Min(p0.X, p1.X), Math.Min(p2.X, p3.X));
         double minY = Math.Min(Math.Min(p0.Y, p1.Y), Math.Min(p2.Y, p3.Y));
@@ -202,6 +203,26 @@ public sealed class SvgView : FrameworkElement
         }
 
         return new Rect(left, top, right - left, bottom - top);
+    }
+
+    private Rect GetVisibleRectInWindow(Window window)
+    {
+        var client = new Rect(0, 0, window.ClientSize.Width, window.ClientSize.Height);
+        for (var current = Parent; current != null; current = current.Parent)
+        {
+            if (current is ScrollViewer scrollViewer && scrollViewer.ViewportWidth > 0 && scrollViewer.ViewportHeight > 0)
+            {
+                var viewport = new Rect(
+                    scrollViewer.Bounds.X,
+                    scrollViewer.Bounds.Y,
+                    scrollViewer.ViewportWidth,
+                    scrollViewer.ViewportHeight);
+                var clipped = viewport.Intersect(client);
+                return clipped.Width > 0 && clipped.Height > 0 ? clipped : client;
+            }
+        }
+
+        return client;
     }
 
     private readonly record struct RebuildRequest(
