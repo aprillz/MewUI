@@ -58,6 +58,7 @@ internal sealed partial class MewVGWin32GraphicsContext
             }
             else
             {
+                _resources!.OffscreenProvider.EnterSession();
                 BrowserNative.MakeContextCurrent();
                 OpenGLExt.BindFramebuffer(OpenGLExt.GL_FRAMEBUFFER, 0);
                 GL.ColorMask(true, true, true, true);
@@ -99,6 +100,17 @@ internal sealed partial class MewVGWin32GraphicsContext
                     _offscreenProvider.ReleasePendingTargetsUnderCurrentContext();
                 }
             }
+            else
+            {
+                // The view of the kept frame is queued on the window's renderer, and only the window ends a frame on it.
+                var provider = _resources!.OffscreenProvider;
+                provider.ReleasePendingImagesForVg(_vg);
+                NvgStrokeHelper.ReleasePendingGradientLutDeletes(_vg);
+                if (provider.ExitSession())
+                {
+                    provider.ReleasePendingTargetsUnderCurrentContext();
+                }
+            }
         }
         catch
         {
@@ -109,7 +121,7 @@ internal sealed partial class MewVGWin32GraphicsContext
 
     private void AbortFrame()
     {
-        _offscreenProvider?.ExitSession();
+        (_offscreenProvider ?? _resources?.OffscreenProvider)?.ExitSession();
         OpenGLExt.BindFramebuffer(OpenGLExt.GL_FRAMEBUFFER, 0);
     }
 
