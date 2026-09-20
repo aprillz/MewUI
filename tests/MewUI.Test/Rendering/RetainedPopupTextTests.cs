@@ -21,14 +21,17 @@ public sealed class RetainedPopupTextTests
     private const int HEIGHT = 200;
 
     [TestMethod]
-    public void TextOverAnOpaqueBackground_LooksTheSameOnASurfaceWithAlpha()
+    [DataRow("Direct2D")]
+    [DataRow("Gdi")]
+    public void TextOverAnOpaqueBackground_LooksTheSameOnASurfaceWithAlpha(string backend)
     {
         if (!OperatingSystem.IsWindows())
         {
-            Assert.Inconclusive("The Direct2D backend is Windows-only.");
+            Assert.Inconclusive("These backends are Windows-only.");
         }
 
-        using var factory = new Direct2DGraphicsFactory();
+        IGraphicsFactory factory = backend == "Gdi" ? new Aprillz.MewUI.Rendering.Gdi.GdiGraphicsFactory() : new Direct2DGraphicsFactory();
+        using var disposable = factory as IDisposable;
         Application.DefaultGraphicsFactory = factory;
 
         var opaque = Render(factory, transparentWindow: false, out var opaqueList);
@@ -40,7 +43,7 @@ public sealed class RetainedPopupTextTests
         Assert.AreEqual(opaqueList, alphaList, "the two lists were laid out differently");
     }
 
-    private static (byte[] Reference, byte[] Whole, byte[] Partial) Render(Direct2DGraphicsFactory factory, bool transparentWindow, out Rect listBounds)
+    private static (byte[] Reference, byte[] Whole, byte[] Partial) Render(IGraphicsFactory factory, bool transparentWindow, out Rect listBounds)
     {
         var list = new ListBox { Width = 200, Height = 150, Margin = new Thickness(20), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
         list.Items(Enumerable.Range(0, 6).Select(index => $"Popup list item number {index}").ToArray());
@@ -77,7 +80,7 @@ public sealed class RetainedPopupTextTests
         return (referencePixels, wholePixels, partialPixels);
     }
 
-    private static byte[] Read(Direct2DGraphicsFactory factory, IRenderSurface surface)
+    private static byte[] Read(IGraphicsFactory factory, IRenderSurface surface)
     {
         var pixels = new byte[WIDTH * HEIGHT * 4];
         Assert.IsTrue(((IRenderDevice)factory).TryReadPixels(surface, pixels, WIDTH * 4));
