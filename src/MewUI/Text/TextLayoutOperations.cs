@@ -70,7 +70,18 @@ internal static class TextLayoutOperations
             TextAlignment.Bottom => bounds.Y + Math.Max(0, bounds.Height - layout.ContentHeight),
             _ => bounds.Y
         };
-        var origin = new Point(bounds.X, y);
+        // The centre of a box is seldom a whole device pixel, and text that starts between two comes out
+        // softer than the same text in a TextBlock, which layout rounding puts on one. While text is
+        // moving under an animation its snapping is off, and then the exact position is kept.
+        double x = bounds.X;
+        if (context.TextPixelSnap)
+        {
+            double dpiScale = context.DpiScale;
+            x = LayoutRounding.RoundToPixel(x, dpiScale);
+            y = LayoutRounding.RoundToPixel(y, dpiScale);
+        }
+
+        var origin = new Point(x, y);
         var options = new TextDrawOptions(color, paintSpans, Owner: owner, Transient: transient);
 
         if (layout.MeasuredSize.Width <= bounds.Width + 0.5 && layout.ContentHeight <= bounds.Height + 0.5)
