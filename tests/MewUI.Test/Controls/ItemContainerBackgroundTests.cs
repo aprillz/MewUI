@@ -48,6 +48,40 @@ public sealed class ItemContainerBackgroundTests
     }
 
     [TestMethod]
+    public void TheContainer_HasNoBackgroundPropertiesOfItsOwn()
+    {
+        // A row's look in each state belongs to its style, as it does for every other control: the state
+        // goes into the visual state, and the triggers of the style set Background. Properties that carry
+        // the colours on every container would be a second way to do the same, set row by row.
+        var declared = typeof(ItemContainer)
+            .GetMembers(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.DeclaredOnly)
+            .Select(member => member.Name)
+            .Where(name => name.Contains("Background") || name.Contains("Hovered") || name.Contains("Alternate"))
+            .Distinct()
+            .OrderBy(name => name)
+            .ToArray();
+
+        Assert.AreEqual(0, declared.Length, "public members of ItemContainer about its backgrounds: " + string.Join(", ", declared));
+    }
+
+    [TestMethod]
+    public void HoveredAndSelectedRows_TakeTheirBackgroundFromTheStyle()
+    {
+        var (window, list) = CreateList(zebraStriping: false);
+        var palette = list.ThemeInternal.Palette;
+
+        var hovered = ContainerBounds(list, 2);
+        window.SendMouseMove(new Point(hovered.X + hovered.Width / 2, hovered.Y + hovered.Height / 2));
+        list.SelectedIndex = 4;
+        window.PerformLayout();
+        window.PerformLayout();
+
+        Assert.AreEqual(palette.ControlBackground.Lerp(palette.Accent, 0.15), Container(list, 2).Background, "the hovered row");
+        Assert.AreEqual(palette.SelectionBackground, Container(list, 4).Background, "the selected row");
+        Assert.AreEqual(0, Container(list, 0).Background.A, "a row that is neither");
+    }
+
+    [TestMethod]
     public void HoveredRow_PaintsTheHoverBackground()
     {
         if (!OperatingSystem.IsWindows())
@@ -64,6 +98,9 @@ public sealed class ItemContainerBackgroundTests
         window.SendMouseMove(new Point(hovered.X + hovered.Width / 2, hovered.Y + hovered.Height / 2));
 
         Assert.IsTrue(Container(list, 2).IsHovered, "the mouse move did not put the row into the hovered state");
+
+        // A frame brings the visual states up to date before it draws, which is where the style puts the hover in.
+        window.PerformLayout();
 
         byte[] pixels = RenderList(list);
 

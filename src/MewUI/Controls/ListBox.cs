@@ -780,14 +780,11 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
     private protected override void ConfigureItemContainer(ItemContainer container, int index)
     {
         var theme = Theme;
-        container.SelectionBackground = theme.Palette.SelectionBackground;
-        container.HoverBackground = theme.Palette.ControlBackground.Lerp(theme.Palette.Accent, 0.15);
-        container.AlternateBackground = ZebraStriping
-            ? theme.Palette.ControlBackground.Lerp(theme.Palette.ButtonFace, theme.IsDark ? 0.45 : 0.33)
-            : Color.Transparent;
         container.RowPadding = _presenter.ItemPadding;
         container.CornerRadius = _presenter.ItemRadius;
-        container.SetIsAlternate((index & 1) == 1);
+        container.SetAlternate(
+            ZebraStriping && (index & 1) == 1,
+            theme.Palette.ControlBackground.Lerp(theme.Palette.ButtonFace, theme.IsDark ? 0.45 : 0.33));
         container.SetIsHovered(index == _hoverIndex);
     }
 
