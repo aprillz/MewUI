@@ -2,14 +2,15 @@ using Aprillz.MewUI;
 using Aprillz.MewUI.Controls;
 using Aprillz.MewUI.Rendering;
 using Aprillz.MewUI.Rendering.Gdi;
-using Aprillz.MewUI.Rendering.Retained;
+using MewUI.Test.Infrastructure;
 
 namespace MewUI.Test.Rendering;
 
 /// <summary>
 /// Validates that an item's visual state reaches the surface through the container that owns it:
 /// changing one item's selection or hover must re-record that container alone, and must damage only
-/// the area that container covers.
+/// the area that container covers. The state goes through the container's style, as it does in a
+/// list, so the containers stand in a window.
 /// Not parallelizable: assigns the process-wide Application.DefaultGraphicsFactory.
 /// </summary>
 [TestClass]
@@ -33,26 +34,21 @@ public sealed class RetainedItemScopeTests
         Application.DefaultGraphicsFactory = factory;
 
         var containers = BuildItems();
-        var root = BuildRoot(containers);
-        Layout(root);
+        var window = BuildWindow(containers);
+        using var surface = factory.CreateSurface(RenderSurfaceDescriptor.Offscreen(SURFACE_WIDTH, SURFACE_HEIGHT, 1.0, hasAlpha: false));
+        Frames(window, surface, 3);
 
-        using var scene = new RenderScene();
-        var capture = new SceneCapture();
-        var registry = new RenderDirtyRegistry();
-        Render(factory, context => capture.Capture(scene, root, context, registry));
-
-        scene.Statistics.Reset();
-        scene.ResetDamage();
+        window.RetainedStatistics!.Reset();
         containers[2].SetIsSelected(true);
-        Render(factory, context => capture.Capture(scene, root, context, registry));
+        Frames(window, surface, 1);
 
         Assert.AreEqual(
             1,
-            scene.Statistics.ContentRecordCount,
+            window.RetainedStatistics.ContentRecordCount,
             "a selection change re-recorded more than the container that owns it");
-        Assert.IsGreaterThan(0, scene.Statistics.ContentReplayCount, "the unchanged items were not replayed");
 
-        var damage = scene.DamageBounds;
+        Assert.IsTrue(window.LastRetainedDamage is Rect, $"the selection change repainted the whole frame ({window.LastWholeFrameReason})");
+        var damage = (Rect)window.LastRetainedDamage!;
         Assert.IsTrue(damage.IntersectsWith(containers[2].Bounds));
         Assert.IsFalse(
             damage.IntersectsWith(containers[0].Bounds),
@@ -75,23 +71,19 @@ public sealed class RetainedItemScopeTests
         Application.DefaultGraphicsFactory = factory;
 
         var containers = BuildItems();
-        var root = BuildRoot(containers);
-        Layout(root);
-
-        using var scene = new RenderScene();
-        var capture = new SceneCapture();
-        var registry = new RenderDirtyRegistry();
+        var window = BuildWindow(containers);
+        using var surface = factory.CreateSurface(RenderSurfaceDescriptor.Offscreen(SURFACE_WIDTH, SURFACE_HEIGHT, 1.0, hasAlpha: false));
         containers[1].SetIsHovered(true);
-        Render(factory, context => capture.Capture(scene, root, context, registry));
+        Frames(window, surface, 3);
 
-        scene.Statistics.Reset();
+        window.RetainedStatistics!.Reset();
         containers[1].SetIsHovered(false);
         containers[3].SetIsHovered(true);
-        Render(factory, context => capture.Capture(scene, root, context, registry));
+        Frames(window, surface, 1);
 
         Assert.AreEqual(
             2,
-            scene.Statistics.ContentRecordCount,
+            window.RetainedStatistics.ContentRecordCount,
             "moving the hover re-recorded more than the item it left and the item it reached");
     }
 
@@ -103,38 +95,30 @@ public sealed class RetainedItemScopeTests
             containers[index] = new ItemContainer
             {
                 Height = 24,
-                SelectionBackground = Color.FromArgb(255, 60, 120, 220),
-                HoverBackground = Color.FromArgb(255, 200, 220, 240),
-                AlternateBackground = Color.FromArgb(255, 240, 240, 240),
                 Content = new TextBlock { Text = "item " + index },
             };
-            containers[index].SetIsAlternate((index & 1) == 1);
+            containers[index].SetAlternate((index & 1) == 1, Color.FromArgb(255, 240, 240, 240));
         }
 
         return containers;
     }
 
-    private static StackPanel BuildRoot(ItemContainer[] containers)
+    private static Window BuildWindow(ItemContainer[] containers)
     {
         var stack = new StackPanel { Orientation = Orientation.Vertical };
         stack.Children(containers);
-        return stack;
+        var window = HeadlessWindow.Create(SURFACE_WIDTH, SURFACE_HEIGHT);
+        window.Content = stack;
+        window.PerformLayout();
+        return window;
     }
 
-    private static void Layout(UIElement root)
+    private static void Frames(Window window, IRenderSurface surface, int count)
     {
-        root.Measure(new Size(SURFACE_WIDTH, SURFACE_HEIGHT));
-        root.Arrange(new Rect(0, 0, SURFACE_WIDTH, SURFACE_HEIGHT));
-    }
-
-    private static void Render(GdiGraphicsFactory factory, Action<IGraphicsContext> draw)
-    {
-        using var surface = factory.CreateSurface(
-            RenderSurfaceDescriptor.Offscreen(SURFACE_WIDTH, SURFACE_HEIGHT, 1.0, hasAlpha: false));
-        using var context = factory.CreateContext(surface);
-        context.BeginFrame(surface);
-        context.Clear(Color.White);
-        draw(context);
-        context.EndFrame();
+        for (int index = 0; index < count; index++)
+        {
+            window.PerformLayout();
+            window.RenderFrameToSurface(surface);
+        }
     }
 }

@@ -402,12 +402,22 @@ public sealed partial class ItemsControl : ScrollableItemsBase
         }
     }
 
+    private const string ROW_STYLE_NAME = "items-control-row";
+    private const double ROW_HOVER_ACCENT_SHARE = 0.10;
+
+    // Registered on first use, as the named styles of the framework are: a list of rows hovers more faintly than a list box.
+    private static readonly string _rowStyleName = RegisterRowStyle();
+
+    private static string RegisterRowStyle()
+    {
+        FrameworkNamedStyles.Register(ROW_STYLE_NAME, static () => ItemContainer.CreateRowStyle(ROW_HOVER_ACCENT_SHARE));
+        return ROW_STYLE_NAME;
+    }
+
     private protected override void ConfigureItemContainer(ItemContainer container, int index)
     {
-        var palette = Theme.Palette;
-        container.HoverBackground = ShowRowHover && IsEffectivelyEnabled
-            ? palette.ControlBackground.Lerp(palette.Accent, 0.10)
-            : Color.Transparent;
+        container.StyleName = _rowStyleName;
+        container.ShowsRowState = ShowRowHover && IsEffectivelyEnabled;
         // The row hover always filled a square rectangle, whatever the control's own corner radius.
         container.RowPadding = _presenter.ItemPadding;
         container.CornerRadius = 0;

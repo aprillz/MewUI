@@ -329,13 +329,8 @@ public class NavigationList : ScrollableItemsBase, ISelector, IIndexedSelector
 
     private protected override void ConfigureItemContainer(ItemContainer container, int index)
     {
-        // Selection/hover backgrounds apply to selectable items only; headers/separators stay flat.
-        bool selectable = KindAt(index) == NavigationItemKind.Item;
-        var palette = Theme.Palette;
-        container.SelectionBackground = selectable ? palette.SelectionBackground : Color.Transparent;
-        container.HoverBackground = selectable
-            ? palette.ControlBackground.Lerp(palette.Accent, 0.15)
-            : Color.Transparent;
+        // Selection and hover show on selectable items only; headers and separators stay flat.
+        container.ShowsRowState = KindAt(index) == NavigationItemKind.Item;
         container.RowPadding = _presenter.ItemPadding;
         container.CornerRadius = _presenter.ItemRadius;
         container.SetIsHovered(index == _hoverIndex);

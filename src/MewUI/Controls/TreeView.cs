@@ -362,15 +362,13 @@ public sealed partial class TreeView : Control, ISubtreeInvalidationHost, IFocus
 
     private void ConfigureRowContainer(ItemContainer container, int index)
     {
-        var theme = Theme;
-        container.SelectionBackground = theme.Palette.SelectionBackground;
-        container.HoverBackground = theme.Palette.ControlBackground.Lerp(theme.Palette.Accent, 0.15);
         container.RowPadding = _presenter.ItemPadding;
         container.CornerRadius = _presenter.ItemRadius;
         container.SetIsHovered(index == _hoverVisibleIndex);
 
         if (container is TreeRowContainer row)
         {
+            var theme = Theme;
             row.Indent = Indent;
             row.Depth = _itemsSource.GetDepth(index);
             row.HasChildren = _itemsSource.GetHasChildren(index);
