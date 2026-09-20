@@ -16,14 +16,14 @@ internal static class DeclaredComposition
 {
     private static readonly ConcurrentDictionary<Type, bool> _supported = new();
 
+    /// <summary>The answer already worked out for this type, so asking again costs no delegates.</summary>
+    internal static bool TryGetKnown(Type type, out bool supported) => _supported.TryGetValue(type, out supported);
+
     /// <summary>
     /// Answers for the type of <paramref name="visual"/> from the two delegates it hands over. A delegate
     /// to a virtual method binds to the override that would run, and says which class declared it,
     /// without looking methods up by name, which trimming and ahead-of-time compilation cannot follow.
     /// </summary>
-    /// <summary>The answer already worked out for this type, so asking again costs no delegates.</summary>
-    internal static bool TryGetKnown(Type type, out bool supported) => _supported.TryGetValue(type, out supported);
-
     internal static bool IsSupported(
         UIElement visual,
         Action<IGraphicsContext> renderSubtree,
