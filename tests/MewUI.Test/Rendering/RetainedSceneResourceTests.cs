@@ -234,4 +234,23 @@ public sealed class RetainedSceneResourceTests
             }
         }
     }
+
+    [TestMethod]
+    public void TheCopyOfAPathThatCanStillChange_IsNotFrozen()
+    {
+        // Backends build and keep a cache entry for every frozen geometry they draw. A visual that clears
+        // and refills one path for each of its shapes every frame would leave thousands of entries behind.
+        var changing = new PathGeometry();
+        changing.MoveTo(1, 2);
+        changing.LineTo(30, 4);
+        changing.LineTo(12, 40);
+        changing.Close();
+
+        var copy = Aprillz.MewUI.Rendering.Retained.RenderResourceSnapshot.SnapshotPath(changing);
+        changing.Clear();
+
+        Assert.IsFalse(copy.IsFrozen, "the copy is frozen, so a backend caches it as geometry that is drawn again");
+        Assert.AreEqual(4, copy.Commands.Length, "the copy followed the path it was taken from");
+        Assert.AreEqual(new Rect(1, 2, 29, 38), copy.GetBounds());
+    }
 }
