@@ -1427,7 +1427,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
             return;
         }
 
-        if (hasTextTransform && surfaceCarriesAlpha)
+        if (hasTextTransform && surfaceCarriesAlpha && _pixelSurface is GdiPixelRenderSurface alphaSurface)
         {
             // Transformed text on a per-pixel-alpha cache: the direct GDI path below writes no
             // alpha, so glyphs end up transparent (reading as the background colour). Render the
@@ -1449,7 +1449,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
             }
 
             if (PerPixelAlphaTextRenderer.DrawTextTransformed(
-                    Hdc, _pixelSurface, _surfacePool, text, rt, cullR, textTransform, gdiFont, color, fmt,
+                    Hdc, alphaSurface, _surfacePool, text, rt, cullR, textTransform, gdiFont, color, fmt,
                     yOff, txtH, wrapping, trimming, horizontalAlignment, verticalAlignment))
             {
                 return;
