@@ -11,7 +11,7 @@ using static Aprillz.MewUI.Rendering.GradientBrushHelper;
 
 namespace Aprillz.MewUI.Rendering.Direct2D;
 
-internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITransparentDamageContext, IOpaqueDamageContext, IGroupOpacityContext
+internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITransparentDamageContext, IOpaqueDamageContext, IGroupOpacityContext, IBoundedOpaqueBackdropContext
 {
     private const int D2DERR_RECREATE_TARGET = unchecked((int)0x8899000C);
     private const int D2DERR_WRONG_RESOURCE_DOMAIN = unchecked((int)0x88990015);
@@ -1065,7 +1065,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITra
         double rasterOriginOffsetY = 0;
         if (DWriteVTable.GetFirstLineMetrics(nativeLayout, out var lineMetrics) >= 0)
         {
-            double layoutBaseline = Math.Round(dwFont.Ascent * DpiScale, MidpointRounding.AwayFromZero) / DpiScale;
+            double layoutBaseline = Direct2DMeasurementContext.ResolveRasterBaseline(dwFont, DpiScale);
             rasterOriginOffsetY = layoutBaseline - lineMetrics.baseline;
         }
 
@@ -2015,6 +2015,42 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITra
 
         D2D1VTable.PushLayer((ID2D1RenderTarget*)_renderTarget, parameters, layer);
 
+        D2D1VTable.SetTextAntialiasMode((ID2D1RenderTarget*)_renderTarget, D2D1_TEXT_ANTIALIAS_MODE.CLEARTYPE);
+        _opaqueBackdropLayers.Push(layer);
+    }
+
+    // Room for a border that pixel snapping moved past the box.
+    private const double BACKDROP_BOX_MARGIN = 1;
+
+    void IBoundedOpaqueBackdropContext.BeginOpaqueBackdrop(Rect box)
+    {
+        if (_clearTypeEnabled || _renderTarget == 0 || _deviceContext == 0 || _opaqueBackdropLayers.Count > 0 ||
+            box.Width <= 0 || box.Height <= 0)
+        {
+            BeginOpaqueBackdrop();
+            return;
+        }
+
+        if (D2D1VTable.CreateLayer((ID2D1RenderTarget*)_renderTarget, out nint layer) < 0 || layer == 0)
+        {
+            _opaqueBackdropLayers.Push(0);
+            return;
+        }
+
+        // Subpixel text needs a layer that knows what is under it, which is one that starts as a copy
+        // of the target. Closing such a layer blends the copy back over the target, so anything
+        // translucent inside the layer is blended twice: the layer is kept to the box, which its owner
+        // fills opaquely, and an opaque pixel comes out of that the same.
+        var parameters = new D2D1_LAYER_PARAMETERS1(
+            contentBounds: ToRectF(box.Inflate(BACKDROP_BOX_MARGIN, BACKDROP_BOX_MARGIN)),
+            geometricMask: 0,
+            maskAntialiasMode: D2D1_ANTIALIAS_MODE.PER_PRIMITIVE,
+            maskTransform: D2D1_MATRIX_3X2_F.Identity,
+            opacity: 1.0f,
+            opacityBrush: 0,
+            layerOptions: D2D1_LAYER_OPTIONS1.INITIALIZE_FROM_BACKGROUND);
+
+        D2D1VTable.PushLayer((ID2D1DeviceContext*)_deviceContext, parameters, layer);
         D2D1VTable.SetTextAntialiasMode((ID2D1RenderTarget*)_renderTarget, D2D1_TEXT_ANTIALIAS_MODE.CLEARTYPE);
         _opaqueBackdropLayers.Push(layer);
     }

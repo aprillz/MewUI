@@ -112,7 +112,7 @@ internal static class FrameRenderer
         bool backdropScope = node.State.OpaqueBackdrop;
         if (backdropScope)
         {
-            context.BeginOpaqueBackdrop();
+            OpaqueBackdropScope.Begin(context, node.Element.Bounds);
         }
 
         try

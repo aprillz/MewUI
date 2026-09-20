@@ -41,3 +41,31 @@ internal interface IPartialPresentContext
 {
     void LimitPresentTo(IReadOnlyList<Rect> areas);
 }
+
+/// <summary>
+/// A context that can confine an opaque backdrop scope to the box its owner fills. A scope that does
+/// not know its box has to answer for the whole target, and a backend that realizes the scope as a
+/// layer then blends everything translucent on the target once more when the scope closes. Told the
+/// box, it touches only that. The scope is closed with <see cref="IGraphicsContext.EndOpaqueBackdrop"/>.
+/// </summary>
+internal interface IBoundedOpaqueBackdropContext
+{
+    /// <summary>Opens the scope over <paramref name="box"/>, given in the context's current coordinates.</summary>
+    void BeginOpaqueBackdrop(Rect box);
+}
+
+/// <summary>Opens an opaque backdrop scope, confined to the box when the context can do that.</summary>
+internal static class OpaqueBackdropScope
+{
+    internal static void Begin(IGraphicsContext context, Rect box)
+    {
+        if (context is IBoundedOpaqueBackdropContext bounded)
+        {
+            bounded.BeginOpaqueBackdrop(box);
+        }
+        else
+        {
+            context.BeginOpaqueBackdrop();
+        }
+    }
+}
