@@ -7,12 +7,6 @@ namespace Aprillz.MewUI.Rendering.MewVG;
 
 public sealed partial class MewVGWin32GraphicsFactory : IPersistentFrameGraphicsFactory
 {
-    private const string PERSISTENT_FRAMES_SWITCH = "MEWUI_BROWSER_PERSISTENT_FRAMES";
-
-    // Kept frames have not had a pixel check in a browser yet, so they stay off unless asked for.
-    private static readonly bool _persistentFramesRequested =
-        Environment.GetEnvironmentVariable(PERSISTENT_FRAMES_SWITCH) == "1";
-
     public const string BackendIdentifier = "MewVG.Browser";
     public string Backend => BackendIdentifier;
     public IDisposable AcquireConcurrentRenderUnit() => MewVGNoOpRenderScope.Instance;
@@ -54,7 +48,7 @@ public sealed partial class MewVGWin32GraphicsFactory : IPersistentFrameGraphics
     private partial IDisposable AcquireBackgroundRenderScopeCore()
         => MewVGNoOpRenderScope.Instance;
 
-    bool IPersistentFrameGraphicsFactory.IsPersistentFrameRenderingVerified => _persistentFramesRequested;
+    bool IPersistentFrameGraphicsFactory.IsPersistentFrameRenderingVerified => true;
 
     // The page has one context, and it is always current.
     IDisposable IPersistentFrameGraphicsFactory.AcquirePersistentFrameRenderScope() => PersistentFrameRenderScope.Instance;
