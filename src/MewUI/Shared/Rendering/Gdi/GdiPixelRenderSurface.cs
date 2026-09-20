@@ -154,17 +154,10 @@ internal sealed class GdiPixelRenderSurface : IPixelBufferSource, ICpuPixelSurfa
         byte g = (byte)((color.G * a + 127) / 255);
         byte b = (byte)((color.B * a + 127) / 255);
 
-        int pixelCount = PixelWidth * PixelHeight;
+        uint packed = (uint)(b | (g << 8) | (r << 16) | (a << 24));
         unsafe
         {
-            byte* p = (byte*)_dibBits;
-            for (int i = 0; i < pixelCount; i++)
-            {
-                *p++ = b;
-                *p++ = g;
-                *p++ = r;
-                *p++ = a;
-            }
+            new Span<uint>((void*)_dibBits, PixelWidth * PixelHeight).Fill(packed);
         }
 
         IncrementVersion();
