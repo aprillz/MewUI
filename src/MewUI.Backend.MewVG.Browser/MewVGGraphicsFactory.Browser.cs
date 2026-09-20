@@ -37,7 +37,7 @@ public sealed partial class MewVGWin32GraphicsFactory : IPersistentFrameGraphics
         => new BrowserFont(family, size, weight, italic, underline, strikethrough);
 
     private partial IDisposable CreateWindowResources(IWindowSurface surface)
-        => BrowserWindowResources.Create();
+        => BrowserWindowResources.Create(_offscreenProvider);
 
     private partial IGraphicsContext CreateContextCore(WindowRenderTarget target, IDisposable resources)
         => ((BrowserWindowResources)resources).GetOrCreateContext();
@@ -104,15 +104,23 @@ internal sealed class BrowserWindowResources : IDisposable, IMewVGWindowCacheMai
 
     private BrowserTextCache? _textCache;
 
-    private BrowserWindowResources(NanoVGGL vg) => Vg = vg;
+    private BrowserWindowResources(NanoVGGL vg, IMewVGOffscreenSurfaceProvider offscreenProvider)
+    {
+        Vg = vg;
+        OffscreenProvider = offscreenProvider;
+    }
 
     internal NanoVGGL Vg { get; }
+
+    // The window's frames release what offscreen passes queued for this renderer, as the desktop windows do.
+    internal IMewVGOffscreenSurfaceProvider OffscreenProvider { get; }
 
     // Resizing recreates the graphics context, so the cache lives with the window resources
     // instead; otherwise every resize frame would re-rasterize the whole screen's text.
     internal BrowserTextCache TextCache => _textCache ??= new BrowserTextCache(Vg);
 
-    internal static BrowserWindowResources Create() => new BrowserWindowResources(SharedVg);
+    internal static BrowserWindowResources Create(IMewVGOffscreenSurfaceProvider offscreenProvider)
+        => new BrowserWindowResources(SharedVg, offscreenProvider);
 
     /// <summary>
     /// The one renderer for the canvas context. Offscreen surfaces render through the same
