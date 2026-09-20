@@ -21,6 +21,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The remote scripts pass this to the runner: it carries the default per-test timeout. -->
+    <None Include="test.runsettings" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\MewUI\MewUI.csproj" />
     <ProjectReference Include="..\..\src\MewUI.Platform.Win32\MewUI.Platform.Win32.csproj" />
     <ProjectReference Include="..\..\src\MewUI.Backend.Direct2D\MewUI.Backend.Direct2D.csproj" />
