@@ -144,7 +144,7 @@ bind: (view, item, _, _) => ((TextBlock)view).Foreground = item.IsUrgent ? Color
 
 `Bind` runs every time a container is realized for an item. Scrolling an item out of view recycles its container, so scrolling back in binds again. Changes to the item collection, the template, `ItemPadding`, or the theme rebind every container currently on screen.
 
-A selection change does not rebind. The control paints the selection itself and only updates the container's `IsSelected` (see the container hook below). If something inside the template must follow the selection, subscribe to that value instead of branching in `Bind`.
+A selection change does not rebind. The control updates the container's `IsSelected`, and the container paints its own selection background (see the container hook below). If something inside the template must follow the selection, subscribe to that value instead of branching in `Bind`.
 
 It is skipped in one case only: a container that is still on screen for the same item, when nothing has invalidated the bindings. A plain relayout does not rebind.
 
@@ -170,7 +170,7 @@ Applications that do not use the hook pay for no extra element. Registering or r
 
 ### What the container tells you
 
-`ItemContainer` and `GridViewRow` expose `Index`, `Item`, and `IsSelected` read-only. `IsSelected` is kept current as the selection changes, but the container does not paint it.
+`ItemContainer` and `GridViewRow` expose `Index`, `Item`, and `IsSelected` read-only. `IsSelected` is kept current as the selection changes. The container paints the selection and hover backgrounds from its style: it reports `VisualStateFlags.Selected` and `VisualStateFlags.Hot`, and the default style sets `Background` through state triggers. A `Style` for `ItemContainer` or `GridViewRow` in the application style sheet changes those colours.
 
 `Item` also feeds the command system. When a context menu attached to the container, or a button inside it, invokes a command, a typed handler receives that item as its argument. See the argument section of [CommandSystem.md](CommandSystem.md).
 
