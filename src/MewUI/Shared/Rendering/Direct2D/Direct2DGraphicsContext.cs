@@ -11,7 +11,7 @@ using static Aprillz.MewUI.Rendering.GradientBrushHelper;
 
 namespace Aprillz.MewUI.Rendering.Direct2D;
 
-internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITransparentDamageContext, IOpaqueDamageContext
+internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITransparentDamageContext, IOpaqueDamageContext, IGroupOpacityContext
 {
     private const int D2DERR_RECREATE_TARGET = unchecked((int)0x8899000C);
     private const int D2DERR_WRONG_RESOURCE_DOMAIN = unchecked((int)0x88990015);

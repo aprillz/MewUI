@@ -83,6 +83,8 @@ internal abstract class GraphicsContextBase : IGraphicsContext, ITextBackendRend
         if (IsActive) EndFrame();
         FramePixelWidth = target.PixelWidth;
         FramePixelHeight = target.PixelHeight;
+        _hasRootTransform = false;
+        _rootTransform = Matrix3x2.Identity;
         _cullRect = InfiniteCullRect;
         _cullStack.Clear();
         _drawCalls = 0;
@@ -243,6 +245,7 @@ internal abstract class GraphicsContextBase : IGraphicsContext, ITextBackendRend
         // erase the viewport for everything drawn afterwards, and consumers that size work to the
         // visible area - filter source layers most of all - fall back to the full element extent.
         var previous = GetTransformCore();
+        matrix = _hasRootTransform ? matrix * _rootTransform : matrix;
         SetTransformCore(matrix);
         if (_cullRect.Equals(InfiniteCullRect))
         {
@@ -275,12 +278,35 @@ internal abstract class GraphicsContextBase : IGraphicsContext, ITextBackendRend
         return new Rect(left, top, right - left, bottom - top);
     }
 
-    public Matrix3x2 GetTransform() => GetTransformCore();
+    public Matrix3x2 GetTransform()
+        => _hasRootTransform ? GetTransformCore() * _rootTransformInverse : GetTransformCore();
 
     public void ResetTransform()
     {
         _cullRect = InfiniteCullRect;
-        ResetTransformCore();
+        if (_hasRootTransform)
+        {
+            SetTransformCore(_rootTransform);
+        }
+        else
+        {
+            ResetTransformCore();
+        }
+    }
+
+    // Where this target stands inside the surface its drawing is meant for. A target that holds only
+    // part of a frame takes transforms in that frame's coordinates and moves them onto itself.
+    private Matrix3x2 _rootTransform = Matrix3x2.Identity;
+    private Matrix3x2 _rootTransformInverse = Matrix3x2.Identity;
+    private bool _hasRootTransform;
+
+    /// <summary>Places this target inside a larger surface; every transform given afterwards is in that surface's coordinates.</summary>
+    internal void SetRootTransform(Matrix3x2 rootTransform)
+    {
+        _hasRootTransform = !rootTransform.IsIdentity && Matrix3x2.Invert(rootTransform, out _rootTransformInverse);
+        _rootTransform = _hasRootTransform ? rootTransform : Matrix3x2.Identity;
+        _cullRect = InfiniteCullRect;
+        SetTransformCore(_rootTransform);
     }
 
     public void ResetClip()
@@ -548,9 +574,47 @@ internal abstract class GraphicsContextBase : IGraphicsContext, ITextBackendRend
     public void EndFrame()
     {
         if (!IsActive) return;
-        OnEndFrame();
-        IsActive = false;
-        _cullStack.Clear();
+        try
+        {
+            OnEndFrame();
+        }
+        finally
+        {
+            IsActive = false;
+            _cullStack.Clear();
+            ReleaseFrameResources();
+        }
+    }
+
+    // A backend may hold its drawing until the frame ends, so what a frame drew with stays alive until then.
+    private List<Action>? _frameResourceReleases;
+
+    /// <summary>Keeps a resource this frame drew with until the frame has ended.</summary>
+    internal void ReleaseWhenFrameEnds(Action release)
+    {
+        if (IsActive)
+        {
+            (_frameResourceReleases ??= []).Add(release);
+        }
+        else
+        {
+            release();
+        }
+    }
+
+    private void ReleaseFrameResources()
+    {
+        if (_frameResourceReleases == null)
+        {
+            return;
+        }
+
+        for (int index = 0; index < _frameResourceReleases.Count; index++)
+        {
+            _frameResourceReleases[index]();
+        }
+
+        _frameResourceReleases.Clear();
     }
 
     /// <summary>

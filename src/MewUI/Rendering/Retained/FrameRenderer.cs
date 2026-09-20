@@ -94,10 +94,19 @@ internal static class FrameRenderer
             return;
         }
 
+        // A faded visual is blended onto the surface once, as a whole, so what it draws goes through a
+        // group: two of its children that overlap must not show through each other.
         bool opacityScope = node.State.Opacity < 1;
+        var group = default(OpacityGroup);
         if (opacityScope)
         {
-            context.BeginOpacity(node.State.Opacity);
+            var reach = damage is Rect damaged ? node.SurfaceSubtreeBounds.Intersect(damaged) : node.SurfaceSubtreeBounds;
+            group = OpacityGroup.Begin(context, scene.GroupFactory, node.State.Opacity, reach);
+            context = group.Target;
+            if (!ReferenceEquals(context, group.Outer))
+            {
+                scene.Statistics.GroupSurfaceCount++;
+            }
         }
 
         bool backdropScope = node.State.OpaqueBackdrop;
@@ -119,7 +128,7 @@ internal static class FrameRenderer
 
             if (opacityScope)
             {
-                context.EndOpacity();
+                group.End();
             }
         }
     }
