@@ -51,13 +51,13 @@ public sealed class ControlTextVerticalPlacementTests
             Width = 160,
             Height = 80,
         };
+        list.PrepareContainer<string>((_, _, _, _) => { });
 
         Layout(list, dpi);
 
         var container = GetFirstContainer(list);
         var text = (TextBlock)container.Content!;
-        var row = container.Bounds.Inflate(container.RowPadding);
-        AssertCentersMatch(row, text.Bounds, dpi, "ListBox");
+        AssertCentersMatch(container.Bounds, text.Bounds, dpi, "ListBox");
         Assert.AreEqual(TextAlignment.Center, text.VerticalTextAlignment);
     }
 
@@ -69,13 +69,13 @@ public sealed class ControlTextVerticalPlacementTests
             Height = 80,
         };
         tree.ItemsSource([new TreeViewNode("Tree item")]);
+        tree.PrepareContainer<TreeViewNode>((_, _, _, _) => { });
 
         Layout(tree, dpi);
 
         var container = GetFirstContainer(tree);
         var text = (TextBlock)container.Content!;
-        var row = container.Bounds.Inflate(container.RowPadding);
-        AssertCentersMatch(row, text.Bounds, dpi, "TreeView");
+        AssertCentersMatch(container.Bounds, text.Bounds, dpi, "TreeView");
         Assert.AreEqual(TextAlignment.Center, text.VerticalTextAlignment);
     }
 
