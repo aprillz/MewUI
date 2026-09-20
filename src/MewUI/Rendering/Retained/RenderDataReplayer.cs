@@ -33,6 +33,13 @@ internal static class RenderDataReplayer
     {
         var arguments = new ReadOnlySpan<double>(values, command.ValueOffset, command.ValueCount);
         object? paint = command.PaintIndex >= 0 ? resources[command.PaintIndex] : null;
+        if (paint != null && command.Kind >= RenderCommandKind.DrawLine && command.Kind <= RenderCommandKind.FillPath)
+        {
+            // A shape drawn with a pen or a brush, which brings gradients, patterns and dashes with it.
+            ReplayOptional(_paintReplay, context, in command, values, resources, placedOffsetX, placedOffsetY);
+            return;
+        }
+
         switch (command.Kind)
         {
             case RenderCommandKind.Save:
@@ -55,7 +62,9 @@ internal static class RenderDataReplayer
                 }
                 break;
             case RenderCommandKind.SetClipPath:
-                context.SetClipPath(Require<PathGeometry>(in command, resources));
+            case RenderCommandKind.DrawPath:
+            case RenderCommandKind.FillPath:
+                ReplayOptional(_pathReplay, context, in command, values, resources, placedOffsetX, placedOffsetY);
                 break;
             case RenderCommandKind.ResetClip:
                 context.ResetClip();
@@ -109,92 +118,181 @@ internal static class RenderDataReplayer
                 context.EnableAlphaTextHint = command.BooleanValue;
                 break;
             case RenderCommandKind.DrawLine:
-                ReplayLine(context, in command, arguments, paint);
-                break;
-            case RenderCommandKind.DrawRectangle:
-                ReplayRectangle(context, in command, arguments, paint);
-                break;
-            case RenderCommandKind.FillRectangle:
-                if (paint is Brush rectangleBrush)
-                {
-                    context.FillRectangle(command.Bounds, rectangleBrush);
-                }
-                else
-                {
-                    context.FillRectangle(command.Bounds, command.Color);
-                }
-                break;
-            case RenderCommandKind.DrawRoundedRectangle:
-                ReplayRoundedRectangle(context, in command, arguments, paint);
-                break;
-            case RenderCommandKind.FillRoundedRectangle:
-                if (paint is Brush roundedBrush)
-                {
-                    context.FillRoundedRectangle(command.Bounds, arguments[0], arguments[1], roundedBrush);
-                }
-                else
-                {
-                    context.FillRoundedRectangle(command.Bounds, arguments[0], arguments[1], command.Color);
-                }
+                ReplayOptional(_lineReplay, context, in command, values, resources, placedOffsetX, placedOffsetY);
                 break;
             case RenderCommandKind.DrawEllipse:
-                ReplayEllipse(context, in command, arguments, paint);
-                break;
             case RenderCommandKind.FillEllipse:
-                if (paint is Brush ellipseBrush)
-                {
-                    context.FillEllipse(command.Bounds, ellipseBrush);
-                }
-                else
-                {
-                    context.FillEllipse(command.Bounds, command.Color);
-                }
+                ReplayOptional(_ellipseReplay, context, in command, values, resources, placedOffsetX, placedOffsetY);
                 break;
-            case RenderCommandKind.DrawPath:
-                ReplayDrawPath(context, in command, arguments, resources, paint);
-                break;
-            case RenderCommandKind.FillPath:
-                ReplayFillPath(context, in command, resources, paint);
+            case RenderCommandKind.DrawRectangle:
+            case RenderCommandKind.FillRectangle:
+            case RenderCommandKind.DrawRoundedRectangle:
+            case RenderCommandKind.FillRoundedRectangle:
+                ReplayColoredBox(context, in command, arguments);
                 break;
             case RenderCommandKind.DrawBoxShadow:
-                context.DrawBoxShadow(
-                    new Rect(arguments[4], arguments[5], arguments[6], arguments[7]),
-                    arguments[0],
-                    arguments[1],
-                    command.Color,
-                    arguments[2],
-                    arguments[3]);
+                ReplayOptional(_shadowReplay, context, in command, values, resources, placedOffsetX, placedOffsetY);
                 break;
             case RenderCommandKind.DrawImage:
-                ReplayImage(context, in command, arguments, resources);
+                ReplayOptional(_imageReplay, context, in command, values, resources, placedOffsetX, placedOffsetY);
                 break;
             case RenderCommandKind.DrawText:
-                ReplayText(context, context.Text.Draw, in command, resources, placedOffsetX, placedOffsetY);
-                break;
             case RenderCommandKind.DrawTextBackground:
-                ReplayText(context, context.Text.DrawBackground, in command, resources, placedOffsetX, placedOffsetY);
-                break;
             case RenderCommandKind.DrawTextForeground:
-                ReplayText(context, context.Text.DrawForeground, in command, resources, placedOffsetX, placedOffsetY);
+                ReplayOptional(_textReplay, context, in command, values, resources, placedOffsetX, placedOffsetY);
                 break;
             default:
                 throw new InvalidOperationException($"The recorded command {command.Kind} cannot be replayed.");
         }
     }
 
-    private static void ReplayLine(
-        IGraphicsContext context,
-        in RenderCommand command,
-        ReadOnlySpan<double> arguments,
-        object? paint)
+    // Replaying a kind of drawing refers to everything a backend needs to draw it. A kind is therefore
+    // replayed through a handler that only recording that kind puts in place, so an application that
+    // never draws text carries no text renderer on account of the replayer.
+    private delegate void OptionalReplay(IGraphicsContext context, in RenderCommand command, double[] values, object?[] resources, double placedOffsetX, double placedOffsetY);
+
+    private static OptionalReplay? _textReplay;
+    private static OptionalReplay? _imageReplay;
+    private static OptionalReplay? _pathReplay;
+    private static OptionalReplay? _shadowReplay;
+    private static OptionalReplay? _lineReplay;
+    private static OptionalReplay? _ellipseReplay;
+    private static OptionalReplay? _paintReplay;
+
+    internal static void UseText() => _textReplay ??= ReplayAnyText;
+
+    internal static void UseImage() => _imageReplay ??= ReplayAnyImage;
+
+    internal static void UsePath() => _pathReplay ??= ReplayAnyPath;
+
+    internal static void UseBoxShadow() => _shadowReplay ??= ReplayBoxShadow;
+
+    internal static void UseLine() => _lineReplay ??= ReplayAnyLine;
+
+    internal static void UseEllipse() => _ellipseReplay ??= ReplayAnyEllipse;
+
+    /// <summary>Pens and brushes, as opposed to plain colours, for the shapes that are always replayed.</summary>
+    internal static void UsePaint() => _paintReplay ??= ReplayPainted;
+
+    private static void ReplayOptional(OptionalReplay? replay, IGraphicsContext context, in RenderCommand command, double[] values, object?[] resources, double placedOffsetX, double placedOffsetY)
     {
+        if (replay == null)
+        {
+            throw new InvalidOperationException($"The recorded command {command.Kind} has no replay in place.");
+        }
+
+        replay(context, in command, values, resources, placedOffsetX, placedOffsetY);
+    }
+
+    private static void ReplayAnyText(IGraphicsContext context, in RenderCommand command, double[] values, object?[] resources, double placedOffsetX, double placedOffsetY)
+    {
+        var text = context.Text;
+        if (command.Kind == RenderCommandKind.DrawTextBackground)
+        {
+            ReplayText(context, text.DrawBackground, in command, resources, placedOffsetX, placedOffsetY);
+        }
+        else if (command.Kind == RenderCommandKind.DrawTextForeground)
+        {
+            ReplayText(context, text.DrawForeground, in command, resources, placedOffsetX, placedOffsetY);
+        }
+        else
+        {
+            ReplayText(context, text.Draw, in command, resources, placedOffsetX, placedOffsetY);
+        }
+    }
+
+    private static ReadOnlySpan<double> Arguments(in RenderCommand command, double[] values)
+        => new(values, command.ValueOffset, command.ValueCount);
+
+    private static object? Paint(in RenderCommand command, object?[] resources)
+        => command.PaintIndex >= 0 ? resources[command.PaintIndex] : null;
+
+    /// <summary>Rectangles and rounded rectangles in a plain colour, which the chrome of every control draws.</summary>
+    private static void ReplayColoredBox(IGraphicsContext context, in RenderCommand command, ReadOnlySpan<double> arguments)
+    {
+        switch (command.Kind)
+        {
+            case RenderCommandKind.FillRectangle:
+                context.FillRectangle(command.Bounds, command.Color);
+                break;
+            case RenderCommandKind.FillRoundedRectangle:
+                context.FillRoundedRectangle(command.Bounds, arguments[0], arguments[1], command.Color);
+                break;
+            case RenderCommandKind.DrawRectangle:
+                if (command.UsesBooleanOverload)
+                {
+                    context.DrawRectangle(command.Bounds, command.Color, arguments[0], command.BooleanValue);
+                }
+                else
+                {
+                    context.DrawRectangle(command.Bounds, command.Color, arguments[0]);
+                }
+
+                break;
+            default:
+                if (command.UsesBooleanOverload)
+                {
+                    context.DrawRoundedRectangle(command.Bounds, arguments[0], arguments[1], command.Color, arguments[2], command.BooleanValue);
+                }
+                else
+                {
+                    context.DrawRoundedRectangle(command.Bounds, arguments[0], arguments[1], command.Color, arguments[2]);
+                }
+
+                break;
+        }
+    }
+
+    private static void ReplayPainted(IGraphicsContext context, in RenderCommand command, double[] values, object?[] resources, double placedOffsetX, double placedOffsetY)
+    {
+        var arguments = Arguments(in command, values);
+        object? paint = Paint(in command, resources);
+        switch (command.Kind)
+        {
+            case RenderCommandKind.DrawLine:
+                context.DrawLine(new Point(arguments[0], arguments[1]), new Point(arguments[2], arguments[3]), (Pen)paint!);
+                break;
+            case RenderCommandKind.DrawRectangle:
+                context.DrawRectangle(command.Bounds, (Pen)paint!);
+                break;
+            case RenderCommandKind.FillRectangle:
+                context.FillRectangle(command.Bounds, (Brush)paint!);
+                break;
+            case RenderCommandKind.DrawRoundedRectangle:
+                context.DrawRoundedRectangle(command.Bounds, arguments[0], arguments[1], (Pen)paint!);
+                break;
+            case RenderCommandKind.FillRoundedRectangle:
+                context.FillRoundedRectangle(command.Bounds, arguments[0], arguments[1], (Brush)paint!);
+                break;
+            case RenderCommandKind.DrawEllipse:
+                context.DrawEllipse(command.Bounds, (Pen)paint!);
+                break;
+            case RenderCommandKind.FillEllipse:
+                context.FillEllipse(command.Bounds, (Brush)paint!);
+                break;
+            case RenderCommandKind.DrawPath:
+                context.DrawPath(Require<PathGeometry>(in command, resources), (Pen)paint!);
+                break;
+            default:
+                if (command.UsesFillRule)
+                {
+                    context.FillPath(Require<PathGeometry>(in command, resources), (Brush)paint!, command.FillRule);
+                }
+                else
+                {
+                    context.FillPath(Require<PathGeometry>(in command, resources), (Brush)paint!);
+                }
+
+                break;
+        }
+    }
+
+    private static void ReplayAnyLine(IGraphicsContext context, in RenderCommand command, double[] values, object?[] resources, double placedOffsetX, double placedOffsetY)
+    {
+        var arguments = Arguments(in command, values);
         var start = new Point(arguments[0], arguments[1]);
         var end = new Point(arguments[2], arguments[3]);
-        if (paint is Pen pen)
-        {
-            context.DrawLine(start, end, pen);
-        }
-        else if (command.UsesBooleanOverload)
+        if (command.UsesBooleanOverload)
         {
             context.DrawLine(start, end, command.Color, arguments[4], command.BooleanValue);
         }
@@ -204,61 +302,12 @@ internal static class RenderDataReplayer
         }
     }
 
-    private static void ReplayRectangle(
-        IGraphicsContext context,
-        in RenderCommand command,
-        ReadOnlySpan<double> arguments,
-        object? paint)
+    private static void ReplayAnyEllipse(IGraphicsContext context, in RenderCommand command, double[] values, object?[] resources, double placedOffsetX, double placedOffsetY)
     {
-        if (paint is Pen pen)
+        var arguments = Arguments(in command, values);
+        if (command.Kind == RenderCommandKind.FillEllipse)
         {
-            context.DrawRectangle(command.Bounds, pen);
-        }
-        else if (command.UsesBooleanOverload)
-        {
-            context.DrawRectangle(command.Bounds, command.Color, arguments[0], command.BooleanValue);
-        }
-        else
-        {
-            context.DrawRectangle(command.Bounds, command.Color, arguments[0]);
-        }
-    }
-
-    private static void ReplayRoundedRectangle(
-        IGraphicsContext context,
-        in RenderCommand command,
-        ReadOnlySpan<double> arguments,
-        object? paint)
-    {
-        if (paint is Pen pen)
-        {
-            context.DrawRoundedRectangle(command.Bounds, arguments[0], arguments[1], pen);
-        }
-        else if (command.UsesBooleanOverload)
-        {
-            context.DrawRoundedRectangle(
-                command.Bounds,
-                arguments[0],
-                arguments[1],
-                command.Color,
-                arguments[2],
-                command.BooleanValue);
-        }
-        else
-        {
-            context.DrawRoundedRectangle(command.Bounds, arguments[0], arguments[1], command.Color, arguments[2]);
-        }
-    }
-
-    private static void ReplayEllipse(
-        IGraphicsContext context,
-        in RenderCommand command,
-        ReadOnlySpan<double> arguments,
-        object? paint)
-    {
-        if (paint is Pen pen)
-        {
-            context.DrawEllipse(command.Bounds, pen);
+            context.FillEllipse(command.Bounds, command.Color);
         }
         else if (command.UsesBooleanOverload)
         {
@@ -270,41 +319,16 @@ internal static class RenderDataReplayer
         }
     }
 
-    private static void ReplayDrawPath(
-        IGraphicsContext context,
-        in RenderCommand command,
-        ReadOnlySpan<double> arguments,
-        object?[] resources,
-        object? paint)
+    private static void ReplayAnyPath(IGraphicsContext context, in RenderCommand command, double[] values, object?[] resources, double placedOffsetX, double placedOffsetY)
     {
         var path = Require<PathGeometry>(in command, resources);
-        if (paint is Pen pen)
+        if (command.Kind == RenderCommandKind.SetClipPath)
         {
-            context.DrawPath(path, pen);
+            context.SetClipPath(path);
         }
-        else
+        else if (command.Kind == RenderCommandKind.DrawPath)
         {
-            context.DrawPath(path, command.Color, arguments[0]);
-        }
-    }
-
-    private static void ReplayFillPath(
-        IGraphicsContext context,
-        in RenderCommand command,
-        object?[] resources,
-        object? paint)
-    {
-        var path = Require<PathGeometry>(in command, resources);
-        if (paint is Brush brush)
-        {
-            if (command.UsesFillRule)
-            {
-                context.FillPath(path, brush, command.FillRule);
-            }
-            else
-            {
-                context.FillPath(path, brush);
-            }
+            context.DrawPath(path, command.Color, Arguments(in command, values)[0]);
         }
         else if (command.UsesFillRule)
         {
@@ -316,12 +340,21 @@ internal static class RenderDataReplayer
         }
     }
 
-    private static void ReplayImage(
-        IGraphicsContext context,
-        in RenderCommand command,
-        ReadOnlySpan<double> arguments,
-        object?[] resources)
+    private static void ReplayBoxShadow(IGraphicsContext context, in RenderCommand command, double[] values, object?[] resources, double placedOffsetX, double placedOffsetY)
     {
+        var arguments = Arguments(in command, values);
+        context.DrawBoxShadow(
+            new Rect(arguments[4], arguments[5], arguments[6], arguments[7]),
+            arguments[0],
+            arguments[1],
+            command.Color,
+            arguments[2],
+            arguments[3]);
+    }
+
+    private static void ReplayAnyImage(IGraphicsContext context, in RenderCommand command, double[] values, object?[] resources, double placedOffsetX, double placedOffsetY)
+    {
+        var arguments = Arguments(in command, values);
         var image = Require<IImage>(in command, resources);
         switch (command.ImageVariant)
         {

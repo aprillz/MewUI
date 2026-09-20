@@ -10,12 +10,12 @@ namespace Aprillz.MewUI.Rendering.Retained;
 internal sealed class RenderDataRecorder : IGraphicsContext
 {
     private readonly IGraphicsContext _inner;
-    private readonly RecordingTextContext _text;
+    // Made on first use: asking the context for its text renderer makes an application carry it.
+    private RecordingTextContext? _text;
 
     internal RenderDataRecorder(IGraphicsContext inner)
     {
         _inner = inner;
-        _text = new RecordingTextContext(this, inner.Text);
     }
 
     /// <summary>Slot the following calls are recorded into. Calls are dropped while this is null.</summary>
@@ -32,7 +32,7 @@ internal sealed class RenderDataRecorder : IGraphicsContext
 
     internal IGraphicsContext Inner => _inner;
 
-    public ITextRenderContext Text => _text;
+    public ITextRenderContext Text => _text ??= new RecordingTextContext(this, _inner.Text);
 
     public double DpiScale => _inner.DpiScale;
 
@@ -170,6 +170,7 @@ internal sealed class RenderDataRecorder : IGraphicsContext
 
     public void SetClipPath(PathGeometry path)
     {
+        RenderDataReplayer.UsePath();
         Record(RenderCommandKind.SetClipPath, path.GetBounds(), GeometryPolicy(path), resource: path);
         _inner.SetClipPath(path);
     }
@@ -224,6 +225,7 @@ internal sealed class RenderDataRecorder : IGraphicsContext
 
     public void DrawLine(Point start, Point end, Color color, double thickness = 1)
     {
+        RenderDataReplayer.UseLine();
         Record(
             RenderCommandKind.DrawLine,
             LineBounds(start, end, thickness),
@@ -237,6 +239,7 @@ internal sealed class RenderDataRecorder : IGraphicsContext
 
     public void DrawLine(Point start, Point end, Color color, double thickness, bool pixelSnap)
     {
+        RenderDataReplayer.UseLine();
         Record(
             RenderCommandKind.DrawLine,
             LineBounds(start, end, thickness),
@@ -251,6 +254,7 @@ internal sealed class RenderDataRecorder : IGraphicsContext
 
     public void DrawLine(Point start, Point end, Pen pen)
     {
+        RenderDataReplayer.UsePaint();
         Record(
             RenderCommandKind.DrawLine,
             LineBounds(start, end, pen.Thickness),
@@ -289,6 +293,7 @@ internal sealed class RenderDataRecorder : IGraphicsContext
 
     public void DrawRectangle(Rect rect, Pen pen)
     {
+        RenderDataReplayer.UsePaint();
         Record(RenderCommandKind.DrawRectangle, rect, RenderResourcePolicy.ImmutableDescriptor, paint: pen, ink: StrokeBounds(rect, pen.Thickness));
         if (Draws)
         {
@@ -307,6 +312,7 @@ internal sealed class RenderDataRecorder : IGraphicsContext
 
     public void FillRectangle(Rect rect, Brush brush)
     {
+        RenderDataReplayer.UsePaint();
         Record(RenderCommandKind.FillRectangle, rect, RenderResourcePolicy.ImmutableDescriptor, paint: brush);
         if (Draws)
         {
@@ -345,6 +351,7 @@ internal sealed class RenderDataRecorder : IGraphicsContext
 
     public void DrawRoundedRectangle(Rect rect, double radiusX, double radiusY, Pen pen)
     {
+        RenderDataReplayer.UsePaint();
         Record(
             RenderCommandKind.DrawRoundedRectangle,
             rect,
@@ -369,6 +376,7 @@ internal sealed class RenderDataRecorder : IGraphicsContext
 
     public void FillRoundedRectangle(Rect rect, double radiusX, double radiusY, Brush brush)
     {
+        RenderDataReplayer.UsePaint();
         Record(
             RenderCommandKind.FillRoundedRectangle,
             rect,
@@ -383,6 +391,7 @@ internal sealed class RenderDataRecorder : IGraphicsContext
 
     public void DrawEllipse(Rect bounds, Color color, double thickness = 1)
     {
+        RenderDataReplayer.UseEllipse();
         Record(RenderCommandKind.DrawEllipse, bounds, color: color, values: [thickness], ink: StrokeBounds(bounds, thickness));
         if (Draws)
         {
@@ -392,6 +401,7 @@ internal sealed class RenderDataRecorder : IGraphicsContext
 
     public void DrawEllipse(Rect bounds, Color color, double thickness, bool strokeInset)
     {
+        RenderDataReplayer.UseEllipse();
         Record(
             RenderCommandKind.DrawEllipse,
             bounds,
@@ -407,6 +417,7 @@ internal sealed class RenderDataRecorder : IGraphicsContext
 
     public void DrawEllipse(Rect bounds, Pen pen)
     {
+        RenderDataReplayer.UsePaint();
         Record(RenderCommandKind.DrawEllipse, bounds, RenderResourcePolicy.ImmutableDescriptor, paint: pen, ink: StrokeBounds(bounds, pen.Thickness));
         if (Draws)
         {
@@ -416,6 +427,7 @@ internal sealed class RenderDataRecorder : IGraphicsContext
 
     public void FillEllipse(Rect bounds, Color color)
     {
+        RenderDataReplayer.UseEllipse();
         Record(RenderCommandKind.FillEllipse, bounds, color: color);
         if (Draws)
         {
@@ -425,6 +437,7 @@ internal sealed class RenderDataRecorder : IGraphicsContext
 
     public void FillEllipse(Rect bounds, Brush brush)
     {
+        RenderDataReplayer.UsePaint();
         Record(RenderCommandKind.FillEllipse, bounds, RenderResourcePolicy.ImmutableDescriptor, paint: brush);
         if (Draws)
         {
@@ -434,6 +447,7 @@ internal sealed class RenderDataRecorder : IGraphicsContext
 
     public void DrawPath(PathGeometry path, Color color, double thickness = 1)
     {
+        RenderDataReplayer.UsePath();
         Record(
             RenderCommandKind.DrawPath,
             path.GetBounds(),
@@ -450,6 +464,7 @@ internal sealed class RenderDataRecorder : IGraphicsContext
 
     public void DrawPath(PathGeometry path, Pen pen)
     {
+        RenderDataReplayer.UsePaint();
         Record(
             RenderCommandKind.DrawPath,
             path.GetBounds(),
@@ -465,6 +480,7 @@ internal sealed class RenderDataRecorder : IGraphicsContext
 
     public void FillPath(PathGeometry path, Color color)
     {
+        RenderDataReplayer.UsePath();
         Record(RenderCommandKind.FillPath, path.GetBounds(), GeometryPolicy(path), color: color, resource: path);
         if (Draws)
         {
@@ -474,6 +490,7 @@ internal sealed class RenderDataRecorder : IGraphicsContext
 
     public void FillPath(PathGeometry path, Color color, FillRule fillRule)
     {
+        RenderDataReplayer.UsePath();
         Record(
             RenderCommandKind.FillPath,
             path.GetBounds(),
@@ -489,6 +506,7 @@ internal sealed class RenderDataRecorder : IGraphicsContext
 
     public void FillPath(PathGeometry path, Brush brush)
     {
+        RenderDataReplayer.UsePaint();
         Record(
             RenderCommandKind.FillPath,
             path.GetBounds(),
@@ -503,6 +521,7 @@ internal sealed class RenderDataRecorder : IGraphicsContext
 
     public void FillPath(PathGeometry path, Brush brush, FillRule fillRule)
     {
+        RenderDataReplayer.UsePaint();
         Record(
             RenderCommandKind.FillPath,
             path.GetBounds(),
@@ -518,6 +537,7 @@ internal sealed class RenderDataRecorder : IGraphicsContext
 
     public void DrawBoxShadow(Rect bounds, double cornerRadius, double blurRadius, Color shadowColor, double offsetX = 0, double offsetY = 0)
     {
+        RenderDataReplayer.UseBoxShadow();
         double expansion = Math.Max(0, blurRadius) * 0.5;
         var shadowBounds = new Rect(
             bounds.X + offsetX - expansion,
@@ -537,6 +557,7 @@ internal sealed class RenderDataRecorder : IGraphicsContext
 
     public void DrawImage(IImage image, Point location)
     {
+        RenderDataReplayer.UseImage();
         Record(
             RenderCommandKind.DrawImage,
             new Rect(location.X, location.Y, image.PixelWidth, image.PixelHeight),
@@ -551,6 +572,7 @@ internal sealed class RenderDataRecorder : IGraphicsContext
 
     public void DrawImage(IImage image, Rect destRect)
     {
+        RenderDataReplayer.UseImage();
         Record(
             RenderCommandKind.DrawImage,
             destRect,
@@ -565,6 +587,7 @@ internal sealed class RenderDataRecorder : IGraphicsContext
 
     public void DrawImage(IImage image, Rect destRect, Rect sourceRect)
     {
+        RenderDataReplayer.UseImage();
         Record(
             RenderCommandKind.DrawImage,
             destRect,
@@ -663,6 +686,7 @@ internal sealed class RenderDataRecorder : IGraphicsContext
 
         private void AddTextCommand(RenderCommandKind kind, ITextLayout layout, Point origin, in TextDrawOptions options)
         {
+            RenderDataReplayer.UseText();
             recorder.Slot?.AddText(kind, LayoutExtent(layout, origin), layout, in options);
         }
 
