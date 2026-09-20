@@ -19,6 +19,9 @@ public sealed class CachedElementResizeTests
     private const double TALL_DIP = 300;
     private const double SHORT_DIP = 220;
     private const double STRIPE_DIP = 24;
+    private const int FRAME_WAIT_MS = 5000;
+    private const int FRAME_POLL_MS = 50;
+    private const int FRAME_HOLD_MS = 200;
 
     [TestMethod]
     public async Task CachedPanel_KeepsItsBottomStripe_AfterShrinkingOnAScaledMonitor()
@@ -70,19 +73,16 @@ public sealed class CachedElementResizeTests
                 window.Show();
                 MonitorProbe.SetWindowPos(window.Handle, 0,
                     monitor.PixelBounds.Left + 60, monitor.PixelBounds.Top + 60, 0, 0, MonitorProbe.MOVE_ONLY);
-                await Task.Delay(600);
-                AssertStripeAtBottom(window.Handle, TALL_DIP, scale, "at the initial size");
+                await AssertStripeAtBottomAsync(window.Handle, TALL_DIP, scale, "at the initial size");
 
                 // Shrinking retires the tall surface and reuses it for the shorter request.
                 panel.Height = SHORT_DIP;
                 window.InvalidateVisual();
-                await Task.Delay(600);
-                AssertStripeAtBottom(window.Handle, SHORT_DIP, scale, "after shrinking the cached element");
+                await AssertStripeAtBottomAsync(window.Handle, SHORT_DIP, scale, "after shrinking the cached element");
 
                 panel.Height = TALL_DIP;
                 window.InvalidateVisual();
-                await Task.Delay(600);
-                AssertStripeAtBottom(window.Handle, TALL_DIP, scale, "after growing it back");
+                await AssertStripeAtBottomAsync(window.Handle, TALL_DIP, scale, "after growing it back");
             }
             finally
             {
@@ -91,30 +91,67 @@ public sealed class CachedElementResizeTests
         });
     }
 
-    /// <summary>The stripe must sit at the element's true bottom edge, with the body above it.</summary>
-    private static void AssertStripeAtBottom(nint hwnd, double heightDip, double scale, string stage)
+    /// <summary>
+    /// The stripe must sit at the element's true bottom edge, with the body above it, once the change has
+    /// reached the composed window image, and must still sit there a moment later.
+    /// </summary>
+    private static async Task AssertStripeAtBottomAsync(nint hwnd, double heightDip, double scale, string stage)
+    {
+        // A frame not composed yet reads black and the frame before the change has another colour at this
+        // height, so neither passes for the awaited one: a match is what tells that the frame arrived.
+        var waited = System.Diagnostics.Stopwatch.StartNew();
+        string? mismatch = FindStripeMismatch(hwnd, heightDip, scale);
+        while (mismatch != null && waited.ElapsedMilliseconds < FRAME_WAIT_MS)
+        {
+            await Task.Delay(FRAME_POLL_MS);
+            mismatch = FindStripeMismatch(hwnd, heightDip, scale);
+        }
+
+        Assert.IsNull(mismatch, $"{stage}: {mismatch} (waited {waited.ElapsedMilliseconds} ms for the frame to reach the window image)");
+
+        await Task.Delay(FRAME_HOLD_MS);
+        string? later = FindStripeMismatch(hwnd, heightDip, scale);
+        Assert.IsNull(later, $"{stage}: {later} ({FRAME_HOLD_MS} ms after a frame that matched)");
+    }
+
+    /// <summary>What is wrong with the window image as it is now, or null when the stripe and the body are in place.</summary>
+    private static string? FindStripeMismatch(nint hwnd, double heightDip, double scale)
     {
         var shot = ScreenCapture.OfClientArea(hwnd);
-        int w = (int)Math.Round(PANEL_W_DIP * scale);
-        int h = (int)Math.Round(heightDip * scale);
+        int widthPx = (int)Math.Round(PANEL_W_DIP * scale);
+        int heightPx = (int)Math.Round(heightDip * scale);
         int stripePx = (int)Math.Round(STRIPE_DIP * scale);
-        Assert.IsGreaterThanOrEqualTo(w, shot.Width, $"{stage}: client narrower than the element");
-        Assert.IsGreaterThanOrEqualTo(h, shot.Height, $"{stage}: client shorter than the element");
+        if (shot.Width < widthPx)
+        {
+            return $"client narrower than the element ({shot.Width} < {widthPx})";
+        }
 
-        int x = w / 2;
-        var bottom = shot.At(x, h - 3);
-        var body = shot.At(x, h - stripePx - 6);
-        var top = shot.At(x, 3);
+        if (shot.Height < heightPx)
+        {
+            return $"client shorter than the element ({shot.Height} < {heightPx})";
+        }
 
-        Assert.IsTrue(
-            bottom.G > 150 && bottom.R < 120,
-            $"{stage}: the bottom edge is not the stripe (B={bottom.B} G={bottom.G} R={bottom.R}); " +
-            "a squashed cache leaves the previous render's body here");
-        Assert.IsTrue(
-            body.R > 150 && body.G < 120,
-            $"{stage}: just above the stripe should be the body (B={body.B} G={body.G} R={body.R})");
-        Assert.IsTrue(
-            top.R > 150 && top.G < 120,
-            $"{stage}: the top edge should be the body (B={top.B} G={top.G} R={top.R})");
+        int column = widthPx / 2;
+        var bottom = shot.At(column, heightPx - 3);
+        var body = shot.At(column, heightPx - stripePx - 6);
+        var top = shot.At(column, 3);
+
+        if (bottom.G <= 150 || bottom.R >= 120)
+        {
+            return $"the bottom edge is not the stripe (B={bottom.B} G={bottom.G} R={bottom.R}); " +
+                "a squashed cache leaves the previous render's body here";
+        }
+
+        if (body.R <= 150 || body.G >= 120)
+        {
+            return $"just above the stripe should be the body (B={body.B} G={body.G} R={body.R})";
+        }
+
+        if (top.R <= 150 || top.G >= 120)
+        {
+            return $"the top edge should be the body (B={top.B} G={top.G} R={top.R})";
+        }
+
+        return null;
     }
 }

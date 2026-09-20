@@ -12,6 +12,8 @@ internal sealed class CaptureScene
 {
     private const double WINDOW_WIDTH = 460;
     private const double WINDOW_HEIGHT = 340;
+    private const int WAIT_TIMEOUT_MS = 3000;
+    private const int WAIT_POLL_MS = 20;
 
     private readonly List<Window> _windows = new();
     private Window? _spaceDownIn;
@@ -68,6 +70,24 @@ internal sealed class CaptureScene
         await Task.Delay(250);
         await Input.ActivateAsync(window);
         return window;
+    }
+
+    /// <summary>Waits on the UI thread, with the loop running, until the condition holds; false when it never did within the wait.</summary>
+    public static async Task<bool> WaitUntilAsync(Func<bool> condition)
+    {
+        var waited = System.Diagnostics.Stopwatch.StartNew();
+        while (!condition())
+        {
+            if (waited.ElapsedMilliseconds >= WAIT_TIMEOUT_MS)
+            {
+                return false;
+            }
+
+            // The platform delivers injected input through the loop, which only runs while this body is suspended.
+            await Task.Delay(WAIT_POLL_MS);
+        }
+
+        return true;
     }
 
     public static Point Center(UIElement element)
