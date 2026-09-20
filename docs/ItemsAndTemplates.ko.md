@@ -144,7 +144,7 @@ bind: (view, item, _, _) => ((TextBlock)view).Foreground = item.IsUrgent ? Color
 
 `Bind`는 컨테이너가 아이템에 대해 실현될 때마다 불린다. 아이템이 화면 밖으로 나가면 컨테이너가 회수되므로, 다시 스크롤해 들어오면 또 불린다. 아이템 컬렉션·템플릿·`ItemPadding`·테마 변경은 화면에 있는 컨테이너 전부를 재바인딩한다.
 
-선택 변경은 재바인딩하지 않는다. 선택 배경은 컨트롤이 그리고, 컨테이너의 `IsSelected`만 갱신된다(아래 컨테이너 훅 참조). 선택에 따라 템플릿 안의 무엇이 달라져야 하면 `Bind`에서 분기하지 말고 그 값을 구독한다.
+선택 변경은 재바인딩하지 않는다. 컨트롤은 컨테이너의 `IsSelected`를 갱신하고, 선택 배경은 컨테이너가 스스로 그린다(아래 컨테이너 훅 참조). 선택에 따라 템플릿 안의 무엇이 달라져야 하면 `Bind`에서 분기하지 말고 그 값을 구독한다.
 
 건너뛰는 경우는 하나뿐이다. 같은 아이템으로 화면에 남아 있고 바인딩을 무효화한 것이 없을 때다. 단순 재배치만으로는 재바인딩되지 않는다.
 
@@ -170,7 +170,7 @@ list.PrepareContainer<ChatMessage>((container, message, index, ctx) => container
 
 ### 컨테이너가 알려주는 것
 
-`ItemContainer`와 `GridViewRow`는 `Index`, `Item`, `IsSelected`를 읽기 전용으로 노출한다. `IsSelected`는 선택이 바뀔 때 갱신되지만 컨테이너가 그것을 그리지는 않는다.
+`ItemContainer`와 `GridViewRow`는 `Index`, `Item`, `IsSelected`를 읽기 전용으로 노출한다. `IsSelected`는 선택이 바뀔 때 갱신된다. 컨테이너는 선택과 호버 배경을 자기 스타일로 그린다. 시각 상태로 `VisualStateFlags.Selected`와 `VisualStateFlags.Hot`을 보고하고, 기본 스타일이 상태 트리거로 `Background`를 설정한다. 애플리케이션 스타일시트에 `ItemContainer`나 `GridViewRow` 대상 `Style`을 두면 그 색을 바꿀 수 있다.
 
 `Item`은 명령 시스템의 인자 공급원이기도 하다. 컨테이너에 단 컨텍스트 메뉴나 컨테이너 안의 버튼이 명령을 실행하면, 타입을 적은 처리기가 그 아이템을 인자로 받는다. 자세한 것은 [CommandSystem.ko.md](CommandSystem.ko.md)의 인자 절에 있다.
 
