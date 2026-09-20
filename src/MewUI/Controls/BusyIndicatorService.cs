@@ -135,7 +135,6 @@ internal sealed class BusyIndicatorPresenter : Control, IVisualTreeHost
     private readonly CancellationTokenSource? _cts;
     private readonly bool _cancellable;
     private AnimationClock? _fadeClock;
-    private double _opacity;
 
     // Abort UI elements - only created when cancellable
     private readonly Button? _abortButton;
@@ -322,6 +321,9 @@ internal sealed class BusyIndicatorPresenter : Control, IVisualTreeHost
         _child = grid;
         _child.Parent = this;
         IsHitTestVisible = true; // block input to controls behind the overlay
+
+        // Nothing shows until the fade starts.
+        Opacity = 0;
     }
 
     private void ApplyFlatButtonStyle(Button button)
@@ -339,7 +341,7 @@ internal sealed class BusyIndicatorPresenter : Control, IVisualTreeHost
             .AttachTo(this);
         _fadeClock.TickCallback = progress =>
         {
-            SetFadeOpacity((float)progress);
+            Opacity = progress;
         };
         _fadeClock.Start();
     }
@@ -351,41 +353,19 @@ internal sealed class BusyIndicatorPresenter : Control, IVisualTreeHost
             .AttachTo(this);
         _fadeClock.TickCallback = progress =>
         {
-            SetFadeOpacity(1.0 - progress);
+            Opacity = 1.0 - progress;
         };
         _fadeClock.CompletedCallback = onCompleted;
         _fadeClock.Start();
     }
 
-    private void SetFadeOpacity(double opacity)
-    {
-        bool drewBefore = _opacity > 0;
-        _opacity = opacity;
-        if (drewBefore != (_opacity > 0))
-        {
-            // The ring and the message are composed only while something of the fade shows.
-            RaiseRenderDirty(Rendering.Retained.RenderDirtyKind.Composition);
-        }
-
-        InvalidateVisual();
-    }
-
     protected override void OnRender(IGraphicsContext context)
     {
-        if (_opacity <= 0)
-        {
-            return;
-        }
-
-        context.Save();
-        context.GlobalAlpha *= (float)_opacity;
-
         // Dim the entire window with a semi-transparent background
         var bg = Theme.Palette.ControlBackground;
         context.FillRectangle(Bounds, Color.FromArgb(Theme.IsDark ? (byte)192 : (byte)160, bg.R, bg.G, bg.B)); // ~75% opacity
 
         base.OnRender(context);
-        context.Restore();
     }
 
     protected override Size MeasureContent(Size availableSize)
@@ -401,11 +381,6 @@ internal sealed class BusyIndicatorPresenter : Control, IVisualTreeHost
 
     protected override void RenderSubtree(IGraphicsContext context)
     {
-        if (_opacity <= 0)
-        {
-            return;
-        }
-
         base.RenderSubtree(context);
         _child.Render(context);
     }
@@ -413,10 +388,7 @@ internal sealed class BusyIndicatorPresenter : Control, IVisualTreeHost
     internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
     {
         builder.Content(0);
-        if (_opacity > 0)
-        {
-            builder.Child(_child);
-        }
+        builder.Child(_child);
     }
 
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor) => visitor(_child);

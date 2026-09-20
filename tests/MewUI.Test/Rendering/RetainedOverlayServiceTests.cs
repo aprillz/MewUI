@@ -51,6 +51,16 @@ public sealed class RetainedOverlayServiceTests
             window.PerformLayout();
             window.RenderFrameToSurface(surface);
             AssertMatchesReference(factory, window, surface, $"fade step {step}");
+            if (step == 6)
+            {
+                // Part-way in, the cover, the ring and the message fade together, as one group.
+                window.RetainedStatistics!.Reset();
+                window.RenderFrameToSurface(surface);
+                ((Button)window.Content!).Background = Color.FromArgb(255, 200, 60, 60);
+                window.PerformLayout();
+                window.RenderFrameToSurface(surface);
+                Assert.IsTrue(window.RetainedStatistics.GroupSurfaceCount > 0, "the busy indicator was not faded as a group part-way through its fade");
+            }
         }
 
         busy.NotifyProgress("Almost there");
