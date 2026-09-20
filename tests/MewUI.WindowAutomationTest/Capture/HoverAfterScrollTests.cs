@@ -17,7 +17,8 @@ public sealed class HoverAfterScrollTests
     [TestMethod]
     public Task AGridRow_ThatArrivesUnderThePointer_BecomesTheHoveredOne() => CaptureScene.RunAsync(async scene =>
     {
-        var grid = new GridView { Margin = new Thickness(20) };
+        // The scene activates a window by clicking its bottom right corner, which must not land on the grid's scroll bar.
+        var grid = new GridView { Margin = new Thickness(20, 20, 60, 60) };
         grid.ItemsSource = ItemsView.Create(Enumerable.Range(0, ITEM_COUNT).Select(index => "Item " + index).ToArray());
         grid.SetColumns(
         [
@@ -32,6 +33,10 @@ public sealed class HoverAfterScrollTests
         ]);
         var window = await scene.ShowAsync(grid);
 
+        // The first rows exist only once the window has had its first layout.
+        Assert.IsTrue(
+            await CaptureScene.WaitUntilAsync(() => HasRow(grid, 3)),
+            $"precondition: the grid realized its first rows ({DescribeRealized(grid)})");
         var pointer = CaptureScene.Center(RowAt(grid, 3));
         await scene.Input.MoveAsync(window, pointer);
         Assert.IsTrue(
@@ -71,6 +76,22 @@ public sealed class HoverAfterScrollTests
         });
 
         Assert.IsNotNull(found, $"row {index} is not realized");
+        return found;
+    }
+
+    private static string DescribeRealized(GridView grid)
+    {
+        var realized = new List<string>();
+        grid.VisitRealizedRows((index, row) => realized.Add($"{index}@{row.Bounds.Y:0}"));
+        int elements = 0;
+        VisualTree.Visit(grid, _ => elements++);
+        return $"grid at {grid.Bounds}, visible {grid.IsVisible}, items {grid.ItemsSource?.Count}, rows [{string.Join(" ", realized)}], {elements} visuals under the grid";
+    }
+
+    private static bool HasRow(GridView grid, int index)
+    {
+        bool found = false;
+        grid.VisitRealizedRows((rowIndex, _) => found |= rowIndex == index);
         return found;
     }
 
