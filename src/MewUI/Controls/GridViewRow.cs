@@ -5,15 +5,43 @@ namespace Aprillz.MewUI.Controls;
 
 /// <summary>
 /// The container a <see cref="GridView"/> realizes for one row: it hosts that row's cells, draws the
-/// selection, hover and grid lines, and routes row input.
+/// row background and grid lines, and routes row input. Its background in each state comes from its
+/// style: the row reports whether it is selected or under the pointer in its visual state.
 /// </summary>
 /// <remarks>
 /// Reachable from <c>PrepareContainer</c>, so an application can attach behavior to the whole row
 /// rather than repeating it in every cell template. It also supplies <see cref="Item"/> as the
 /// operand of commands invoked from within it.
 /// </remarks>
-public sealed class GridViewRow : Panel, ICommandArgumentSource
+public sealed class GridViewRow : Control, IVisualTreeHost, ICommandArgumentSource
 {
+    // A style without setters keeps the themed border of the Control base style off the row, which
+    // would inset every cell. Later triggers win, so selection covers the hover.
+    private static readonly bool _defaultStyleRegistered =
+        DefaultStyles.Register<GridViewRow>(static () => new Style(typeof(GridViewRow))
+        {
+            Setters =
+            [
+                Setter.Create(CornerRadiusProperty, theme => Math.Max(0, theme.Metrics.ControlCornerRadius - ROW_CORNER_INSET)),
+            ],
+            Triggers =
+            [
+                new StateTrigger
+                {
+                    Match = VisualStateFlags.Hot,
+                    Setters = [Setter.Create(BackgroundProperty, theme => theme.Palette.ControlBackground.Lerp(theme.Palette.Accent, HOVER_ACCENT_SHARE))],
+                },
+                new StateTrigger
+                {
+                    Match = VisualStateFlags.Selected,
+                    Setters = [Setter.Create(BackgroundProperty, theme => theme.Palette.SelectionBackground)],
+                },
+            ],
+        });
+
+    private const double ROW_CORNER_INSET = 2;
+    private const double HOVER_ACCENT_SHARE = 0.15;
+
     private readonly GridView _owner;
     private readonly List<Cell> _cells = new();
     private int _rowIndex;
@@ -57,7 +85,33 @@ public sealed class GridViewRow : Panel, ICommandArgumentSource
 
     object? ICommandArgumentSource.CommandArgument => Item;
 
-    internal void SetIsSelected(bool isSelected) => SetValue(IsSelectedPropertyKey, isSelected);
+    internal void SetIsSelected(bool isSelected)
+    {
+        if (IsSelected != isSelected)
+        {
+            SetValue(IsSelectedPropertyKey, isSelected);
+            InvalidateVisualState();
+        }
+    }
+
+    protected override VisualState ComputeVisualState()
+    {
+        var state = base.ComputeVisualState();
+        var flags = state.Flags;
+
+        // A disabled grid shows no row under the pointer, though its rows still see the pointer.
+        if (!_owner.IsEffectivelyEnabled)
+        {
+            flags &= ~VisualStateFlags.Hot;
+        }
+
+        if (IsSelected)
+        {
+            flags |= VisualStateFlags.Selected;
+        }
+
+        return state with { Flags = flags };
+    }
 
     /// <summary>Sets whether this row is an alternating row and the background it fills when it is.</summary>
     internal void SetAlternate(bool isAlternate, Color background)
@@ -87,12 +141,6 @@ public sealed class GridViewRow : Panel, ICommandArgumentSource
         ClearLocalValue(TagProperty);
         IsHitTestVisible = true;
     }
-
-    // OnRender reads IsMouseOver directly (no style trigger), so the framework's
-    // visual-state path doesn't invalidate for us. Schedule a render explicitly.
-    protected override void OnMouseEnter() => InvalidateVisual();
-
-    protected override void OnMouseLeave() => InvalidateVisual();
 
     protected override void OnMouseDown(MouseEventArgs e)
     {
@@ -158,7 +206,7 @@ public sealed class GridViewRow : Panel, ICommandArgumentSource
             var ctx = new TemplateContext();
             var cell = new Cell(this, ctx);
             _cells.Add(cell);
-            Add(cell.View);
+            cell.View.Parent = this;
         }
 
         while (_cells.Count > columns.Count)
@@ -166,7 +214,7 @@ public sealed class GridViewRow : Panel, ICommandArgumentSource
             int idx = _cells.Count - 1;
             _cells[idx].Unbind();
             _cells[idx].Context.Dispose();
-            RemoveAt(idx);
+            _cells[idx].View.Parent = null;
             _cells.RemoveAt(idx);
         }
 
@@ -303,29 +351,18 @@ public sealed class GridViewRow : Panel, ICommandArgumentSource
             context.FillRectangle(snapped, _alternateBackground);
         }
 
-        var cornerRadius = theme.Metrics.ControlCornerRadius - 2;
-        if (IsSelected)
+        // Selected or under the pointer, by the triggers of the style.
+        var background = Background;
+        if (background.A != 0)
         {
+            double cornerRadius = CornerRadius;
             if (cornerRadius > 0)
             {
-                context.FillRoundedRectangle(snapped, cornerRadius, cornerRadius, theme.Palette.SelectionBackground);
+                context.FillRoundedRectangle(snapped, cornerRadius, cornerRadius, background);
             }
             else
             {
-                context.FillRectangle(snapped, theme.Palette.SelectionBackground);
-            }
-        }
-        else if (IsMouseOver && _owner.IsEffectivelyEnabled)
-        {
-            var hoverBackground = theme.Palette.ControlBackground.Lerp(theme.Palette.Accent, 0.15);
-
-            if (cornerRadius > 0)
-            {
-                context.FillRoundedRectangle(snapped, cornerRadius, cornerRadius, hoverBackground);
-            }
-            else
-            {
-                context.FillRectangle(snapped, hoverBackground);
+                context.FillRectangle(snapped, background);
             }
         }
 
@@ -346,6 +383,45 @@ public sealed class GridViewRow : Panel, ICommandArgumentSource
                 context.DrawLine(new Point(x, snapped.Y), new Point(x, snapped.Bottom), stroke, 1, pixelSnap: true);
             }
         }
+    }
+
+    bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
+    {
+        // A cell in a collapsed column is visited too: it stays bound and has to hear of theme and DPI changes.
+        for (int index = 0; index < _cells.Count; index++)
+        {
+            if (!visitor(_cells[index].View))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    protected override UIElement? OnHitTest(Point point)
+    {
+        if (!Bounds.Contains(point) || !IsVisible || !IsHitTestVisible || !IsEffectivelyEnabled)
+        {
+            return null;
+        }
+
+        for (int index = _cells.Count - 1; index >= 0; index--)
+        {
+            // A collapsed column shows nothing, so nothing of it can be hit.
+            if (_owner._core.Columns[index].ActualWidth <= 0.01)
+            {
+                continue;
+            }
+
+            var hit = _cells[index].View.HitTest(point);
+            if (hit != null)
+            {
+                return hit;
+            }
+        }
+
+        return this;
     }
 
     protected override void RenderSubtree(IGraphicsContext context)
@@ -415,24 +491,8 @@ public sealed class GridViewRow : Panel, ICommandArgumentSource
             }
 
             var built = Template.Build(Context);
+            View.Parent = null;
             built.Parent = row;
-
-            int idx = -1;
-            for (int i = 0; i < row.Children.Count; i++)
-            {
-                if (ReferenceEquals(row.Children[i], View))
-                {
-                    idx = i;
-                    break;
-                }
-            }
-
-            if (idx >= 0)
-            {
-                row.RemoveAt(idx);
-                row.Insert(idx, built);
-            }
-
             View = built;
             _built = true;
 
