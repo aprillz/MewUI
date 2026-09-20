@@ -434,6 +434,7 @@ public partial class Window
             return false;
         }
 
+        _renderScene.GroupFactory = GraphicsFactory;
         FrameRenderer.Replay(_renderScene, context, damage);
         return true;
     }

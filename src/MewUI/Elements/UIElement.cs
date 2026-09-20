@@ -519,14 +519,14 @@ public abstract partial class UIElement : Element
             // here leaves the cache reusable while the opacity animates.
             if (opacity < 1)
             {
-                context.BeginOpacity(opacity);
+                var group = BeginOpacityGroup(context, opacity);
                 try
                 {
-                    RenderVisual(context);
+                    RenderVisual(group.Target);
                 }
                 finally
                 {
-                    context.EndOpacity();
+                    group.End();
                 }
             }
             else
@@ -534,6 +534,19 @@ public abstract partial class UIElement : Element
                 RenderVisual(context);
             }
         }
+    }
+
+    private OpacityGroup BeginOpacityGroup(IGraphicsContext context, double opacity)
+    {
+        // What a faded visual can draw on is not known before it draws, so the group covers all of the
+        // frame that is in view. Outside a window frame nothing says how far that is.
+        if (_renderCullViewport is not Rect viewport)
+        {
+            return OpacityGroup.Begin(context, null, opacity, default);
+        }
+
+        var factory = (FindVisualRoot() as Window)?.GraphicsFactory ?? Application.DefaultGraphicsFactory;
+        return OpacityGroup.Begin(context, factory, opacity, Rendering.Retained.RetainedGeometry.TransformRect(viewport, context.GetTransform()));
     }
 
     private void RenderVisual(IGraphicsContext context)

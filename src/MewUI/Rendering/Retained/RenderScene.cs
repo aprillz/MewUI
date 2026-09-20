@@ -19,6 +19,9 @@ internal sealed class RenderSceneStatistics
     /// <summary>Visuals an update looked into, as opposed to passing over because nothing under them changed.</summary>
     internal int CapturedNodeCount { get; set; }
 
+    /// <summary>Surfaces a replay made to blend a faded group as a whole.</summary>
+    internal int GroupSurfaceCount { get; set; }
+
     internal void Reset()
     {
         ContentRecordCount = 0;
@@ -26,6 +29,7 @@ internal sealed class RenderSceneStatistics
         RejectedSlotCount = 0;
         LiveFallbackCount = 0;
         CapturedNodeCount = 0;
+        GroupSurfaceCount = 0;
     }
 }
 
@@ -49,6 +53,9 @@ internal sealed class RenderScene : IDisposable
     internal IReadOnlyList<UIElement> LayerRoots { get; set; } = [];
 
     internal RenderSceneStatistics Statistics { get; } = new();
+
+    /// <summary>Makes the surfaces that faded groups are drawn into. Without one a group is faded call by call.</summary>
+    internal IGraphicsFactory? GroupFactory { get; set; }
 
     internal int NodeCount => _nodes.Count;
 
