@@ -126,7 +126,8 @@ EM_JS(int, mewui_text_rasterize, (const char* utf8_text, const char* utf8_font, 
     {
         // BrowserFont uses the CSS font size when fontBoundingBoxAscent is unavailable. Keep the
         // raster baseline on that same fallback instead of drawing alphabetic text at y = 0.
-        var sizeMatch = /(?:^|\s)([0-9]+(?:\.[0-9]+)?)px(?:\s|\/)/.exec(f);
+        // EM_JS drops backslashes from its body, so the pattern is written without any.
+        var sizeMatch = new RegExp("(?:^| )([0-9]+(?:[.][0-9]+)?)px").exec(f);
         ascent = sizeMatch ? Number(sizeMatch[1]) : 0;
     }
     ctx.translate(inset_left_px, inset_top_px);
@@ -165,7 +166,8 @@ EM_JS(int, mewui_text_draw_to_texture, (const char* utf8_text, const char* utf8_
     var ascent = ctx.measureText("Mg").fontBoundingBoxAscent || 0;
     if (!(ascent > 0))
     {
-        var sizeMatch = /(?:^|\s)([0-9]+(?:\.[0-9]+)?)px(?:\s|\/)/.exec(f);
+        // EM_JS drops backslashes from its body, so the pattern is written without any.
+        var sizeMatch = new RegExp("(?:^| )([0-9]+(?:[.][0-9]+)?)px").exec(f);
         ascent = sizeMatch ? Number(sizeMatch[1]) : 0;
     }
     ctx.translate(inset_left_px, inset_top_px);
