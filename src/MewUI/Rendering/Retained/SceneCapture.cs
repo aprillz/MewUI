@@ -551,7 +551,6 @@ internal sealed class SceneCapture
         return box.Width > 0 && box.Height > 0 && Visible(box).IsEmpty;
     }
 
-    /// <summary>The part of an extent that the clips around it let reach the surface.</summary>
     private const double CHANGED_CALL_MARGIN = 1;
 
     private void StageChangeWithinSlot(SceneUpdate update, VisualNode node, int slotIndex, Matrix3x2 transform)
@@ -572,6 +571,7 @@ internal sealed class SceneCapture
         }
     }
 
+    /// <summary>The part of an extent that the clips around it let reach the surface.</summary>
     private Rect Visible(Rect extent)
     {
         if (_ambientClip is not Rect clip || extent.IsEmpty)
