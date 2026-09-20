@@ -154,6 +154,17 @@ public sealed class RetainedGroupOpacityTests
         window.PerformLayout();
         window.RenderFrameToSurface(surface);
         Assert.AreEqual(1, window.RetainedStatistics.GroupSurfaceCount);
+
+        // A visual faded all the way out shows nothing, so a frame that replays it has no group to make.
+        faded.Opacity = 0;
+        window.PerformLayout();
+        window.RenderFrameToSurface(surface);
+        window.RetainedStatistics.Reset();
+        stack.Children(new Button { Content = new TextBlock { Text = "one more" }, Width = 120 });
+        turned.Rotation = Rotation.CounterClockwise90;
+        window.PerformLayout();
+        window.RenderFrameToSurface(surface);
+        Assert.AreEqual(0, window.RetainedStatistics.GroupSurfaceCount, "a visual with no opacity left was given a surface");
     }
 
     private static void AssertOverlap(IGraphicsFactory factory, IRenderSurface surface, string backend, string label)

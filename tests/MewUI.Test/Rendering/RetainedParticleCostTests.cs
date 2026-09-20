@@ -28,11 +28,13 @@ public sealed class RetainedParticleCostTests
     private const int FRAMES = 300;
 
     [TestMethod]
-    [DataRow("Gdi", 300)]
-    [DataRow("Gdi", 1500)]
-    [DataRow("MewVG", 300)]
-    [DataRow("MewVG", 1500)]
-    public void MeasureMovingParticles(string backend, int particleCount)
+    [DataRow("Gdi", 300, false)]
+    [DataRow("Gdi", 1500, false)]
+    [DataRow("MewVG", 300, false)]
+    [DataRow("MewVG", 1500, false)]
+    [DataRow("MewVG", 1500, true)]
+    [DataRow("Gdi", 1500, true)]
+    public void MeasureMovingParticles(string backend, int particleCount, bool onTheOverlayLayer)
     {
         if (!OperatingSystem.IsWindows() || Environment.GetEnvironmentVariable("MEWUI_PARTICLE_COST") != "1")
         {
@@ -46,9 +48,25 @@ public sealed class RetainedParticleCostTests
         using var renderScope = factory is MewVGWin32GraphicsFactory ? factory.AcquireBackgroundRenderScope() : null;
 
         var particles = new Particles(particleCount);
-        var backdrop = new Border { Background = Color.FromArgb(255, 250, 250, 250), Child = particles };
+        var counter = new TextBlock { Text = "frame 0" };
+        var page = new StackPanel { Orientation = Orientation.Vertical };
+        page.Children(counter);
+        for (int index = 0; index < 12; index++)
+        {
+            page.Children(new Button { Content = new TextBlock { Text = "Button " + index }, Margin = new Thickness(4) });
+        }
+
         var window = HeadlessWindow.Create(WIDTH, HEIGHT);
-        window.Content = backdrop;
+        if (onTheOverlayLayer)
+        {
+            window.Content = new Border { Background = Color.FromArgb(255, 250, 250, 250), Child = page };
+            window.OverlayLayer.Add(particles);
+        }
+        else
+        {
+            window.Content = new Border { Background = Color.FromArgb(255, 250, 250, 250), Child = particles };
+        }
+
         window.PerformLayout();
         using var surface = factory.CreateSurface(RenderSurfaceDescriptor.Offscreen(WIDTH, HEIGHT, 1.0, hasAlpha: false));
         using var reference = factory.CreateSurface(RenderSurfaceDescriptor.Offscreen(WIDTH, HEIGHT, 1.0, hasAlpha: false));
@@ -66,6 +84,7 @@ public sealed class RetainedParticleCostTests
         for (int frame = 0; frame < FRAMES; frame++)
         {
             particles.Step();
+            counter.Text = "frame " + frame;
             window.PerformLayout();
             long start = Stopwatch.GetTimestamp();
             window.RenderFrameToSurface(surface);
@@ -89,7 +108,7 @@ public sealed class RetainedParticleCostTests
 
         Console.Error.WriteLine(string.Create(CultureInfo.InvariantCulture, $"""
 
-            === moving particles ({backend}, {particleCount} shapes, {FRAMES} frames) ===
+            === moving particles ({backend}, {particleCount} shapes, overlay layer {onTheOverlayLayer}, {FRAMES} frames) ===
             scene-driven : first 50 {Median(retained, 0, 50):0.00} ms, last 50 {Median(retained, FRAMES - 50, 50):0.00} ms, {retainedBytes / FRAMES / 1024.0:0.0} KB per frame, last damage {window.LastRetainedDamage?.ToString() ?? "whole"} ({window.LastWholeFrameReason})
             straight     : first 50 {Median(direct, 0, 50):0.00} ms, last 50 {Median(direct, FRAMES - 50, 50):0.00} ms, {directBytes / FRAMES / 1024.0:0.0} KB per frame
             """));
