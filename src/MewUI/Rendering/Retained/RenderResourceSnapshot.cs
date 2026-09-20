@@ -8,10 +8,27 @@ namespace Aprillz.MewUI.Rendering.Retained;
 /// </summary>
 internal static class RenderResourceSnapshot
 {
-    /// <summary>Returns a frozen copy of <paramref name="source"/>, so later edits cannot reach it.</summary>
+    private const int PATH_POOL_LIMIT = 4096;
+
+    // Copies handed back by the recordings that were replaced, per thread because recordings are built on more than one.
+    [ThreadStatic]
+    private static Stack<PathGeometry>? _pathPool;
+
+    /// <summary>Returns a copy of <paramref name="source"/> that later edits cannot reach.</summary>
     internal static PathGeometry SnapshotPath(PathGeometry source)
     {
-        var snapshot = new PathGeometry { FillRule = source.FillRule };
+        PathGeometry snapshot;
+        if (_pathPool != null && _pathPool.TryPop(out var pooled))
+        {
+            pooled.Reset();
+            snapshot = pooled;
+        }
+        else
+        {
+            snapshot = new PathGeometry();
+        }
+
+        snapshot.FillRule = source.FillRule;
         foreach (var command in source.Commands)
         {
             switch (command.Type)
@@ -31,8 +48,18 @@ internal static class RenderResourceSnapshot
             }
         }
 
-        snapshot.Freeze();
+        // Left unfrozen: a backend keeps a cache entry per frozen geometry, and this copy lives for one recording.
         return snapshot;
+    }
+
+    /// <summary>Takes back a copy made by <see cref="SnapshotPath"/> once the recording that held it is gone.</summary>
+    internal static void ReturnPath(PathGeometry snapshot)
+    {
+        var pool = _pathPool ??= new Stack<PathGeometry>();
+        if (pool.Count < PATH_POOL_LIMIT)
+        {
+            pool.Push(snapshot);
+        }
     }
 
     /// <summary>Copies the span-backed parts of <paramref name="options"/> so the record outlives the caller's buffers.</summary>
