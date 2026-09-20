@@ -95,6 +95,90 @@ public sealed class PopupTextRenderingTests
             $"{backend}: {differing} of {mainText.Width * mainText.Height} text pixels differ between the popup and the main window by up to {largest}; pixels with subpixel colour: main {mainColored}, popup {popupColored}");
     });
 
+    /// <summary>
+    /// The drop-down of a ComboBox and a context menu are the popups people look at most. Their text
+    /// cannot be laid over the main window's pixel for pixel, so this counts the pixels that carry
+    /// subpixel colour: none of them means the popup fell back to grayscale antialiasing.
+    /// </summary>
+    [TestMethod]
+    public Task DropDownAndMenuText_IsSubpixelAntialiased() => CaptureScene.RunAsync(async scene =>
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("Reads the screen back through the Windows capture helper.");
+        }
+
+        var combo = new ComboBox { Width = 240, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(8, 8, 0, 0) };
+        combo.Items(SAMPLE, "second row", "third row", "fourth row");
+        var mainList = NewList();
+        mainList.HorizontalAlignment = HorizontalAlignment.Left;
+        mainList.VerticalAlignment = VerticalAlignment.Top;
+        mainList.Margin = new Thickness(8, 200, 0, 0);
+        var root = new Grid();
+        root.Children(combo, mainList);
+        var window = await scene.ShowAsync(root);
+        string backend = window.GraphicsFactory.Backend;
+
+        var mainShot = ScreenCapture.OfClientArea(window.Handle);
+        int mainColored = CountSubpixelColor(mainShot);
+        if (mainColored == 0)
+        {
+            Assert.Inconclusive($"{backend} draws no subpixel text in the main window either.");
+        }
+
+        combo.IsDropDownOpen = true;
+        await Task.Delay(900);
+        var popupList = (ListBox?)typeof(ComboBox).GetField("_popupList", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(combo);
+        var dropDown = popupList?.ResolveInputHostWindow();
+        Assert.IsTrue(dropDown != null && !ReferenceEquals(dropDown, window), "precondition: the drop-down opened in a window of its own");
+        await scene.Input.MoveAsync(window, new Point(window.ClientSize.Width - 4, window.ClientSize.Height - 4));
+        await Task.Delay(400);
+        int dropDownColored = CountSubpixelColor(ScreenCapture.OfClientArea(dropDown!.Handle));
+        combo.IsDropDownOpen = false;
+        await Task.Delay(400);
+
+        var menu = new ContextMenu();
+        for (int index = 0; index < 5; index++)
+        {
+            menu.AddItem(new Command($"probe.text{index}", $"{SAMPLE} {index}"));
+        }
+
+        menu.Show(combo, new Point(combo.Bounds.X, combo.Bounds.Bottom));
+        await Task.Delay(900);
+        var menuWindow = menu.ResolveInputHostWindow();
+        Assert.IsTrue(menuWindow != null && !ReferenceEquals(menuWindow, window), "precondition: the menu opened in a window of its own");
+        int menuColored = CountSubpixelColor(ScreenCapture.OfClientArea(menuWindow!.Handle));
+        menu.CloseTree(window);
+
+        Assert.IsTrue(
+            dropDownColored > 0 && menuColored > 0 && Environment.GetEnvironmentVariable("MEWUI_REPORT_COUNTS") != "1",
+            $"{backend}: pixels with subpixel colour - main window {mainColored}, ComboBox drop-down {dropDownColored}, context menu {menuColored}");
+    });
+
+    private static int CountSubpixelColor(ScreenCapture shot)
+    {
+        var paper = MostCommonColor(shot, 0, 0, shot.Width, shot.Height);
+        int paperSpread = paper.R - paper.B;
+        int colored = 0;
+
+        // Only inside the background the text sits on: the border around it is tinted with the accent colour.
+        var box = BoxOfColor(shot, paper);
+        for (int y = box.Y + 5; y < box.Y + box.Height - 5; y++)
+        {
+            for (int x = box.X + 5; x < box.X + box.Width - 5; x++)
+            {
+                var pixel = shot.At(x, y);
+                bool nearPaperOrInk = Math.Abs(pixel.R - pixel.G) < 60 && Math.Abs(pixel.G - pixel.B) < 60;
+                if (nearPaperOrInk && Math.Abs((pixel.R - pixel.B) - paperSpread) > 14)
+                {
+                    colored++;
+                }
+            }
+        }
+
+        return colored;
+    }
+
     private static ListBox NewList()
     {
         var list = new ListBox { Width = 240, Height = 72 };
