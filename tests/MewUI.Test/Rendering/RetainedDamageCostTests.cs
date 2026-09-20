@@ -75,6 +75,90 @@ public sealed class RetainedDamageCostTests
     }
 
     /// <summary>
+    /// A frame can repaint everything, the box around what changed, or each changed area by itself.
+    /// Which one a frame takes is a matter of cost alone, so all three have to end at the same pixels.
+    /// </summary>
+    [TestMethod]
+    [DataRow("Whole")]
+    [DataRow("Union")]
+    [DataRow("Split")]
+    public void EveryDamageCandidate_EndsAtTheSamePixels(string candidate)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("The GDI backend is Windows-only.");
+            return;
+        }
+
+        using var factory = new GdiGraphicsFactory();
+        Application.DefaultGraphicsFactory = factory;
+
+        var cells = new List<CostCell>();
+        var root = BuildScene(cells);
+        LayoutScene(root);
+
+        using var scene = new RenderScene();
+        var capture = new SceneCapture();
+        var registry = new RenderDirtyRegistry();
+        using var shown = CreateSurface(factory, hasAlpha: false);
+        using var shownContext = factory.CreateContext(shown);
+        shownContext.BeginFrame(shown);
+        shownContext.Clear(_background);
+        UpdateAndReplayWhole(scene, capture, registry, root, shownContext);
+        shownContext.EndFrame();
+
+        var random = new Random(20260920);
+        for (int round = 0; round < 12; round++)
+        {
+            // Two cells far apart, so the areas and the box around them differ.
+            for (int change = 0; change < 2; change++)
+            {
+                var cell = cells[random.Next(cells.Count)];
+                cell.Fill = Color.FromArgb(255, (byte)random.Next(256), (byte)random.Next(256), (byte)random.Next(256));
+                cell.InvalidateVisual();
+            }
+
+            scene.ResetDamage();
+            SetPreserve(shown, true);
+            shownContext.BeginFrame(shown);
+            capture.Capture(scene, root, new RenderDataRecorder(shownContext) { SuppressDrawing = true }, registry);
+            shownContext.EndFrame();
+            Assert.IsTrue(scene.HasDamage && !scene.IsFullDamage, "the round changed nothing the scene could bound");
+
+            var areas = new Rect[scene.DamageRegion.Areas.Count];
+            for (int index = 0; index < areas.Length; index++)
+            {
+                areas[index] = SnapOut(scene.DamageRegion.Areas[index]);
+            }
+
+            if (candidate == "Whole")
+            {
+                RenderFullSurface(scene, shown, shownContext, clearingBeginFrame: false);
+            }
+            else if (candidate == "Union")
+            {
+                RenderDamageRegions(scene, shown, shownContext, [SnapOut(scene.DamageBounds)]);
+            }
+            else
+            {
+                RenderDamageRegions(scene, shown, shownContext, areas);
+            }
+        }
+
+        using var whole = CreateSurface(factory, hasAlpha: false);
+        using (var wholeContext = factory.CreateContext(whole))
+        {
+            wholeContext.BeginFrame(whole);
+            wholeContext.Clear(_background);
+            FrameRenderer.Replay(scene, wholeContext);
+            wholeContext.EndFrame();
+        }
+
+        var difference = ComparePixels(shown, whole);
+        Assert.AreEqual(0, difference.DifferingPixels, $"{candidate}: {difference.DifferingPixels} pixels differ from a full replay, first at {difference.FirstDifference}");
+    }
+
+    /// <summary>
     /// Repeats single-cell updates through the damage path and reports how far the surface ends up
     /// from a full replay of the same scene.
     /// </summary>
@@ -164,6 +248,75 @@ public sealed class RetainedDamageCostTests
 
         Console.Error.WriteLine(report.ToString());
     }
+
+    /// <summary>
+    /// The frame path repaints everything once the damage passes a share of the surface. That share is
+    /// only right while it sits where the two costs cross, so this measures both on every backend and
+    /// fails when the one the frame path takes costs clearly more than the other.
+    /// </summary>
+    [TestMethod]
+    public void TheFramePath_TakesTheCheaperCandidate()
+    {
+        if (!RequestedByEnvironment(out string? skip))
+        {
+            Assert.Inconclusive(skip);
+            return;
+        }
+
+        var failures = new StringBuilder();
+        var report = new StringBuilder(Environment.NewLine + "=== policy against measured cost ===" + Environment.NewLine);
+        CheckPolicy(report, failures, "Gdi", () => new GdiGraphicsFactory());
+        CheckPolicy(report, failures, "Direct2D", () => new Direct2DGraphicsFactory());
+        CheckPolicy(report, failures, "MewVG.Win32", () => new MewVGWin32GraphicsFactory());
+        Console.Error.WriteLine(report.ToString());
+        Assert.AreEqual(0, failures.Length, failures.ToString());
+    }
+
+    private const double POLICY_COST_TOLERANCE = 1.15;
+
+    private static void CheckPolicy(StringBuilder report, StringBuilder failures, string name, Func<IGraphicsFactory> create)
+    {
+        var factory = create();
+        using var disposable = factory as IDisposable;
+        using var backgroundScope = factory is MewVGWin32GraphicsFactory mewVG ? mewVG.AcquireBackgroundRenderScope() : null;
+        Application.DefaultGraphicsFactory = factory;
+
+        var cells = new List<CostCell>();
+        var root = BuildScene(cells);
+        LayoutScene(root);
+        using var scene = new RenderScene();
+        var capture = new SceneCapture();
+        using var target = CreateSurface(factory, hasAlpha: false);
+        using var targetContext = factory.CreateContext(target);
+        targetContext.BeginFrame(target);
+        targetContext.Clear(_background);
+        UpdateAndReplayWhole(scene, capture, registry: null, root, targetContext);
+        targetContext.EndFrame();
+
+        if (target is not IPersistentFrameSurface || targetContext is not IOpaqueDamageContext)
+        {
+            report.AppendLine(CultureInfo.InvariantCulture, $"[{name}] cannot repaint part of a frame: nothing to choose between");
+            return;
+        }
+
+        WarmUp(() => RenderFullSurface(scene, target, targetContext, clearingBeginFrame: false));
+        var whole = Measure(() => RenderFullSurface(scene, target, targetContext, clearingBeginFrame: false));
+        foreach (double ratio in _policyRatios)
+        {
+            var damage = DamageRect(ratio);
+            var part = Measure(() => RenderDamageDirect(scene, target, targetContext, damage));
+            bool takesWhole = ratio >= Window.WHOLE_FRAME_DAMAGE_RATIO;
+            double taken = takesWhole ? whole.Median : part.Median;
+            double other = takesWhole ? part.Median : whole.Median;
+            report.AppendLine(CultureInfo.InvariantCulture, $"[{name}] ratio {ratio:0.00}: part {part.Median:0.0} us, whole {whole.Median:0.0} us, takes {(takesWhole ? "whole" : "part")}");
+            if (taken > other * POLICY_COST_TOLERANCE)
+            {
+                failures.AppendLine(CultureInfo.InvariantCulture, $"[{name}] at {ratio:0.00} of the surface the frame path takes {(takesWhole ? "whole" : "part")} at {taken:0.0} us while the other costs {other:0.0} us");
+            }
+        }
+    }
+
+    private static readonly double[] _policyRatios = [0.05, 0.25, 0.5, 0.7, 0.8, 0.9, 1.0];
 
     private static bool RequestedByEnvironment(out string? reason)
     {
