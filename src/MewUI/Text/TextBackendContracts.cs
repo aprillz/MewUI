@@ -15,6 +15,9 @@ internal interface ITextBackendMeasurementContext : IDisposable
 
     Size Measure(ReadOnlySpan<char> text, IFont font);
 
+    /// <summary>
+    /// Returns the baseline, in DIPs, at which this font's rasterizer draws an unshifted run.
+    /// </summary>
     double GetRasterBaseline(IFont font);
 
     double[]? GetUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font);

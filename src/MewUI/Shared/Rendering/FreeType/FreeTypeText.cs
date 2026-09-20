@@ -540,13 +540,23 @@ internal static unsafe class FreeTypeText
     }
 
     /// <summary>
-    /// Converts the layout engine's FreeType ascent back to device pixels. The requested
-    /// pixel height is the em size, not the baseline: fonts with tall ascenders (notably
-    /// Noto Sans) can place the baseline several pixels below it.
+    /// Returns the layout baseline in DIPs after snapping it to the same device pixel the
+    /// FreeType rasterizer uses. The requested pixel height is the em size, not the baseline.
     /// </summary>
+    internal static double GetRasterBaseline(FreeTypeFont font)
+    {
+        double dpiScale = font.Size > 0 ? font.PixelHeight / font.Size : 1.0;
+        return GetBaselinePx(font, dpiScale) / dpiScale;
+    }
+
     private static int GetBaselinePx(FreeTypeFont font)
     {
         double dpiScale = font.Size > 0 ? font.PixelHeight / font.Size : 1.0;
+        return GetBaselinePx(font, dpiScale);
+    }
+
+    private static int GetBaselinePx(FreeTypeFont font, double dpiScale)
+    {
         return Math.Max(1, (int)Math.Round(font.Ascent * dpiScale));
     }
 

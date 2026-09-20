@@ -13,6 +13,13 @@ internal static unsafe partial class CoreTextText
     private const uint kCGBitmapByteOrder32Little = 2u << 12;
     private const uint kCGBitmapInfo = kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little;
 
+    internal static double GetRasterBaseline(CoreTextFont font, uint dpi)
+    {
+        uint actualDpi = dpi == 0 ? 96u : dpi;
+        nint ctFont = font.GetFontRef(actualDpi);
+        return ctFont == 0 ? font.Ascent : CTFontGetAscent(ctFont) / (actualDpi / 96.0);
+    }
+
     public static TextBitmap Rasterize(
         CoreTextFont font,
         ReadOnlySpan<char> text,

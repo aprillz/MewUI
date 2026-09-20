@@ -122,6 +122,13 @@ EM_JS(int, mewui_text_rasterize, (const char* utf8_text, const char* utf8_font, 
     // top left of its own box, inset by the room a grown texture leaves for glyph ink overhang. wrap
     // stays in the signature but carries no work.
     var ascent = ctx.measureText("Mg").fontBoundingBoxAscent || 0;
+    if (!(ascent > 0))
+    {
+        // BrowserFont uses the CSS font size when fontBoundingBoxAscent is unavailable. Keep the
+        // raster baseline on that same fallback instead of drawing alphabetic text at y = 0.
+        var sizeMatch = /(?:^|\s)([0-9]+(?:\.[0-9]+)?)px(?:\s|\/)/.exec(f);
+        ascent = sizeMatch ? Number(sizeMatch[1]) : 0;
+    }
     ctx.translate(inset_left_px, inset_top_px);
     ctx.scale(scale, scale);
     ctx.fillText(UTF8ToString(utf8_text), 0, ascent);
@@ -156,6 +163,11 @@ EM_JS(int, mewui_text_draw_to_texture, (const char* utf8_text, const char* utf8_
     if (Module.mewuiTextFont !== f) { ctx.font = f; ctx.textBaseline = "alphabetic"; Module.mewuiTextFont = f; }
     ctx.fillStyle = "rgba(" + red + "," + green + "," + blue + "," + (alpha / 255) + ")";
     var ascent = ctx.measureText("Mg").fontBoundingBoxAscent || 0;
+    if (!(ascent > 0))
+    {
+        var sizeMatch = /(?:^|\s)([0-9]+(?:\.[0-9]+)?)px(?:\s|\/)/.exec(f);
+        ascent = sizeMatch ? Number(sizeMatch[1]) : 0;
+    }
     ctx.translate(inset_left_px, inset_top_px);
     ctx.scale(scale, scale);
     ctx.fillText(UTF8ToString(utf8_text), 0, ascent);

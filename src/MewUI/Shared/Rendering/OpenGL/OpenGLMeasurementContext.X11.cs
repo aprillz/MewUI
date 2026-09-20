@@ -5,6 +5,11 @@ namespace Aprillz.MewUI.Rendering.OpenGL;
 
 internal sealed partial class OpenGLMeasurementContext : ITextAdvanceSource
 {
+    public override double GetRasterBaseline(IFont font)
+        => font is FreeTypeFont ftFont
+            ? FreeTypeText.GetRasterBaseline(ftFont)
+            : base.GetRasterBaseline(font);
+
     bool ITextAdvanceSource.TryGetUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font, Span<double> destination)
     {
         if (text.IsEmpty || font is not FreeTypeFont ftFont || destination.Length < text.Length)
