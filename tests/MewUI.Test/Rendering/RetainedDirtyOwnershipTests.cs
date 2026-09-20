@@ -86,6 +86,28 @@ public sealed class RetainedDirtyOwnershipTests
         Assert.IsFalse(queue.Has(leaves[3], RenderDirtyKind.Content), "a scrolled leaf claimed its drawing changed");
     }
 
+    [TestMethod]
+    public void PixelsOfABitmapChanged_QueuesTheImageThatShowsIt()
+    {
+        // A resource that changes under a visual is reported by the visual that draws with it, as a change
+        // of its own drawing: nothing else in the tree knows the bitmap.
+        var bitmap = new WriteableBitmap(24, 16, clear: true, hasAlpha: false);
+        var image = new Image { Source = bitmap, Width = 24, Height = 16 };
+        var other = new Leaf { Height = 24 };
+        var stack = new StackPanel { Orientation = Orientation.Vertical };
+        stack.Children(image, other);
+        var window = HeadlessWindow.Create(160, 120);
+        window.Content = stack;
+        Settle(window);
+
+        bitmap.Clear(Color.FromArgb(255, 220, 60, 40));
+
+        var queue = window.RenderDirtyQueue;
+        Assert.IsTrue(queue.Has(image, RenderDirtyKind.Content), "the image showing the bitmap is not queued");
+        Assert.IsFalse(queue.Has(other, RenderDirtyKind.Content), "a visual that does not show the bitmap was queued");
+        Assert.IsFalse(queue.Has(stack, RenderDirtyKind.Content), "the parent was queued as if its own drawing changed");
+    }
+
     /// <summary>Runs the passes a new window needs before it is still, then empties the queue.</summary>
     private static void Settle(Window window)
     {
