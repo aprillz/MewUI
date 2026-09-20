@@ -563,7 +563,7 @@ public abstract partial class UIElement : Element
         // such as ContextMenu and ListBox draw their own text there rather than in the subtree.
         if (this is Control { Background.A: 255 })
         {
-            context.BeginOpaqueBackdrop();
+            OpaqueBackdropScope.Begin(context, Bounds);
             try
             {
                 OnRender(context);
