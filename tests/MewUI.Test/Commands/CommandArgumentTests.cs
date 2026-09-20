@@ -220,7 +220,16 @@ public sealed class CommandArgumentTests
 
         // Right-click inside the cell text rather than the row itself, so the event has to bubble
         // through the cell to the row that carries the menu.
-        var cellBounds = ((FrameworkElement)third.Children[0]).Bounds;
+        FrameworkElement? firstCell = null;
+        VisualTree.Visit(third, element =>
+        {
+            if (firstCell == null && element is TextBlock block)
+            {
+                firstCell = block;
+            }
+        });
+        Assert.IsNotNull(firstCell);
+        var cellBounds = firstCell.Bounds;
         window.SendClick(new Point(cellBounds.X + 5, cellBounds.Y + cellBounds.Height / 2), MouseButton.Right);
         window.PerformLayout();
         Assert.IsGreaterThan(0.0, menu.Bounds.Width, "the row's menu opened from a right-click on its cell");
