@@ -278,8 +278,10 @@ public sealed class SimpleSvgSourceParityTests
 
     private static string RepositoryRoot()
     {
+        // Anchored on the asset the test reads rather than a solution file, which is not named the
+        // same on every branch.
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory != null && !File.Exists(Path.Combine(directory.FullName, "MewUI.Dev.slnx")))
+        while (directory != null && !Directory.Exists(Path.Combine(directory.FullName, "assets", "logo")))
         {
             directory = directory.Parent;
         }
