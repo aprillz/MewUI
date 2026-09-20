@@ -51,6 +51,17 @@ internal readonly struct DWRITE_TEXT_METRICS(
 }
 
 [StructLayout(LayoutKind.Sequential)]
+internal struct DWRITE_LINE_METRICS
+{
+    public uint length;
+    public uint trailingWhitespaceLength;
+    public uint newlineLength;
+    public float height;
+    public float baseline;
+    public int isTrimmed;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 internal unsafe struct DWRITE_GLYPH_RUN
 {
     public nint fontFace;

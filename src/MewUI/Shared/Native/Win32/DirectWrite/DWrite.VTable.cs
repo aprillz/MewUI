@@ -276,6 +276,20 @@ internal static unsafe class DWriteVTable
         }
     }
 
+    /// <summary>IDWriteTextLayout::GetLineMetrics (vtable index 59).</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int GetFirstLineMetrics(nint textLayout, out DWRITE_LINE_METRICS metrics)
+    {
+        metrics = default;
+        uint actualLineCount = 0;
+        var vtbl = *(nint**)textLayout;
+        var fn = (delegate* unmanaged[Stdcall]<nint, DWRITE_LINE_METRICS*, uint, uint*, int>)vtbl[59];
+        fixed (DWRITE_LINE_METRICS* metricsPointer = &metrics)
+        {
+            return fn(textLayout, metricsPointer, 1, &actualLineCount);
+        }
+    }
+
     /// <summary>IDWriteTextLayout::GetOverhangMetrics (vtable index 61).</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int GetOverhangMetrics(nint textLayout, out DWRITE_OVERHANG_METRICS overhangs)
