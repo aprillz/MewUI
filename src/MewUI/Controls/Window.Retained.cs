@@ -72,7 +72,7 @@ public partial class Window
     /// <summary>How many scene updates were rejected and left the previous scene in place.</summary>
     internal int RejectedSceneUpdates => _rejectedSceneUpdates;
 
-    private const double WHOLE_FRAME_DAMAGE_RATIO = 0.85;
+    internal const double WHOLE_FRAME_DAMAGE_RATIO = 0.85;
 
     /// <summary>Why the last frame that painted the whole surface did so.</summary>
     internal string? LastWholeFrameReason { get; private set; }
