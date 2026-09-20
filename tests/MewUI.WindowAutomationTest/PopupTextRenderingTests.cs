@@ -96,35 +96,31 @@ public sealed class PopupTextRenderingTests
     });
 
     /// <summary>
-    /// The drop-down of a ComboBox and a context menu are the popups people look at most. Their text
-    /// cannot be laid over the main window's pixel for pixel, so this counts the pixels that carry
-    /// subpixel colour: none of them means the popup fell back to grayscale antialiasing.
+    /// A drop-down opens under its ComboBox, wherever that stands. Above 100% a position on a whole device
+    /// pixel is a fraction of a layout unit, and the popup window draws its content under a translation
+    /// by that fraction. The text in it still has to be the pixels the same list shows in the main window.
     /// </summary>
     [TestMethod]
-    public Task DropDownAndMenuText_IsSubpixelAntialiased() => CaptureScene.RunAsync(async scene =>
+    [DataRow(8.0)]
+    [DataRow(8.4)]
+    [DataRow(8.8)]
+    public Task DropDownText_IsTheSamePixelsAsAListInTheWindow(double comboTop) => CaptureScene.RunAsync(async scene =>
     {
         if (!OperatingSystem.IsWindows())
         {
             Assert.Inconclusive("Reads the screen back through the Windows capture helper.");
         }
 
-        var combo = new ComboBox { Width = 240, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(8, 8, 0, 0) };
-        combo.Items(SAMPLE, "second row", "third row", "fourth row");
-        var mainList = NewList();
-        mainList.HorizontalAlignment = HorizontalAlignment.Left;
-        mainList.VerticalAlignment = VerticalAlignment.Top;
-        mainList.Margin = new Thickness(8, 200, 0, 0);
+        string[] words = ["Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta", "Eta", "Theta", "Iota", "Kappa"];
+        var combo = new ComboBox { Width = 200, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(8, comboTop, 0, 0) };
+        combo.Items(words);
+        var mainList = new ListBox { Width = 200, Height = 270, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(260, 8, 0, 0) };
+        mainList.Items(words);
         var root = new Grid();
         root.Children(combo, mainList);
         var window = await scene.ShowAsync(root);
         string backend = window.GraphicsFactory.Backend;
-
-        var mainShot = ScreenCapture.OfClientArea(window.Handle);
-        int mainColored = CountSubpixelColor(mainShot);
-        if (mainColored == 0)
-        {
-            Assert.Inconclusive($"{backend} draws no subpixel text in the main window either.");
-        }
+        double scale = window.GetDpi() / 96.0;
 
         combo.IsDropDownOpen = true;
         await Task.Delay(900);
@@ -133,51 +129,42 @@ public sealed class PopupTextRenderingTests
         Assert.IsTrue(dropDown != null && !ReferenceEquals(dropDown, window), "precondition: the drop-down opened in a window of its own");
         await scene.Input.MoveAsync(window, new Point(window.ClientSize.Width - 4, window.ClientSize.Height - 4));
         await Task.Delay(400);
-        int dropDownColored = CountSubpixelColor(ScreenCapture.OfClientArea(dropDown!.Handle));
+
+        var mainShot = ScreenCapture.OfClientArea(window.Handle);
+        var dropDownShot = ScreenCapture.OfClientArea(dropDown!.Handle);
         combo.IsDropDownOpen = false;
-        await Task.Delay(400);
 
-        var menu = new ContextMenu();
-        for (int index = 0; index < 5; index++)
+        // The list inside the popup window stands where its bounds are, less where the window starts.
+        var inPopup = new Rect(
+            popupList!.Bounds.X - dropDown.HostedPortalOrigin.X,
+            popupList.Bounds.Y - dropDown.HostedPortalOrigin.Y,
+            popupList.Bounds.Width,
+            popupList.Bounds.Height);
+        var mainText = FindText(mainShot, (int)(mainList.Bounds.X * scale) + 4, (int)(mainList.Bounds.Y * scale) + 4, (int)(mainList.Bounds.Right * scale) - 24, (int)(mainList.Bounds.Bottom * scale) - 4);
+        var popupText = FindText(dropDownShot, (int)(inPopup.X * scale) + 4, (int)(inPopup.Y * scale) + 4, (int)(inPopup.Right * scale) - 24, (int)(inPopup.Bottom * scale) - 4);
+
+        Assert.IsTrue(mainText.Width > 20 && popupText.Width > 20, $"{backend}: the first row was not found (window {mainText}, drop-down {popupText})");
+        Assert.AreEqual((mainText.Width, mainText.Height), (popupText.Width, popupText.Height), $"{backend} at {scale:0.00}x: the first row covers a different box in the drop-down (window {mainText}, drop-down {popupText})");
+
+        int differing = 0;
+        int largest = 0;
+        for (int y = 0; y < mainText.Height; y++)
         {
-            menu.AddItem(new Command($"probe.text{index}", $"{SAMPLE} {index}"));
-        }
-
-        menu.Show(combo, new Point(combo.Bounds.X, combo.Bounds.Bottom));
-        await Task.Delay(900);
-        var menuWindow = menu.ResolveInputHostWindow();
-        Assert.IsTrue(menuWindow != null && !ReferenceEquals(menuWindow, window), "precondition: the menu opened in a window of its own");
-        int menuColored = CountSubpixelColor(ScreenCapture.OfClientArea(menuWindow!.Handle));
-        menu.CloseTree(window);
-
-        Assert.IsTrue(
-            dropDownColored > 0 && menuColored > 0 && Environment.GetEnvironmentVariable("MEWUI_REPORT_COUNTS") != "1",
-            $"{backend}: pixels with subpixel colour - main window {mainColored}, ComboBox drop-down {dropDownColored}, context menu {menuColored}");
-    });
-
-    private static int CountSubpixelColor(ScreenCapture shot)
-    {
-        var paper = MostCommonColor(shot, 0, 0, shot.Width, shot.Height);
-        int paperSpread = paper.R - paper.B;
-        int colored = 0;
-
-        // Only inside the background the text sits on: the border around it is tinted with the accent colour.
-        var box = BoxOfColor(shot, paper);
-        for (int y = box.Y + 5; y < box.Y + box.Height - 5; y++)
-        {
-            for (int x = box.X + 5; x < box.X + box.Width - 5; x++)
+            for (int x = 0; x < mainText.Width; x++)
             {
-                var pixel = shot.At(x, y);
-                bool nearPaperOrInk = Math.Abs(pixel.R - pixel.G) < 60 && Math.Abs(pixel.G - pixel.B) < 60;
-                if (nearPaperOrInk && Math.Abs((pixel.R - pixel.B) - paperSpread) > 14)
+                var main = mainShot.At(mainText.X + x, mainText.Y + y);
+                var popup = dropDownShot.At(popupText.X + x, popupText.Y + y);
+                int delta = Math.Max(Math.Abs(main.B - popup.B), Math.Max(Math.Abs(main.G - popup.G), Math.Abs(main.R - popup.R)));
+                if (delta > 0)
                 {
-                    colored++;
+                    differing++;
+                    largest = Math.Max(largest, delta);
                 }
             }
         }
 
-        return colored;
-    }
+        Assert.AreEqual(0, differing, $"{backend} at {scale:0.00}x, ComboBox at {comboTop}: {differing} of {mainText.Width * mainText.Height} pixels of the first row differ between the drop-down and the list in the window, by up to {largest}");
+    });
 
     private static ListBox NewList()
     {
