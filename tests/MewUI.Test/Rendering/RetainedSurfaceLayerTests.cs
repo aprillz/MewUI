@@ -145,6 +145,75 @@ public sealed class RetainedSurfaceLayerTests
         }
     }
 
+    [TestMethod]
+    public void AddingLayers_MakesNoSurfaceOfTheirOwn()
+    {
+        if (!TryCreate(out var factory, out var window, out var surface))
+        {
+            return;
+        }
+
+        using (factory)
+        using (surface)
+        {
+            Frames(window, surface, 2);
+            window.RetainedStatistics!.Reset();
+
+            // An overlay, an adorner and a popup drawn in the surface are three layers above the body.
+            var owner = (UIElement)window.Content!;
+            window.OverlayLayer.Add(Overlay(Color.FromArgb(255, 200, 40, 40), 40, 40));
+            var popup = new Tile { Fill = Color.FromArgb(255, 40, 160, 90), ShadowBlur = 8 };
+            window.ShowPopup(owner, popup, _ => new Rect(100, 90, 80, 60));
+            Frames(window, surface, 2);
+
+            Assert.AreEqual(0, window.RetainedStatistics.GroupSurfaceCount, "a layer that only orders what is drawn made a surface of its own");
+            AssertMatchesReference(factory, window, surface, "after the layers were added");
+
+            window.ClosePopup(popup);
+        }
+    }
+
+    [TestMethod]
+    public void ABodyVisualWithAShadow_LeavesNoInkWhereItWas()
+    {
+        if (!TryCreate(out var factory, out var window, out var surface))
+        {
+            return;
+        }
+
+        using (factory)
+        using (surface)
+        {
+            // The shadow lies outside the bounds of the tile, over its neighbour and the window background.
+            var stack = (StackPanel)window.Content!;
+            var shadowed = new Tile
+            {
+                Fill = Color.FromArgb(255, 120, 60, 170),
+                ShadowBlur = 12,
+                Width = 80,
+                Height = 40,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                Margin = new Thickness(20, 6, 0, 6),
+            };
+            stack.Children(shadowed);
+            Frames(window, surface, 2);
+            AssertMatchesReference(factory, window, surface, "with the shadowed visual in place");
+
+            shadowed.Margin = new Thickness(110, 6, 0, 6);
+            Frames(window, surface, 1);
+            AssertMatchesReference(factory, window, surface, "after the shadowed visual moved");
+
+            shadowed.ShadowBlur = 4;
+            shadowed.InvalidateVisual();
+            Frames(window, surface, 1);
+            AssertMatchesReference(factory, window, surface, "after its shadow shrank");
+
+            stack.Remove(shadowed);
+            Frames(window, surface, 1);
+            AssertMatchesReference(factory, window, surface, "after the shadowed visual was removed");
+        }
+    }
+
     private static Tile Overlay(Color fill, double left, double top) => new()
     {
         Fill = fill,
