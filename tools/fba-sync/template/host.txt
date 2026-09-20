@@ -156,8 +156,7 @@ FrameworkElement TopBar() => new Border()
                     .DockLeft()
                     .Children(
                         new Image()
-                            .BindSource(GalleryView.Resources.Logo)
-                            .ImageScaleQuality(ImageScaleQuality.HighQuality)
+                            .BindSource(GalleryView.Resources.LogoVector)
                             .Width(200)
                             .CenterVertical(),
 
@@ -299,6 +298,7 @@ void EnsureMaxFpsLoop()
 string ResourceUrl(string fileName) => fileName switch
 {
     "logo_h-480.png" => AssetsBase + "logo/logo_h-1280.png",
+    "logo_h.svg" => AssetsBase + "logo/logo_h.svg",
     "april.jpg" => AssetsBase + "images/april.jpg",
     "soonduk.jpg" => AssetsBase + "images/soonduk.jpg",
     _ => SampleResourcesBase + fileName,

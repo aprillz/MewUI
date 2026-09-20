@@ -164,8 +164,7 @@ FrameworkElement TopBar() => new Border()
                     .DockLeft()
                     .Children(
                         new Image()
-                            .BindSource(GalleryView.Resources.Logo)
-                            .ImageScaleQuality(ImageScaleQuality.HighQuality)
+                            .BindSource(GalleryView.Resources.LogoVector)
                             .Width(200)
                             .CenterVertical(),
 
