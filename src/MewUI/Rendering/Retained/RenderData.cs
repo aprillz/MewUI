@@ -259,6 +259,16 @@ internal sealed class RenderData : IDisposable
         {
             _leases[leaseIndex].Dispose();
         }
+
+        for (int resourceIndex = 0; resourceIndex < _resources.Length; resourceIndex++)
+        {
+            // A frozen path is the visual's own; an unfrozen one is the copy this recording took.
+            if (_resources[resourceIndex] is PathGeometry copy && !copy.IsFrozen)
+            {
+                _resources[resourceIndex] = null;
+                RenderResourceSnapshot.ReturnPath(copy);
+            }
+        }
     }
 
     internal static RenderData Create(
