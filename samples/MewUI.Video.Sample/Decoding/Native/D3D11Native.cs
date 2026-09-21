@@ -232,6 +232,72 @@ internal static unsafe class D3D11Native
         }
     }
 
+    /// <summary>
+    /// Formats the DXGI adapter name, vendor/device id and LUID backing <paramref name="d3d11Device"/> for diagnostics.
+    /// </summary>
+    public static string DescribeAdapter(nint d3d11Device)
+    {
+        if (d3d11Device == 0)
+        {
+            return "no device";
+        }
+
+        nint dxgiDevice = 0;
+        nint adapter = 0;
+
+        try
+        {
+            Guid dxgiDeviceId = IID_IDXGIDevice;
+            if (Marshal.QueryInterface(d3d11Device, in dxgiDeviceId, out dxgiDevice) < 0 || dxgiDevice == 0)
+            {
+                return "IDXGIDevice unavailable";
+            }
+
+            var dxgiDeviceVtable = *(nint**)dxgiDevice;
+            var getAdapter = (delegate* unmanaged[Stdcall]<nint, nint*, int>)dxgiDeviceVtable[7];
+            if (getAdapter(dxgiDevice, &adapter) < 0 || adapter == 0)
+            {
+                return "GetAdapter failed";
+            }
+
+            var adapterVtable = *(nint**)adapter;
+            var getDesc = (delegate* unmanaged[Stdcall]<nint, DXGI_ADAPTER_DESC*, int>)adapterVtable[8];
+            DXGI_ADAPTER_DESC desc;
+            if (getDesc(adapter, &desc) < 0)
+            {
+                return "GetDesc failed";
+            }
+
+            string name = new string(desc.Description).TrimEnd('\0');
+            return $"{name} vendor=0x{desc.VendorId:X4} device=0x{desc.DeviceId:X4} luid={desc.AdapterLuid.HighPart:X8}:{desc.AdapterLuid.LowPart:X8}";
+        }
+        finally
+        {
+            if (adapter != 0)
+            {
+                Marshal.Release(adapter);
+            }
+
+            if (dxgiDevice != 0)
+            {
+                Marshal.Release(dxgiDevice);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Formats the fields of a texture description that decide video-processor and interop eligibility.
+    /// </summary>
+    public static string DescribeTexture(nint texture)
+    {
+        if (!TryGetTexture2DDesc(texture, out var desc))
+        {
+            return "no texture";
+        }
+
+        return $"{desc.Width}x{desc.Height} format={desc.Format} mips={desc.MipLevels} array={desc.ArraySize} usage={desc.Usage} bind=0x{desc.BindFlags:X} cpu=0x{desc.CPUAccessFlags:X} misc=0x{desc.MiscFlags:X}";
+    }
+
     public static bool TryGetAdapterLuid(nint d3d11Device, out ulong lowPart, out long highPart)
     {
         lowPart = 0;

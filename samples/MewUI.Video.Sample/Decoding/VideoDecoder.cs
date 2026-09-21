@@ -29,6 +29,10 @@ public sealed unsafe class VideoDecoder : IDisposable
     private AVHWDeviceType _activeHardwareDeviceType = AVHWDeviceType.AV_HWDEVICE_TYPE_NONE;
     private D3D11VideoProcessorConverter? _hardwareTextureConverter;
     private bool _hardwareTextureConverterInitTried;
+    // Counts per-frame conversion failures so the log records the first one and then a periodic total.
+    private int _hardwareConversionFailureCount;
+    // Converter output is NT-shared RGBA for import into an OpenGL presenter instead of Direct2D.
+    private readonly bool _sharedTextureOutput;
     private bool _hardwareTextureConverterAvailable;
     private readonly string _codecName = string.Empty;
     private readonly long _bitRate;
@@ -52,11 +56,12 @@ public sealed unsafe class VideoDecoder : IDisposable
     private AVFrame* _vaapiFilteredFrame;
     private bool _vaapiFilterInitTried;
 
-    public VideoDecoder(string path, nint preferredD3D11Device = 0)
+    public VideoDecoder(string path, nint preferredD3D11Device = 0, bool sharedTextureOutput = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         SampleLog.Write($"VideoDecoder ctor: {path}");
         _preferredD3D11Device = preferredD3D11Device;
+        _sharedTextureOutput = sharedTextureOutput;
 
         AVFormatContext* format = null;
         ThrowIfError(ffmpeg.avformat_open_input(&format, path, null, null), "open input");
@@ -253,6 +258,13 @@ public sealed unsafe class VideoDecoder : IDisposable
                     else if (TryConvertHardwareFrameForInterop(_frame, out nint convertedHandle, out int convertedSubresource))
                     {
                         gpuResource = new D3D11GpuResource(convertedHandle, convertedSubresource, D3D11Device, ReturnConvertedTexture);
+                        if (_hardwareTextureConverter is D3D11VideoProcessorConverter sharedConverter && sharedConverter.SharedOutput)
+                        {
+                            var sharedResource = (D3D11GpuResource)gpuResource;
+                            sharedResource.SharedHandle = sharedConverter.GetSharedHandle(convertedHandle);
+                            sharedResource.ProducedFenceValue = sharedConverter.GetProducedValue(convertedHandle);
+                            sharedResource.Fences = sharedConverter.Fences;
+                        }
                         ((D3D11GpuResource)gpuResource).SetRasterSize(Width, Height);
                         exportedViaGpuConverter = true;
                     }
@@ -602,7 +614,7 @@ public sealed unsafe class VideoDecoder : IDisposable
         if (!_hardwareTextureConverterInitTried)
         {
             _hardwareTextureConverterInitTried = true;
-            _hardwareTextureConverterAvailable = D3D11VideoProcessorConverter.TryCreate(D3D11Device, out _hardwareTextureConverter);
+            _hardwareTextureConverterAvailable = D3D11VideoProcessorConverter.TryCreate(D3D11Device, out _hardwareTextureConverter, _sharedTextureOutput);
             SampleLog.Write(_hardwareTextureConverterAvailable
                 ? "D3D11 video processor interop converter initialised."
                 : "D3D11 video processor interop converter unavailable; exposing decoder surface directly.");
@@ -615,7 +627,12 @@ public sealed unsafe class VideoDecoder : IDisposable
 
         if (!_hardwareTextureConverter.TryConvert(inputTexture, unchecked((int)(nint)hwFrame->data[1]), Width, Height, out d3d11TextureHandle))
         {
-            SampleLog.Write("D3D11 video processor conversion failed; exposing decoder surface directly.");
+            _hardwareConversionFailureCount++;
+            if (_hardwareConversionFailureCount == 1 || _hardwareConversionFailureCount % 300 == 0)
+            {
+                SampleLog.Write($"D3D11 video processor conversion failed; exposing decoder surface directly. failures={_hardwareConversionFailureCount}");
+            }
+
             return false;
         }
 

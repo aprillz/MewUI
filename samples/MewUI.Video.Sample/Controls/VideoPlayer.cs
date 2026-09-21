@@ -118,7 +118,9 @@ public sealed class VideoPlayer : IDisposable
             VideoPlayback newPlayback;
             try
             {
-                newPlayback = await Task.Run(() => new VideoPlayback(path, preferredD3D11Device));
+                // Presenters without a D3D11 device (OpenGL) import the converter output through shared handles.
+                bool sharedTextureOutput = OperatingSystem.IsWindows() && _owner.GraphicsFactory is not ID3D11RenderTargetDeviceProvider;
+                newPlayback = await Task.Run(() => new VideoPlayback(path, preferredD3D11Device, sharedTextureOutput));
             }
             finally
             {

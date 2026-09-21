@@ -26,6 +26,12 @@ public sealed class VideoView : FrameworkElement
     private long _lastGeneration = -1;
     private bool _firstPresentedFrameLogged;
     private long _lastGpuInteropInvalidationTicks;
+    // Counts per-frame Direct2D wrap failures so the log records the first one and then a periodic total.
+    private int _direct2DWrapFailureCount;
+    // GL import of the shared converter output: semaphores for the current decoder's fences, and a sticky failure flag that falls back to WGL.
+    private GlSharedSemaphores? _glSemaphores;
+    private SharedTextureFences? _glSemaphoreFences;
+    private bool _memoryObjectUnavailable;
 
     public VideoPlayback? Playback
     {
@@ -249,6 +255,7 @@ public sealed class VideoView : FrameworkElement
 
         if (previousFrame is not null)
         {
+            WaitForGlReads(previousFrame);
             _playback?.Recycle(previousFrame);
         }
     }
@@ -352,14 +359,36 @@ public sealed class VideoView : FrameworkElement
             }
             catch (Exception ex)
             {
-                SampleLog.Write(
-                    $"Direct2D external raster path failed ({ex.Message}); using CPU upload path. frameDevice=0x{d3d11.DeviceHandle:X}, factoryDevice=0x{d2dFactory.NativeD3D11Device:X}, texture=0x{d3d11.TextureHandle:X}");
+                _direct2DWrapFailureCount++;
+                if (_direct2DWrapFailureCount == 1)
+                {
+                    SampleLog.Write(
+                        $"Direct2D external raster path failed ({ex.GetType().Name}: {ex.Message}); using CPU upload path. frameDevice=0x{d3d11.DeviceHandle:X}, factoryDevice=0x{d2dFactory.NativeD3D11Device:X}, texture=0x{d3d11.TextureHandle:X}");
+                    SampleLog.Write($"[d2d-diag] texture: {D3D11Native.DescribeTexture(d3d11.TextureHandle)} subresource={d3d11.SubresourceIndex}");
+                    SampleLog.Write($"[d2d-diag] frame device adapter: {D3D11Native.DescribeAdapter(d3d11.DeviceHandle)}");
+                    SampleLog.Write($"[d2d-diag] factory device adapter: {D3D11Native.DescribeAdapter(d2dFactory.NativeD3D11Device)}");
+                }
+                else if (_direct2DWrapFailureCount % 300 == 0)
+                {
+                    SampleLog.Write($"Direct2D external raster path still failing. failures={_direct2DWrapFailureCount}");
+                }
             }
 
             return null;
         }
 
         if (_interopProbeFailed) return null;
+
+        GlCapabilityLog.LogOnce();
+
+        if (d3d11.SharedHandle != 0 && d3d11.Fences is not null && !_memoryObjectUnavailable)
+        {
+            IImage? sharedImage = TryCreateGlMemoryObjectImage(factory, frame, d3d11, d3d11.Fences);
+            if (sharedImage is not null)
+            {
+                return sharedImage;
+            }
+        }
 
         if (!WglDxInteropTexture.IsAvailable)
         {
@@ -378,8 +407,10 @@ public sealed class VideoView : FrameworkElement
 
         try
         {
-            var entry = GetOrCreateCachedGlInteropEntry(factory, d3d11, frame.Width, frame.Height);
-            _interopTexture = entry.InteropTexture;
+            int interopWidth = d3d11.PixelWidth > 0 ? d3d11.PixelWidth : frame.Width;
+            int interopHeight = d3d11.PixelHeight > 0 ? d3d11.PixelHeight : frame.Height;
+            var entry = GetOrCreateCachedGlInteropEntry(factory, d3d11, interopWidth, interopHeight);
+            _interopTexture = entry.Source as WglDxInteropTexture;
             _activeGLInteropEntry = entry;
             UpdatePresentationPath("gpu zero-copy (wgl dx interop)");
             if (!_firstPresentedFrameLogged)
@@ -397,6 +428,69 @@ public sealed class VideoView : FrameworkElement
         }
     }
 
+    private IImage? TryCreateGlMemoryObjectImage(IGraphicsFactory factory, VideoFrame frame, D3D11GpuResource d3d11, SharedTextureFences fences)
+    {
+        if (!GlMemoryObjectTexture.IsAvailable)
+        {
+            SampleLog.Write("GL_EXT_memory_object_win32 unavailable - trying WGL_NV_DX_interop.");
+            _memoryObjectUnavailable = true;
+            return null;
+        }
+
+        if (!ReferenceEquals(_glSemaphoreFences, fences))
+        {
+            // A new decoder brings new fences; textures imported against the old ones go with them.
+            DisposeGlInteropCache();
+            _glSemaphores?.Dispose();
+            _glSemaphoreFences = fences;
+            _glSemaphores = GlSharedSemaphores.TryCreate(fences);
+            if (_glSemaphores is null)
+            {
+                // No GPU-side ordering: the converter completes each frame on the CPU, and texture reuse is left unfenced.
+                fences.CpuCompletionRequired = true;
+                SampleLog.Write("GL semaphore import unavailable - converter completes frames on the CPU.");
+            }
+        }
+
+        try
+        {
+            if (!_glInteropCache.TryGetValue(d3d11.TextureHandle, out var entry))
+            {
+                int width = d3d11.PixelWidth > 0 ? d3d11.PixelWidth : frame.Width;
+                int height = d3d11.PixelHeight > 0 ? d3d11.PixelHeight : frame.Height;
+                var texture = new GlMemoryObjectTexture(d3d11.SharedHandle, d3d11.TextureHandle, width, height, _glSemaphores);
+                var image = factory.CreateImageView(texture);
+                entry = new CachedGlInteropEntry(texture, image);
+                _glInteropCache.Add(d3d11.TextureHandle, entry);
+            }
+
+            ((GlMemoryObjectTexture)entry.Source).ProducedValue = d3d11.ProducedFenceValue;
+            _activeGLInteropEntry = entry;
+            UpdatePresentationPath("gpu zero-copy (gl memory object)");
+            return entry.Image;
+        }
+        catch (Exception ex)
+        {
+            SampleLog.Write($"GL memory object import failed ({ex.Message}); trying WGL_NV_DX_interop.");
+            _activeGLInteropEntry = null;
+            _memoryObjectUnavailable = true;
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Holds a frame's shared texture until GL has finished sampling it, before the converter may reuse it.
+    /// </summary>
+    private void WaitForGlReads(VideoFrame frame)
+    {
+        if (frame.GpuResource is D3D11GpuResource d3d11
+            && _glInteropCache.TryGetValue(d3d11.TextureHandle, out var entry)
+            && entry.Source is GlMemoryObjectTexture texture)
+        {
+            texture.WaitForReads();
+        }
+    }
+
     private void ReleaseLastFrame()
     {
         if (_activeGLInteropEntry is null)
@@ -408,7 +502,15 @@ public sealed class VideoView : FrameworkElement
         _image = null;
         _interopTexture = null;
         _activeGLInteropEntry = null;
+        if (_lastUploadedFrame is not null)
+        {
+            WaitForGlReads(_lastUploadedFrame);
+        }
+
         DisposeGlInteropCache();
+        _glSemaphores?.Dispose();
+        _glSemaphores = null;
+        _glSemaphoreFences = null;
 
         if (_lastUploadedFrame is null)
         {
@@ -454,11 +556,11 @@ public sealed class VideoView : FrameworkElement
         _glInteropCache.Clear();
     }
 
-    private sealed class CachedGlInteropEntry(WglDxInteropTexture interopTexture, IImage image) : IDisposable
+    private sealed class CachedGlInteropEntry(IExternalRasterSource source, IImage image) : IDisposable
     {
         private bool _disposed;
 
-        public WglDxInteropTexture InteropTexture { get; } = interopTexture;
+        public IExternalRasterSource Source { get; } = source;
 
         public IImage Image { get; } = image;
 
@@ -471,7 +573,7 @@ public sealed class VideoView : FrameworkElement
 
             _disposed = true;
             Image.Dispose();
-            InteropTexture.Dispose();
+            Source.Dispose();
         }
     }
 

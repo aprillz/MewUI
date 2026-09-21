@@ -67,6 +67,11 @@ internal sealed class D3D11GpuResource : IGpuFrameResource, IExternalRasterSourc
     public nint TextureHandle => _disposed ? 0 : _textureHandle;
     public int SubresourceIndex { get; }
     public nint DeviceHandle { get; }
+    // NT shared handle of the texture when the converter runs in shared-output mode, otherwise 0.
+    public nint SharedHandle { get; internal set; }
+    // Producer fence value to wait for before sampling a shared-output texture, and the fences it belongs to.
+    public ulong ProducedFenceValue { get; internal set; }
+    public SharedTextureFences? Fences { get; internal set; }
     public int PixelWidth { get; private set; }
     public int PixelHeight { get; private set; }
     public int Version => 0;
