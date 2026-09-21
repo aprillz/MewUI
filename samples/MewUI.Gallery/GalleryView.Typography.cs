@@ -139,6 +139,7 @@ partial class GalleryView
                     ));
 
         return CardGrid(
+            Card("Font Weight Ramp (100 to 800)", FontWeightRampDemo(), minWidth: 560),
             Card(
                 "Run-like Inline Text",
                 new StackPanel()
@@ -161,6 +162,53 @@ partial class GalleryView
             // Last: the widest card on the page, so the ones that wrap in a row keep their places.
             Card("SyntaxViewer", SyntaxViewerDemo(), minWidth: 650)
         );
+    }
+
+    private static readonly FontWeight[] _weightRamp =
+    [
+        FontWeight.Thin, FontWeight.ExtraLight, FontWeight.Light, FontWeight.Normal,
+        FontWeight.Medium, FontWeight.SemiBold, FontWeight.Bold, FontWeight.ExtraBold,
+    ];
+
+    private FrameworkElement FontWeightRampDemo()
+    {
+        var rows = new List<FrameworkElement>(_weightRamp.Length + 1);
+        foreach (var weight in _weightRamp)
+        {
+            rows.Add(new StackPanel()
+                .Horizontal()
+                .Spacing(12)
+                .Children(
+                    new TextBlock()
+                        .Width(104)
+                        .FontSize(ThemeFontSize.Small)
+                        .WithTheme((t, b) => b.Foreground(t.Palette.PlaceholderText))
+                        .Text($"{(int)weight}  {weight}"),
+                    // The tinted box ends where the run ends, so a weight the family cannot supply
+                    // shows up as a row whose sample is exactly as wide as the one above it.
+                    new Border()
+                        .Padding(4, 2)
+                        .CornerRadius(4)
+                        .WithTheme((t, b) => b.Background(t.Palette.ContainerBackground))
+                        .Child(new TextBlock()
+                            .FontSize(18)
+                            .FontWeight(weight)
+                            .Text("Hamburgefonstiv 123"))));
+        }
+
+        rows.Add(new TextBlock()
+            .FontSize(ThemeFontSize.Small)
+            .TextWrapping(TextWrapping.Wrap)
+            .Width(520)
+            .WithTheme((t, b) => b.Foreground(t.Palette.PlaceholderText))
+            .Text("Segoe UI ships no Medium or ExtraBold face, so those rows fall back. Which face a "
+                + "fallback picks depends on the Win32 text engine: GDI matches a face whose name "
+                + "starts with the family, DirectWrite follows the OpenType weight matching rules."));
+
+        return new StackPanel()
+            .Vertical()
+            .Spacing(6)
+            .Children([.. rows]);
     }
 
     private FrameworkElement LineBoxDemo()
