@@ -1,0 +1,13 @@
+<Project>
+
+  <!--
+    The vendored LiveCharts generator turns on XML documentation through its own nuget.props and
+    documents none of its public members, so a rebuild reports CS1591 for each of them. The submodule
+    is kept pristine and ships no Directory.Build.targets, which is why the search from the generator
+    project reaches this file.
+  -->
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'LiveChartsGenerators'">
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+</Project>
