@@ -12,7 +12,11 @@ param(
 
     [string] $BaselinePath,
 
-    [int64] $AllowedGrowthBytes = 16384
+    [int64] $AllowedGrowthBytes = 16384,
+
+    # Labels the report when the sources are not a working copy. Two configurations are measured at
+    # the same time by exporting the commit twice, and an exported tree has no repository to ask.
+    [string] $Commit
 )
 
 $ErrorActionPreference = 'Stop'
@@ -107,6 +111,8 @@ foreach ($probeName in $Probe) {
         throw "No executable was produced for probe '$probeName'."
     }
 
+    # The map is the newest one the probe project wrote, so one working copy measures one
+    # configuration at a time. Measure two at once by exporting the commit into two directories.
     $mapRoot = Join-Path $PSScriptRoot "MewUI.AotSizeProbe\obj\Release\net10.0\$RuntimeIdentifier\native"
     $map = Get-ChildItem $mapRoot -Filter '*.map.xml' -File |
         Sort-Object LastWriteTimeUtc -Descending |
@@ -133,10 +139,17 @@ foreach ($probeName in $Probe) {
     }
 }
 
+if ([string]::IsNullOrWhiteSpace($Commit)) {
+    $Commit = & git -C $repoRoot rev-parse HEAD 2>$null
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($Commit)) {
+        $Commit = 'unknown'
+    }
+}
+
 $report = [ordered]@{
     schemaVersion = 1
     measuredAtUtc = [DateTime]::UtcNow.ToString('O')
-    commit = (& git -C $repoRoot rev-parse HEAD).Trim()
+    commit = $Commit.Trim()
     dotnetSdk = (& dotnet --version).Trim()
     runtimeIdentifier = $RuntimeIdentifier
     backend = $Backend
