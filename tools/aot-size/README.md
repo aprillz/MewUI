@@ -38,6 +38,18 @@ Run the four canonical probes on Windows GDI:
 ./tools/aot-size/Measure-AotSize.ps1
 ```
 
+Measure several configurations at once by exporting the commit once per configuration. One working copy measures one at a time: the probes read the newest map the probe project wrote, and the referenced projects share their intermediate directories.
+
+```powershell
+$commit = git rev-parse HEAD
+git archive $commit | tar -x -C $env:TEMP/probe-gdi
+Push-Location $env:TEMP/probe-gdi
+./tools/aot-size/Measure-AotSize.ps1 -Backend Gdi -Commit $commit
+Pop-Location
+```
+
+`-Commit` labels the report, which an exported tree cannot supply on its own.
+
 Check growth against the committed observation baseline:
 
 ```powershell
