@@ -1,0 +1,15 @@
+﻿<linker>
+  <!--
+    Win32 text engine selection. The gate is a static readonly bool, so folding it to a constant
+    makes the branch in MewVGWin32GraphicsFactory.CreateFontCore unconditional and leaves the path the app
+    did not select unreachable. One line applies per configured value.
+  -->
+  <assembly fullname="Aprillz.MewUI.Backend.MewVG.Win32">
+    <type fullname="Aprillz.MewUI.Rendering.Win32.DirectWriteTextGate">
+      <method signature="System.Boolean get_IsSupported()" body="stub" value="false"
+              feature="Aprillz.MewUI.Win32.DirectWriteText.Enabled" featurevalue="false" />
+      <method signature="System.Boolean get_IsSupported()" body="stub" value="true"
+              feature="Aprillz.MewUI.Win32.DirectWriteText.Enabled" featurevalue="true" />
+    </type>
+  </assembly>
+</linker>

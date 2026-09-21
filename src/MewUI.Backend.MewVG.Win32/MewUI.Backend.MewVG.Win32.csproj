@@ -55,6 +55,9 @@
     <Compile Include="..\MewUI\Shared\Rendering\Gdi\GdiTextAdvances.cs" LinkBase="Rendering\Gdi" />
     <Compile Include="..\MewUI\Shared\Rendering\Gdi\GdiWrappedEllipsisHelper.cs" LinkBase="Rendering\Gdi" />
     <Compile Include="..\MewUI\Shared\Rendering\Gdi\TextInkInsetRectExtensions.cs" LinkBase="Rendering\Gdi" />
+    <Compile Include="..\MewUI\Shared\Rendering\Win32\*.cs" LinkBase="Rendering\Win32" />
+    <Compile Include="..\MewUI\Shared\Rendering\DirectWrite\**\*.cs" LinkBase="Rendering\DirectWrite" />
+    <Compile Include="..\MewUI\Shared\Native\Win32\DirectWrite\**\*.cs" LinkBase="Native\DirectWrite" />
 
     <Compile Include="..\MewUI\Shared\Native\Win32\User32.cs" LinkBase="Native" />
     <Compile Include="..\MewUI\Shared\Native\Win32\Gdi32.cs" LinkBase="Native" />
@@ -74,6 +77,13 @@
     <Compile Include="..\MewUI\Shared\Native\OpenGLExt.cs" LinkBase="Native" />
     <Compile Include="..\MewUI\Shared\Native\Common\Structs\*.cs" LinkBase="Native\Structs" />
     <Compile Include="..\MewUI\Shared\Platform\Win32\Resources\*.cs" LinkBase="Resources" />
+  </ItemGroup>
+
+  <!-- Feature-switch substitutions let the trimmer drop the unselected Win32 text path. -->
+  <ItemGroup>
+    <EmbeddedResource Include="ILLink.Substitutions.xml">
+      <LogicalName>ILLink.Substitutions.xml</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
 
 </Project>

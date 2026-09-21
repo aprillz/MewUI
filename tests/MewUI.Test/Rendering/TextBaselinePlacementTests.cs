@@ -1,3 +1,4 @@
+extern alias direct2d;
 using Aprillz.MewUI;
 using Aprillz.MewUI.Native.DirectWrite;
 using Aprillz.MewUI.Rendering;
@@ -51,7 +52,7 @@ public sealed class TextBaselinePlacementTests
                 Assert.IsNotNull(nativeLayout);
                 try
                 {
-                    var captured = DWriteGlyphRunExtractor.Capture(nativeLayout.BackendHandle);
+                    var captured = direct2d::Aprillz.MewUI.Native.DirectWrite.DWriteGlyphRunExtractor.Capture(nativeLayout.BackendHandle);
                     Assert.IsNotEmpty(captured);
                     double nativeBaseline = captured[0].BaselineOriginY;
                     var layout = (ManagedTextLayout)factory.TextEngine.CreateLayout(

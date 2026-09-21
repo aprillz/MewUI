@@ -4,6 +4,7 @@ using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Native.Constants;
 using Aprillz.MewUI.Native.Structs;
 using Aprillz.MewUI.Rendering.Gdi.Core;
+using Aprillz.MewUI.Rendering.Win32;
 using Aprillz.MewUI.Text;
 
 using static Aprillz.MewUI.Rendering.GradientBrushHelper;
@@ -1341,7 +1342,15 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
     {
         if (format.Font is not GdiFont gdiFont)
         {
-            throw new ArgumentException("Font must be a GdiFont", nameof(format));
+            // A face that rasterizes the run itself (the DirectWrite engine) hands back a bitmap, so
+            // none of the GDI drawing modes below apply to it.
+            if (format.Font is IWin32TextFace rasterizingFace)
+            {
+                DrawFaceRasterizedText(text, format, layout, color, rasterizingFace);
+                return;
+            }
+
+            throw new ArgumentException("Font must be a Win32 text face", nameof(format));
         }
 
         color = BlendGlobalAlpha(color);
@@ -1614,7 +1623,111 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
     }
 
     protected override TextInkOverhang MeasureRunInkOverhang(ReadOnlySpan<char> text, IFont font, BackendTextLayout layout)
-        => font is GdiFont gdiFont ? gdiFont.GetRunInkOverhang(text) : TextInkOverhang.None;
+        => font is IWin32TextFace face ? face.GetRunInkOverhang(text) : TextInkOverhang.None;
+
+    /// <summary>
+    /// Draws a run whose face rasterizes itself. The bitmap comes back with straight alpha, which
+    /// <c>AlphaBlend</c> cannot take, so it is premultiplied on the way into the blend surface.
+    /// </summary>
+    private void DrawFaceRasterizedText(ReadOnlySpan<char> text, BackendTextFormat format,
+        BackendTextLayout layout, Color color, IWin32TextFace face)
+    {
+        color = BlendGlobalAlpha(color);
+        if (text.IsEmpty || color.A == 0)
+        {
+            return;
+        }
+
+        var inkInset = TextInkInsetPx.FromOverhang(layout.InkOverhang, _dpiScale);
+        var target = ToDeviceRect(InflateByInset(TransformRect(layout.EffectiveBounds), inkInset));
+        int widthPx = target.right - target.left;
+        int heightPx = target.bottom - target.top;
+        if (widthPx <= 0 || heightPx <= 0 || Gdi32.RectVisible(Hdc, ref target) == 0)
+        {
+            return;
+        }
+
+        var request = new Win32TextRasterizeRequest(
+            widthPx, heightPx, color,
+            format.HorizontalAlignment, format.VerticalAlignment,
+            format.Wrapping, format.Trimming, _dpiScale, inkInset);
+
+        // Subpixel antialiasing needs a coverage value per channel, which one alpha per pixel cannot
+        // carry. Blending it takes reading the pixels under the run, so it is only available where
+        // those are known: no transform, an opaque colour, and either a surface without alpha or an
+        // opaque backdrop behind it. That is the same condition the GDI path uses for ClearType.
+        bool destinationIsKnown = !TryGetTextWorldTransform(out _) && color.A == 255 && !EnableAlphaTextHint
+            && (!(_pixelSurface?.HasAlpha ?? false) || _opaqueBackdropDepth > 0);
+        if (destinationIsKnown && face.TryRasterizeSubpixel(text, request, out var coverage))
+        {
+            BlendSubpixelCoverage(coverage, target, color);
+            return;
+        }
+
+        if (!face.TryRasterize(text, request, out var bitmap) || bitmap.Data.Length == 0)
+        {
+            return;
+        }
+
+        using var surface = new AaSurface(Hdc, bitmap.WidthPx, bitmap.HeightPx);
+        if (!surface.IsValid)
+        {
+            return;
+        }
+
+        var destination = surface.GetPixelSpan();
+        int bytes = Math.Min(destination.Length, bitmap.WidthPx * bitmap.HeightPx * 4);
+        for (int i = 0; i < bytes; i += 4)
+        {
+            byte alpha = bitmap.Data[i + 3];
+            destination[i] = (byte)(bitmap.Data[i] * alpha / 255);
+            destination[i + 1] = (byte)(bitmap.Data[i + 1] * alpha / 255);
+            destination[i + 2] = (byte)(bitmap.Data[i + 2] * alpha / 255);
+            destination[i + 3] = alpha;
+        }
+
+        surface.AlphaBlendTo(Hdc, target.left, target.top);
+    }
+
+    /// <summary>
+    /// Lerps the text colour into the pixels under the run, one coverage value per channel. The
+    /// destination is copied in and written back whole, because subpixel blending has to read what
+    /// is already there and <c>AlphaBlend</c> carries only one alpha per pixel.
+    /// </summary>
+    private void BlendSubpixelCoverage(Win32TextCoverage coverage, RECT target, Color color)
+    {
+        int width = coverage.WidthPx;
+        int height = coverage.HeightPx;
+        if (width <= 0 || height <= 0 || coverage.Data.Length < width * height * 3)
+        {
+            return;
+        }
+
+        using var surface = new AaSurface(Hdc, width, height);
+        if (!surface.IsValid ||
+            !Gdi32.BitBlt(surface.MemDc, 0, 0, width, height, Hdc, target.left, target.top, GdiConstants.SRCCOPY))
+        {
+            return;
+        }
+
+        var destination = surface.GetPixelSpan();
+        var channels = coverage.Data;
+        int pixels = Math.Min(width * height, destination.Length / 4);
+        for (int i = 0; i < pixels; i++)
+        {
+            int source = i * 3;
+            int target32 = i * 4;
+            destination[target32] = Lerp(destination[target32], color.B, channels[source + 2]);
+            destination[target32 + 1] = Lerp(destination[target32 + 1], color.G, channels[source + 1]);
+            destination[target32 + 2] = Lerp(destination[target32 + 2], color.R, channels[source]);
+            destination[target32 + 3] = 255;
+        }
+
+        Gdi32.BitBlt(Hdc, target.left, target.top, width, height, surface.MemDc, 0, 0, GdiConstants.SRCCOPY);
+    }
+
+    private static byte Lerp(byte destination, byte source, byte coverage)
+        => coverage == 0 ? destination : (byte)(((destination * (255 - coverage)) + (source * coverage)) / 255);
 
     private Rect InflateByInset(Rect rect, TextInkInsetPx inset)
     {
@@ -1791,75 +1904,15 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
         }
     }
 
-    public override unsafe Size MeasureText(ReadOnlySpan<char> text, IFont font)
-    {
-        if (font is not GdiFont gdiFont)
-        {
-            throw new ArgumentException("Font must be a GdiFont", nameof(font));
-        }
+    public override Size MeasureText(ReadOnlySpan<char> text, IFont font)
+        => font is IWin32TextFace face
+            ? face.Measure(text, double.PositiveInfinity, TextWrapping.NoWrap, DpiScale)
+            : throw new ArgumentException("Font must be a Win32 text face.", nameof(font));
 
-        var oldFont = Gdi32.SelectObject(Hdc, gdiFont.Handle);
-
-        try
-        {
-            if (text.IsEmpty)
-            {
-                return Size.Empty;
-            }
-
-            var hasLineBreaks = text.IndexOfAny('\r', '\n') >= 0;
-            var rect = hasLineBreaks
-                ? new RECT(0, 0, QuantizeLengthPx(1_000_000), 0)
-                : new RECT(0, 0, 0, 0);
-
-            uint format = hasLineBreaks
-                ? GdiConstants.DT_CALCRECT | GdiConstants.DT_WORDBREAK | GdiConstants.DT_NOPREFIX
-                : GdiConstants.DT_CALCRECT | GdiConstants.DT_SINGLELINE | GdiConstants.DT_NOPREFIX;
-
-            fixed (char* pText = text)
-            {
-                Gdi32.DrawText(Hdc, pText, text.Length, ref rect, format);
-            }
-
-            return new Size(rect.Width / DpiScale, rect.Height / DpiScale);
-        }
-        finally
-        {
-            Gdi32.SelectObject(Hdc, oldFont);
-        }
-    }
-
-    public override unsafe Size MeasureText(ReadOnlySpan<char> text, IFont font, double maxWidth)
-    {
-        if (font is not GdiFont gdiFont)
-        {
-            throw new ArgumentException("Font must be a GdiFont", nameof(font));
-        }
-
-        var oldFont = Gdi32.SelectObject(Hdc, gdiFont.Handle);
-
-        try
-        {
-            if (double.IsNaN(maxWidth) || maxWidth <= 0 || double.IsInfinity(maxWidth))
-            {
-                maxWidth = 1_000_000;
-            }
-
-            var rect = new RECT(0, 0, QuantizeLengthPx(maxWidth), 0);
-
-            fixed (char* pText = text)
-            {
-                Gdi32.DrawText(Hdc, pText, text.Length, ref rect,
-                    GdiConstants.DT_CALCRECT | GdiConstants.DT_WORDBREAK | GdiConstants.DT_NOPREFIX);
-            }
-
-            return new Size(rect.Width / DpiScale, rect.Height / DpiScale);
-        }
-        finally
-        {
-            Gdi32.SelectObject(Hdc, oldFont);
-        }
-    }
+    public override Size MeasureText(ReadOnlySpan<char> text, IFont font, double maxWidth)
+        => font is IWin32TextFace face
+            ? face.Measure(text, maxWidth, TextWrapping.Wrap, DpiScale)
+            : throw new ArgumentException("Font must be a Win32 text face.", nameof(font));
 
     #endregion
 

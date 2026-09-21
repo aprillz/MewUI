@@ -2,6 +2,7 @@ using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Native.Com;
 using Aprillz.MewUI.Native.Direct2D;
 using Aprillz.MewUI.Native.DirectWrite;
+using Aprillz.MewUI.Rendering.DirectWrite;
 using Aprillz.MewUI.Platform;
 using Aprillz.MewUI.Platform.Win32;
 using Aprillz.MewUI.Resources;
@@ -36,6 +37,9 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
 
     private nint _d2dFactory;
     private nint _dwriteFactory;
+    // Font creation and family resolution are shared with the GDI and MewVG backends, which create
+    // the same DirectWriteFont without taking on Direct2D.
+    private readonly DirectWriteFontFactory _fontFactory = new();
     private bool _initialized;
     private bool _hasFactory1;
     private nint _defaultFixedStrokeStyle;
@@ -123,10 +127,6 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
 
         TextFormatCache.ReleaseAll();
 
-        foreach (var (_, col) in _privateFontCollections)
-            ComHelpers.Release(col);
-        _privateFontCollections.Clear();
-
         ComHelpers.Release(_defaultFixedStrokeStyle);
         _defaultFixedStrokeStyle = 0;
 
@@ -136,7 +136,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
         _gpuDeviceState = GpuDeviceState.Disposed;
         ResetGpuDeviceChain();
 
-        ComHelpers.Release(_dwriteFactory);
+        _fontFactory.Dispose();
         _dwriteFactory = 0;
         ComHelpers.Release(_d2dFactory);
         _d2dFactory = 0;
@@ -174,12 +174,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
             }
         }
 
-        hr = DWrite.DWriteCreateFactory(DWRITE_FACTORY_TYPE.SHARED, DWrite.IID_IDWriteFactory, out _dwriteFactory);
-        if (hr < 0 || _dwriteFactory == 0)
-        {
-            throw new InvalidOperationException($"DWriteCreateFactory failed: 0x{hr:X8}");
-        }
-
+        _dwriteFactory = _fontFactory.Factory;
         _textRenderingParams = BuildTunedTextRenderingParams((IDWriteFactory*)_dwriteFactory);
 
         if (_hasFactory1)
@@ -350,117 +345,19 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
     public IFont CreateFont(string family, double size, FontWeight weight = FontWeight.Normal, bool italic = false, bool underline = false, bool strikethrough = false)
     {
         EnsureInitialized();
-        family = SelectFamilyCandidate(ValidateFamilyName(family));
-        var (resolvedFamily, fontCollection) = ResolveWithCollection(family);
-        return new DirectWriteFont(resolvedFamily, size, weight, italic, underline, strikethrough, _dwriteFactory, fontCollection);
+        return _fontFactory.CreateFont(family, size, weight, italic, underline, strikethrough);
     }
 
     public IFont CreateFont(string family, double size, uint dpi, FontWeight weight = FontWeight.Normal, bool italic = false, bool underline = false, bool strikethrough = false)
     {
         EnsureInitialized();
-        family = SelectFamilyCandidate(ValidateFamilyName(family));
-        var (resolvedFamily, fontCollection) = ResolveWithCollection(family);
-        return new DirectWriteFont(resolvedFamily, size, weight, italic, underline, strikethrough, _dwriteFactory, fontCollection, dpi);
-    }
-
-    /// <summary>Picks the first installed family from a comma-separated list; single names pass through.</summary>
-    private string SelectFamilyCandidate(string family)
-    {
-        if (!FontFamilyList.IsList(family))
-        {
-            return family;
-        }
-
-        string[] candidates = FontFamilyList.Split(family);
-        foreach (string candidate in candidates)
-        {
-            if (FontRegistry.Resolve(candidate) != null || IsSystemFamilyInstalled(candidate))
-            {
-                return candidate;
-            }
-        }
-        return candidates.Length > 0 ? candidates[0] : family;
-    }
-
-    private bool IsSystemFamilyInstalled(string family)
-    {
-        if (DWriteVTable.GetSystemFontCollection((IDWriteFactory*)_dwriteFactory, out nint collection, false) < 0 || collection == 0)
-        {
-            return false;
-        }
-        try
-        {
-            return DWriteVTable.FindFamilyName(collection, family, out _, out int exists) >= 0 && exists != 0;
-        }
-        finally
-        {
-            ComHelpers.Release(collection);
-        }
-    }
-
-    // Cache: familyName → DWrite custom font collection (nint)
-    private readonly Dictionary<string, nint> _privateFontCollections = new(StringComparer.OrdinalIgnoreCase);
-
-    private (string family, nint fontCollection) ResolveWithCollection(string familyOrPath)
-    {
-        familyOrPath = ValidateFamilyName(familyOrPath);
-        var resolved = FontRegistry.Resolve(familyOrPath);
-        if (resolved != null)
-        {
-            // Ensure GDI registration (for GDI backend compatibility)
-            if (OperatingSystem.IsWindows())
-                Win32Fonts.EnsurePrivateFontFamily(resolved.Value.FilePath);
-
-            // Get or create DWrite custom font collection for this private font
-            var fontCollection = GetOrCreatePrivateCollection(resolved.Value.FamilyName, resolved.Value.FilePath);
-            return (resolved.Value.FamilyName, fontCollection);
-        }
-
-        // Legacy file path
-        if (OperatingSystem.IsWindows() && FontResources.LooksLikeFontFilePath(familyOrPath))
-        {
-            var path = Path.GetFullPath(familyOrPath);
-            Win32Fonts.EnsurePrivateFontFamily(path);
-            var family = FontResources.TryGetParsedFamilyName(path, out var parsed) && !string.IsNullOrWhiteSpace(parsed)
-                ? parsed : Path.GetFileNameWithoutExtension(path);
-            var fontCollection = GetOrCreatePrivateCollection(family, path);
-            return (family, fontCollection);
-        }
-
-        return (familyOrPath, 0); // System font, no custom collection
-    }
-
-    private static string ValidateFamilyName(string? family)
-    {
-        if (string.IsNullOrWhiteSpace(family))
-        {
-            throw new ArgumentException("Font family must be provided by the caller.", nameof(family));
-        }
-
-        return family.Trim();
-    }
-
-    private nint GetOrCreatePrivateCollection(string familyName, string filePath)
-    {
-        if (_privateFontCollections.TryGetValue(familyName, out var cached))
-            return cached;
-
-        var factory = (IDWriteFactory*)_dwriteFactory;
-        var collection = DWritePrivateFontCollection.CreateCollection(factory, [filePath]);
-        if (collection != 0)
-            _privateFontCollections[familyName] = collection;
-        return collection;
+        return _fontFactory.CreateFont(family, size, weight, italic, underline, strikethrough, dpi);
     }
 
     private void RefreshSystemFontCollection()
     {
         EnsureInitialized();
-        var factory = (IDWriteFactory*)_dwriteFactory;
-        int hr = DWriteVTable.GetSystemFontCollection(factory, out var collection, checkForUpdates: true);
-        if (hr >= 0 && collection != 0)
-        {
-            ComHelpers.Release(collection);
-        }
+        _fontFactory.RefreshSystemFontCollection();
     }
 
     private string ResolveWin32FontFamilyOrFile(string familyOrPath)

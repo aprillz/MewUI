@@ -1,6 +1,7 @@
 using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Native.Constants;
 using Aprillz.MewUI.Native.Structs;
+using Aprillz.MewUI.Rendering.Win32;
 using Aprillz.MewUI.Text;
 
 namespace Aprillz.MewUI.Rendering.Gdi;
@@ -15,24 +16,29 @@ internal sealed class GdiMeasurementContext : MeasureGraphicsContextBase, ITextA
 
     public override double DpiScale { get; }
 
-    internal double[] GetUtf16PrefixAdvances(ReadOnlySpan<char> text, GdiFont font)
-        => GdiTextAdvances.GetUtf16PrefixAdvances(_hdc, font, text, DpiScale);
-
     double[] ITextAdvanceSource.GetUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font)
-        => font is GdiFont gdiFont
-            ? GetUtf16PrefixAdvances(text, gdiFont)
-            : throw new ArgumentException("Font must be a GdiFont.", nameof(font));
-
-    bool ITextAdvanceSource.TryGetUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font, Span<double> destination)
     {
-        if (font is not GdiFont gdiFont || destination.Length < text.Length)
+        if (font is not IWin32TextFace face)
         {
-            return false;
+            throw new ArgumentException("Font must be a Win32 text face.", nameof(font));
         }
 
-        GdiTextAdvances.GetUtf16PrefixAdvances(_hdc, gdiFont, text, DpiScale, destination);
-        return true;
+        if (text.IsEmpty)
+        {
+            return [];
+        }
+
+        var advances = GC.AllocateUninitializedArray<double>(text.Length);
+        if (!face.TryGetPrefixAdvances(text, DpiScale, advances))
+        {
+            throw new InvalidOperationException("The font could not report prefix advances.");
+        }
+
+        return advances;
     }
+
+    bool ITextAdvanceSource.TryGetUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font, Span<double> destination)
+        => font is IWin32TextFace face && face.TryGetPrefixAdvances(text, DpiScale, destination);
 
     public GdiMeasurementContext(nint hdc, uint dpi)
     {
@@ -50,81 +56,13 @@ internal sealed class GdiMeasurementContext : MeasureGraphicsContextBase, ITextA
         }
     }
 
-    public override unsafe Size MeasureText(ReadOnlySpan<char> text, IFont font)
-    {
-        if (text.IsEmpty || font is not GdiFont gdiFont)
-        {
-            return Size.Empty;
-        }
+    public override Size MeasureText(ReadOnlySpan<char> text, IFont font)
+        => font is IWin32TextFace face
+            ? face.Measure(text, double.PositiveInfinity, TextWrapping.NoWrap, DpiScale)
+            : Size.Empty;
 
-        var oldFont = Gdi32.SelectObject(_hdc, gdiFont.Handle);
-        try
-        {
-            var hasLineBreaks = text.IndexOfAny('\r', '\n') >= 0;
-            if (!hasLineBreaks)
-            {
-                fixed (char* textPointer = text)
-                {
-                    SIZE size;
-                    if (Gdi32.GetTextExtentPoint32(_hdc, textPointer, text.Length, &size))
-                    {
-                        return new Size(size.cx / DpiScale, size.cy / DpiScale);
-                    }
-                }
-            }
-
-            var rect = hasLineBreaks
-                ? new RECT(0, 0, LayoutRounding.RoundToPixelInt(1_000_000, DpiScale), 0)
-                : new RECT(0, 0, 0, 0);
-
-            uint format = hasLineBreaks
-                ? GdiConstants.DT_CALCRECT | GdiConstants.DT_WORDBREAK | GdiConstants.DT_NOPREFIX
-                : GdiConstants.DT_CALCRECT | GdiConstants.DT_SINGLELINE | GdiConstants.DT_NOPREFIX;
-
-            fixed (char* pText = text)
-            {
-                Gdi32.DrawText(_hdc, pText, text.Length, ref rect, format);
-            }
-            return new Size(rect.Width / DpiScale, rect.Height / DpiScale);
-        }
-        finally
-        {
-            Gdi32.SelectObject(_hdc, oldFont);
-        }
-    }
-
-    public override unsafe Size MeasureText(ReadOnlySpan<char> text, IFont font, double maxWidth)
-    {
-        if (text.IsEmpty || font is not GdiFont gdiFont)
-        {
-            return Size.Empty;
-        }
-
-        if (double.IsNaN(maxWidth) || maxWidth <= 0 || double.IsInfinity(maxWidth))
-        {
-            maxWidth = 1_000_000;
-        }
-
-        var maxWidthPx = LayoutRounding.RoundToPixelInt(maxWidth, DpiScale);
-        if (maxWidthPx <= 0)
-        {
-            maxWidthPx = LayoutRounding.RoundToPixelInt(1_000_000, DpiScale);
-        }
-
-        var oldFont = Gdi32.SelectObject(_hdc, gdiFont.Handle);
-        try
-        {
-            var rect = new RECT(0, 0, maxWidthPx, 0);
-            fixed (char* pText = text)
-            {
-                Gdi32.DrawText(_hdc, pText, text.Length, ref rect,
-                    GdiConstants.DT_CALCRECT | GdiConstants.DT_WORDBREAK | GdiConstants.DT_NOPREFIX);
-            }
-            return new Size(rect.Width / DpiScale, rect.Height / DpiScale);
-        }
-        finally
-        {
-            Gdi32.SelectObject(_hdc, oldFont);
-        }
-    }
+    public override Size MeasureText(ReadOnlySpan<char> text, IFont font, double maxWidth)
+        => font is IWin32TextFace face
+            ? face.Measure(text, maxWidth, TextWrapping.Wrap, DpiScale)
+            : Size.Empty;
 }

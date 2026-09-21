@@ -5,6 +5,7 @@ using Aprillz.MewUI.Rendering.Gdi;
 using Aprillz.MewUI.Rendering.OpenGL;
 using Aprillz.MewUI.Text;
 using Aprillz.MewVG;
+using Aprillz.MewUI.Rendering.Win32;
 
 namespace Aprillz.MewUI.Rendering.MewVG;
 
@@ -152,6 +153,11 @@ internal sealed partial class MewVGWin32GraphicsContext
     private GdiMeasurementContext EnsureMeasureContext()
         => _measureContext ??= new GdiMeasurementContext(User32.GetDC(0), (uint)Math.Round(DpiScale * 96));
 
+    /// <summary>Cache identity for a face that has no native font handle to key on.</summary>
+    private static string DescribeFace(IFont font)
+        => string.Create(null, stackalloc char[128],
+            $"{font.Family}|{(int)font.Weight}|{(font.IsItalic ? 1 : 0)}{(font.IsUnderline ? 1 : 0)}{(font.IsStrikethrough ? 1 : 0)}");
+
     private Size MeasureTextCore(ReadOnlySpan<char> text, IFont font)
         => EnsureMeasureContext().MeasureText(text, font);
 
@@ -159,7 +165,7 @@ internal sealed partial class MewVGWin32GraphicsContext
         => EnsureMeasureContext().MeasureText(text, font, maxWidth);
 
     protected override TextInkOverhang MeasureRunInkOverhang(ReadOnlySpan<char> text, IFont font, BackendTextLayout layout)
-        => font is GdiFont gdiFont ? gdiFont.GetRunInkOverhang(text) : TextInkOverhang.None;
+        => font is IWin32TextFace face ? face.GetRunInkOverhang(text) : TextInkOverhang.None;
 
     public override Size MeasureText(ReadOnlySpan<char> text, IFont font)
         => MeasureTextCore(text, font);
@@ -231,7 +237,9 @@ internal sealed partial class MewVGWin32GraphicsContext
         BackendTextFormat format, BackendTextLayout layout, Color color)
     {
         if (text.IsEmpty) return;
-        if (format.Font is not GdiFont gdiFont) return;
+        if (format.Font is not IWin32TextFace face) return;
+        // Null on the DirectWrite branch, where the face rasterizes the run itself.
+        var gdiFont = format.Font as GdiFont;
 
         var bounds = layout.EffectiveBounds;
         var boundsPx = ToPixelRect(bounds);
@@ -321,11 +329,13 @@ internal sealed partial class MewVGWin32GraphicsContext
 
         bool needsLinear = NeedsLinearFilter();
         var textHash = string.GetHashCode(text);
+        // An HFONT already encodes family, weight, style and size. A DirectWrite face has no such
+        // handle, so its identity goes in the name and size fields instead.
         var key = new MewVGTextCacheKey(new TextCacheKey(
             textHash,
-            gdiFont.Handle,
-            string.Empty,
-            0,
+            gdiFont?.Handle ?? 0,
+            gdiFont is null ? DescribeFace(format.Font) : string.Empty,
+            gdiFont is null ? (int)Math.Round(format.Font.Size * DpiScale * 64) : 0,
             color.ToArgb(),
             widthPx,
             heightPx,
@@ -336,38 +346,33 @@ internal sealed partial class MewVGWin32GraphicsContext
             inkInset.Left,
             inkInset.Top), needsLinear);
 
+        var rasterRequest = new Win32TextRasterizeRequest(
+            widthPx, heightPx, color,
+            format.HorizontalAlignment, format.VerticalAlignment,
+            format.Wrapping, format.Trimming, DpiScale, inkInset);
+
         MewVGTextEntry entry;
         if (_transientText)
         {
-            var bmp = OpenGLTextRasterizer.Rasterize(
-                _frameSession.Hdc,
-                gdiFont,
-                text,
-                widthPx,
-                heightPx,
-                color,
-                format.HorizontalAlignment,
-                format.VerticalAlignment,
-                format.Wrapping,
-                format.Trimming,
-                _textCache.RentTransientBuffer(widthPx * heightPx * 4),
-                inkInset);
+            var transientBuffer = _textCache.RentTransientBuffer(widthPx * heightPx * 4);
+            if (!face.TryRasterize(text, rasterRequest with { Buffer = transientBuffer }, out var bmp))
+            {
+                bmp = OpenGLTextRasterizer.Rasterize(
+                    _frameSession.Hdc, gdiFont!, text, widthPx, heightPx, color,
+                    format.HorizontalAlignment, format.VerticalAlignment,
+                    format.Wrapping, format.Trimming, transientBuffer, inkInset);
+            }
             entry = _textCache.UseTransient(bmp.Data.AsSpan(0, bmp.WidthPx * bmp.HeightPx * 4), bmp.WidthPx, bmp.HeightPx, needsLinear);
         }
         else if (!_textCache.TryGet(key, text, out entry))
         {
-            var bmp = OpenGLTextRasterizer.Rasterize(
-                _frameSession.Hdc,
-                gdiFont,
-                text,
-                widthPx,
-                heightPx,
-                color,
-                format.HorizontalAlignment,
-                format.VerticalAlignment,
-                format.Wrapping,
-                format.Trimming,
-                inkInset: inkInset);
+            if (!face.TryRasterize(text, rasterRequest, out var bmp))
+            {
+                bmp = OpenGLTextRasterizer.Rasterize(
+                    _frameSession.Hdc, gdiFont!, text, widthPx, heightPx, color,
+                    format.HorizontalAlignment, format.VerticalAlignment,
+                    format.Wrapping, format.Trimming, inkInset: inkInset);
+            }
             entry = _textCache.CreateImage(key, text, ref bmp);
         }
 

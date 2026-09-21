@@ -1,7 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-namespace Aprillz.MewUI.Rendering.Direct2D;
+namespace Aprillz.MewUI.Rendering.DirectWrite;
 
 /// <summary>
 /// Native COM implementation of <c>ID2D1SimplifiedGeometrySink</c> (the base interface

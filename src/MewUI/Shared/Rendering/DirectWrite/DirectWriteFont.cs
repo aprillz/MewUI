@@ -7,9 +7,11 @@ using Aprillz.MewUI.Native.Constants;
 using Aprillz.MewUI.Native.DirectWrite;
 using Aprillz.MewUI.Native.Structs;
 using Aprillz.MewUI.Resources;
-namespace Aprillz.MewUI.Rendering.Direct2D;
+using Aprillz.MewUI.Rendering.Win32;
+using Aprillz.MewUI.Text;
+namespace Aprillz.MewUI.Rendering.DirectWrite;
 
-internal sealed unsafe partial class DirectWriteFont : FontBase, IGlyphOutlineFont
+internal sealed unsafe partial class DirectWriteFont : FontBase, IGlyphOutlineFont, IWin32TextFace
 {
     /// <summary>
     /// Non-zero DWrite custom font collection for private fonts.
@@ -24,6 +26,7 @@ internal sealed unsafe partial class DirectWriteFont : FontBase, IGlyphOutlineFo
     // Native DWrite resources retained for the lifetime of this font for outline
     // extraction (IDWriteFontFace::GetGlyphRunOutline). Cached lazily on first use.
     private readonly nint _dwriteFactoryHandle;
+    private readonly uint _outlineDpi;
     private nint _cachedFontFace;
     private bool _faceLookupAttempted;
 
@@ -32,6 +35,7 @@ internal sealed unsafe partial class DirectWriteFont : FontBase, IGlyphOutlineFo
         : base(ValidateFamilyName(family), size, weight, italic, underline, strikethrough)
     {
         _dwriteFactoryHandle = dwriteFactory;
+        _outlineDpi = outlineDpi;
         if (dwriteFactory == 0 || size <= 0)
         {
             return;
@@ -198,6 +202,79 @@ internal sealed unsafe partial class DirectWriteFont : FontBase, IGlyphOutlineFo
         InternalLeading = Math.Max(0, leading);
         CapHeight = metrics.capHeight > 0 ? metrics.capHeight * scale : Ascent * 0.7;
         XHeight = metrics.xHeight > 0 ? metrics.xHeight * scale : CapHeight * 0.72;
+    }
+
+    /// <summary>
+    /// Pixel grid the measurements are fitted to. DirectWrite lays glyphs out on this grid, so it
+    /// has to match the surface the text is drawn on; 96 DPI leaves the layout unhinted.
+    /// </summary>
+    private float PixelsPerDip => _outlineDpi > 0 ? _outlineDpi / 96f : 1f;
+
+    public TextInkOverhang GetRunInkOverhang(ReadOnlySpan<char> text)
+        => DirectWriteTextMeasure.GetRunInkOverhang(_dwriteFactoryHandle, this, null, text, PixelsPerDip);
+
+    public bool TryGetPrefixAdvances(ReadOnlySpan<char> text, double dpiScale, Span<double> destination)
+    {
+        if (destination.Length < text.Length)
+        {
+            return false;
+        }
+
+        if (text.IsEmpty)
+        {
+            return true;
+        }
+
+        if (_dwriteFactoryHandle == 0)
+        {
+            return false;
+        }
+
+        DirectWriteTextMeasure.FillPrefixAdvances(
+            _dwriteFactoryHandle, this, null, text, dpiScale > 0 ? (float)dpiScale : 1f, destination);
+        return true;
+    }
+
+    public Size Measure(ReadOnlySpan<char> text, double maxWidthDip, TextWrapping wrapping, double dpiScale)
+    {
+        if (text.IsEmpty || _dwriteFactoryHandle == 0)
+        {
+            return default;
+        }
+
+        return DirectWriteTextMeasure.Measure(
+            _dwriteFactoryHandle, this, null, text, maxWidthDip, wrapping, TextTrimming.None,
+            dpiScale > 0 ? (float)dpiScale : 1f, out _);
+    }
+
+    public bool TryRasterize(ReadOnlySpan<char> text, in Win32TextRasterizeRequest request, out TextBitmap bitmap)
+    {
+        if (_dwriteFactoryHandle == 0)
+        {
+            bitmap = default;
+            return false;
+        }
+
+        bitmap = DirectWriteTextRasterizer.Rasterize(
+            _dwriteFactoryHandle, this, text, request.WidthPx, request.HeightPx, request.Color,
+            request.HorizontalAlignment, request.VerticalAlignment, request.Wrapping, request.Trimming,
+            request.DpiScale > 0 ? (float)request.DpiScale : 1f, request.Buffer, request.InkInset);
+        return true;
+    }
+
+    public bool TryRasterizeSubpixel(ReadOnlySpan<char> text, in Win32TextRasterizeRequest request,
+        out Win32TextCoverage coverage)
+    {
+        if (_dwriteFactoryHandle == 0)
+        {
+            coverage = default;
+            return false;
+        }
+
+        return DirectWriteTextRasterizer.TryRasterizeSubpixel(
+            _dwriteFactoryHandle, this, text, request.WidthPx, request.HeightPx,
+            request.HorizontalAlignment, request.VerticalAlignment, request.Wrapping, request.Trimming,
+            request.DpiScale > 0 ? (float)request.DpiScale : 1f, request.InkInset, out coverage);
     }
 
     public unsafe bool TryAppendGlyphOutline(PathGeometry path, char ch, Point baselineOrigin, out double advance)

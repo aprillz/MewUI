@@ -73,6 +73,33 @@
   </ItemGroup>
 
   <!--
+    Win32 text engine. Selects which of the two text paths the GDI and MewVG.Win32 backends keep:
+    GDI (legacy family-name matching, no colour glyphs) or DirectWrite (typographic family matching,
+    colour emoji). Trim="true" hands the value to the trimmer as well as the runtime, so a trimmed
+    or NativeAOT publish drops whichever path the app did not select. Apps that reference neither
+    Win32 backend carry the switch in runtimeconfig.json and nothing reads it.
+
+    Remove first: an app that declares the same option would otherwise leave the item duplicated and
+    the value the trimmer sees undefined.
+  -->
+  <PropertyGroup>
+    <MewUIWin32TextEngine Condition="'$(MewUIWin32TextEngine)' == ''">Gdi</MewUIWin32TextEngine>
+    <_MewUIWin32DirectWriteText>false</_MewUIWin32DirectWriteText>
+    <_MewUIWin32DirectWriteText Condition="'$(MewUIWin32TextEngine)' == 'DirectWrite'">true</_MewUIWin32DirectWriteText>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Remove="Aprillz.MewUI.Win32.DirectWriteText.Enabled" />
+    <RuntimeHostConfigurationOption Include="Aprillz.MewUI.Win32.DirectWriteText.Enabled"
+                                    Value="$(_MewUIWin32DirectWriteText)" Trim="true" />
+  </ItemGroup>
+
+  <Target Name="_MewUIValidateWin32TextEngine" BeforeTargets="Build"
+          Condition="'$(MewUIWin32TextEngine)' != 'Gdi' And '$(MewUIWin32TextEngine)' != 'DirectWrite'">
+    <Error Text="MewUIWin32TextEngine must be Gdi or DirectWrite. Actual: '$(MewUIWin32TextEngine)'." />
+  </Target>
+
+  <!--
     Binding path generator interceptors. The compiler only honours interceptors whose namespace is
     allow-listed, so opt the generated namespace in here rather than asking every app to do it.
     This must live in targets, not props: nuget.g.props is imported before the project body, where

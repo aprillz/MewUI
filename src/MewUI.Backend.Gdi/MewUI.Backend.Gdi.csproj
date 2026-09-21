@@ -16,6 +16,10 @@
   <ItemGroup>
     <Compile Include="..\MewUI\Shared\Rendering\Gdi\*.cs" LinkBase="Rendering\Gdi" />
     <Compile Include="..\MewUI\Shared\Rendering\Gdi\Core\*.cs" LinkBase="Rendering\Gdi\Core" />
+    <Compile Include="..\MewUI\Shared\Rendering\Win32\*.cs" LinkBase="Rendering\Win32" />
+    <Compile Include="..\MewUI\Shared\Rendering\DirectWrite\**\*.cs" LinkBase="Rendering\DirectWrite" />
+    <Compile Include="..\MewUI\Shared\Native\Win32\DirectWrite\**\*.cs" LinkBase="Native\DirectWrite" />
+    <Compile Include="..\MewUI\Shared\Rendering\Common\TextBitmap.cs" LinkBase="Rendering\Common" />
     <Compile Include="..\MewUI\Shared\Rendering\Common\TextCacheKey.cs" LinkBase="Rendering\Common" />
     <Compile Include="..\MewUI\Shared\Rendering\Common\TextInkInsetPx.cs" LinkBase="Rendering\Common" />
     <Compile Include="..\MewUI\Shared\Native\Win32\User32.cs" LinkBase="Native" />
@@ -27,6 +31,13 @@
     <!-- Public types (Char32/Byte32) come from Platform.Win32 via ProjectReference; avoid duplicate compilation. -->
     <Compile Remove="..\MewUI\Shared\Native\Win32\Structs\InlineArrays.cs" />
     <Compile Include="..\MewUI\Shared\Native\Win32\Constants\*.cs" LinkBase="Native\Constants" />
+  </ItemGroup>
+
+  <!-- Feature-switch substitutions let the trimmer drop the unselected Win32 text path. -->
+  <ItemGroup>
+    <EmbeddedResource Include="ILLink.Substitutions.xml">
+      <LogicalName>ILLink.Substitutions.xml</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
 
 </Project>

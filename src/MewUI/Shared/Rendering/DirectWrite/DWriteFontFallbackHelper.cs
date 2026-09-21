@@ -1,7 +1,7 @@
 using Aprillz.MewUI.Native.Com;
 using Aprillz.MewUI.Native.DirectWrite;
 
-namespace Aprillz.MewUI.Rendering.Direct2D;
+namespace Aprillz.MewUI.Rendering.DirectWrite;
 
 /// <summary>
 /// Builds a custom IDWriteFontFallback that incorporates the user's

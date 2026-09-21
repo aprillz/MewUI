@@ -28,4 +28,8 @@
     </None>
   </ItemGroup>
 
+
+  <!-- Framework build policy, which carries the MewUIWin32TextEngine switch. -->
+  <Import Project="..\..\build\Aprillz.MewUI.targets" />
+
 </Project>
