@@ -253,7 +253,7 @@ var first = new TextBlock().Bind(TextBlock.TextProperty, order, x => x.Lines[0].
 | [**SVG**](extensions/MewUI.Svg/README.ko.md) | 순수 C# SVG 파싱/렌더링 (System.Drawing 비의존, AOT 호환) | `Aprillz.MewUI.Svg` |
 | [**Skia**](extensions/MewUI.Skia/README.ko.md) | `SkiaCanvasView` (SkiaSharp로 그리기) + GPU zero-copy 인터롭 | `Aprillz.MewUI.Skia` |
 | [**MewCharts**](extensions/MewUI.MewCharts/README.ko.md) | LiveChartsCore 엔진 기반 차트 (Cartesian/Pie/Polar), SkiaSharp 비의존 | `Aprillz.MewUI.MewCharts` |
-| [**Markdown**](extensions/MewUI.Markdown/README.md) | `MarkdownViewer` - Markdig 기반 네이티브 Markdown 렌더링: 표, 각주, 작업 목록, 복사 버튼이 있는 코드 블록, 링크, 이미지, 텍스트 선택 (웹 뷰 비의존) | `Aprillz.MewUI.Markdown` |
+| [**Markdown**](extensions/MewUI.Markdown/README.ko.md) | `MarkdownViewer` - Markdig 기반 네이티브 Markdown 렌더링: 표, 각주, 작업 목록, 복사 버튼이 있는 코드 블록, 링크, 이미지, 텍스트 선택 (웹 뷰 비의존) | `Aprillz.MewUI.Markdown` |
 | [**WebView2**](extensions/MewUI.WebView2.Win32/README.md) | Win32 WebView2 컨트롤 (Microsoft Edge WebView2 런타임 필요, Windows 전용) | `Aprillz.MewUI.WebView2.Win32` |
 
 **Skia 인터롭** - 사용 중인 백엔드에 맞는 zero-copy 브리지를 하나 추가하면 GPU 직행 경로가 켜집니다.
