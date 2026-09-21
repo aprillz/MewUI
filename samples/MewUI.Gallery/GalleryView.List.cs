@@ -52,19 +52,19 @@ partial class GalleryView
             Card(
                 "ListBox (WrapPresenter)",
                 ListBoxWrapPresenterCard()
-            )
+            ),
+
+            Card("ListBox (Search highlight)", ListBoxSearchHighlightDemo()),
+            Card("ItemsControl (WrapPresenter)", ItemsControlWrapPresenterCard()),
+            ChatVariableHeightCard()
         );
     }
 
     private FrameworkElement TreeViewPage() =>
         CardGrid(
             Card("TreeView", TreeViewCard()),
-            Card("TreeView (Async children)", AsyncTreeViewCard()));
-
-    private FrameworkElement ItemsControlPage() =>
-        CardGrid(
-            Card("ItemsControl (WrapPresenter)", ItemsControlWrapPresenterCard()),
-            ChatVariableHeightCard());
+            Card("TreeView (Async children)", AsyncTreeViewCard()),
+            Card("TreeView (Search highlight)", TreeViewSearchHighlightDemo()));
 
     private FrameworkElement ListBoxWrapPresenterCard()
         {
@@ -728,6 +728,129 @@ partial class GalleryView
                 _ => "Edge-case: superlongword_superlongword_superlongword_superlongword_superlongword"
             };
         }
+    }
+
+    private FrameworkElement ListBoxSearchHighlightDemo()
+    {
+        string[] controlNames =
+        [
+            "Button", "TextBox", "TextBlock", "TreeView", "ListBox", "ComboBox", "CheckBox",
+            "RadioButton", "Slider", "ProgressBar", "TabControl", "ToolTip", "ContextMenu",
+            "ScrollViewer", "MenuBar", "ToggleSwitch", "NumericUpDown", "ColorPicker"
+        ];
+        var listBox = new ListBox()
+            .Height(230)
+            .Items(controlNames);
+
+        return SearchHighlightDemo(listBox, highlight =>
+            listBox.ItemTemplate(new DelegateTemplate<string>(
+                build: ctx => new TextBlock().Register(ctx, "Text").CenterVertical(),
+                bind: (_, item, _, ctx) => highlight(ctx.Get<TextBlock>("Text"), item ?? ""))));
+    }
+
+    private FrameworkElement TreeViewSearchHighlightDemo()
+    {
+        var treeItems = new[]
+        {
+            new TreeViewNode("Controls",
+            [
+                new TreeViewNode("Button.cs"),
+                new TreeViewNode("TextBox.cs"),
+                new TreeViewNode("TreeView.cs"),
+                new TreeViewNode("ListBox.cs")
+            ]),
+            new TreeViewNode("Text",
+            [
+                new TreeViewNode("TextServices.cs"),
+                new TreeViewNode("ManagedTextEngine.cs"),
+                new TreeViewNode("ManagedTextRenderContext.cs"),
+                new TreeViewNode("TextViewLayout.cs")
+            ])
+        };
+        var treeView = new TreeView()
+            .Height(230)
+            .ItemsSource(treeItems);
+
+        var demo = SearchHighlightDemo(treeView, highlight =>
+            treeView.ItemTemplate<TreeViewNode>(
+                build: ctx => new TextBlock().Register(ctx, "Text").CenterVertical(),
+                bind: (_, item, _, ctx) => highlight(ctx.Get<TextBlock>("Text"), item.Text)));
+
+        foreach (var node in treeItems)
+        {
+            treeView.Expand(node);
+        }
+
+        return demo;
+    }
+
+    /// <summary>Hosts items under a search box; applyTemplate installs a template whose bind calls the given highlighter.</summary>
+    private static FrameworkElement SearchHighlightDemo(Element items, Action<Action<TextBlock, string>> applyTemplate)
+    {
+        string query = string.Empty;
+        var highlightColor = Color.FromArgb(110, 255, 184, 0);
+
+        // Paint spans repaint only, so the layout and measured width never change while typing.
+        void ApplyHighlight(TextBlock target, string text)
+        {
+            if (query.Length == 0 || !text.Contains(query, StringComparison.OrdinalIgnoreCase))
+            {
+                target.Text = text;
+                return;
+            }
+            target.Inlines.Clear();
+            int position = 0;
+            while (position < text.Length)
+            {
+                int match = text.IndexOf(query, position, StringComparison.OrdinalIgnoreCase);
+                if (match < 0)
+                {
+                    break;
+                }
+                if (match > position)
+                {
+                    target.Inlines.Add(new Run(text[position..match]));
+                }
+                target.Inlines.Add(new Run(text.Substring(match, query.Length)).Background(highlightColor));
+                position = match + query.Length;
+            }
+            if (position < text.Length)
+            {
+                target.Inlines.Add(new Run(text[position..]));
+            }
+        }
+
+        var description = new TextBlock()
+                   .DockBottom()
+                   .FontSize(ThemeFontSize.Small)
+                   .TextWrapping(TextWrapping.Wrap)
+                   .Text("Run.Background becomes a paint span behind the matched glyphs; items stay plain TextBlocks.");
+
+        // A fresh template instance is the public rebind trigger: the setter rebuilds realized
+        // containers while selection and expansion state stay on the control.
+        void ApplyTemplates()
+        {
+            applyTemplate(ApplyHighlight);
+            ApplyHighlight(description, description.Text);
+        }
+
+        ApplyTemplates();
+
+        var search = new TextBox()
+            .Placeholder("Type to highlight matches, e.g. box")
+            .OnTextChanged(text =>
+            {
+                query = text;
+                ApplyTemplates();
+            });
+
+        return new DockPanel()
+            .Width(260)
+            .Spacing(8)
+            .Children(
+                search.DockTop(),
+                description,
+                items);
     }
 }
 

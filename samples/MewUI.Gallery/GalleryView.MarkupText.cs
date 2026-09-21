@@ -82,20 +82,24 @@ partial class GalleryView
         return CardGrid(
             Card("Basic Inline Styles", MarkupExample(INLINE_STYLES), minWidth: 650),
             Card("Nested Styles and Restoration", MarkupExample(NESTED_STYLES), minWidth: 650),
+            Card("Combined Attributes", MarkupExample(ATTRIBUTE_STYLES), minWidth: 650),
+
             Card(
                 "Font, Size, and Weight",
                 MarkupExample(FONT_STYLES, options: new TextMarkupOptions("Courier New")),
                 minWidth: 650),
+
             Card("Fixed Color Formats", MarkupExample(COLOR_FORMATS), minWidth: 650),
             Card("Named Colors", MarkupExample(NAMED_COLORS), minWidth: 650),
-            Card("Combined Attributes", MarkupExample(ATTRIBUTE_STYLES), minWidth: 650),
             Card("Entities and Line Breaks", MarkupExample(ENTITIES), minWidth: 650),
-            Card("Malformed and Unknown Markup", MarkupExample(MALFORMED), minWidth: 650),
+
             Card(
                 "Wrapping",
                 MarkupExample(WRAPPING, resultWidth: 430),
                 minWidth: 650),
+
             Card("Superscript and Subscript", MarkupExample(SCRIPTS), minWidth: 650),
+
             Card(
                 "Run Baseline Offset",
                 new TextBlock
@@ -122,6 +126,9 @@ partial class GalleryView
                         new Run(" | "),
                         new Run("wrapped text keeps each run on its own shifted baseline across line breaks").BaselineOffset(4)),
                 minWidth: 650),
+
+            Card("Malformed and Unknown Markup", MarkupExample(MALFORMED), minWidth: 650),
+
             Card(
                 "Runtime Markup and Read-only Text",
                 new StackPanel()
@@ -147,7 +154,8 @@ partial class GalleryView
                             .FontSize(ThemeFontSize.Small)
                             .SemiBold(),
                         decodedText),
-                minWidth: 650));
+                minWidth: 650)
+        );
     }
 
     private FrameworkElement MarkupExample(

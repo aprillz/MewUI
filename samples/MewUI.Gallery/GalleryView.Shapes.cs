@@ -7,8 +7,6 @@ partial class GalleryView
 {
     private FrameworkElement ShapesPage() =>
         CardGrid(
-            RectangleCard(),
-
             Card(
                 "Ellipse",
                 new StackPanel()
@@ -40,6 +38,8 @@ partial class GalleryView
                             .StrokeStyle(new StrokeStyle { DashArray = [6, 4] })
                     )
             ),
+
+            RectangleCard(),
 
             Card(
                 "Path (SVG)",
@@ -105,39 +105,8 @@ partial class GalleryView
                             .Stroke(Color.FromRgb(100, 100, 100), 3)
                             .StrokeStyle(new StrokeStyle { DashArray = [8, 4, 2, 4] })
                     )
-            ),
-
-            Card(
-                "Prompt Icons",
-                PromptIconsCard(),
-                minWidth: 720
             )
         );
-
-    private FrameworkElement PromptIconsCard()
-        => new WrapPanel()
-            .Orientation(Orientation.Horizontal)
-            .Spacing(12)
-            .Children(
-                PromptIconTile("Question", new PromptIcon { Kind = PromptIconKind.Question }),
-                PromptIconTile("Info", new PromptIcon { Kind = PromptIconKind.Info }),
-                PromptIconTile("Warning", new PromptIcon { Kind = PromptIconKind.Warning }),
-                PromptIconTile("Error", new PromptIcon { Kind = PromptIconKind.Error }),
-                PromptIconTile("Success", new PromptIcon { Kind = PromptIconKind.Success }),
-                PromptIconTile("Shield", new PromptIcon { Kind = PromptIconKind.Shield }),
-                PromptIconTile("Crash", new PromptIcon { Kind = PromptIconKind.Crash })
-            );
-
-    private FrameworkElement PromptIconTile(string title, FrameworkElement icon)
-        => new StackPanel()
-            .Width(90)
-            .Vertical()
-            .Spacing(6)
-            .Children(
-                icon.Width(60).Height(60).Center(),
-
-                new TextBlock().Text(title).Center()
-            );
 
     private static PathGeometry BuildTriangle()
     {

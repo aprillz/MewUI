@@ -5,10 +5,57 @@ namespace Aprillz.MewUI.Gallery;
 
 partial class GalleryView
 {
-    private FrameworkElement CustomRenderingPage() =>
-        CardGrid(
+    private FrameworkElement CustomRenderingPage()
+    {
+        ConfettiOverlay confetti = new();
+        window.OverlayLayer.Add(confetti);
+
+        return CardGrid(
             Card("Offscreen", new SampleOffscreenControl { Height = 240, Width = 280 }),
-            Card("Async Rendering", AsyncConfettiContent()));
+            Card("Async Rendering", AsyncConfettiContent()),
+
+            Card("Confetti",
+                new StackPanel()
+                    .Vertical()
+                    .Spacing(8)
+                    .Children(
+                        new TextBlock()
+                            .Text("Port of WpfConfetti by caefale")
+                            .WithTheme((t, c) => c.Foreground(t.Palette.DisabledText))
+                            .FontSize(ThemeFontSize.Small),
+                        new Grid()
+                            .Columns("*,*")
+                            .Rows("Auto,Auto,Auto,Auto")
+                            .Spacing(4)
+                            .Children(
+                                new Button()
+                                    .Content("Burst")
+                                    .OnClick(() => confetti?.Burst())
+                                    .ColumnSpan(2),
+                                new Button()
+                                    .Content("Start Cannons")
+                                    .OnClick(() => confetti?.Cannons())
+                                    .Row(1),
+                                new Button()
+                                    .Content("Stop Cannons")
+                                    .OnClick(() => confetti?.StopCannons())
+                                    .Row(1).Column(1),
+                                new Button()
+                                    .Content("Start Rain")
+                                    .OnClick(() => confetti?.StartRain())
+                                    .Row(2),
+                                new Button()
+                                    .Content("Stop Rain")
+                                    .OnClick(() => confetti?.StopRain())
+                                    .Row(2).Column(1),
+                                new Button()
+                                    .Content("Clear All")
+                                    .OnClick(() => confetti?.Clear())
+                                    .Row(3).ColumnSpan(2)
+                            )
+                    ))
+        );
+    }
 
     private static readonly int[] ConfettiCountOptions = [500, 5_000, 50_000, 100_000];
 

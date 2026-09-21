@@ -183,7 +183,7 @@ partial class GalleryView : UserControl
 
     private sealed record NavEntry(NavigationItemKind Kind, string Title, Element? Icon, Func<FrameworkElement>? Page);
 
-    // Group headers separate sections; pages are selectable items with their own icon elements.
+    // Group headers separate the groups of pages; pages are selectable items with their own icon elements.
     private NavEntry[] NavEntries()
     {
         NavEntry Group(string title) => new(NavigationItemKind.Header, title, null, null);
@@ -192,46 +192,92 @@ partial class GalleryView : UserControl
         // Headers carry no icon; each selectable item uses a distinct icon.
         return
         [
-            Group("Basics"),
+            Group("Input"),
             Page("Buttons", ButtonsPage, "tap_single_regular"),
-            Page("Inputs", InputsPage, "textbox_regular"),
-            Page("Data Binding", DataBindingPage, "link_regular"),
-            Page("Drag & Drop", DragDropPage, "drag_regular"),
-            Page("Selection", SelectionPage, "multiselect_regular"),
-            Page("Typography", TypographyPage, "text_font_regular"),
-            Page("Markup Text", MarkupTextPage, "code_regular"),
-            Page("Styling", StylingPage, "color_regular"),
+            Page("Toggles", TogglesPage, "toggle_right_regular"),
+            Page("Text Input", TextInputPage, "textbox_regular"),
+            Page("Range", RangePage, "options_regular"),
+            Page("Pickers", PickersPage, "calendar_regular"),
 
-            Group("Navigation"),
-            Page("NavigationView", NavigationViewPage, "navigation_regular"),
+            Group("Text"),
+            Page("Fonts", FontsPage, "text_font_regular"),
+            Page("Text Layout", TextLayoutPage, "text_wrap_regular"),
+            Page("Markup Text", MarkupTextPage, "code_regular"),
 
             Group("Collections"),
             Page("Lists", ListsPage, "list_regular"),
             Page("TreeView", TreeViewPage, "text_bullet_list_tree_regular"),
             Page("GridView", GridViewPage, "grid_regular"),
-            Page("ItemsControl", ItemsControlPage, "collections_regular"),
 
             Group("Layout"),
             Page("Panels", PanelsPage, "dock_regular"),
-            Page("Layout", LayoutPage, "match_app_layout_regular"),
-            Page("Transform", TransformPage, "resize_regular"),
+            Page("Containers", ContainersPage, "match_app_layout_regular"),
+            Page("Navigation", NavigationPage, "navigation_regular"),
+
+            Group("Commands"),
+            Page("Menu", MenuPage, "line_horizontal_3_regular"),
+            Page("ToolBar", ToolBarPage, "wrench_regular"),
+
+            Group("Status"),
+            Page("Progress", ProgressPage, "spinner_ios_regular"),
+            Page("Overlay", OverlayPage, "layer_regular"),
 
             Group("Graphics"),
             Page("Shapes", ShapesPage, "shapes_regular"),
             Page("Icons", IconsPage, "icons_regular"),
             Page("Media", MediaPage, "image_library_regular"),
-            Page("Custom Rendering", CustomRenderingPage, "paint_brush_regular"),
+            Page("Transform", TransformPage, "resize_regular"),
             Page("Transitions", TransitionsPage, "arrow_sync_circle_regular"),
+            Page("Custom Rendering", CustomRenderingPage, "paint_brush_regular"),
 
             Group("Windowing"),
             Page("Window", WindowPage, "window_regular"),
-            Page("Menu", MenuPage, "options_regular"),
-            Page("ToolBar", ToolBarPage, "wrench_regular"),
             Page("MessageBox", MessageBoxPage, "alert_on_regular"),
             Page("File Dialog", FileDialogPage, "folder_open_regular"),
-            Page("ShowDialog", ShowDialogPage, "window_new_regular"),
-            Page("Overlay", OverlayPage, "layer_regular")
+
+            Group("Framework"),
+            Page("Data Binding", DataBindingPage, "link_regular"),
+            Page("Drag & Drop", DragDropPage, "drag_regular"),
+            Page("Styling", StylingPage, "color_regular"),
+            Page("DevTools", DevToolsPage, "bug_regular")
         ];
+    }
+
+    private sealed record SegmentItem(string Icon, string Label);
+
+    // Binds the icon fill to the inherited Foreground, so it follows selection, theme, and disabled
+    // dimming exactly like the text label. Inherited-value changes now notify property bindings, so
+    // this stays in sync; SolidColorBrush is a lightweight, non-disposable value descriptor.
+    private static PathShape SegmentIconShape(double size)
+    {
+        var shape = new PathShape()
+            .Stretch(Stretch.Uniform)
+            .Width(size).Height(size);
+
+        shape.Bind(Shape.FillProperty, shape, Control.ForegroundProperty,
+            (Color color) => new SolidColorBrush(color));
+        return shape;
+    }
+
+    // The icon set is drawn on standard grids and the resource carries no metadata, so the grid is the
+    // smallest standard one that covers the ink. Handing that to ViewBox keeps the margin the designer
+    // left: stretching to the ink instead scales every icon by however tightly it happens to be drawn.
+    private static readonly double[] _iconGrids = [16, 20, 24, 28, 32, 48];
+
+    private static Rect IconViewBox(PathGeometry geometry)
+    {
+        var ink = geometry.GetBounds();
+        double extent = Math.Max(ink.Right, ink.Bottom);
+
+        foreach (double grid in _iconGrids)
+        {
+            if (extent <= grid)
+            {
+                return new Rect(0, 0, grid, grid);
+            }
+        }
+
+        return new Rect(0, 0, extent, extent);
     }
 }
 

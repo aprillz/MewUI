@@ -58,36 +58,44 @@ partial class GalleryView
                     .Text(item => item.Name)
             );
 
-        return Card(
-            "Icons (Path)",
-            new DockPanel()
-                .Height(400)
-                .Spacing(6)
-                .Children(
-                    new StackPanel()
-                        .DockTop()
-                        .Horizontal()
-                        .Spacing(8)
-                        .Children(
-                            new TextBox()
-                                .Width(200)
-                                .Placeholder("Filter icons...")
-                                .BindText(query),
-                            new TextBlock()
-                                .BindText(countText)
-                                .CenterVertical()
-                                .FontSize(ThemeFontSize.Small),
+        return CardGrid(
+            Card(
+                "Icons (Path)",
+                new DockPanel()
+                    .Height(400)
+                    .Spacing(6)
+                    .Children(
+                        new StackPanel()
+                            .DockTop()
+                            .Horizontal()
+                            .Spacing(8)
+                            .Children(
+                                new TextBox()
+                                    .Width(200)
+                                    .Placeholder("Filter icons...")
+                                    .BindText(query),
+                                new TextBlock()
+                                    .BindText(countText)
+                                    .CenterVertical()
+                                    .FontSize(ThemeFontSize.Small),
 
-                            new TextBlock()
-                                .Text("Fluent System Icons by Microsoft (MIT License)")
-                                .WithTheme((t, c) => c.Foreground(t.Palette.DisabledText))
-                                .CenterVertical()
-                                .FontSize(ThemeFontSize.Small)
-                        ),
+                                new TextBlock()
+                                    .Text("Fluent System Icons by Microsoft (MIT License)")
+                                    .WithTheme((t, c) => c.Foreground(t.Palette.DisabledText))
+                                    .CenterVertical()
+                                    .FontSize(ThemeFontSize.Small)
+                            ),
 
-                    grid
-                ),
-            minWidth: 460
+                        grid
+                    ),
+                minWidth: 460
+            ),
+
+            Card(
+                "Prompt Icons",
+                PromptIconsCard(),
+                minWidth: 720
+            )
         );
     }
 
@@ -97,4 +105,29 @@ partial class GalleryView
         private PathGeometry? _geometry;
         public PathGeometry Geometry => _geometry ??= PathGeometry.Parse(pathData);
     }
+
+    private FrameworkElement PromptIconsCard()
+        => new WrapPanel()
+            .Orientation(Orientation.Horizontal)
+            .Spacing(12)
+            .Children(
+                PromptIconTile("Question", new PromptIcon { Kind = PromptIconKind.Question }),
+                PromptIconTile("Info", new PromptIcon { Kind = PromptIconKind.Info }),
+                PromptIconTile("Warning", new PromptIcon { Kind = PromptIconKind.Warning }),
+                PromptIconTile("Error", new PromptIcon { Kind = PromptIconKind.Error }),
+                PromptIconTile("Success", new PromptIcon { Kind = PromptIconKind.Success }),
+                PromptIconTile("Shield", new PromptIcon { Kind = PromptIconKind.Shield }),
+                PromptIconTile("Crash", new PromptIcon { Kind = PromptIconKind.Crash })
+            );
+
+    private FrameworkElement PromptIconTile(string title, FrameworkElement icon)
+        => new StackPanel()
+            .Width(90)
+            .Vertical()
+            .Spacing(6)
+            .Children(
+                icon.Width(60).Height(60).Center(),
+
+                new TextBlock().Text(title).Center()
+            );
 }

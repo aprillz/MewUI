@@ -6,9 +6,6 @@ partial class GalleryView
 {
     private FrameworkElement OverlayPage()
     {
-        ConfettiOverlay confetti = new();
-        window.OverlayLayer.Add(confetti);
-
         return CardGrid(
             Card(
                 "Toast",
@@ -27,6 +24,7 @@ partial class GalleryView
                             .OnClick(() => window.ShowToast($"Toast at {DateTime.Now:HH:mm:ss}"))
                     )
             ),
+
             Card(
                 "BusyIndicator",
                 new StackPanel()
@@ -41,46 +39,32 @@ partial class GalleryView
                             .OnClick(() => ShowBusyDemo(cancellable: true))
                     )
             ),
-            Card("Confetti",
+
+            Card(
+                "ToolTip",
+                new Button()
+                    .Content("Hover me")
+                    .ToolTip("ToolTip text")
+            ),
+
+            Card(
+                "Tooltip font isolation",
                 new StackPanel()
                     .Vertical()
                     .Spacing(8)
                     .Children(
                         new TextBlock()
-                            .Text("Port of WpfConfetti by caefale")
-                            .WithTheme((t, c) => c.Foreground(t.Palette.DisabledText))
+                            .Text("The button is 20pt Consolas. Hover it: the tooltip keeps the theme font, not the button's font. A popup no longer inherits the triggering control's font.")
+                            .TextWrapping(TextWrapping.Wrap)
                             .FontSize(ThemeFontSize.Small),
-                        new Grid()
-                            .Columns("*,*")
-                            .Rows("Auto,Auto,Auto,Auto")
-                            .Spacing(4)
-                            .Children(
-                                new Button()
-                                    .Content("Burst")
-                                    .OnClick(() => confetti?.Burst())
-                                    .ColumnSpan(2),
-                                new Button()
-                                    .Content("Start Cannons")
-                                    .OnClick(() => confetti?.Cannons())
-                                    .Row(1),
-                                new Button()
-                                    .Content("Stop Cannons")
-                                    .OnClick(() => confetti?.StopCannons())
-                                    .Row(1).Column(1),
-                                new Button()
-                                    .Content("Start Rain")
-                                    .OnClick(() => confetti?.StartRain())
-                                    .Row(2),
-                                new Button()
-                                    .Content("Stop Rain")
-                                    .OnClick(() => confetti?.StopRain())
-                                    .Row(2).Column(1),
-                                new Button()
-                                    .Content("Clear All")
-                                    .OnClick(() => confetti?.Clear())
-                                    .Row(3).ColumnSpan(2)
-                            )
-                    ))
+                        new Button()
+                            .Content("Hover me (20pt / Consolas)")
+                            .FontSize(20)
+                            .FontFamily("Consolas")
+                            .ToolTip("This tooltip stays in the theme font.")
+                            .HorizontalAlignment(HorizontalAlignment.Left)
+                    )
+            )
         );
     }
 

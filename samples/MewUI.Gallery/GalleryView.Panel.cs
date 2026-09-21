@@ -135,6 +135,30 @@ partial class GalleryView
                 minWidth: 320
             ),
 
+            Card(
+                "StackPanel Wrap Growth",
+                new Border()
+                    .Width(260)
+                    .Top()
+                    .Padding(8)
+                    .BorderThickness(1)
+                    .CornerRadius(8)
+                    .WithTheme((t, b) => b.Background(t.Palette.ContainerBackground).BorderBrush(t.Palette.ControlBorder))
+                    .Child(
+                        new StackPanel()
+                            .Vertical()
+                            .Spacing(6)
+                            .Children(
+                                new TextBlock()
+                                    .TextWrapping(TextWrapping.Wrap)
+                                    .Text("First wrapped label. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog."),
+                                new TextBlock()
+                                    .TextWrapping(TextWrapping.Wrap)
+                                    .Text("Second wrapped label. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog.")
+                            )
+                    )
+            ),
+
             PanelCard(
                 "SplitPanel",
                 new SplitPanel()
