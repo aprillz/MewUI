@@ -894,7 +894,7 @@ FrameworkElement BindSamples()
                         new ListBox()
                             .Ref(out var selectionListBox)
                             .Height(120)
-                            .ItemsSource(ItemsSource.Create(selectionItems))
+                            .ItemsSource(ItemsView.Create(selectionItems))
                             .BindSelectedIndex(vm.SelectedIndex),
 
                         new StackPanel()

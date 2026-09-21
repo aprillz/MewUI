@@ -611,7 +611,7 @@ internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSu
 
     /// <summary>
     /// Marks the FBO contents as newer than the CPU pixel mirror. Use after a GPU write
-    /// (e.g. <see cref="OpenGL.OpenGLGaussianBlur"/>) instead of an immediate readback -
+    /// (e.g. <c>OpenGLGaussianBlur</c>) instead of an immediate readback -
     /// the next CPU consumer of <c>_pixels</c> (Lock / CopyPixels / GetPixelSpan) flushes
     /// it via <see cref="FlushFboReadbackIfNeeded"/>. Folds N per-filter sync points into
     /// at most one when many GPU passes feed a single CPU consumer.
