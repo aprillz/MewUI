@@ -214,10 +214,11 @@ var first = new TextBlock().Bind(TextBlock.TextProperty, order, x => x.Lines[0].
 
 컨트롤(구현됨):
 - `Button`, `ToggleButton`, `RepeatButton`, `SplitButton`, `DropDownButton`
-- `Label`, `TextBlock`, `Image`
+- `SegmentedControl`, `ButtonGroup`
+- `Label`, `TextBlock`, `MarkupTextBlock`, `Image`
 - `TextBox`, `MultiLineTextBox`, `SyntaxViewer`, `PasswordBox`
 - `CheckBox`, `RadioButton`, `ToggleSwitch`
-- `ComboBox`, `ListBox`, `TreeView`, `GridView`
+- `ComboBox`, `ListBox`, `ItemsControl`, `TreeView`, `GridView`
 - `Slider`, `ProgressBar`, `ProgressRing`, `NumericUpDown`
 - `TabControl`, `GroupBox`, `Expander`, `Border`
 - `ColorPicker`, `DatePicker`, `Calendar`
@@ -225,6 +226,9 @@ var first = new TextBlock().Bind(TextBlock.TextProperty, order, x => x.Lines[0].
 - `ToolBar` (선언한 밴드에 명령 그룹, 그립으로 끌어 재배치)
 - `NavigationView`
 - `ScrollViewer`
+- `ContentControl`, `UserControl`, `TransitionContentControl`
+- `Popup`, `Separator`
+- `MessageBox`, `FileDialog`
 - `Window`, `DispatcherTimer`
 
 패널:
