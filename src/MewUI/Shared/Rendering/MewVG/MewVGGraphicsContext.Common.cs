@@ -7,11 +7,11 @@ using Aprillz.MewVG.Tess;
 namespace Aprillz.MewUI.Rendering.MewVG;
 
 #if MEWUI_MEWVG_MACOS
-internal sealed partial class MewVGMacOSGraphicsContext : GraphicsContextBase, ITransparentDamageContext, IOpaqueDamageContext
+internal sealed partial class MewVGMacOSGraphicsContext : GraphicsContextBase, ITransparentDirtyRectContext, IOpaqueDirtyRectContext
 #elif MEWUI_MEWVG_X11
-internal sealed partial class MewVGX11GraphicsContext : GraphicsContextBase, ITransparentDamageContext, IOpaqueDamageContext
+internal sealed partial class MewVGX11GraphicsContext : GraphicsContextBase, ITransparentDirtyRectContext, IOpaqueDirtyRectContext
 #else
-internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, ITransparentDamageContext, IOpaqueDamageContext
+internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, ITransparentDirtyRectContext, IOpaqueDirtyRectContext
 #endif
 {
 #if MEWUI_MEWVG_MACOS
@@ -371,10 +371,10 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
         _vg.Restore();
     }
 
-    void ITransparentDamageContext.ClearRectangleToTransparent(Rect rect)
+    void ITransparentDirtyRectContext.ClearRectangleToTransparent(Rect rect)
         => ClearRectangleCore(rect, new NVGcolor(0, 0, 0, 0));
 
-    void IOpaqueDamageContext.ClearRectangle(Rect rect, Color color)
+    void IOpaqueDirtyRectContext.ClearRectangle(Rect rect, Color color)
         => ClearRectangleCore(rect, ToNvgColor(color));
 
     private void ClearRectangleCore(Rect rect, NVGcolor color)

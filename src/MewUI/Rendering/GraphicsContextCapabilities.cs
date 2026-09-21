@@ -6,7 +6,7 @@ namespace Aprillz.MewUI.Rendering;
 /// alpha that was already there, so the old pixels show through. A context that does not implement
 /// it keeps its window on the whole-frame immediate path.
 /// </summary>
-internal interface ITransparentDamageContext
+internal interface ITransparentDirtyRectContext
 {
     /// <summary>
     /// Writes zero to every channel of <paramref name="rect"/>, which is in the target's own
@@ -18,10 +18,10 @@ internal interface ITransparentDamageContext
 
 /// <summary>
 /// A context that can overwrite a rectangle of its target with one colour, alpha included.
-/// Repainting part of an opaque window needs this so the damaged box starts from the window
+/// Repainting part of an opaque window needs this so the dirty box starts from the window
 /// background instead of the pixels the previous frame left behind.
 /// </summary>
-internal interface IOpaqueDamageContext
+internal interface IOpaqueDirtyRectContext
 {
     /// <summary>
     /// Writes <paramref name="color"/> to every channel of <paramref name="rect"/>, which is in the

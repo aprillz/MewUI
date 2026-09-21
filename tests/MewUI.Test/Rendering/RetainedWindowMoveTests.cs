@@ -74,7 +74,7 @@ public sealed class RetainedWindowMoveTests
             window.RenderFrameToSurface(surface);
         }
 
-        var damage = window.LastRetainedDamage;
+        var dirtyRect = window.LastRetainedDirtyRect;
 
         using var reference = Surface(factory);
         window.RenderReferenceFrameToSurface(reference);
@@ -90,6 +90,6 @@ public sealed class RetainedWindowMoveTests
         }
 
         Assert.AreEqual(0, differing, $"{label}: {differing} pixels differ from a frame drawn straight from the visuals");
-        return damage;
+        return dirtyRect;
     }
 }

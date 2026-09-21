@@ -74,12 +74,12 @@ public sealed class RetainedPopupSurfaceTests
         tiles[2].InvalidateVisual();
         popupWindow.RenderFrameToSurface(surface);
 
-        var damage = popupWindow.LastRetainedDamage;
-        Assert.IsNotNull(damage, $"one item changed and the popup drew its whole frame: {popupWindow.LastWholeFrameReason}");
+        var dirtyRect = popupWindow.LastRetainedDirtyRect;
+        Assert.IsNotNull(dirtyRect, $"one item changed and the popup drew its whole frame: {popupWindow.LastWholeFrameReason}");
         double expectedTop = (tiles[2].Bounds.Y - origin.Y) * portalScale;
         Assert.IsTrue(
-            damage.Value.Height <= tiles[2].Bounds.Height * portalScale + 2 && Math.Abs(damage.Value.Y - expectedTop) <= 1,
-            $"the damage {damage} is not the changed item, expected top {expectedTop} in the popup's own coordinates");
+            dirtyRect.Value.Height <= tiles[2].Bounds.Height * portalScale + 2 && Math.Abs(dirtyRect.Value.Y - expectedTop) <= 1,
+            $"the dirty region {dirtyRect} is not the changed item, expected top {expectedTop} in the popup's own coordinates");
         AssertMatchesReference(factory, popupWindow, surface, pixelWidth, pixelHeight, "after one item changed");
     }
 

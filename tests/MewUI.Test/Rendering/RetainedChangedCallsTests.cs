@@ -47,19 +47,19 @@ public sealed class RetainedChangedCallsTests
         window.PerformLayout();
         window.RenderFrameToSurface(surface);
 
-        var damage = window.LastRetainedDamage;
+        var dirtyRect = window.LastRetainedDirtyRect;
         Assert.IsTrue(
-            damage is Rect area && area.Height <= ROW_HEIGHT * 3,
-            $"the highlight moved one row and the frame repainted {damage?.ToString() ?? "everything"} ({window.LastWholeFrameReason})");
+            dirtyRect is Rect area && area.Height <= ROW_HEIGHT * 3,
+            $"the highlight moved one row and the frame repainted {dirtyRect?.ToString() ?? "everything"} ({window.LastWholeFrameReason})");
 
         rows.HotRow = -1;
         window.PerformLayout();
         window.RenderFrameToSurface(surface);
 
-        damage = window.LastRetainedDamage;
+        dirtyRect = window.LastRetainedDirtyRect;
         Assert.IsTrue(
-            damage is Rect cleared && cleared.Height <= ROW_HEIGHT * 2,
-            $"the highlight went away and the frame repainted {damage?.ToString() ?? "everything"} ({window.LastWholeFrameReason})");
+            dirtyRect is Rect cleared && cleared.Height <= ROW_HEIGHT * 2,
+            $"the highlight went away and the frame repainted {dirtyRect?.ToString() ?? "everything"} ({window.LastWholeFrameReason})");
 
         AssertMatchesReference(factory, window, surface);
     }

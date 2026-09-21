@@ -8,7 +8,7 @@ namespace MewUI.Test.Rendering;
 
 /// <summary>
 /// Validates that an item's visual state reaches the surface through the container that owns it:
-/// changing one item's selection or hover must re-record that container alone, and must damage only
+/// changing one item's selection or hover must re-record that container alone, and must mark only
 /// the area that container covers. The state goes through the container's style, as it does in a
 /// list, so the containers stand in a window.
 /// Not parallelizable: assigns the process-wide Application.DefaultGraphicsFactory.
@@ -47,15 +47,15 @@ public sealed class RetainedItemScopeTests
             window.RetainedStatistics.ContentRecordCount,
             "a selection change re-recorded more than the container that owns it");
 
-        Assert.IsTrue(window.LastRetainedDamage is Rect, $"the selection change repainted the whole frame ({window.LastWholeFrameReason})");
-        var damage = (Rect)window.LastRetainedDamage!;
-        Assert.IsTrue(damage.IntersectsWith(containers[2].Bounds));
+        Assert.IsTrue(window.LastRetainedDirtyRect is Rect, $"the selection change repainted the whole frame ({window.LastWholeFrameReason})");
+        var dirtyRect = (Rect)window.LastRetainedDirtyRect!;
+        Assert.IsTrue(dirtyRect.IntersectsWith(containers[2].Bounds));
         Assert.IsFalse(
-            damage.IntersectsWith(containers[0].Bounds),
-            $"the damage {damage} reaches an item that did not change at {containers[0].Bounds}");
+            dirtyRect.IntersectsWith(containers[0].Bounds),
+            $"the dirty region {dirtyRect} reaches an item that did not change at {containers[0].Bounds}");
         Assert.IsFalse(
-            damage.IntersectsWith(containers[4].Bounds),
-            $"the damage {damage} reaches an item that did not change at {containers[4].Bounds}");
+            dirtyRect.IntersectsWith(containers[4].Bounds),
+            $"the dirty region {dirtyRect} reaches an item that did not change at {containers[4].Bounds}");
     }
 
     [TestMethod]

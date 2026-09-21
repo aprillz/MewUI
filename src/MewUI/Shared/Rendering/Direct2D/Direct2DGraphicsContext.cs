@@ -12,7 +12,7 @@ using static Aprillz.MewUI.Rendering.GradientBrushHelper;
 
 namespace Aprillz.MewUI.Rendering.Direct2D;
 
-internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITransparentDamageContext, IOpaqueDamageContext, IGroupOpacityContext, IBoundedOpaqueBackdropContext
+internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITransparentDirtyRectContext, IOpaqueDirtyRectContext, IGroupOpacityContext, IBoundedOpaqueBackdropContext
 {
     private const int D2DERR_RECREATE_TARGET = unchecked((int)0x8899000C);
     private const int D2DERR_WRONG_RESOURCE_DOMAIN = unchecked((int)0x88990015);
@@ -506,10 +506,10 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITra
         D2D1VTable.Clear((ID2D1RenderTarget*)_renderTarget, ToColorF(color));
     }
 
-    void ITransparentDamageContext.ClearRectangleToTransparent(Rect rect)
+    void ITransparentDirtyRectContext.ClearRectangleToTransparent(Rect rect)
         => ClearRectangleCore(rect, new D2D1_COLOR_F(0, 0, 0, 0));
 
-    void IOpaqueDamageContext.ClearRectangle(Rect rect, Color color)
+    void IOpaqueDirtyRectContext.ClearRectangle(Rect rect, Color color)
         => ClearRectangleCore(rect, ToColorF(color));
 
     private void ClearRectangleCore(Rect rect, D2D1_COLOR_F color)

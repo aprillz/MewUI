@@ -295,6 +295,6 @@ public sealed class RetainedAnimationSweepTests
         Assert.AreEqual(
             0,
             differing,
-            $"{label}: {differing} pixels differ from a frame drawn straight from the visuals, inside ({minX},{minY})-({maxX},{maxY}); damage {string.Join(" ", window.LastRetainedDamageAreas)}");
+            $"{label}: {differing} pixels differ from a frame drawn straight from the visuals, inside ({minX},{minY})-({maxX},{maxY}); dirty region {string.Join(" ", window.LastRetainedDirtyRects)}");
     }
 }

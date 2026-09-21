@@ -164,17 +164,17 @@ public sealed class RetainedPartialRepaintTests
                 counts.Whole,
                 $"a hover drew {counts.Whole} whole frames (partial {counts.Partial}, untouched {counts.Untouched})");
 
-            var damage = window.LastRetainedDamage;
-            if (damage is Rect repainted && repainted.Width > 0)
+            var dirtyRect = window.LastRetainedDirtyRect;
+            if (dirtyRect is Rect repainted && repainted.Width > 0)
             {
                 double clientArea = window.ClientSize.Width * window.ClientSize.Height;
                 Assert.IsFalse(
                     repainted.Contains(new Point(second.Bounds.X + 2, second.Bounds.Y + 2)),
-                    $"the damage {repainted} covers the button the pointer never reached at {second.Bounds}");
+                    $"the dirty region {repainted} covers the button the pointer never reached at {second.Bounds}");
                 Assert.IsLessThan(
                     clientArea / 2,
                     repainted.Width * repainted.Height,
-                    $"the damage {repainted} covers more than half of the {window.ClientSize} client area");
+                    $"the dirty region {repainted} covers more than half of the {window.ClientSize} client area");
             }
         });
     });

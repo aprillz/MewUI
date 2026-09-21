@@ -40,15 +40,15 @@ internal sealed class RenderSceneStatistics
 internal sealed class RenderScene : IDisposable
 {
     private readonly Dictionary<UIElement, VisualNode> _nodes = new(ReferenceEqualityComparer.Instance);
-    private BoundsAccumulator _damage;
-    private readonly DamageRegion _damageRegion = new();
+    private BoundsAccumulator _dirtyBounds;
+    private readonly DirtyRegion _dirtyRegion = new();
 
     internal UIElement? Root { get; set; }
 
     /// <summary>
     /// The visuals drawn over <see cref="Root"/> on the same surface, in the order they are drawn:
     /// adorners, popups shown inside the surface, overlays. They are roots of the same scene, so they
-    /// take part in the same update and the same damage as the body.
+    /// take part in the same update and the same dirty region as the body.
     /// </summary>
     internal IReadOnlyList<UIElement> LayerRoots { get; set; } = [];
 
@@ -68,31 +68,31 @@ internal sealed class RenderScene : IDisposable
     /// <summary>Device the recorded data belongs to. Recorded resources do not survive a change.</summary>
     internal int DeviceGeneration { get; private set; }
 
-    /// <summary>Surface-space area the last update changed, valid while <see cref="IsFullDamage"/> is false.</summary>
-    internal Rect DamageBounds => _damage.Result;
+    /// <summary>Surface-space area the last update changed, valid while <see cref="IsFullyDirty"/> is false.</summary>
+    internal Rect DirtyBounds => _dirtyBounds.Result;
 
-    /// <summary>The same damage as separate areas, which is what a frame repaints.</summary>
-    internal DamageRegion DamageRegion => _damageRegion;
+    /// <summary>The same dirty region as separate areas, which is what a frame repaints.</summary>
+    internal DirtyRegion DirtyRegion => _dirtyRegion;
 
     /// <summary>True when the update could not bound what it changed, so the whole surface is stale.</summary>
-    internal bool IsFullDamage { get; private set; }
+    internal bool IsFullyDirty { get; private set; }
 
-    internal bool HasDamage => IsFullDamage || DamageBounds.Width > 0;
+    internal bool HasDirtyRegion => IsFullyDirty || DirtyBounds.Width > 0;
 
     /// <summary>Records that an area of the surface no longer matches the scene.</summary>
-    internal void AddDamage(Rect bounds)
+    internal void AddDirtyRect(Rect bounds)
     {
-        _damage.Add(bounds);
-        _damageRegion.Add(bounds);
+        _dirtyBounds.Add(bounds);
+        _dirtyRegion.Add(bounds);
     }
 
-    internal void RequestFullDamage() => IsFullDamage = true;
+    internal void MarkFullyDirty() => IsFullyDirty = true;
 
-    internal void ResetDamage()
+    internal void ResetDirtyRegion()
     {
-        _damage = default;
-        _damageRegion.Clear();
-        IsFullDamage = false;
+        _dirtyBounds = default;
+        _dirtyRegion.Clear();
+        IsFullyDirty = false;
     }
 
     /// <summary>Opens the pass an update lands in and returns its id.</summary>
@@ -113,7 +113,7 @@ internal sealed class RenderScene : IDisposable
         }
 
         DeviceGeneration = generation;
-        RequestFullDamage();
+        MarkFullyDirty();
         foreach (var node in _nodes.Values)
         {
             node.ClearSlots();
@@ -182,7 +182,7 @@ internal sealed class RenderScene : IDisposable
             var node = FindNode(removed[index]);
             if (node != null)
             {
-                AddDamage(node.SurfaceSubtreeBounds);
+                AddDirtyRect(node.SurfaceSubtreeBounds);
             }
 
             RemoveNode(removed[index]);

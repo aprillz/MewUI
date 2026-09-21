@@ -65,7 +65,7 @@ public partial class Window
     }
 
     /// <summary>Area the last frame repainted, or null when that frame was drawn whole.</summary>
-    internal Rect? LastRetainedDamage { get; private set; }
+    internal Rect? LastRetainedDirtyRect { get; private set; }
 
     /// <summary>How many frames this window drew whole, repainted part of, and found nothing to repaint in.</summary>
     internal readonly record struct RetainedFrameCounts(int Whole, int Partial, int Untouched);
@@ -77,16 +77,16 @@ public partial class Window
     /// <summary>How many scene updates were rejected and left the previous scene in place.</summary>
     internal int RejectedSceneUpdates => _rejectedSceneUpdates;
 
-    internal const double WHOLE_FRAME_DAMAGE_RATIO = 0.85;
+    internal const double WHOLE_FRAME_DIRTY_RATIO = 0.85;
 
     /// <summary>Why the last frame that painted the whole surface did so.</summary>
     internal string? LastWholeFrameReason { get; private set; }
 
-    // The separate areas the current frame repaints; their union is LastRetainedDamage.
-    private readonly List<Rect> _frameDamageAreas = [];
+    // The separate areas the current frame repaints; their union is LastRetainedDirtyRect.
+    private readonly List<Rect> _frameDirtyRects = [];
 
     /// <summary>The separate areas the last partial frame repainted.</summary>
-    internal IReadOnlyList<Rect> LastRetainedDamageAreas => _frameDamageAreas;
+    internal IReadOnlyList<Rect> LastRetainedDirtyRects => _frameDirtyRects;
 
     private int _wholeFrames;
     private int _partialFrames;
@@ -111,7 +111,7 @@ public partial class Window
 
     // Each frame that paints takes the next colour, so a repaint of the same area shows as a change of
     // colour and two frames in a row never look like one.
-    private static readonly Color[] _damageMarkColors =
+    private static readonly Color[] _dirtyMarkColors =
     [
         Color.FromArgb(255, 255, 64, 64),
         Color.FromArgb(255, 64, 200, 64),
@@ -122,9 +122,9 @@ public partial class Window
     ];
 
     // The areas the newest painting frame repainted, in that frame's colour.
-    private readonly List<Rect> _damageMarks = [];
-    private bool _damageOverlayEnabled;
-    private int _damageMarkColorIndex;
+    private readonly List<Rect> _dirtyMarks = [];
+    private bool _dirtyRegionOverlayEnabled;
+    private int _dirtyMarkColorIndex;
 
     // What the scene had counted when the newest painting frame began, and what that frame added.
     private int _visitedAtFrameStart;
@@ -140,20 +140,20 @@ public partial class Window
     /// replayed. The overlay only reads what a frame did. It asks for no frame, and it draws over the
     /// frame on its way to the screen, never into the surface that keeps the frame.
     /// </summary>
-    internal bool DamageOverlayEnabled => _damageOverlayEnabled || (_hostedPortalRoot != null && Owner?.DamageOverlayEnabled == true);
+    internal bool DirtyRegionOverlayEnabled => _dirtyRegionOverlayEnabled || (_hostedPortalRoot != null && Owner?.DirtyRegionOverlayEnabled == true);
 
     private void RegisterRetainedDiagnostics()
     {
         // The overlay draws with ordinary commands, so a release build can show it too.
         InputMap.Map(
             new KeyGesture(Key.D, ModifierKeys.Primary | ModifierKeys.Shift),
-            ToggleDamageOverlay);
+            ToggleDirtyRegionOverlay);
     }
 
-    internal void ToggleDamageOverlay()
+    internal void ToggleDirtyRegionOverlay()
     {
-        _damageOverlayEnabled = !_damageOverlayEnabled;
-        _damageMarks.Clear();
+        _dirtyRegionOverlayEnabled = !_dirtyRegionOverlayEnabled;
+        _dirtyMarks.Clear();
         _presentedFrameLost = true;
 
         // The frame moves between the target's own buffer and a surface of its own, and neither holds
@@ -173,7 +173,7 @@ public partial class Window
     /// </summary>
     private bool TryRenderFrameWithOverlay(IRenderSurface surface, Size clientSize)
     {
-        bool enabled = DamageOverlayEnabled && !_drawingReferenceFrame;
+        bool enabled = DirtyRegionOverlayEnabled && !_drawingReferenceFrame;
         if (enabled != _overlayWasEnabled)
         {
             // The frame moves between the handed surface and this window's own, and neither holds what
@@ -210,7 +210,7 @@ public partial class Window
             {
                 context.Clear(AllowsTransparency ? Color.Transparent : EffectiveOpaqueBackground);
                 context.DrawImage(view, new Rect(0, 0, clientSize.Width, clientSize.Height));
-                DrawDamageMarks(context);
+                DrawDirtyMarks(context);
             }
             finally
             {
@@ -226,25 +226,25 @@ public partial class Window
     }
 
     /// <summary>Notes what the frame being built repaints, to be shown when it reaches the screen.</summary>
-    private void NoteDamageMarks(Rect? damage, Size clientSize)
+    private void NoteDirtyMarks(Rect? dirtyRect, Size clientSize)
     {
-        if (_renderScene == null || !DamageOverlayEnabled)
+        if (_renderScene == null || !DirtyRegionOverlayEnabled)
         {
-            _damageMarks.Clear();
+            _dirtyMarks.Clear();
             return;
         }
 
         // Only what the newest painting frame did is shown. Marks of earlier frames pile up into a
         // picture nobody can read; the colour changing from frame to frame already tells them apart.
-        _damageMarkColorIndex = (_damageMarkColorIndex + 1) % _damageMarkColors.Length;
-        _damageMarks.Clear();
-        if (damage == null)
+        _dirtyMarkColorIndex = (_dirtyMarkColorIndex + 1) % _dirtyMarkColors.Length;
+        _dirtyMarks.Clear();
+        if (dirtyRect == null)
         {
-            _damageMarks.Add(new Rect(0, 0, clientSize.Width, clientSize.Height));
+            _dirtyMarks.Add(new Rect(0, 0, clientSize.Width, clientSize.Height));
         }
         else
         {
-            _damageMarks.AddRange(_frameDamageAreas);
+            _dirtyMarks.AddRange(_frameDirtyRects);
         }
     }
 
@@ -258,22 +258,22 @@ public partial class Window
     }
 
     /// <summary>Draws the tint and the counts over a frame on its way to the screen.</summary>
-    private void DrawDamageMarks(IGraphicsContext context)
+    private void DrawDirtyMarks(IGraphicsContext context)
     {
-        if (!DamageOverlayEnabled)
+        if (!DirtyRegionOverlayEnabled)
         {
             return;
         }
 
-        var color = WithAlpha(_damageMarkColors[_damageMarkColorIndex], DAMAGE_TINT_ALPHA);
-        for (int index = 0; index < _damageMarks.Count; index++)
+        var color = WithAlpha(_dirtyMarkColors[_dirtyMarkColorIndex], DIRTY_TINT_ALPHA);
+        for (int index = 0; index < _dirtyMarks.Count; index++)
         {
-            context.FillRectangle(LayoutRounding.SnapViewportRectToPixels(_damageMarks[index], DpiScale), color);
+            context.FillRectangle(LayoutRounding.SnapViewportRectToPixels(_dirtyMarks[index], DpiScale), color);
         }
 
         // A frame that painted nothing leaves the counts of the last one that did, like the tint.
         var statistics = _renderScene?.Statistics;
-        if (statistics != null && _damageMarks.Count > 0)
+        if (statistics != null && _dirtyMarks.Count > 0)
         {
             _frameVisited = Math.Max(0, statistics.CapturedNodeCount - _visitedAtFrameStart);
             _frameRecorded = Math.Max(0, statistics.ContentRecordCount - _recordedAtFrameStart);
@@ -304,7 +304,7 @@ public partial class Window
         DrawEngineText(context, text.WrittenSpan, panel.Deflate(new Thickness(PAD)), Color.White, transient: true);
     }
 
-    private const double DAMAGE_TINT_ALPHA = 96;
+    private const double DIRTY_TINT_ALPHA = 96;
 
     private static Color WithAlpha(Color color, double alpha)
         => Color.FromArgb((byte)Math.Clamp(alpha, 0, 255), color.R, color.G, color.B);
@@ -317,7 +317,7 @@ public partial class Window
     private Rect? UpdateRetainedScene(IGraphicsContext context, IRenderTarget target, UIElement root, bool isPortal)
     {
         _retainedSceneReady = false;
-        LastRetainedDamage = null;
+        LastRetainedDirtyRect = null;
 
         if (_drawingReferenceFrame)
         {
@@ -331,8 +331,8 @@ public partial class Window
         // Recorded resources belong to the device they were taken from.
         _renderScene.SetDeviceGeneration(DeviceGeneration);
 
-        // The damage of the frame being drawn now, not of every frame since the scene was built.
-        _renderScene.ResetDamage();
+        // The dirty region of the frame being drawn now, not of every frame since the scene was built.
+        _renderScene.ResetDirtyRegion();
 
         var recorder = new RenderDataRecorder(context) { SuppressDrawing = true };
 
@@ -358,54 +358,54 @@ public partial class Window
         if (_consecutiveRejectedUpdates >= REJECTIONS_BEFORE_DRAWING_DIRECTLY)
         {
             // The frames drawn directly meanwhile are not what the target was keeping for the scene.
-            _renderScene.RequestFullDamage();
+            _renderScene.MarkFullyDirty();
         }
 
         _consecutiveRejectedUpdates = 0;
         _retainedSceneReady = true;
 
-        if (_renderScene.IsFullDamage || !CanRepaintPartOfTheFrame(context, target))
+        if (_renderScene.IsFullyDirty || !CanRepaintPartOfTheFrame(context, target))
         {
-            LastWholeFrameReason = _renderScene.IsFullDamage ? "the scene asked for the whole frame" : "the target does not keep its contents";
+            LastWholeFrameReason = _renderScene.IsFullyDirty ? "the scene asked for the whole frame" : "the target does not keep its contents";
             _wholeFrames++;
             return null;
         }
 
-        var damage = _renderScene.DamageBounds;
-        if (damage.Width <= 0 || damage.Height <= 0)
+        var dirtyRect = _renderScene.DirtyBounds;
+        if (dirtyRect.Width <= 0 || dirtyRect.Height <= 0)
         {
             // Nothing changed anywhere, so the frame the target still holds is already this frame.
             _untouchedFrames++;
-            LastRetainedDamage = default(Rect);
-            return LastRetainedDamage;
+            LastRetainedDirtyRect = default(Rect);
+            return LastRetainedDirtyRect;
         }
 
         // Past this share of the surface a frame that repaints areas costs as much as one that repaints
-        // everything, which has no erasing and no clipping to do (agent/retained-redesign/damage-cost.md).
+        // everything, which has no erasing and no clipping to do (agent/retained-redesign/dirty-region-cost.md).
         double surfaceArea = (target.PixelWidth / Math.Max(1.0, target.DpiScale)) * (target.PixelHeight / Math.Max(1.0, target.DpiScale));
-        if (_renderScene.DamageRegion.TotalArea >= surfaceArea * WHOLE_FRAME_DAMAGE_RATIO)
+        if (_renderScene.DirtyRegion.TotalArea >= surfaceArea * WHOLE_FRAME_DIRTY_RATIO)
         {
-            LastWholeFrameReason = $"the damage {_renderScene.DamageBounds} covers most of the surface";
+            LastWholeFrameReason = $"the dirty region {_renderScene.DirtyBounds} covers most of the surface";
             _wholeFrames++;
             return null;
         }
 
-        if (_renderScene.DamageRegion.TotalArea > LargestPartialRepaintArea)
+        if (_renderScene.DirtyRegion.TotalArea > LargestPartialRepaintArea)
         {
-            LargestPartialRepaintArea = _renderScene.DamageRegion.TotalArea;
-            LargestPartialRepaint = damage;
+            LargestPartialRepaintArea = _renderScene.DirtyRegion.TotalArea;
+            LargestPartialRepaint = dirtyRect;
         }
 
         _partialFrames++;
-        _frameDamageAreas.Clear();
-        var areas = _renderScene.DamageRegion.Areas;
+        _frameDirtyRects.Clear();
+        var areas = _renderScene.DirtyRegion.Areas;
         for (int index = 0; index < areas.Count; index++)
         {
-            _frameDamageAreas.Add(LayoutRounding.SnapViewportRectToPixels(areas[index], DpiScale));
+            _frameDirtyRects.Add(LayoutRounding.SnapViewportRectToPixels(areas[index], DpiScale));
         }
 
-        LastRetainedDamage = LayoutRounding.SnapViewportRectToPixels(damage, DpiScale);
-        return LastRetainedDamage;
+        LastRetainedDirtyRect = LayoutRounding.SnapViewportRectToPixels(dirtyRect, DpiScale);
+        return LastRetainedDirtyRect;
     }
 
     private readonly List<UIElement> _layerRoots = [];
@@ -413,7 +413,7 @@ public partial class Window
     /// <summary>
     /// Lists what this surface draws over its body, in drawing order: adorners, the popups shown inside
     /// the surface, overlays, and the performance monitor last. They go into the scene as roots, so they
-    /// share its update and its damage with the body.
+    /// share its update and its dirty region with the body.
     /// </summary>
     private List<UIElement> CollectLayerRoots()
     {
@@ -446,10 +446,10 @@ public partial class Window
     }
 
     /// <summary>Whether this frame found nothing to repaint at all.</summary>
-    internal static bool RepaintsNothing(Rect? damage) => damage is Rect area && (area.Width <= 0 || area.Height <= 0);
+    internal static bool RepaintsNothing(Rect? dirtyRect) => dirtyRect is Rect area && (area.Width <= 0 || area.Height <= 0);
 
-    /// <summary>Draws the body from the scene, restricted to the damage when the frame has one.</summary>
-    private bool TryRenderRetainedBody(IGraphicsContext context, Rect? damage)
+    /// <summary>Draws the body from the scene, restricted to the dirty region when the frame has one.</summary>
+    private bool TryRenderRetainedBody(IGraphicsContext context, Rect? dirtyRect)
     {
         if (!_retainedSceneReady || _renderScene == null)
         {
@@ -457,24 +457,24 @@ public partial class Window
         }
 
         _renderScene.GroupFactory = GraphicsFactory;
-        FrameRenderer.Replay(_renderScene, context, damage);
+        FrameRenderer.Replay(_renderScene, context, dirtyRect);
         return true;
     }
 
-    private void EraseRetainedDamage(IGraphicsContext context, Rect damage, Color clearColor)
+    private void EraseRetainedDirtyRect(IGraphicsContext context, Rect dirtyRect, Color clearColor)
     {
         if (AllowsTransparency)
         {
-            ((ITransparentDamageContext)context).ClearRectangleToTransparent(damage);
+            ((ITransparentDirtyRectContext)context).ClearRectangleToTransparent(dirtyRect);
         }
         else
         {
-            ((IOpaqueDamageContext)context).ClearRectangle(damage, clearColor);
+            ((IOpaqueDirtyRectContext)context).ClearRectangle(dirtyRect, clearColor);
         }
     }
 
     /// <summary>
-    /// Whether the previous frame survives on this target and the damaged box can be erased on it,
+    /// Whether the previous frame survives on this target and the dirty box can be erased on it,
     /// which is what a partial repaint needs.
     /// </summary>
     private bool CanRepaintPartOfTheFrame(IGraphicsContext context, IRenderTarget target)
@@ -487,8 +487,8 @@ public partial class Window
         }
 
         bool canErase = AllowsTransparency
-            ? context is ITransparentDamageContext
-            : context is IOpaqueDamageContext;
+            ? context is ITransparentDirtyRectContext
+            : context is IOpaqueDirtyRectContext;
         if (!canErase)
         {
             return false;
@@ -508,19 +508,19 @@ public partial class Window
 
     /// <summary>
     /// Whether this window's frames are kept in the buffer its own target draws into. Transparent
-    /// windows blend onto a target they clear first, and the damage overlay draws on the target, so both
+    /// windows blend onto a target they clear first, and the dirty region overlay draws on the target, so both
     /// keep their frame in a surface of their own instead.
     /// </summary>
     private bool DrawsInPlace(IRenderTarget target)
         => target is WindowRenderTarget &&
            !AllowsTransparency &&
-           !DamageOverlayEnabled &&
+           !DirtyRegionOverlayEnabled &&
            !PresentWithoutFrameSurface &&
            PlatformReportsLostFrames &&
            GraphicsFactory is IPersistentFrameGraphicsFactory { IsPersistentFrameRenderingVerified: true, DrawsWindowFramesInPlace: true };
 
     /// <summary>Tells a target drawn in place how much of its buffer this frame has to put on screen.</summary>
-    private void LimitInPlacePresent(IGraphicsContext context, IRenderTarget target, Rect? damage)
+    private void LimitInPlacePresent(IGraphicsContext context, IRenderTarget target, Rect? dirtyRect)
     {
         if (!DrawsInPlace(target) || context is not IPartialPresentContext partial)
         {
@@ -528,7 +528,7 @@ public partial class Window
         }
 
         _presents++;
-        if (_presentedFrameLost || damage == null)
+        if (_presentedFrameLost || dirtyRect == null)
         {
             // The screen lost the frame, or the whole of it was painted: the default copies everything.
             _presentedFrameLost = false;
@@ -543,11 +543,11 @@ public partial class Window
         }
         else
         {
-            partial.LimitPresentTo(_frameDamageAreas);
+            partial.LimitPresentTo(_frameDirtyRects);
             _presentedArea = 0;
-            for (int index = 0; index < _frameDamageAreas.Count; index++)
+            for (int index = 0; index < _frameDirtyRects.Count; index++)
             {
-                _presentedArea += _frameDamageAreas[index].Width * _frameDamageAreas[index].Height;
+                _presentedArea += _frameDirtyRects[index].Width * _frameDirtyRects[index].Height;
             }
         }
     }
@@ -662,12 +662,12 @@ public partial class Window
             PlatformReportsLostFrames &&
             persistentFactory.WindowTargetKeepsPresentedFrame &&
             !AllowsTransparency &&
-            !DamageOverlayEnabled &&
+            !DirtyRegionOverlayEnabled &&
             !_frameRepaintedNothing &&
             _rootsOverTheFrame.Count == 0 &&
             !rootsOverTheFrameChanged &&
-            LastRetainedDamage is Rect &&
-            _frameDamageAreas.Count > 0;
+            LastRetainedDirtyRect is Rect &&
+            _frameDirtyRects.Count > 0;
 
         _presentedFrameLost = false;
         _presents++;
@@ -694,11 +694,11 @@ public partial class Window
                 {
                     // A context that ends its frame by copying a buffer of its own to the window copies
                     // only these areas too.
-                    (context as IPartialPresentContext)?.LimitPresentTo(_frameDamageAreas);
+                    (context as IPartialPresentContext)?.LimitPresentTo(_frameDirtyRects);
                     _presentedArea = 0;
-                    for (int index = 0; index < _frameDamageAreas.Count; index++)
+                    for (int index = 0; index < _frameDirtyRects.Count; index++)
                     {
-                        var area = _frameDamageAreas[index];
+                        var area = _frameDirtyRects[index];
                         context.Save();
                         context.SetClip(area);
                         context.DrawImage(view, whole);
@@ -713,7 +713,7 @@ public partial class Window
                 }
 
                 DrawRootsOverTheFrame(context, clientSize);
-                DrawDamageMarks(context);
+                DrawDirtyMarks(context);
             }
             finally
             {

@@ -215,7 +215,7 @@ public sealed class RetainedScrollReuseTests
         using var context = factory.CreateContext(surface);
         context.BeginFrame(surface);
         var recorder = new RenderDataRecorder(context) { SuppressDrawing = true };
-        scene.ResetDamage();
+        scene.ResetDirtyRegion();
         capture.Capture(scene, root, recorder, dirty);
         context.EndFrame();
     }

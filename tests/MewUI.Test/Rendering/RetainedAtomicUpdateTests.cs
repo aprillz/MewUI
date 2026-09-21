@@ -222,7 +222,7 @@ public sealed class RetainedAtomicUpdateTests
         try
         {
             var recorder = new RenderDataRecorder(context) { SuppressDrawing = true };
-            scene.ResetDamage();
+            scene.ResetDirtyRegion();
             capture.Capture(scene, root, recorder);
         }
         finally

@@ -15,7 +15,7 @@ namespace MewUI.Test.Rendering;
 /// </summary>
 [TestClass]
 [DoNotParallelize]
-public sealed class RetainedSlotDamageTests
+public sealed class RetainedSlotDirtyRegionTests
 {
     private const int WIDTH = 800;
     private const int HEIGHT = 500;
@@ -63,10 +63,10 @@ public sealed class RetainedSlotDamageTests
             window.PerformLayout();
             window.RenderFrameToSurface(surface);
 
-            var damage = window.LastRetainedDamage;
+            var dirtyRect = window.LastRetainedDirtyRect;
             Assert.IsTrue(
-                damage is Rect area && area.Right <= 260,
-                $"step {step}: the pane is 150 wide and the frame repainted {damage?.ToString() ?? "everything"} ({window.LastWholeFrameReason})");
+                dirtyRect is Rect area && area.Right <= 260,
+                $"step {step}: the pane is 150 wide and the frame repainted {dirtyRect?.ToString() ?? "everything"} ({window.LastWholeFrameReason})");
         }
 
         using var reference = factory.CreateSurface(RenderSurfaceDescriptor.Offscreen(WIDTH, HEIGHT, 1.0, hasAlpha: false));

@@ -78,7 +78,7 @@ public sealed class RetainedWholeFrameCostTests
             long start = Stopwatch.GetTimestamp();
             window.RenderFrameToSurface(surface);
             replayed[frame] = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
-            wholeFrames += window.LastRetainedDamage == null ? 1 : 0;
+            wholeFrames += window.LastRetainedDirtyRect == null ? 1 : 0;
         }
 
         var replayedStats = window.LastFrameStats;

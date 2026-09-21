@@ -11,14 +11,14 @@ namespace MewUI.Test.Rendering;
 
 /// <summary>
 /// A frame that repaints part of the surface has to leave every pixel as a whole frame would: what
-/// overlaps the damaged area is drawn again in its original order, antialiased edges that the damaged
+/// overlaps the dirty area is drawn again in its original order, antialiased edges that the dirty
 /// area cuts through come out the same, and on a transparent surface the old pixels lose their alpha
 /// before anything is drawn over them. All four channels are compared.
 /// Not parallelizable: assigns the process-wide Application.DefaultGraphicsFactory.
 /// </summary>
 [TestClass]
 [DoNotParallelize]
-public sealed class RetainedDamageExactnessTests
+public sealed class RetainedDirtyRegionExactnessTests
 {
     private const int WIDTH = 220;
     private const int HEIGHT = 160;
@@ -185,7 +185,7 @@ public sealed class RetainedDamageExactnessTests
             }
 
             Frames(window, surface, 1);
-            Assert.IsNotNull(window.LastRetainedDamage, $"round {round}: the frame was drawn whole, so it proves nothing about partial repaint");
+            Assert.IsNotNull(window.LastRetainedDirtyRect, $"round {round}: the frame was drawn whole, so it proves nothing about partial repaint");
 
             using var reference = factory.CreateSurface(RenderSurfaceDescriptor.Offscreen(WIDTH, HEIGHT, 1.0, hasAlpha: transparent));
             window.RenderReferenceFrameToSurface(reference);

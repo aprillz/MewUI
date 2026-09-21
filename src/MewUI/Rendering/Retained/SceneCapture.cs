@@ -307,7 +307,7 @@ internal sealed class SceneCapture
 
     /// <summary>
     /// Asks the visual for its composition every pass. A declaration that has not changed returns the
-    /// plan the node already holds, so nothing is allocated and no damage is reported; that is what
+    /// plan the node already holds, so nothing is allocated and no dirty region is reported; that is what
     /// lets a visual whose children or geometry did change be noticed without a separate signal.
     /// </summary>
     private CompositionPlan BuildPlan(SceneUpdate update, UIElement element, VisualNode node, bool attachmentChanged)
@@ -414,7 +414,7 @@ internal sealed class SceneCapture
                         ApplyScope(context, in entry);
                         if (entry.Kind is CompositionEntryKind.ClipRect or CompositionEntryKind.ClipRoundedRect)
                         {
-                            // What lies past the clip never reaches the surface, so it is neither ink nor damage.
+                            // What lies past the clip never reaches the surface, so it is neither ink nor dirty.
                             var scopeClip = RetainedGeometry.TransformRect(entry.Rect, transform);
                             _ambientClip = outerClip is Rect outer ? outer.Intersect(scopeClip) : scopeClip;
                         }
@@ -461,7 +461,7 @@ internal sealed class SceneCapture
         if (data == null)
         {
             // A slot that could not be recorded is drawn live. What it inks is not known, so it answers
-            // for the bounds of its visual: enough to be found by a damaged area and to damage its own.
+            // for the bounds of its visual: enough to be found by a dirty area and to mark its own dirty.
             bool drawnLive = stagedThisPass || node.NonRecordableReason != null;
             return drawnLive ? node.Element.Bounds.Inflate(LIVE_INK_MARGIN, LIVE_INK_MARGIN) : default;
         }
@@ -509,7 +509,7 @@ internal sealed class SceneCapture
         if (data == null)
         {
             // A slot already found unrecordable is tried again only when its visual changed; trying it
-            // every pass would damage its area every frame for nothing.
+            // every pass would mark its area dirty every frame for nothing.
             return changed || node.NonRecordableReason == null;
         }
 

@@ -27,7 +27,7 @@ public sealed class RetainedCompatibilityReachTests
     }
 
     [TestMethod]
-    public void DamageReach_UnderDeclaredAndUndeclaredPanels()
+    public void DirtyReach_UnderDeclaredAndUndeclaredPanels()
     {
         if (!OperatingSystem.IsWindows())
         {
@@ -63,8 +63,8 @@ public sealed class RetainedCompatibilityReachTests
         top.InvalidateVisual();
         window.RenderFrameToSurface(live);
 
-        var damage = window.LastRetainedDamage;
-        string reach = damage is Rect area
+        var dirtyRect = window.LastRetainedDirtyRect;
+        string reach = dirtyRect is Rect area
             ? $"{area} (touches the unchanged sibling at {bottom.Bounds}: {area.Contains(new Point(bottom.Bounds.X + 2, bottom.Bounds.Y + 2))})"
             : "the whole surface";
         Console.Error.WriteLine($"{label} root: changing one child repaints {reach}");
