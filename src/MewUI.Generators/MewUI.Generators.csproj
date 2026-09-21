@@ -1,10 +1,19 @@
-<Project Sdk="Microsoft.NET.Sdk">
+<!-- An AOT publish passes PublishAot and its companions as global properties, which reach every
+     referenced project before UndefineProperties on the reference is consulted; on netstandard2.0
+     that is NETSDK1207 during restore. TreatAsLocalProperty lets the values below win here. -->
+<Project Sdk="Microsoft.NET.Sdk" TreatAsLocalProperty="PublishAot;PublishTrimmed;IsAotCompatible;IsTrimmable;SelfContained;RuntimeIdentifier">
 
   <!-- Source generators run inside the compiler/IDE host: netstandard2.0 only, no
        MewUI.Common.props (which forces net8/net10 + trimming + packaging). Roslyn 4.12 is the
        floor because GetInterceptableLocation() does not exist earlier, so this cannot live in
        MewUI.Analyzers, which stays pinned at 4.8 for broad IDE / CI host compatibility. -->
   <PropertyGroup>
+    <PublishAot>false</PublishAot>
+    <PublishTrimmed>false</PublishTrimmed>
+    <IsAotCompatible>false</IsAotCompatible>
+    <IsTrimmable>false</IsTrimmable>
+    <SelfContained>false</SelfContained>
+    <RuntimeIdentifier></RuntimeIdentifier>
     <TargetFramework>netstandard2.0</TargetFramework>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>

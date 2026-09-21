@@ -8,7 +8,6 @@
     <PackageId>$(MewUITitle).WebView2.Win32</PackageId>
     <Description>Win32 WebView2 control for $(MewUITitle). Requires Microsoft Edge WebView2 Runtime (Evergreen).</Description>
     <ImplicitUsings>enable</ImplicitUsings>
-    <IsAotCompatible>true</IsAotCompatible>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 
     <PackageTags>webview2;win32;native;aot;gui;browser</PackageTags>

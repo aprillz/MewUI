@@ -33,7 +33,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <IsTrimmable>true</IsTrimmable>
+    <!-- Implies IsTrimmable, EnableTrimAnalyzer, EnableAotAnalyzer and EnableSingleFileAnalyzer,
+         and stamps [assembly: AssemblyMetadata("IsAotCompatible", "True")] on net10.0, which is
+         what VerifyReferenceAotCompatibility checks in a consumer's build. -->
+    <IsAotCompatible>true</IsAotCompatible>
     <SuppressTrimAnalysisWarnings>false</SuppressTrimAnalysisWarnings>
 
     <PublishRepositoryUrl>false</PublishRepositoryUrl>

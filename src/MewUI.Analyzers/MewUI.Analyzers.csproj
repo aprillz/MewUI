@@ -1,9 +1,18 @@
-<Project Sdk="Microsoft.NET.Sdk">
+<!-- An AOT publish passes PublishAot and its companions as global properties, which reach every
+     referenced project before UndefineProperties on the reference is consulted; on netstandard2.0
+     that is NETSDK1207 during restore. TreatAsLocalProperty lets the values below win here. -->
+<Project Sdk="Microsoft.NET.Sdk" TreatAsLocalProperty="PublishAot;PublishTrimmed;IsAotCompatible;IsTrimmable;SelfContained;RuntimeIdentifier">
 
   <!-- Analyzers run inside the compiler/IDE host: netstandard2.0 only, no MewUI.Common.props
        (which forces net8/net10 + trimming + packaging). Roslyn version is pinned low for
        broad VS / VS Code (C# Dev Kit) / Rider / CI host compatibility. -->
   <PropertyGroup>
+    <PublishAot>false</PublishAot>
+    <PublishTrimmed>false</PublishTrimmed>
+    <IsAotCompatible>false</IsAotCompatible>
+    <IsTrimmable>false</IsTrimmable>
+    <SelfContained>false</SelfContained>
+    <RuntimeIdentifier></RuntimeIdentifier>
     <TargetFramework>netstandard2.0</TargetFramework>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>

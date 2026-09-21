@@ -13,9 +13,6 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <IsTrimmable>true</IsTrimmable>
-    <SuppressTrimAnalysisWarnings>false</SuppressTrimAnalysisWarnings>
-
     <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
     <CompilerGeneratedFilesOutputPath>Generated</CompilerGeneratedFilesOutputPath>
   </PropertyGroup>
