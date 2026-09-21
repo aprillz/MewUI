@@ -19,19 +19,19 @@
 
 ## 파이프라인 개요
 
-MewUI는 즉시 모드로 렌더링합니다(매 프레임 다시 그림). 다만 히트 테스트와 Measure/Arrange 결과를 프레임 간 재사용하기 위해 레이아웃/컨트롤 트리는 유지(retained)됩니다.
+MewUI는 히트 테스트와 Measure/Arrange 결과를 프레임 간 재사용하기 위해 레이아웃/컨트롤 트리를 유지하고, 각 요소가 그린 내용도 유지합니다. 요소는 무효화된 뒤에만 다시 그려집니다. 프레임은 나머지 요소의 유지된 그리기를 재사용하고, 창에서 바뀐 부분만 다시 칠합니다.
 
 패스 순서는 다음과 같습니다.
 
 1) **Measure**: DesiredSize 계산. 위에서 아래로 재귀합니다(부모의 `MeasureOverride`/`MeasureContent`가 자신의 크기를 반환하기 전에 자식들의 `Measure`를 호출).
 2) **Arrange**: Bounds 확정. 같은 방식으로 위에서 아래로 재귀합니다.
-3) **Render**: Bounds와 현재 visual 상태로 그리기(요소 자신의 시각 요소는 `OnRender`, 자식은 이어서 `RenderSubtree`).
+3) **Render**: 무효화된 요소를 Bounds와 현재 visual 상태로 그리고(요소 자신의 시각 요소는 `OnRender`, 자식은 이어서 `RenderSubtree`), 나머지는 유지된 그리기를 재사용.
 
 ### 언제 어떤 패스가 실행되는가
 
 - `InvalidateMeasure()`: `IsMeasureDirty`와 `IsArrangeDirty`를 함께 true로 표시한 뒤, 이미 dirty였더라도 `Parent.InvalidateMeasure()`를 무조건 다시 호출합니다(오래된 조상의 플래그도 다시 통지되어야 하고, 이 호출 자체가 `Window`를 깨우는 역할도 합니다). 마지막에 `InvalidateVisual()`을 호출합니다.
 - `InvalidateArrange()`: `IsArrangeDirty`만 true로 표시하고 같은 방식으로 `Parent.InvalidateArrange()`에 전파합니다. Measure가 invalid임을 의미하지 **않습니다**.
-- `InvalidateVisual()`: `Parent.InvalidateVisual()`로만 전파합니다. `Window`에서는 다시 그리기만 예약합니다(`RequestRender()`). 레이아웃 패스는 예약하지 **않습니다**.
+- `InvalidateVisual()`: 이 요소 자신의 그리기가 바뀌었음을 알립니다. 요소는 다음 프레임에 다시 그려지고 창은 다시 그리기를 예약합니다. 레이아웃 패스는 예약하지 **않습니다**. 조상에게는 조상 자신의 그리기가 바뀌었다고 알리지 않으므로, 조상의 `InvalidateVisual()` 재정의는 후손의 무효화로 호출되지 않습니다. `Window.InvalidateVisual()`은 창의 다시 그리기를 예약합니다(`RequestRender()`).
 - `InvalidateVisualState()`(`UIElement`/`Control`): 스타일 트리거/상태 전환 등 visual state 재계산 대상으로 요소를 등록하고 `Window.RequestUpdatePass()`를 호출합니다. 위 두 가지와 다른 지점입니다. `AffectsVisualState`만 있고 레이아웃/렌더에는 영향이 없는 속성이라도, 트리거로 결정되는 값이 아직 실행되지 않은 레이아웃/렌더에 반영되어야 하므로 update pass 자체는 돌아야 합니다.
 
 `Window.InvalidateMeasure()`와 `Window.InvalidateArrange()`는 위 동작에 더해 `RequestUpdatePass()`도 호출합니다.
@@ -120,6 +120,9 @@ Render는 Bounds와 현재 visual 상태로 실제 픽셀을 그립니다.
 ### 규칙
 
 - Render는 레이아웃을 수행하지 않습니다. `UIElement.Render`는 `sealed`이며 `Measure`/`Arrange`를 호출하지 않습니다. `OnRender` 안에서 `InvalidateMeasure()`/`InvalidateArrange()`를 유발하는 것은 피하세요. 현재 프레임을 망가뜨리지는 않지만, 이 렌더가 끝나자마자 또 다른 update pass를 예약하게 되어 조건 없이 매 프레임 반복될 수 있습니다.
+- `OnRender`는 매 프레임 실행되지 않습니다. `OnRender`가 읽는 모든 값은 바뀔 때 요소를 무효화해야 합니다. `AffectsRender`로 등록한 MewProperty는 스스로 무효화하고([프로퍼티 시스템](PropertySystem.ko.md) 참고), 필드, 모델 값, 타이머 같은 그 밖의 입력은 `InvalidateVisual()`을 직접 호출해야 합니다. 호출하지 않으면 화면에는 이전 그리기가 그대로 남습니다.
+- 부모의 상태를 읽어 그리는 요소는 그 상태가 바뀔 때 부모가 무효화합니다. 부모 자신의 무효화는 자식을 다시 그리지 않습니다.
+- 파티클 효과처럼 계속 바뀌는 콘텐츠는 바뀌는 프레임마다 `InvalidateVisual()`을 호출합니다.
 - Render는 가능한 한 이미 스냅된 지오메트리를 사용합니다(위 Arrange 라운딩 표 참고).
 - 윈도우 클라이언트 뷰포트 밖의 요소는 컬링됩니다. 요소의 `Bounds`가 `new Rect(root.ClientSize)`와 교차하지 않으면 `Render`는 비트맵 캐시를 해제하고 `OnRender`를 호출하지 않은 채 반환합니다. 부모가 적용한 변환(transform) 아래에서 렌더링되는 서브트리는 `Bounds`가 실제 보이는 영역을 반영하지 않으므로, 잘못 컬링되지 않도록 상속 속성인 `SkipViewportCull`을 설정하세요.
 

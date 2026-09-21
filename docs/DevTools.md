@@ -55,7 +55,7 @@ The inspector and the performance monitor draw on the window itself, so they are
 
 **Visual tree window** lists the window's element tree, including popups and adorners, and selects the element you click in the target window. Selecting a node highlights it through the inspector overlay, so opening the tree turns the inspector on as well.
 
-**Performance monitor** is an overlay with the recent frame times, draw calls and cull ratio. It draws after everything else in the frame so its own cost is reported in the numbers you read.
+**Performance monitor** is an overlay with the recent frame times, draw calls and cull ratio. It draws after everything else in the frame so its own cost is reported in the numbers you read. Draw calls count what the frame actually drew: a frame that repaints only a small changed area reports few, and a full repaint reports the whole window.
 
 **Profiler timeline** records per-frame samples for layout, render, text and backend phases, and lets you pause with `Space`. Clicking a sample that belongs to an element highlights that element in the target window.
 
