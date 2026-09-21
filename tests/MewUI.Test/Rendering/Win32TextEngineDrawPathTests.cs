@@ -5,6 +5,7 @@ using Aprillz.MewUI.Rendering.Gdi;
 using Aprillz.MewUI.Text;
 
 using GdiDirectWriteFonts = gdibackend::Aprillz.MewUI.Rendering.DirectWrite.DirectWriteFontFactory;
+using GdiFaceCoverageCache = gdibackend::Aprillz.MewUI.Rendering.Gdi.Core.FaceCoverageCache;
 
 namespace Aprillz.MewUI.Test.Rendering;
 
@@ -77,6 +78,39 @@ public sealed class Win32TextEngineDrawPathTests
             "The DirectWrite path dropped subpixel coverage on a surface whose pixels are known.");
     }
 
+    /// <summary>
+    /// The GDI backend has no texture to keep a rasterized run in, so a face that rasterizes itself
+    /// would lay the run out and render its glyphs on every draw. The coverage of a run is kept
+    /// from the second time it is drawn: after that, drawing it again, in any colour, only blends it.
+    /// </summary>
+    [TestMethod]
+    public void GdiBackend_KeepsTheCoverageOfARunDrawnTwice_AndBlendsItAfterwards()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("The Win32 text engines are Windows-only.");
+            return;
+        }
+
+        using var gdi = new GdiGraphicsFactory();
+        using var fonts = new GdiDirectWriteFonts();
+        using var font = fonts.CreateFont("Segoe UI", 17, FontWeight.Normal, false, false, false, 96);
+
+        GdiFaceCoverageCache.Clear();
+        int missesBefore = GdiFaceCoverageCache.Misses;
+        int hitsBefore = GdiFaceCoverageCache.Hits;
+
+        byte[] first = Render(gdi, font, static (pixels, _) => pixels.ToArray(), Color.FromArgb(255, 0, 0, 0));
+        Render(gdi, font, static (pixels, _) => 0, Color.FromArgb(255, 0, 0, 0));
+        byte[] third = Render(gdi, font, static (pixels, _) => pixels.ToArray(), Color.FromArgb(255, 0, 0, 0));
+        byte[] recoloured = Render(gdi, font, static (pixels, _) => pixels.ToArray(), Color.FromArgb(255, 200, 30, 30));
+
+        Assert.AreEqual(2, GdiFaceCoverageCache.Misses - missesBefore, "a run drawn for the second time was not kept");
+        Assert.AreEqual(2, GdiFaceCoverageCache.Hits - hitsBefore, "drawing the run again did not find what was kept");
+        CollectionAssert.AreEqual(first, third, "a run blended from kept coverage differs from the run that was rasterized");
+        CollectionAssert.AreNotEqual(first, recoloured, "the kept coverage carried the first colour with it");
+    }
+
     private static int ColourFringedPixels(IGraphicsFactory factory, IFont font)
         => Render(factory, font, static (pixels, stride) =>
         {
@@ -116,9 +150,12 @@ public sealed class Win32TextEngineDrawPathTests
             return columns;
         });
 
-    private delegate int PixelReader(ReadOnlySpan<byte> pixels, int stride);
+    private delegate TResult PixelReader<TResult>(ReadOnlySpan<byte> pixels, int stride);
 
-    private static int Render(IGraphicsFactory factory, IFont font, PixelReader read)
+    private static int Render(IGraphicsFactory factory, IFont font, PixelReader<int> read)
+        => Render(factory, font, read, Color.FromArgb(255, 0, 0, 0));
+
+    private static TResult Render<TResult>(IGraphicsFactory factory, IFont font, PixelReader<TResult> read, Color color)
     {
         // No alpha: the pixels under the run are known, which is what subpixel blending needs.
         using var surface = factory.CreateSurface(
@@ -140,7 +177,7 @@ public sealed class Win32TextEngineDrawPathTests
             var contextBase = (GraphicsContextBase)context;
             var layout = contextBase.CreateBackendTextLayout(TEXT, format, in constraints);
             Assert.IsNotNull(layout, "The backend produced no text layout.");
-            contextBase.DrawBackendTextLayout(TEXT, format, layout, Color.FromArgb(255, 0, 0, 0));
+            contextBase.DrawBackendTextLayout(TEXT, format, layout, color);
             context.EndFrame();
         }
 
