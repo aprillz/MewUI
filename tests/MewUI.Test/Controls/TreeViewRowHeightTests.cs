@@ -52,7 +52,7 @@ public sealed class TreeViewRowHeightTests
         });
 
         tops.Sort();
-        Assert.IsTrue(tops.Count >= 2, $"{control.GetType().Name} realized {tops.Count} rows");
+        Assert.IsGreaterThanOrEqualTo(2, tops.Count, $"{control.GetType().Name} realized {tops.Count} rows");
         return tops[1] - tops[0];
     }
 }

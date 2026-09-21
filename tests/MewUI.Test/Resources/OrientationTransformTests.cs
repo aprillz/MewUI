@@ -10,7 +10,7 @@ public sealed class OrientationTransformTests
     private const double RawHeight = 2;
     private const double Tol = 1e-9;
 
-    [DataTestMethod]
+    [TestMethod]
     [DataRow(ImageOrientation.Normal, 4.0, 2.0)]
     [DataRow(ImageOrientation.MirrorHorizontal, 4.0, 2.0)]
     [DataRow(ImageOrientation.Rotate180, 4.0, 2.0)]
@@ -29,7 +29,7 @@ public sealed class OrientationTransformTests
 
     // Raw corners are TL(0,0), TR(4,0), BL(0,2), BR(4,2). Each row lists the expected oriented position
     // of those four corners for one orientation.
-    [DataTestMethod]
+    [TestMethod]
     [DataRow(ImageOrientation.Normal, /*TL*/0.0, 0.0, /*TR*/4.0, 0.0, /*BL*/0.0, 2.0, /*BR*/4.0, 2.0)]
     [DataRow(ImageOrientation.MirrorHorizontal, 4.0, 0.0, 0.0, 0.0, 4.0, 2.0, 0.0, 2.0)]
     [DataRow(ImageOrientation.Rotate180, 4.0, 2.0, 0.0, 2.0, 4.0, 0.0, 0.0, 0.0)]

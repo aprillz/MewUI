@@ -34,7 +34,7 @@ public sealed class ApplicationRenderCacheMaintenanceTests
         Assert.AreEqual(0, dispatcher.PendingCount);
 
         runtime.Dispose();
-        Assert.AreEqual(2, modes.Count);
+        Assert.HasCount(2, modes);
     }
 
     [TestMethod]

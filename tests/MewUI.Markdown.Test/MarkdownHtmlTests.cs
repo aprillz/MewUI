@@ -30,7 +30,7 @@ public sealed class MarkdownHtmlTests
         Assert.AreEqual(inline, Text(MarkdownParser.Parse(inline, new MarkdownOptions()).Single()));
         Assert.AreEqual("before  after", Text(MarkdownParser.Parse(inline, _html).Single()));
         Assert.AreEqual(block, Text(MarkdownParser.Parse(block, new MarkdownOptions()).Single()).TrimEnd());
-        Assert.AreEqual(0, MarkdownParser.Parse(block, _html).Count);
+        Assert.IsEmpty(MarkdownParser.Parse(block, _html));
     }
 
     [TestMethod]
@@ -45,9 +45,9 @@ public sealed class MarkdownHtmlTests
         presenter.Renderers = new MarkdownRenderers().RegisterBlock<Markdig.Syntax.HtmlBlock>((_, _) => null);
         ParsedMarkdown preserved = presenter.Document;
 
-        Assert.AreEqual(0, hidden.Blocks.Count);
+        Assert.IsEmpty(hidden.Blocks);
         Assert.AreNotSame(hidden, preserved);
-        Assert.AreEqual(1, preserved.Blocks.Count);
+        Assert.HasCount(1, preserved.Blocks);
         Assert.IsInstanceOfType<Markdig.Syntax.HtmlBlock>(preserved.Blocks.Single().Node);
     }
 

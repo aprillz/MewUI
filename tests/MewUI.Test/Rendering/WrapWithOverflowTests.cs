@@ -33,7 +33,7 @@ public sealed class WrapWithOverflowTests
         var overflowed = Layout(factory, WORDS, TextWrapping.WrapWithOverflow, full * 0.4);
 
         Assert.IsGreaterThan(1, wrapped.Lines.Count);
-        Assert.AreEqual(wrapped.Lines.Count, overflowed.Lines.Count,
+        Assert.HasCount(wrapped.Lines.Count, overflowed.Lines,
             "WrapWithOverflow split the text at a different place than Wrap.");
         for (int index = 0; index < wrapped.Lines.Count; index++)
         {
@@ -58,7 +58,7 @@ public sealed class WrapWithOverflowTests
 
         var overflowed = Layout(factory, SINGLE_WORD, TextWrapping.WrapWithOverflow, full * 0.4);
 
-        Assert.AreEqual(1, overflowed.Lines.Count, "The word was split instead of overflowing.");
+        Assert.HasCount(1, overflowed.Lines, "The word was split instead of overflowing.");
         Assert.AreEqual(SINGLE_WORD.Length, overflowed.Lines[0].TextLength);
         Assert.IsGreaterThan(full * 0.4, overflowed.MeasuredSize.Width,
             "The line reported a width inside the constraint although its text overflows it.");
@@ -90,7 +90,7 @@ public sealed class WrapWithOverflowTests
         Assert.AreEqual(SINGLE_WORD.Length + 1, carrying.TextLength,
             "The line kept going past the first break opportunity after the overflowing word.");
         Assert.AreEqual(text.Length, overflowed.Lines[^1].TextStart + overflowed.Lines[^1].TextLength);
-        Assert.AreEqual(3, overflowed.Lines.Count, "Expected the lines \"ab \", the word, and \"cd\".");
+        Assert.HasCount(3, overflowed.Lines, "Expected the lines \"ab \", the word, and \"cd\".");
     }
 
     private static ITextLayout Layout(IGraphicsFactory factory, string text, TextWrapping wrapping, double maxWidth)

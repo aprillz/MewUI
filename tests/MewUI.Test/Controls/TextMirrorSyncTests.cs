@@ -47,7 +47,7 @@ public sealed class TextMirrorSyncTests
     }
 
     [TestMethod]
-    [DynamicData(nameof(Controls), DynamicDataSourceType.Method)]
+    [DynamicData(nameof(Controls))]
     public void ClearingAgainAfterAppendLands(Func<TextBase> create)
     {
         var control = create();
@@ -66,7 +66,7 @@ public sealed class TextMirrorSyncTests
     }
 
     [TestMethod]
-    [DynamicData(nameof(Controls), DynamicDataSourceType.Method)]
+    [DynamicData(nameof(Controls))]
     public void AssigningTheStaleMirrorValueUpdatesTheDocument(Func<TextBase> create)
     {
         var control = create();
@@ -88,7 +88,7 @@ public sealed class TextMirrorSyncTests
     }
 
     [TestMethod]
-    [DynamicData(nameof(ControlsWithUndo), DynamicDataSourceType.Method)]
+    [DynamicData(nameof(ControlsWithUndo))]
     public void AssigningTheCurrentTextKeepsUndoHistory(Func<TextBase> create)
     {
         var control = create();

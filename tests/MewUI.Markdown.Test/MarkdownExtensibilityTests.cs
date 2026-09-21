@@ -93,8 +93,8 @@ public sealed class MarkdownExtensibilityTests
 
         var paragraph = Descendants(presenter.DocumentRoot!).OfType<MarkdownParagraph>().Single();
         StringAssert.StartsWith(paragraph.Text, "left ");
-        Assert.IsTrue(inlineObject.MeasureCount > 0);
-        Assert.IsTrue(paragraph.DesiredSize.Width > 0);
+        Assert.IsGreaterThan(0, inlineObject.MeasureCount);
+        Assert.IsGreaterThan(0, paragraph.DesiredSize.Width);
     }
 
     [TestMethod]
@@ -106,11 +106,11 @@ public sealed class MarkdownExtensibilityTests
 
         var host = viewer.BlockHost!;
         Assert.AreEqual(2000, host.BlockCount);
-        Assert.IsTrue(host.RealizedCount < 100, $"realized {host.RealizedCount}");
+        Assert.IsLessThan(100, host.RealizedCount, $"realized {host.RealizedCount}");
         Assert.IsNotNull(host.GetRealized(0));
         Assert.IsNull(host.GetRealized(1999));
         var scroll = (ScrollViewer)viewer.DocumentRoot!;
-        Assert.IsTrue(scroll.ViewportHeight < host.DesiredSize.Height);
+        Assert.IsLessThan(host.DesiredSize.Height, scroll.ViewportHeight);
     }
 
     [TestMethod]
@@ -133,7 +133,7 @@ public sealed class MarkdownExtensibilityTests
         var element = host.GetRealized(firstRealized)!;
         // Content is arranged at -offset; the first kept block sits at most one viewport above the visible range.
         Assert.IsTrue(element.Bounds.Y >= -300 - element.Bounds.Height && element.Bounds.Y <= 300, $"y={element.Bounds.Y}");
-        Assert.IsTrue(host.RealizedCount < 100, $"realized {host.RealizedCount}");
+        Assert.IsLessThan(100, host.RealizedCount, $"realized {host.RealizedCount}");
     }
 
     [TestMethod]
@@ -151,7 +151,7 @@ public sealed class MarkdownExtensibilityTests
         Layout(viewer, 400, 300);
 
         var scroll = (ScrollViewer)viewer.DocumentRoot!;
-        Assert.IsTrue(scroll.VerticalOffset > 0);
+        Assert.IsGreaterThan(0, scroll.VerticalOffset);
         var heading = host.GetRealized(1500);
         Assert.IsNotNull(heading);
         Assert.IsTrue(heading.Bounds.Y >= 0 && heading.Bounds.Y < 300, $"heading y={heading.Bounds.Y}");

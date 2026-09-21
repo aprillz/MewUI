@@ -159,7 +159,7 @@ public sealed class ItemContainerTests
         box.ClearContainer<string>((_, _, index, _) => cleared.Add(index));
         Layout(box);
 
-        Assert.AreEqual(0, cleared.Count, "nothing has been released yet");
+        Assert.IsEmpty(cleared, "nothing has been released yet");
 
         box.ScrollIntoView(80);
         Layout(box);

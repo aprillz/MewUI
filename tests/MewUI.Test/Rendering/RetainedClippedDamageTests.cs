@@ -76,8 +76,9 @@ public sealed class RetainedClippedDamageTests
             Assert.IsTrue(
                 damage.Value.Width <= picture.Bounds.Width + 2 && damage.Value.Height <= picture.Bounds.Height + 2,
                 $"the damage {damage} reaches past the clipped picture at {picture.Bounds}");
-            Assert.IsTrue(
-                window.RetainedStatistics!.ContentReplayCount <= 3,
+            Assert.IsLessThanOrEqualTo(
+                3,
+                window.RetainedStatistics!.ContentReplayCount,
                 $"repainting the picture replayed {window.RetainedStatistics!.ContentReplayCount} recordings");
         }
     }
@@ -219,8 +220,9 @@ public sealed class RetainedClippedDamageTests
                 damage.Value.X >= preview.Bounds.X - 1 && damage.Value.Y >= preview.Bounds.Y - 1 &&
                 damage.Value.Right <= preview.Bounds.Right + 1 && damage.Value.Bottom <= preview.Bounds.Bottom + 1,
                 $"the damage {damage} reaches past the preview at {preview.Bounds}");
-            Assert.IsTrue(
-                window.RetainedStatistics!.ContentRecordCount <= 4,
+            Assert.IsLessThanOrEqualTo(
+                4,
+                window.RetainedStatistics!.ContentRecordCount,
                 $"panning recorded {window.RetainedStatistics!.ContentRecordCount} slots again");
             AssertMatchesReference(factory, window, surface, "after panning");
 

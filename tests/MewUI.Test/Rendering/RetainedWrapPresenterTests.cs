@@ -78,8 +78,9 @@ public sealed class RetainedWrapPresenterTests
 
         // One row leaves and one row arrives; every other cell was already recorded.
         int columns = (int)(WIDTH / CELL);
-        Assert.IsTrue(
-            recordsForTheScroll <= columns * 2,
+        Assert.IsLessThanOrEqualTo(
+            columns * 2,
+            recordsForTheScroll,
             $"scrolling by one row drew {recordsForTheScroll} cells again; only the {columns} that arrived should be new");
 
         using var reference = factory.CreateSurface(RenderSurfaceDescriptor.Offscreen(WIDTH, HEIGHT, 1.0, hasAlpha: false));

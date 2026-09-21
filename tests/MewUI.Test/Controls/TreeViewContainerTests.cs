@@ -34,7 +34,7 @@ public sealed class TreeViewContainerTests
 
         // The row container draws the expander and the row backgrounds, so a tree without hooks needs
         // it as much as one with them.
-        Assert.IsTrue(rows > 0, "the tree realized no rows");
+        Assert.IsGreaterThan(0, rows, "the tree realized no rows");
         Assert.AreEqual(rows, containers, "a row without a container has no expander, selection or hover drawn");
     }
 

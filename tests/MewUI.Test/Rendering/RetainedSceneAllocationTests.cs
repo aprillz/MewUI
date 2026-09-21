@@ -60,8 +60,9 @@ public sealed class RetainedSceneAllocationTests
         int commandSize = System.Runtime.CompilerServices.Unsafe.SizeOf<RenderCommand>();
         Console.WriteLine(
             $"command={commandSize}B scene={scene.EstimatedCommandBytes}B nodes={scene.NodeCount}");
-        Assert.IsTrue(
-            commandSize <= COMMAND_RECORD_SIZE_LIMIT,
+        Assert.IsLessThanOrEqualTo(
+            COMMAND_RECORD_SIZE_LIMIT,
+            commandSize,
             $"one recorded command takes {commandSize} bytes, over the {COMMAND_RECORD_SIZE_LIMIT} byte budget");
     }
 
@@ -97,8 +98,9 @@ public sealed class RetainedSceneAllocationTests
         long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
 
         Assert.AreEqual(0, scene.Statistics.ContentRecordCount, "the steady pass re-recorded content");
-        Assert.IsTrue(
-            allocated <= STEADY_PASS_ALLOCATION_LIMIT,
+        Assert.IsLessThanOrEqualTo(
+            STEADY_PASS_ALLOCATION_LIMIT,
+            allocated,
             $"a scene update with no changes allocated {allocated} bytes, over the {STEADY_PASS_ALLOCATION_LIMIT} byte budget");
     }
 

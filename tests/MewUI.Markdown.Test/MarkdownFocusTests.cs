@@ -41,7 +41,7 @@ public sealed class MarkdownFocusTests
         window.FocusManager.SetFocus(last);
         int expectedUnit = Enumerable.Range(last.TextUnit + 1, viewer.Document.TextUnits.Count - last.TextUnit - 1)
             .First(unit => viewer.Document.TextUnits[unit].HasLinks);
-        Assert.IsFalse(host.GetRealized(viewer.Document.TextUnits[expectedUnit].TopIndex) != null, "the target must start unrealized for this test to mean anything");
+        Assert.IsNull(host.GetRealized(viewer.Document.TextUnits[expectedUnit].TopIndex), "the target must start unrealized for this test to mean anything");
 
         WindowInputRouter.KeyDown(window, new KeyEventArgs(Key.Tab, 0));
         Relayout(window, host);
@@ -51,7 +51,7 @@ public sealed class MarkdownFocusTests
         Assert.IsNotNull(focused);
         Assert.AreEqual(expectedUnit, focused.TextUnit);
         Assert.AreEqual(0, focused.FocusedLink);
-        Assert.IsTrue(scroll.VerticalOffset > 0, "the viewer must have scrolled to the target block");
+        Assert.IsGreaterThan(0, scroll.VerticalOffset, "the viewer must have scrolled to the target block");
     }
 
     [TestMethod]
@@ -79,7 +79,7 @@ public sealed class MarkdownFocusTests
         scroll.SetScrollOffsets(0, host.GetBlockTop(300));
         Relayout(window, host);
         Assert.IsNull(host.GetRealized(0));
-        Assert.IsTrue(host.CachedCount > 0);
+        Assert.IsGreaterThan(0, host.CachedCount);
 
         scroll.SetScrollOffsets(0, 0);
         Relayout(window, host);
@@ -112,7 +112,7 @@ public sealed class MarkdownFocusTests
             int anchorIndex = host.IndexAt(scroll.VerticalOffset);
             var anchor = host.GetRealized(anchorIndex)!;
             double anchorTop = anchor.Bounds.Y;
-            Assert.IsTrue(host.GetRealized(29) != null, "an image block above the anchor must be realized so its growth exercises the correction");
+            Assert.IsNotNull(host.GetRealized(29), "an image block above the anchor must be realized so its growth exercises the correction");
             double imageHeightBefore = host.GetRealized(29)!.DesiredSize.Height;
 
             pending.SetResult(new MarkdownImageLease(new LargeImageSource(), null));
@@ -121,7 +121,7 @@ public sealed class MarkdownFocusTests
             window.PerformLayout();
             Relayout(window, host);
 
-            Assert.IsTrue(host.GetRealized(29)!.DesiredSize.Height > imageHeightBefore + 50, "the image block must have grown");
+            Assert.IsGreaterThan(imageHeightBefore + 50, host.GetRealized(29)!.DesiredSize.Height, "the image block must have grown");
             Assert.AreEqual(anchorTop, host.GetRealized(anchorIndex)!.Bounds.Y, 1.0, "the block at the viewport top must not move when blocks above it grow");
         }
         finally
@@ -143,7 +143,7 @@ public sealed class MarkdownFocusTests
         window.PerformLayout();
         Relayout(window, host);
 
-        Assert.IsTrue(Math.Abs(host.IndexAt(scroll.VerticalOffset) - anchor) <= 1, "the same block stays at the viewport top across the DPI change");
+        Assert.IsLessThanOrEqualTo(1, Math.Abs(host.IndexAt(scroll.VerticalOffset) - anchor), "the same block stays at the viewport top across the DPI change");
         AssertCovered(scroll, host, "after DPI change");
     }
 
@@ -160,7 +160,7 @@ public sealed class MarkdownFocusTests
             Relayout(window, host);
         }
 
-        Assert.IsTrue(scroll.VerticalOffset > 1000, $"offset={scroll.VerticalOffset}");
+        Assert.IsGreaterThan(1000, scroll.VerticalOffset, $"offset={scroll.VerticalOffset}");
         Assert.IsNull(host.GetRealized(0), "the first block must have left the realized window");
         AssertCovered(scroll, host, "after wheel input");
     }

@@ -111,7 +111,7 @@ public sealed class RetainedThreeWayParityTests
             }
         }
 
-        Assert.IsTrue(partialFrames > 0, $"{backend}: no frame took the partial path ({window.LastWholeFrameReason})");
+        Assert.IsGreaterThan(0, partialFrames, $"{backend}: no frame took the partial path ({window.LastWholeFrameReason})");
 
         using var immediate = CreateSurface(factory);
         window.RenderReferenceFrameToSurface(immediate);

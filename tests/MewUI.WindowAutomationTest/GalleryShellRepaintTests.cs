@@ -21,7 +21,7 @@ public sealed class GalleryShellRepaintTests
     {
         var shell = await ShowShellAsync(scene);
         var items = FindAll<ItemContainer>(shell.Navigation.Pane);
-        Assert.IsTrue(items.Count >= 4, $"the navigation pane realized {items.Count} item containers");
+        Assert.IsGreaterThanOrEqualTo(4, items.Count, $"the navigation pane realized {items.Count} item containers");
 
         await RenderingContinuouslyAsync(async () =>
         {
@@ -61,9 +61,9 @@ public sealed class GalleryShellRepaintTests
             await Task.Delay(400);
 
             var counts = shell.Window.RetainedFrames;
-            Assert.IsTrue(counts.Partial + counts.Whole > 0, "the selection change drew no frame");
+            Assert.IsGreaterThan(0, counts.Partial + counts.Whole, "the selection change drew no frame");
             var untouched = items[5];
-            Assert.IsTrue(untouched.Bounds.Width > 0, "the untouched item is not realized");
+            Assert.IsGreaterThan(0, untouched.Bounds.Width, "the untouched item is not realized");
         });
     });
 
@@ -112,12 +112,13 @@ public sealed class GalleryShellRepaintTests
     private static void AssertRepaintStayedNear(Window window, UIElement target, string what, double allowedAreaFactor)
     {
         var counts = window.RetainedFrames;
-        Assert.IsTrue(counts.Partial > 0, $"{what} repainted no frame in part (whole {counts.Whole}, untouched {counts.Untouched})");
+        Assert.IsGreaterThan(0, counts.Partial, $"{what} repainted no frame in part (whole {counts.Whole}, untouched {counts.Untouched})");
         Assert.AreEqual(0, counts.Whole, $"{what} drew {counts.Whole} whole frames (partial {counts.Partial})");
 
         double targetArea = target.Bounds.Width * target.Bounds.Height;
-        Assert.IsTrue(
-            window.LargestPartialRepaintArea <= targetArea * allowedAreaFactor,
+        Assert.IsLessThanOrEqualTo(
+            targetArea * allowedAreaFactor,
+            window.LargestPartialRepaintArea,
             $"{what} repainted {window.LargestPartialRepaintArea:0} in one frame, the target at {target.Bounds} covers {targetArea:0}; the frame reached {window.LargestPartialRepaint}");
     }
 
@@ -213,7 +214,7 @@ public sealed class GalleryShellRepaintTests
 
         // Only the first page is built, so its buttons are the ones on screen.
         var visible = buttons.Where(button => button.Bounds.Width > 0 && button.IsVisible).ToList();
-        Assert.IsTrue(visible.Count >= 2, $"the first page shows {visible.Count} buttons");
+        Assert.IsGreaterThanOrEqualTo(2, visible.Count, $"the first page shows {visible.Count} buttons");
         return new Shell(window, navigation, visible);
     }
 }

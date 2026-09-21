@@ -75,7 +75,7 @@ public sealed class ToggleCommandTests
 
         checkBox.Toggle();
 
-        Assert.AreEqual(true, checkBox.IsChecked);
+        Assert.IsTrue(checkBox.IsChecked);
         Assert.AreEqual(1, executed[0]);
     }
 

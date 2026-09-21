@@ -77,10 +77,11 @@ public sealed class TransparentWindowRepaintTests
                 await Task.Delay(300);
                 var later = SampleShade(window);
 
-                Assert.IsTrue(
-                    Math.Abs(first - later) <= 2,
+                Assert.IsLessThanOrEqualTo(
+                    2,
+                    Math.Abs(first - later),
                     $"{window.GraphicsFactory.Backend}: the translucent area read {first} after the first frames and {later} after thirty more; it built up");
-                Assert.IsTrue(first < 250, $"the translucent area read {first}: nothing of it reached the screen, so this run says nothing");
+                Assert.IsLessThan(250, first, $"the translucent area read {first}: nothing of it reached the screen, so this run says nothing");
             }
             finally
             {

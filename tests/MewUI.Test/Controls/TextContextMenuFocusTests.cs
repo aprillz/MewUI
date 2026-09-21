@@ -91,7 +91,7 @@ public sealed class TextContextMenuFocusTests
                 break;
             }
         }
-        Assert.IsTrue(copyIndex >= 0, "menu has a Copy item");
+        Assert.IsGreaterThanOrEqualTo(0, copyIndex, "menu has a Copy item");
 
         var rowMethod = typeof(ContextMenu).GetMethod("TryGetEntryRowBounds", BindingFlags.NonPublic | BindingFlags.Instance)!;
         object?[] args = [copyIndex, null];

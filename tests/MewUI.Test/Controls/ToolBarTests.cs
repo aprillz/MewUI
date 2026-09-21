@@ -286,7 +286,7 @@ public sealed class ToolBarTests
         visual.OpenOverflow(bar);
         var shown = visual.OverflowContent.Items;
 
-        Assert.IsTrue(shown.Count > 0, "the cut entries did not reach the popup");
+        Assert.IsNotEmpty(shown, "the cut entries did not reach the popup");
         Assert.AreSame(visual.Entries[visual.VisibleEntryCount], shown[0],
             "the popup rebuilt the entry instead of showing the one the band cut");
     }
@@ -433,8 +433,8 @@ public sealed class ToolBarTests
 
         visual.OpenOverflow(bar);
         var shown = visual.OverflowContent.Items.OfType<Button>().Select(entry => entry.Command?.Id).ToList();
-        Assert.IsTrue(shown.Contains("g4"), "the dropped group is not in the band's popup");
-        Assert.IsFalse(shown.Contains("g1"), "a group the band still shows was offered in its popup");
+        Assert.Contains("g4", shown, "the dropped group is not in the band's popup");
+        Assert.DoesNotContain("g1", shown, "a group the band still shows was offered in its popup");
     }
 
     [TestMethod]
@@ -490,8 +490,8 @@ public sealed class ToolBarTests
 
             group.OpenOverflow(bar);
             var shown = group.OverflowContent.Items.OfType<Button>().Select(entry => entry.Command?.Id).ToList();
-            Assert.IsFalse(shown.Contains("g2"), "an entry the band still shows was offered again in the popup");
-            Assert.IsTrue(shown.Contains("g4"), "the entry the cut removed is not in the popup");
+            Assert.DoesNotContain("g2", shown, "an entry the band still shows was offered again in the popup");
+            Assert.Contains("g4", shown, "the entry the cut removed is not in the popup");
             return;
         }
 
@@ -532,8 +532,8 @@ public sealed class ToolBarTests
 
             group.OpenOverflow(bar);
             var shown = group.OverflowContent.Items.OfType<Button>().Select(entry => entry.Command?.Id).ToList();
-            Assert.IsTrue(shown.Contains("g2"), "the entries the band gave up are not all in the popup");
-            Assert.IsTrue(shown.Contains("g4"), "the entries the band gave up are not all in the popup");
+            Assert.Contains("g2", shown, "the entries the band gave up are not all in the popup");
+            Assert.Contains("g4", shown, "the entries the band gave up are not all in the popup");
             group.OverflowContent.Close();
 
             // Collapsed is not gone: the grip still starts a drag, so the group can be moved to a band

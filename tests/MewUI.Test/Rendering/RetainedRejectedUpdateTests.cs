@@ -50,7 +50,7 @@ public sealed class RetainedRejectedUpdateTests
             window.RenderFrameToSurface(surface);
         }
 
-        Assert.IsTrue(window.RejectedSceneUpdates > 0, "the composition was expected to be rejected");
+        Assert.IsGreaterThan(0, window.RejectedSceneUpdates, "the composition was expected to be rejected");
         Assert.AreEqual(0, CountDifferences(factory, window, surface), "the window still shows the scene from before the rejected updates");
 
         // Once the composition is sound again the scene takes over where it left off.

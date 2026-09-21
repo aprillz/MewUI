@@ -101,8 +101,9 @@ public sealed class RetainedGridViewTests
         window.SendMouseMove(new Point(60, 100));
         window.PerformLayout();
         window.RenderFrameToSurface(surface);
-        Assert.IsTrue(
-            window.RetainedStatistics!.ContentRecordCount <= 6,
+        Assert.IsLessThanOrEqualTo(
+            6,
+            window.RetainedStatistics!.ContentRecordCount,
             $"a hover over one row recorded {window.RetainedStatistics!.ContentRecordCount} drawings again");
         var damage = window.LastRetainedDamage;
         Assert.IsTrue(

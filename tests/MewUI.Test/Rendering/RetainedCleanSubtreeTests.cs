@@ -58,15 +58,17 @@ public sealed class RetainedCleanSubtreeTests
 
         statistics.Reset();
         Frames(window, surface, 1);
-        Assert.IsTrue(
-            statistics.CapturedNodeCount <= 2,
+        Assert.IsLessThanOrEqualTo(
+            2,
+            statistics.CapturedNodeCount,
             $"a frame in which nothing changed looked into {statistics.CapturedNodeCount} visuals");
 
         statistics.Reset();
         buttons[260].Background = Color.FromArgb(255, 200, 60, 60);
         Frames(window, surface, 1);
-        Assert.IsTrue(
-            statistics.CapturedNodeCount <= 16,
+        Assert.IsLessThanOrEqualTo(
+            16,
+            statistics.CapturedNodeCount,
             $"a change of one button looked into {statistics.CapturedNodeCount} visuals");
         AssertMatchesReference(factory, window, surface, "after one button changed");
 

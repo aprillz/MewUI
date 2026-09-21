@@ -52,9 +52,9 @@ public sealed class TextWrapToleranceTests
     {
         double measured = Layout(factory, dpi, 1_000_000).MeasuredSize.Width;
 
-        Assert.AreEqual(1, Layout(factory, dpi, measured).Lines.Count,
+        Assert.HasCount(1, Layout(factory, dpi, measured).Lines,
             "The text wrapped in exactly the width it measured.");
-        Assert.AreEqual(1, Layout(factory, dpi, measured - (measured * 1e-7)).Lines.Count,
+        Assert.HasCount(1, Layout(factory, dpi, measured - (measured * 1e-7)).Lines,
             "A deficit within float precision counted as overflow.");
         Assert.IsGreaterThan(1, Layout(factory, dpi, measured * 0.6).Lines.Count,
             "The slack swallowed a real overflow.");

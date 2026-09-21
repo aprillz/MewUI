@@ -61,7 +61,7 @@ public sealed class ItemContainerBackgroundTests
             .OrderBy(name => name)
             .ToArray();
 
-        Assert.AreEqual(0, declared.Length, "public members of ItemContainer about its backgrounds: " + string.Join(", ", declared));
+        Assert.IsEmpty(declared, "public members of ItemContainer about its backgrounds: " + string.Join(", ", declared));
     }
 
     [TestMethod]

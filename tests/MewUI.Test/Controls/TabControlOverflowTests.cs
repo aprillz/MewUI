@@ -51,7 +51,7 @@ public sealed class TabControlOverflowTests
         var (_, tabs, overflow) = Host(width: 200, tabCount: 8);
         var header = VisualTree.Find(tabs, e => e is TabHeaderButton && e.Bounds.Height > 0)!;
 
-        Assert.IsTrue(overflow.Bounds.Height > 0, "the overflow button was not laid out");
+        Assert.IsGreaterThan(0, overflow.Bounds.Height, "the overflow button was not laid out");
         Assert.AreEqual(18, overflow.Bounds.Height,
             $"the chevron stretched to the strip instead of keeping its own height (overflow={overflow.Bounds})");
         Assert.AreEqual(
@@ -70,8 +70,8 @@ public sealed class TabControlOverflowTests
         overflow.IsDropDownOpen = true;
 
         var items = MenuItems(overflow);
-        Assert.IsTrue(items.Count > 0, "a narrow strip hides tabs");
-        Assert.IsTrue(items.Count < 6, "the visible tabs are not listed");
+        Assert.IsNotEmpty(items, "a narrow strip hides tabs");
+        Assert.IsLessThan(6, items.Count, "the visible tabs are not listed");
         Assert.IsFalse(items.Any(item => item.ToString() == "Tab number 0"),
             "the leading tab stays visible, so it is not in the menu");
     }
@@ -120,7 +120,7 @@ public sealed class TabControlOverflowTests
         overflow.IsDropDownOpen = false;
 
         overflow.IsDropDownOpen = true;
-        Assert.AreEqual(first, MenuItems(overflow).Count, "each open rebuilds the menu from scratch");
+        Assert.HasCount(first, MenuItems(overflow), "each open rebuilds the menu from scratch");
     }
 
     [TestMethod]

@@ -24,7 +24,7 @@ public sealed class MarkdownSelectionTests
 
         Assert.AreEqual("paragraph here.\nSecond", presenter.SelectedText);
         Assert.IsTrue(presenter.HasSelection);
-        Assert.IsTrue(changes >= 2);
+        Assert.IsGreaterThanOrEqualTo(2, changes);
     }
 
     [TestMethod]
@@ -47,14 +47,14 @@ public sealed class MarkdownSelectionTests
         using var viewer = new MarkdownViewer { Markdown = MarkdownVirtualizationTests.VariedDocument(900) };
         viewer.Measure(new Size(WIDTH, 300));
         viewer.Arrange(new Rect(0, 0, WIDTH, 300));
-        Assert.IsTrue(viewer.BlockHost!.RealizedCount < 900);
+        Assert.IsLessThan(900, viewer.BlockHost!.RealizedCount);
 
         viewer.SelectAll();
 
         StringAssert.Contains(viewer.SelectedText, "Section 0");
         StringAssert.Contains(viewer.SelectedText, "Short line 897.");
         StringAssert.Contains(viewer.SelectedText, "var value892 = 1;");
-        Assert.IsTrue(viewer.SelectedText.Length > 20_000);
+        Assert.IsGreaterThan(20_000, viewer.SelectedText.Length);
     }
 
     [TestMethod]
@@ -73,7 +73,7 @@ public sealed class MarkdownSelectionTests
         viewer.Arrange(new Rect(0, 0, WIDTH, 300));
 
         var realized = Descendants(host).OfType<MarkdownParagraph>().Where(paragraph => paragraph.TextUnit >= 0).ToArray();
-        Assert.IsTrue(realized.Length > 0);
+        Assert.IsNotEmpty(realized);
         Assert.IsTrue(realized.All(paragraph => paragraph.IsFullySelected), "blocks realized after SelectAll must show the selection");
     }
 

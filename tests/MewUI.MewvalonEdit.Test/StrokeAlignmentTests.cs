@@ -10,7 +10,7 @@ namespace MewUI.MewvalonEdit.Test;
 [TestClass]
 public sealed class StrokeAlignmentTests
 {
-    [DataTestMethod]
+    [TestMethod]
     [DataRow(1.0)]
     [DataRow(1.25)]
     [DataRow(1.5)]

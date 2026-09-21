@@ -284,7 +284,7 @@ public sealed class SelectionBindingTests
         var tree = new TreeView();
         Assert.IsInstanceOfType<ISelector>(tree);
         Assert.IsInstanceOfType<IMultiSelector>(tree);
-        Assert.IsFalse(tree is IIndexedSelector);
+        Assert.IsNotInstanceOfType<IIndexedSelector>(tree);
     }
 
     [TestMethod]

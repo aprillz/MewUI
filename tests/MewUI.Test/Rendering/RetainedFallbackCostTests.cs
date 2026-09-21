@@ -84,7 +84,7 @@ public sealed class RetainedFallbackCostTests
         using var reference = factory.CreateSurface(RenderSurfaceDescriptor.Offscreen(WIDTH, HEIGHT, 1.0, hasAlpha: false));
         int beforeReference = small.Sum(visual => visual.Renders);
         window.RenderReferenceFrameToSurface(reference);
-        Assert.IsTrue(small.Sum(visual => visual.Renders) > beforeReference, "the reference frame is expected to render every visual");
+        Assert.IsGreaterThan(beforeReference, small.Sum(visual => visual.Renders), "the reference frame is expected to render every visual");
         ReadOnlySpan<byte> expected = ((ICpuPixelSurface)reference).GetReadOnlyPixelSpan();
         ReadOnlySpan<byte> shown = ((ICpuPixelSurface)surface).GetReadOnlyPixelSpan();
         int differing = 0;

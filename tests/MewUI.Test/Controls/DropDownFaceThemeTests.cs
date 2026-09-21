@@ -79,7 +79,7 @@ public sealed class DropDownFaceThemeTests
             .Where(sample => sample.A > 0 && !SharesHue(sample, darkHover))
             .ToList();
 
-        Assert.IsTrue(offenders.Count == 0,
+        Assert.IsEmpty(offenders,
             $"frames drifted off the hover hue (dark hover={darkHover}): "
             + string.Join(", ", offenders.Select(static color => $"#{color.A:X2}{color.R:X2}{color.G:X2}{color.B:X2}")));
     }

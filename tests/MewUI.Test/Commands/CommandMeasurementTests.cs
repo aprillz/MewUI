@@ -21,7 +21,7 @@ public sealed class CommandMeasurementTests
     private sealed class FlagState
     {
         public bool Flag1 = true;
-        public bool Flag2;
+        public bool Flag2 = false;
     }
 
     private static Window BuildCommandSourceWindow(int sourceCount, FlagState state)
