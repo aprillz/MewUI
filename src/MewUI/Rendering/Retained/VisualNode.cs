@@ -71,6 +71,39 @@ internal sealed class VisualNode : IDisposable
 
     internal string? NonRecordableReason { get; set; }
 
+    /// <summary>Reason given for a slot that is left unrecorded because its visual changes every pass.</summary>
+    internal const string CHANGES_EVERY_PASS = "the visual changes every pass";
+
+    // A recording is worth taking once it gets replayed; a run this long says it will not be.
+    private const int CHANGED_PASSES_BEFORE_DRAWN_LIVE = 30;
+
+    private int _changedPassRun;
+
+    /// <summary>Last pass that found this visual's content changed.</summary>
+    internal int LastChangedPass { get; private set; } = -1;
+
+    /// <summary>
+    /// Notes that a pass found the content changed, and keeps the run of passes in a row. A visual drawn
+    /// live answers for its own box alone, so a recording that inked past that box ends the run.
+    /// </summary>
+    internal void NoteContentChanged(int pass, bool inkStaysInsideTheVisual)
+    {
+        if (!inkStaysInsideTheVisual)
+        {
+            _changedPassRun = 0;
+            LastChangedPass = pass;
+        }
+        else if (LastChangedPass != pass)
+        {
+            _changedPassRun = LastChangedPass == pass - 1 ? _changedPassRun + 1 : 1;
+            LastChangedPass = pass;
+        }
+    }
+
+    /// <summary>Whether the content has changed in every one of the passes leading up to <paramref name="pass"/>.</summary>
+    internal bool ChangesEveryPass(int pass)
+        => _changedPassRun >= CHANGED_PASSES_BEFORE_DRAWN_LIVE && LastChangedPass >= pass - 1;
+
     internal bool HasContent
     {
         get

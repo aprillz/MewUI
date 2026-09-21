@@ -98,6 +98,7 @@ public sealed class RetainedParticleCostTests
         for (int frame = 0; frame < FRAMES; frame++)
         {
             particles.Step();
+            counter.Text = "again " + frame;
             window.PerformLayout();
             long start = Stopwatch.GetTimestamp();
             window.RenderReferenceFrameToSurface(reference);
