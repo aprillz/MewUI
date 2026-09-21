@@ -30,6 +30,10 @@ public sealed class VideoPlayerWindow : Window
     private Canvas _statsOverlayCanvas = null!;
     private CheckBox _statsOverlayCheckBox = null!;
     private CheckBox _forceCpuReadbackCheckBox = null!;
+    private Border _topBar = null!;
+    private Border _bottomBar = null!;
+    // State restored when leaving full screen.
+    private WindowState _stateBeforeFullScreen = WindowState.Normal;
 
     private readonly DispatcherTimer _uiTimer = new(TimeSpan.FromSeconds(1.0 / 60));
     private readonly Stopwatch _fpsStopwatch = new();
@@ -42,13 +46,18 @@ public sealed class VideoPlayerWindow : Window
     private Point _statsOverlayDragOffset;
     private string? _lastRenderLoopStateLog;
     private string _lastSetStatsText = "";
-    private string _cachedStatsOverlayText = "ffmpeg";
+    private const string STATS_OVERLAY_HINT = "click: play/pause | double-click: full screen";
+    private const string IDLE_STATS_OVERLAY_TEXT = STATS_OVERLAY_HINT + "\nffmpeg";
+    private string _cachedStatsOverlayText = IDLE_STATS_OVERLAY_TEXT;
     private long _nextStatsOverlayUpdateTicks;
 
     private readonly ObservableValue<int> _uiPositionIntValue = new(0);
     private readonly ObservableValue<TimeSpan> _uiPositionValue = new(TimeSpan.Zero);
     private readonly ObservableValue<TimeSpan> _uiDurationValue = new(TimeSpan.Zero);
     private readonly ObservableValue<bool> _uiIsPlayingValue = new(false);
+    // Button text follows both the load state and the play state; setting the content directly would drop the binding.
+    private readonly ObservableValue<string> _uiPlayButtonText = new("Play");
+    private bool _uiIsLoading;
 
     private readonly string? _startupPath;
 
@@ -76,6 +85,7 @@ public sealed class VideoPlayerWindow : Window
 
         Loaded += OnLoadedInternal;
         Closed += OnClosedInternal;
+        WindowStateChanged += OnWindowStateChangedInternal;
         FrameRendered += OnFrameRenderedInternal;
     }
 
@@ -88,6 +98,8 @@ public sealed class VideoPlayerWindow : Window
                 .DockBottom(),
 
             new Grid()
+                .OnMouseDown(OnVideoMouseDown)
+                .OnMouseDoubleClick(OnVideoDoubleClick)
                 .Children(
                     new VideoView()
                         .Ref(out _videoView),
@@ -103,10 +115,11 @@ public sealed class VideoPlayerWindow : Window
                                 .OnMouseDown(BeginStatsOverlayDrag)
                                 .OnMouseMove(DragStatsOverlay)
                                 .OnMouseUp(EndStatsOverlayDrag)
+                                .OnMouseDoubleClick(e => e.Handled = true)
                                 .Child(
                                     new TextBlock()
                                         .Ref(out _statsOverlayText)
-                                        .Text("ffmpeg")
+                                        .Text(IDLE_STATS_OVERLAY_TEXT)
                                         .FontFamily("Consolas")
                                         .FontSize(14)
                                         .Foreground(Color.White)
@@ -118,6 +131,7 @@ public sealed class VideoPlayerWindow : Window
         );
 
     private FrameworkElement BuildTopBar() => new Border()
+        .Ref(out _topBar)
         .Padding(12, 10)
         .BorderThickness(1)
         .WithTheme((theme, border) =>
@@ -169,6 +183,7 @@ public sealed class VideoPlayerWindow : Window
         );
 
     private FrameworkElement BuildBottomBar() => new Border()
+        .Ref(out _bottomBar)
         .Padding(12, 10)
         .BorderThickness(1)
         .WithTheme((theme, border) =>
@@ -182,7 +197,7 @@ public sealed class VideoPlayerWindow : Window
                 .Children(
                     new Button()
                         .Ref(out _playPauseButton)
-                        .BindContent(_uiIsPlayingValue, x => x ? "Pause" : "Play")
+                        .BindContent(_uiPlayButtonText)
                         .Width(96)
                         .OnClick(TogglePlayback),
 
@@ -219,14 +234,8 @@ public sealed class VideoPlayerWindow : Window
         _player.StatusChanged += text => _statusText.Text = text;
         _player.LoadingStateChanged += isLoading =>
         {
-            if (isLoading)
-            {
-                _playPauseButton.Content("Loading...");
-            }
-            else if (_player.Playback is null)
-            {
-                _playPauseButton.Content("Play");
-            }
+            _uiIsLoading = isLoading;
+            UpdatePlayButtonText();
         };
         _player.PlaybackReplaced += OnPlaybackReplaced;
 
@@ -294,6 +303,51 @@ public sealed class VideoPlayerWindow : Window
         _ = _player.LoadAsync(file);
     }
 
+    private void OnVideoMouseDown(MouseEventArgs e)
+    {
+        if (e.Button == MouseButton.Left && e.ClickCount == 1)
+        {
+            TogglePlayback();
+        }
+    }
+
+    private void OnVideoDoubleClick(MouseEventArgs e)
+    {
+        if (e.Button != MouseButton.Left)
+        {
+            return;
+        }
+
+        // The first click of the pair already toggled playback; toggle back so a double click only changes the window.
+        if (_player.Playback is not null)
+        {
+            _player.TogglePlayPause();
+        }
+
+        ToggleFullScreen();
+        e.Handled = true;
+    }
+
+    private void ToggleFullScreen()
+    {
+        if (WindowState == WindowState.FullScreen)
+        {
+            WindowState = _stateBeforeFullScreen;
+        }
+        else
+        {
+            _stateBeforeFullScreen = WindowState == WindowState.Maximized ? WindowState.Maximized : WindowState.Normal;
+            WindowState = WindowState.FullScreen;
+        }
+    }
+
+    private void OnWindowStateChangedInternal(WindowState state)
+    {
+        bool showBars = state != WindowState.FullScreen;
+        _topBar.IsVisible = showBars;
+        _bottomBar.IsVisible = showBars;
+    }
+
     private void TogglePlayback()
     {
         if (_player.Playback is null && !_player.IsLoading)
@@ -306,6 +360,15 @@ public sealed class VideoPlayerWindow : Window
         _player.TogglePlayPause();
     }
 
+    private void UpdatePlayButtonText()
+    {
+        string text = _uiIsLoading ? "Loading..." : _uiIsPlayingValue.Value ? "Pause" : "Play";
+        if (!string.Equals(_uiPlayButtonText.Value, text, StringComparison.Ordinal))
+        {
+            _uiPlayButtonText.Value = text;
+        }
+    }
+
     private void OnPlaybackReplaced()
     {
         ResetFpsStats();
@@ -316,9 +379,10 @@ public sealed class VideoPlayerWindow : Window
             _seekSlider.Maximum = 1;
             _seekSlider.Value = 0;
             _suppressSeekSync = false;
-            _playPauseButton.Content("Play");
-            _statsOverlayText.Text = "ffmpeg";
-            _cachedStatsOverlayText = "ffmpeg";
+            _uiIsPlayingValue.Value = false;
+            UpdatePlayButtonText();
+            _statsOverlayText.Text = IDLE_STATS_OVERLAY_TEXT;
+            _cachedStatsOverlayText = IDLE_STATS_OVERLAY_TEXT;
             _nextStatsOverlayUpdateTicks = 0;
             return;
         }
@@ -434,6 +498,7 @@ public sealed class VideoPlayerWindow : Window
         if (playback is null)
         {
             _uiIsPlayingValue.Value = false;
+            UpdatePlayButtonText();
             _uiDurationValue.Value = TimeSpan.Zero;
             _uiPositionValue.Value = TimeSpan.Zero;
             _uiPositionIntValue.Value = 0;
@@ -461,6 +526,7 @@ public sealed class VideoPlayerWindow : Window
         var duration = playback.Duration;
 
         _uiIsPlayingValue.Value = playback.IsPlaying;
+        UpdatePlayButtonText();
         _uiPositionValue.Value = playback.Position;
         _uiDurationValue.Value = playback.Duration;
         _uiPositionIntValue.Value = (int)_uiPositionValue.Value.TotalSeconds;
@@ -507,6 +573,7 @@ public sealed class VideoPlayerWindow : Window
         var stats = Stats;
 
         var builder = new StringBuilder();
+        builder.Append(STATS_OVERLAY_HINT).Append('\n');
         builder.Append(playback.DecoderStatsOverlayText);
         builder.Append("\nfps: ").Append(_lastFpsText);
         builder.Append("\nrender loop: ").Append(GetRenderLoopStatsText());
