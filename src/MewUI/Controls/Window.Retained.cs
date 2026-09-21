@@ -15,6 +15,9 @@ public partial class Window
     private object? _preservingTarget;
     private IRenderSurface? _retainedFrameSurface;
 
+    // The context that draws into the frame surface, kept for as long as that surface is.
+    private IGraphicsContext? _retainedFrameContext;
+
     /// <summary>
     /// Draws straight into the window target instead of going through the frame surface, so a test can
     /// compare what the two ways of presenting the same frame put on screen.
@@ -438,6 +441,7 @@ public partial class Window
             _layerRoots.Add(performanceAdorner);
         }
 
+        SplitRootsOverTheFrame();
         return _layerRoots;
     }
 
@@ -617,14 +621,34 @@ public partial class Window
 
         // A backend that binds its drawing to a per-thread context needs that context put on this
         // thread before the frame surface is drawn into.
-        using (persistentFactory.AcquirePersistentFrameRenderScope())
+        _mayDrawRootsOverTheFrame = true;
+        _frameDrewEveryRoot = false;
+        try
         {
-            RenderFrameCore(frameSurface, clientSize);
+            using (persistentFactory.AcquirePersistentFrameRenderScope())
+            {
+                RenderFrameCore(frameSurface, clientSize);
+            }
+        }
+        finally
+        {
+            _mayDrawRootsOverTheFrame = false;
         }
 
+        // A frame drawn without the scene drew every root into the surface itself.
+        if (_frameDrewEveryRoot)
+        {
+            _rootsOverTheFrame.Clear();
+        }
+
+        bool rootsOverTheFrameChanged = _rootsOverTheFrame.Count != _rootsOverTheLastFrame;
+        _rootsOverTheLastFrame = _rootsOverTheFrame.Count;
+
         // Nothing was painted, so the window already shows this frame: putting it there again would
-        // copy the whole surface for no change on screen.
-        if (_frameRepaintedNothing && PlatformReportsLostFrames && !_presentedFrameLost)
+        // copy the whole surface for no change on screen. A root drawn over the frame is on no surface,
+        // so the screen has to be given it every frame it is there.
+        if (_frameRepaintedNothing && PlatformReportsLostFrames && !_presentedFrameLost &&
+            _rootsOverTheFrame.Count == 0 && !rootsOverTheFrameChanged)
         {
             _skippedPresents++;
             return true;
@@ -640,6 +664,8 @@ public partial class Window
             !AllowsTransparency &&
             !DamageOverlayEnabled &&
             !_frameRepaintedNothing &&
+            _rootsOverTheFrame.Count == 0 &&
+            !rootsOverTheFrameChanged &&
             LastRetainedDamage is Rect &&
             _frameDamageAreas.Count > 0;
 
@@ -686,6 +712,7 @@ public partial class Window
                     _presentedArea = whole.Width * whole.Height;
                 }
 
+                DrawRootsOverTheFrame(context, clientSize);
                 DrawDamageMarks(context);
             }
             finally
@@ -699,7 +726,124 @@ public partial class Window
             view.Dispose();
         }
 
+
         return true;
+    }
+
+    // Layer roots left out of the kept frame and drawn over it on its way to the screen, in drawing order.
+    private readonly List<UIElement> _rootsOverTheFrame = [];
+
+    // Frame in which each of those roots last changed.
+    private readonly Dictionary<UIElement, int> _rootOverTheFrameLastChange = new(ReferenceEqualityComparer.Instance);
+    private bool _mayDrawRootsOverTheFrame;
+    private bool _frameDrewEveryRoot;
+    private int _rootsOverTheLastFrame;
+    private int _keptFrameNumber;
+
+    /// <summary>
+    /// A layer root that draws something else every frame, over most of the window, would have the kept
+    /// frame replay everything under it every frame. The roots at the top of the order that change every
+    /// frame are therefore left out of the kept frame and drawn straight onto the screen over it. Only
+    /// the top of the order qualifies, so nothing that belongs above such a root ends up beneath it.
+    /// </summary>
+    private void SplitRootsOverTheFrame()
+    {
+        _rootsOverTheFrame.Clear();
+        if (!_mayDrawRootsOverTheFrame)
+        {
+            _rootOverTheFrameLastChange.Clear();
+            return;
+        }
+
+        _keptFrameNumber++;
+        int first = _layerRoots.Count;
+        while (first > 0 && ChangesEveryFrame(_layerRoots[first - 1]))
+        {
+            first--;
+        }
+
+        for (int index = first; index < _layerRoots.Count; index++)
+        {
+            _rootsOverTheFrame.Add(_layerRoots[index]);
+        }
+
+        _layerRoots.RemoveRange(first, _layerRoots.Count - first);
+
+        if (_rootOverTheFrameLastChange.Count > _rootsOverTheFrame.Count)
+        {
+            foreach (var known in _rootOverTheFrameLastChange.Keys.ToArray())
+            {
+                if (!_rootsOverTheFrame.Contains(known))
+                {
+                    _rootOverTheFrameLastChange.Remove(known);
+                }
+            }
+        }
+    }
+
+    private bool ChangesEveryFrame(UIElement layerRoot)
+    {
+        if (_rootOverTheFrameLastChange.TryGetValue(layerRoot, out int lastChange))
+        {
+            if (IsQueuedUnder(layerRoot))
+            {
+                lastChange = _keptFrameNumber;
+                _rootOverTheFrameLastChange[layerRoot] = lastChange;
+            }
+
+            // A frame may go by without it; after that it has settled and goes back into the kept frame.
+            return _keptFrameNumber - lastChange <= 1;
+        }
+
+        var node = _renderScene?.FindNode(layerRoot);
+        if (node != null && node.ChangesEveryPass(_renderScene!.PassId + 1))
+        {
+            _rootOverTheFrameLastChange[layerRoot] = _keptFrameNumber;
+            return true;
+        }
+
+        return false;
+    }
+
+    private bool IsQueuedUnder(UIElement layerRoot)
+    {
+        foreach (var queued in RenderDirtyQueue.Queued.Keys)
+        {
+            for (Element? current = queued; current != null; current = current.Parent)
+            {
+                if (ReferenceEquals(current, layerRoot))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private void DrawRootsOverTheFrame(IGraphicsContext context, Size clientSize)
+    {
+        if (_rootsOverTheFrame.Count == 0)
+        {
+            return;
+        }
+
+        var previousCullViewport = UIElement.RenderCullViewport;
+        UIElement.RenderCullViewport = new Rect(0, 0, clientSize.Width, clientSize.Height);
+        context.Save();
+        try
+        {
+            context.SetClip(LayoutRounding.SnapViewportRectToPixels(new Rect(0, 0, clientSize.Width, clientSize.Height), DpiScale));
+            for (int index = 0; index < _rootsOverTheFrame.Count; index++)
+            {
+                _rootsOverTheFrame[index].Render(context);
+            }
+        }
+        finally
+        {
+            context.Restore();
+            UIElement.RenderCullViewport = previousCullViewport;
+        }
     }
 
     /// <summary>Returns the frame surface matching the target, creating it when it does not match.</summary>
@@ -738,6 +882,9 @@ public partial class Window
 
     private void ReleaseRetainedFrameSurface()
     {
+        // The context draws into the surface, so it goes first.
+        _retainedFrameContext?.Dispose();
+        _retainedFrameContext = null;
         _retainedFrameSurface?.Dispose();
         _retainedFrameSurface = null;
         _preservingTarget = null;
