@@ -115,7 +115,7 @@ public sealed class RetainedSceneAllocationTests
         using var context = factory.CreateContext(surface);
         var recorder = new RenderDataRecorder(context) { SuppressDrawing = true };
         scene.Statistics.Reset();
-        scene.ResetDamage();
+        scene.ResetDirtyRegion();
         capture.Capture(scene, root, recorder, registry);
     }
 

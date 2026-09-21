@@ -14,7 +14,7 @@ namespace MewUI.Test.Rendering;
 /// </summary>
 [TestClass]
 [DoNotParallelize]
-public sealed class RetainedDamageRegionTests
+public sealed class RetainedDirtyRegionTests
 {
     private const int WIDTH = 400;
     private const int HEIGHT = 300;
@@ -58,8 +58,8 @@ public sealed class RetainedDamageRegionTests
             int replayed = window.RetainedStatistics!.ContentReplayCount;
             Assert.IsLessThanOrEqualTo(8, replayed, $"repainting two tiles replayed {replayed} recordings");
 
-            var areas = window.LastRetainedDamageAreas;
-            Assert.IsNotNull(window.LastRetainedDamage, "the frame was drawn whole");
+            var areas = window.LastRetainedDirtyRects;
+            Assert.IsNotNull(window.LastRetainedDirtyRect, "the frame was drawn whole");
             Assert.HasCount(2, areas, $"two distant changes became {areas.Count} area(s)");
             double repainted = areas.Sum(area => area.Width * area.Height);
             Assert.IsLessThan(
@@ -89,7 +89,7 @@ public sealed class RetainedDamageRegionTests
 
             Frame(window, surface);
 
-            Assert.IsNull(window.LastRetainedDamage, "a frame that repaints nearly everything was still clipped into areas");
+            Assert.IsNull(window.LastRetainedDirtyRect, "a frame that repaints nearly everything was still clipped into areas");
             AssertMatchesReference(factory, window, surface, "after changing every tile");
         }
     }

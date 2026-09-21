@@ -7,13 +7,13 @@ using Aprillz.MewUI.Rendering.Retained;
 namespace MewUI.Test.Rendering;
 
 /// <summary>
-/// Validates the damage the scene reports: it must cover what an update changed, stay away from
+/// Validates the dirty region the scene reports: it must cover what an update changed, stay away from
 /// what it did not, and a replay restricted to it must end up at the same pixels as a full replay.
 /// Not parallelizable: assigns the process-wide Application.DefaultGraphicsFactory.
 /// </summary>
 [TestClass]
 [DoNotParallelize]
-public sealed class RetainedSceneDamageTests
+public sealed class RetainedSceneDirtyRegionTests
 {
     private const int SURFACE_WIDTH = 200;
     private const int SURFACE_HEIGHT = 160;
@@ -28,7 +28,7 @@ public sealed class RetainedSceneDamageTests
     }
 
     [TestMethod]
-    public void DamagedReplay_EndsAtTheSamePixelsAsAFullReplay()
+    public void DirtyReplay_EndsAtTheSamePixelsAsAFullReplay()
     {
         if (!OperatingSystem.IsWindows())
         {
@@ -54,51 +54,51 @@ public sealed class RetainedSceneDamageTests
         top.Fill = Color.FromArgb(255, 10, 200, 90);
         top.InvalidateVisual();
 
-        scene.ResetDamage();
+        scene.ResetDirtyRegion();
         using (var scratch = CreateSurface(factory))
         {
             DrawInto(factory, scratch, context => capture.Capture(scene, root, context, registry), clear: true);
         }
 
-        Assert.IsTrue(scene.HasDamage, "the content change reported no damage");
-        Assert.IsFalse(scene.IsFullDamage, "a single item change escalated to the whole surface");
+        Assert.IsTrue(scene.HasDirtyRegion, "the content change reported no dirty region");
+        Assert.IsFalse(scene.IsFullyDirty, "a single item change escalated to the whole surface");
 
-        var damage = scene.DamageBounds;
+        var dirtyRect = scene.DirtyBounds;
         Assert.IsFalse(
-            damage.IntersectsWith(bottom.Bounds),
-            $"the damage {damage} reaches the item that did not change at {bottom.Bounds}");
+            dirtyRect.IntersectsWith(bottom.Bounds),
+            $"the dirty region {dirtyRect} reaches the item that did not change at {bottom.Bounds}");
 
-        using var damaged = CreateSurface(factory);
-        DrawInto(factory, damaged, context => FrameRenderer.Replay(scene, context, damage), clear: true);
+        using var dirty = CreateSurface(factory);
+        DrawInto(factory, dirty, context => FrameRenderer.Replay(scene, context, dirtyRect), clear: true);
 
         using var full = CreateSurface(factory);
         DrawInto(factory, full, context => FrameRenderer.Replay(scene, context), clear: true);
 
-        byte[] damagedPixels = ReadPixels(damaged);
+        byte[] dirtyPixels = ReadPixels(dirty);
         byte[] fullPixels = ReadPixels(full);
 
-        // Inside the damage the partial replay must reach the same pixels as the full replay, and
+        // Inside the dirty region the partial replay must reach the same pixels as the full replay, and
         // outside it must not have drawn at all, which is what lets the previous frame stand.
         for (int row = 0; row < SURFACE_HEIGHT; row++)
         {
             for (int column = 0; column < SURFACE_WIDTH; column++)
             {
-                bool inside = damage.Contains(new Point(column + 0.5, row + 0.5));
+                bool inside = dirtyRect.Contains(new Point(column + 0.5, row + 0.5));
                 int offset = (row * SURFACE_WIDTH + column) * 4;
                 if (inside)
                 {
-                    AssertPixelEqual(fullPixels, damagedPixels, offset, "inside the damage");
+                    AssertPixelEqual(fullPixels, dirtyPixels, offset, "inside the dirty region");
                 }
                 else
                 {
-                    AssertPixelIsWhite(damagedPixels, offset);
+                    AssertPixelIsWhite(dirtyPixels, offset);
                 }
             }
         }
     }
 
     [TestMethod]
-    public void RedrawingOnlyTheDamage_LeavesTheSurfaceAsAFullReplayWould()
+    public void RedrawingOnlyTheDirtyRegion_LeavesTheSurfaceAsAFullReplayWould()
     {
         if (!OperatingSystem.IsWindows())
         {
@@ -128,20 +128,20 @@ public sealed class RetainedSceneDamageTests
         top.Fill = Color.FromArgb(255, 10, 200, 90);
         top.InvalidateVisual();
 
-        scene.ResetDamage();
+        scene.ResetDirtyRegion();
         UpdateScene(factory, live, capture, scene, root, registry);
-        var damage = scene.DamageBounds;
-        Assert.IsTrue(scene.HasDamage && !scene.IsFullDamage);
+        var dirtyRect = scene.DirtyBounds;
+        Assert.IsTrue(scene.HasDirtyRegion && !scene.IsFullyDirty);
 
-        // The second frame keeps the first one and repaints the damaged box alone.
+        // The second frame keeps the first one and repaints the dirty box alone.
         persistent.PreserveContentsOnBeginFrame = true;
         using (var context = factory.CreateContext(live))
         {
             context.BeginFrame(live);
-            var damageContext = context as IOpaqueDamageContext;
-            Assert.IsNotNull(damageContext, "the context cannot erase a rectangle, so partial repaint is untestable");
-            damageContext.ClearRectangle(damage, Color.White);
-            FrameRenderer.Replay(scene, context, damage);
+            var dirtyRectContext = context as IOpaqueDirtyRectContext;
+            Assert.IsNotNull(dirtyRectContext, "the context cannot erase a rectangle, so partial repaint is untestable");
+            dirtyRectContext.ClearRectangle(dirtyRect, Color.White);
+            FrameRenderer.Replay(scene, context, dirtyRect);
             context.EndFrame();
         }
 
@@ -152,7 +152,7 @@ public sealed class RetainedSceneDamageTests
         byte[] fullPixels = ReadPixels(full);
         for (int offset = 0; offset < fullPixels.Length; offset += 4)
         {
-            AssertPixelEqual(fullPixels, partialPixels, offset, "after repainting only the damage");
+            AssertPixelEqual(fullPixels, partialPixels, offset, "after repainting only the dirty region");
         }
     }
 
@@ -190,7 +190,7 @@ public sealed class RetainedSceneDamageTests
             AssertPixelIsWhite(afterUpdate, offset);
         }
 
-        Assert.IsTrue(scene.HasDamage, "the update pass recorded nothing");
+        Assert.IsTrue(scene.HasDirtyRegion, "the update pass recorded nothing");
 
         // The same scene, replayed, is what reaches the surface.
         using var replayed = CreateSurface(factory);
@@ -214,7 +214,7 @@ public sealed class RetainedSceneDamageTests
     }
 
     [TestMethod]
-    public void UnchangedFrame_ReportsNoDamage()
+    public void UnchangedFrame_ReportsNoDirtyRegion()
     {
         if (!OperatingSystem.IsWindows())
         {
@@ -234,14 +234,14 @@ public sealed class RetainedSceneDamageTests
         using var surface = CreateSurface(factory);
         DrawInto(factory, surface, context => capture.Capture(scene, root, context, registry), clear: true);
 
-        scene.ResetDamage();
+        scene.ResetDirtyRegion();
         DrawInto(factory, surface, context => capture.Capture(scene, root, context, registry), clear: true);
 
-        Assert.IsFalse(scene.HasDamage, $"an unchanged frame reported damage at {scene.DamageBounds}");
+        Assert.IsFalse(scene.HasDirtyRegion, $"an unchanged frame reported a dirty region at {scene.DirtyBounds}");
     }
 
     [TestMethod]
-    public void DeviceChange_DamagesTheWholeSurface()
+    public void DeviceChange_DirtiesTheWholeSurface()
     {
         if (!OperatingSystem.IsWindows())
         {
@@ -261,10 +261,10 @@ public sealed class RetainedSceneDamageTests
         using var surface = CreateSurface(factory);
         DrawInto(factory, surface, context => capture.Capture(scene, root, context, registry), clear: true);
 
-        scene.ResetDamage();
+        scene.ResetDirtyRegion();
         scene.SetDeviceGeneration(scene.DeviceGeneration + 1);
 
-        Assert.IsTrue(scene.IsFullDamage, "a device change left the scene claiming partial damage");
+        Assert.IsTrue(scene.IsFullyDirty, "a device change left the scene claiming a partial dirty region");
     }
 
     private static StackPanel BuildRoot(UIElement top, UIElement bottom)
@@ -280,7 +280,7 @@ public sealed class RetainedSceneDamageTests
         root.Arrange(new Rect(0, 0, SURFACE_WIDTH, SURFACE_HEIGHT));
     }
 
-    /// <summary>Brings the scene up to date without drawing, which is what reports the damage.</summary>
+    /// <summary>Brings the scene up to date without drawing, which is what reports the dirty region.</summary>
     private static void UpdateScene(
         GdiGraphicsFactory factory,
         IRenderSurface surface,
@@ -341,7 +341,7 @@ public sealed class RetainedSceneDamageTests
 
         int pixelIndex = offset / 4;
         Assert.Fail(
-            $"The damaged replay differs from the full replay {where} at " +
+            $"The dirty replay differs from the full replay {where} at " +
             $"({pixelIndex % SURFACE_WIDTH},{pixelIndex / SURFACE_WIDTH}): " +
             $"expected BGRA=({expected[offset]},{expected[offset + 1]},{expected[offset + 2]},{expected[offset + 3]}) " +
             $"actual BGRA=({actual[offset]},{actual[offset + 1]},{actual[offset + 2]},{actual[offset + 3]}).");
@@ -356,7 +356,7 @@ public sealed class RetainedSceneDamageTests
 
         int pixelIndex = offset / 4;
         Assert.Fail(
-            $"The damaged replay drew outside the damage at " +
+            $"The dirty replay drew outside the dirty region at " +
             $"({pixelIndex % SURFACE_WIDTH},{pixelIndex / SURFACE_WIDTH}): " +
             $"BGRA=({actual[offset]},{actual[offset + 1]},{actual[offset + 2]},{actual[offset + 3]}).");
     }

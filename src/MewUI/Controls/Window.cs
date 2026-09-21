@@ -3064,7 +3064,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             // The scene is brought up to date before anything is cleared, because what the frame has
             // to repaint is decided from the finished scene.
             NoteSceneCountsBeforeUpdate();
-            Rect? retainedDamage;
+            Rect? retainedDirtyRect;
             if (_hostedPortalRoot is UIElement portalRoot)
             {
                 // The subtree stays arranged in the owner's coordinates. Taking the scene under the
@@ -3075,7 +3075,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
                 {
                     context.Scale(_hostedPortalScale, _hostedPortalScale);
                     context.Translate(-_hostedPortalOrigin.X, -_hostedPortalOrigin.Y);
-                    retainedDamage = UpdateRetainedScene(context, target, portalRoot, isPortal: true);
+                    retainedDirtyRect = UpdateRetainedScene(context, target, portalRoot, isPortal: true);
                 }
                 finally
                 {
@@ -3084,34 +3084,34 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             }
             else if (EffectiveVisualRoot is UIElement sceneRoot)
             {
-                retainedDamage = UpdateRetainedScene(context, target, sceneRoot, isPortal: false);
+                retainedDirtyRect = UpdateRetainedScene(context, target, sceneRoot, isPortal: false);
             }
             else
             {
-                retainedDamage = null;
+                retainedDirtyRect = null;
             }
 
             // A frame that repaints areas paints each one on its own: erase it, clip to it, and replay
             // what touches it. Areas far apart then cost what they cover, not what lies between them.
             // When the target still holds the frame this one would draw, no area is painted at all. The
             // frame still ends the usual way, so what counts frames keeps counting them.
-            int paintedAreaCount = RepaintsNothing(retainedDamage) ? 0 : retainedDamage == null ? 1 : _frameDamageAreas.Count;
+            int paintedAreaCount = RepaintsNothing(retainedDirtyRect) ? 0 : retainedDirtyRect == null ? 1 : _frameDirtyRects.Count;
             _frameRepaintedNothing = paintedAreaCount == 0;
             if (paintedAreaCount > 0)
             {
-                NoteDamageMarks(retainedDamage, clientSize);
+                NoteDirtyMarks(retainedDirtyRect, clientSize);
             }
 
             for (int paintedAreaIndex = 0; paintedAreaIndex < paintedAreaCount; paintedAreaIndex++)
             {
-                Rect? paintedArea = retainedDamage == null ? null : _frameDamageAreas[paintedAreaIndex];
+                Rect? paintedArea = retainedDirtyRect == null ? null : _frameDirtyRects[paintedAreaIndex];
 
                 phaseStart = profiling ? Stopwatch.GetTimestamp() : 0;
                 using (profiling ? ProfilerMarkers.Clear.Auto() : default)
                 {
-                    if (paintedArea is Rect damageToErase)
+                    if (paintedArea is Rect dirtyRectToErase)
                     {
-                        EraseRetainedDamage(context, damageToErase, clearColor);
+                        EraseRetainedDirtyRect(context, dirtyRectToErase, clearColor);
                     }
                     else
                     {
@@ -3142,9 +3142,9 @@ public partial class Window : ContentControl, ILayoutRoundingHost
                 context.SetClip(LayoutRounding.SnapViewportRectToPixels(new Rect(0, 0, clientSize.Width, clientSize.Height), DpiScale));
 
                 // A frame that repaints part of the surface keeps every layer inside the area it erased.
-                if (paintedArea is Rect damageClip)
+                if (paintedArea is Rect dirtyClip)
                 {
-                    context.IntersectClip(damageClip);
+                    context.IntersectClip(dirtyClip);
                 }
 
                 try
@@ -3254,13 +3254,13 @@ public partial class Window : ContentControl, ILayoutRoundingHost
                 }
             }
 
-            LimitInPlacePresent(context, target, retainedDamage);
+            LimitInPlacePresent(context, target, retainedDirtyRect);
 
             // A target that keeps its contents would keep the marks too, so they are drawn only where
             // the next frame starts clean; the frame surface gets them when it is put on screen.
             if (target is not Rendering.IPersistentFrameSurface)
             {
-                DrawDamageMarks(context);
+                DrawDirtyMarks(context);
             }
 
             if (context is GraphicsContextBase gcb)

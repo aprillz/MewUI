@@ -53,7 +53,7 @@ public interface INativeRenderSurface : IRenderSurface
 
 /// <summary>
 /// A surface whose contents can survive into the next frame instead of being cleared when a frame
-/// begins on it, which is what lets a repaint redraw only the damaged part.
+/// begins on it, which is what lets a repaint redraw only the dirty part.
 /// </summary>
 internal interface IPersistentFrameSurface
 {

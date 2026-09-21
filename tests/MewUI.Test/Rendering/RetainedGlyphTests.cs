@@ -77,7 +77,7 @@ public sealed class RetainedGlyphTests
 
             Assert.AreEqual(0, differing,
                 $"{label} at scale {scale}: {differing} pixels differ from a frame drawn straight from the visuals, inside pixels ({minX},{minY})-({maxX},{maxY}); " +
-                $"damage {string.Join(" ", window.LastRetainedDamageAreas)}; numeric {numeric.Bounds}; combo {combo.Bounds}");
+                $"dirty rects {string.Join(" ", window.LastRetainedDirtyRects)}; numeric {numeric.Bounds}; combo {combo.Bounds}");
         }
 
         Check("first frames");

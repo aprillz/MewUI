@@ -45,14 +45,14 @@ public sealed class RetainedHostControlTests
         window.SendMouseMove(firstEntry.CenterOf());
         Check(factory, window, surface, "pointer over an entry");
 
-        var damage = window.LastRetainedDamage;
+        var dirtyRect = window.LastRetainedDirtyRect;
         window.SendMouseMove(new Point(WIDTH - 4, HEIGHT - 4));
         window.PerformLayout();
         window.RenderFrameToSurface(surface);
-        damage = window.LastRetainedDamage;
+        dirtyRect = window.LastRetainedDirtyRect;
         Assert.IsTrue(
-            damage is Rect left && left.Width > 0 && left.Width < bar.Bounds.Width / 2,
-            $"leaving one entry repainted {damage} of a {bar.Bounds} toolbar ({window.LastWholeFrameReason})");
+            dirtyRect is Rect left && left.Width > 0 && left.Width < bar.Bounds.Width / 2,
+            $"leaving one entry repainted {dirtyRect} of a {bar.Bounds} toolbar ({window.LastWholeFrameReason})");
         Check(factory, window, surface, "pointer moved away");
 
         bar.CanReorderGroups = true;
@@ -78,10 +78,10 @@ public sealed class RetainedHostControlTests
         second.Background = Color.FromArgb(255, 200, 60, 60);
         window.PerformLayout();
         window.RenderFrameToSurface(surface);
-        var damage = window.LastRetainedDamage;
+        var dirtyRect = window.LastRetainedDirtyRect;
         Assert.IsTrue(
-            damage is Rect changed && changed.Height > 0 && changed.Height < 40,
-            $"a change of one button repainted {damage} ({window.LastWholeFrameReason})");
+            dirtyRect is Rect changed && changed.Height > 0 && changed.Height < 40,
+            $"a change of one button repainted {dirtyRect} ({window.LastWholeFrameReason})");
         Check(factory, window, surface, "after one button changed");
 
         host.Content = new TextBlock { Text = "replaced" };
@@ -129,7 +129,7 @@ public sealed class RetainedHostControlTests
                 }
             }
 
-            Assert.AreEqual(0, differing, $"{label}: {differing} pixels differ from a frame drawn straight from the visuals, inside ({minX},{minY})-({maxX},{maxY}); damage {string.Join(" ", window.LastRetainedDamageAreas)}");
+            Assert.AreEqual(0, differing, $"{label}: {differing} pixels differ from a frame drawn straight from the visuals, inside ({minX},{minY})-({maxX},{maxY}); dirty region {string.Join(" ", window.LastRetainedDirtyRects)}");
         }
 
         CheckCalendar("first frames");

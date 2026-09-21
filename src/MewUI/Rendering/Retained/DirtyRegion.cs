@@ -3,11 +3,11 @@ namespace Aprillz.MewUI.Rendering.Retained;
 /// <summary>
 /// The areas one frame has to repaint, kept apart for as long as joining them would repaint more than
 /// it saves. Two changes at opposite corners of a surface are two small areas, not one that spans it.
-/// The limits come from the measurements in agent/retained-redesign/damage-cost.md: joining pays while
+/// The limits come from the measurements in agent/retained-redesign/dirty-region-cost.md: joining pays while
 /// the joined box stays within 1.7 times the area of the two and adds little area of its own; on the
 /// backend that paints per pixel, joining eight scattered boxes cost up to sixteen times more.
 /// </summary>
-internal sealed class DamageRegion
+internal sealed class DirtyRegion
 {
     /// <summary>More areas than this are joined, cheapest pair first; each one is a separate replay.</summary>
     internal const int MAX_AREAS = 8;

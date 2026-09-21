@@ -18,13 +18,13 @@ namespace MewUI.Test.Rendering;
 
 /// <summary>
 /// Forces each partial-update execution candidate of the retained plan on an offscreen surface and
-/// reports its per-frame cost, so the damage thresholds rest on measurements instead of estimates.
-/// The measuring methods only run when MEWUI_DAMAGE_COST is set; the correctness method always runs.
+/// reports its per-frame cost, so the dirty region thresholds rest on measurements instead of estimates.
+/// The measuring methods only run when MEWUI_DIRTY_COST is set; the correctness method always runs.
 /// Not parallelizable: assigns the process-wide Application.DefaultGraphicsFactory.
 /// </summary>
 [TestClass]
 [DoNotParallelize]
-public sealed class RetainedDamageCostTests
+public sealed class RetainedDirtyRegionCostTests
 {
     private const int SURFACE_WIDTH = 1280;
     private const int SURFACE_HEIGHT = 800;
@@ -35,7 +35,7 @@ public sealed class RetainedDamageCostTests
     private const int MEASURED_FRAMES = 60;
     private const int SPLIT_REGION_COUNT = 8;
 
-    private static readonly double[] _damageRatios = [0.01, 0.05, 0.25, 0.5, 1.0];
+    private static readonly double[] _dirtyRatios = [0.01, 0.05, 0.25, 0.5, 1.0];
     private static readonly Color _background = Color.FromArgb(255, 250, 250, 250);
     private static readonly Color _cellStroke = Color.FromArgb(255, 60, 60, 70);
 
@@ -83,7 +83,7 @@ public sealed class RetainedDamageCostTests
     [DataRow("Whole")]
     [DataRow("Union")]
     [DataRow("Split")]
-    public void EveryDamageCandidate_EndsAtTheSamePixels(string candidate)
+    public void EveryDirtyCandidate_EndsAtTheSamePixels(string candidate)
     {
         if (!OperatingSystem.IsWindows())
         {
@@ -119,17 +119,17 @@ public sealed class RetainedDamageCostTests
                 cell.InvalidateVisual();
             }
 
-            scene.ResetDamage();
+            scene.ResetDirtyRegion();
             SetPreserve(shown, true);
             shownContext.BeginFrame(shown);
             capture.Capture(scene, root, new RenderDataRecorder(shownContext) { SuppressDrawing = true }, registry);
             shownContext.EndFrame();
-            Assert.IsTrue(scene.HasDamage && !scene.IsFullDamage, "the round changed nothing the scene could bound");
+            Assert.IsTrue(scene.HasDirtyRegion && !scene.IsFullyDirty, "the round changed nothing the scene could bound");
 
-            var areas = new Rect[scene.DamageRegion.Areas.Count];
+            var areas = new Rect[scene.DirtyRegion.Areas.Count];
             for (int index = 0; index < areas.Length; index++)
             {
-                areas[index] = SnapOut(scene.DamageRegion.Areas[index]);
+                areas[index] = SnapOut(scene.DirtyRegion.Areas[index]);
             }
 
             if (candidate == "Whole")
@@ -138,11 +138,11 @@ public sealed class RetainedDamageCostTests
             }
             else if (candidate == "Union")
             {
-                RenderDamageRegions(scene, shown, shownContext, [SnapOut(scene.DamageBounds)]);
+                RenderDirtyRegions(scene, shown, shownContext, [SnapOut(scene.DirtyBounds)]);
             }
             else
             {
-                RenderDamageRegions(scene, shown, shownContext, areas);
+                RenderDirtyRegions(scene, shown, shownContext, areas);
             }
         }
 
@@ -160,7 +160,7 @@ public sealed class RetainedDamageCostTests
     }
 
     /// <summary>
-    /// Repeats single-cell updates through the damage path and reports how far the surface ends up
+    /// Repeats single-cell updates through the dirty region path and reports how far the surface ends up
     /// from a full replay of the same scene.
     /// </summary>
     private static PixelDifference RunRepeatedPartialUpdates(int inflatePixels)
@@ -194,21 +194,21 @@ public sealed class RetainedDamageCostTests
             cell.Fill = Color.FromArgb(255, (byte)random.Next(256), (byte)random.Next(256), (byte)random.Next(256));
             cell.InvalidateVisual();
 
-            scene.ResetDamage();
+            scene.ResetDirtyRegion();
             partialContext.BeginFrame(partial);
             var recorder = new RenderDataRecorder(partialContext) { SuppressDrawing = true };
             capture.Capture(scene, root, recorder, registry);
 
-            if (scene.IsFullDamage || !scene.HasDamage)
+            if (scene.IsFullyDirty || !scene.HasDirtyRegion)
             {
                 partialContext.Clear(_background);
                 FrameRenderer.Replay(scene, partialContext);
             }
             else
             {
-                var damage = Inflate(SnapOut(scene.DamageBounds), inflatePixels);
-                ((IOpaqueDamageContext)partialContext).ClearRectangle(damage, _background);
-                FrameRenderer.Replay(scene, partialContext, damage);
+                var dirtyRect = Inflate(SnapOut(scene.DirtyBounds), inflatePixels);
+                ((IOpaqueDirtyRectContext)partialContext).ClearRectangle(dirtyRect, _background);
+                FrameRenderer.Replay(scene, partialContext, dirtyRect);
             }
 
             partialContext.EndFrame();
@@ -227,7 +227,7 @@ public sealed class RetainedDamageCostTests
     }
 
     [TestMethod]
-    public void MeasureDamageCandidates()
+    public void MeasureDirtyCandidates()
     {
         if (!RequestedByEnvironment(out string? skip))
         {
@@ -236,7 +236,7 @@ public sealed class RetainedDamageCostTests
         }
 
         var report = new StringBuilder();
-        report.AppendLine(Environment.NewLine + "=== retained damage cost ===");
+        report.AppendLine(Environment.NewLine + "=== retained dirty region cost ===");
         report.AppendLine(CultureInfo.InvariantCulture, $"machine={Environment.MachineName} " +
             $"os={Environment.OSVersion.Version} cores={Environment.ProcessorCount} " +
             $"runtime={Environment.Version} configuration={BuildConfiguration()}");
@@ -251,7 +251,7 @@ public sealed class RetainedDamageCostTests
     }
 
     /// <summary>
-    /// The frame path repaints everything once the damage passes a share of the surface. That share is
+    /// The frame path repaints everything once the dirty region passes a share of the surface. That share is
     /// only right while it sits where the two costs cross, so this measures both on every backend and
     /// fails when the one the frame path takes costs clearly more than the other.
     /// </summary>
@@ -294,7 +294,7 @@ public sealed class RetainedDamageCostTests
         UpdateAndReplayWhole(scene, capture, registry: null, root, targetContext);
         targetContext.EndFrame();
 
-        if (target is not IPersistentFrameSurface || targetContext is not IOpaqueDamageContext)
+        if (target is not IPersistentFrameSurface || targetContext is not IOpaqueDirtyRectContext)
         {
             report.AppendLine(CultureInfo.InvariantCulture, $"[{name}] cannot repaint part of a frame: nothing to choose between");
             return;
@@ -304,9 +304,9 @@ public sealed class RetainedDamageCostTests
         var whole = Measure(() => RenderFullSurface(scene, target, targetContext, clearingBeginFrame: false));
         foreach (double ratio in _policyRatios)
         {
-            var damage = DamageRect(ratio);
-            var part = Measure(() => RenderDamageDirect(scene, target, targetContext, damage));
-            bool takesWhole = ratio >= Window.WHOLE_FRAME_DAMAGE_RATIO;
+            var dirtyRect = DirtyRect(ratio);
+            var part = Measure(() => RenderDirtyDirect(scene, target, targetContext, dirtyRect));
+            bool takesWhole = ratio >= Window.WHOLE_FRAME_DIRTY_RATIO;
             double taken = takesWhole ? whole.Median : part.Median;
             double other = takesWhole ? part.Median : whole.Median;
             report.AppendLine(CultureInfo.InvariantCulture, $"[{name}] ratio {ratio:0.00}: part {part.Median:0.0} us, whole {whole.Median:0.0} us, takes {(takesWhole ? "whole" : "part")}");
@@ -327,9 +327,9 @@ public sealed class RetainedDamageCostTests
             return false;
         }
 
-        if (Environment.GetEnvironmentVariable("MEWUI_DAMAGE_COST") != "1")
+        if (Environment.GetEnvironmentVariable("MEWUI_DIRTY_COST") != "1")
         {
-            reason = "Set MEWUI_DAMAGE_COST=1 to run the damage cost measurement.";
+            reason = "Set MEWUI_DIRTY_COST=1 to run the dirty region cost measurement.";
             return false;
         }
 
@@ -398,10 +398,10 @@ public sealed class RetainedDamageCostTests
             $"  nodes={scene.NodeCount} cells={cells.Count} commandBytes={scene.EstimatedCommandBytes} " +
             $"replaysPerFullFrame={scene.Statistics.ContentReplayCount}");
 
-        bool canRepaintPart = target is IPersistentFrameSurface && targetContext is IOpaqueDamageContext;
+        bool canRepaintPart = target is IPersistentFrameSurface && targetContext is IOpaqueDirtyRectContext;
         if (!canRepaintPart)
         {
-            report.AppendLine("  partial repaint unavailable on this surface: damage candidates not measured.");
+            report.AppendLine("  partial repaint unavailable on this surface: dirty region candidates not measured.");
         }
 
         // A GPU backend starts at a low clock, so the first block measured otherwise reads several
@@ -427,43 +427,43 @@ public sealed class RetainedDamageCostTests
         if (canRepaintPart)
         {
             report.AppendLine("  erase only, ClearRectangle by ratio:");
-            foreach (double ratio in _damageRatios)
+            foreach (double ratio in _dirtyRatios)
             {
-                var box = DamageRect(ratio);
+                var box = DirtyRect(ratio);
                 report.AppendLine(CultureInfo.InvariantCulture,
                     $"    {ratio,5:0.00} | {(long)box.Width * (long)box.Height,10} px | " +
                     $"{Measure(() => RenderEraseOnly(target, targetContext, box, true))}");
             }
         }
 
-        report.AppendLine("  ratio | damaged px | damage us p50/p95 | isolation us p50/p95 | " +
+        report.AppendLine("  ratio | dirty px | dirty us p50/p95 | isolation us p50/p95 | " +
             "isolation(miss) us p50/p95 | frameCopy us p50/p95");
 
-        foreach (double ratio in _damageRatios)
+        foreach (double ratio in _dirtyRatios)
         {
-            var damage = DamageRect(ratio);
-            long damagedPixels = (long)damage.Width * (long)damage.Height;
+            var dirtyRect = DirtyRect(ratio);
+            long dirtyPixels = (long)dirtyRect.Width * (long)dirtyRect.Height;
 
             var direct = canRepaintPart
-                ? Measure(() => RenderDamageDirect(scene, target, targetContext, damage))
+                ? Measure(() => RenderDirtyDirect(scene, target, targetContext, dirtyRect))
                 : Samples.Missing;
             var isolationHit = canRepaintPart
-                ? MeasureWithIsolationSurface(factory, scene, target, targetContext, damage, recreateEveryFrame: false)
+                ? MeasureWithIsolationSurface(factory, scene, target, targetContext, dirtyRect, recreateEveryFrame: false)
                 : Samples.Missing;
             var isolationMiss = canRepaintPart
-                ? MeasureWithIsolationSurface(factory, scene, target, targetContext, damage, recreateEveryFrame: true)
+                ? MeasureWithIsolationSurface(factory, scene, target, targetContext, dirtyRect, recreateEveryFrame: true)
                 : Samples.Missing;
-            var frameCopy = MeasureFrameSurfaceCopy(factory, scene, target, targetContext, damage);
+            var frameCopy = MeasureFrameSurfaceCopy(factory, scene, target, targetContext, dirtyRect);
 
             report.AppendLine(CultureInfo.InvariantCulture,
-                $"  {ratio,5:0.00} | {damagedPixels,10} | {direct} | {isolationHit} | {isolationMiss} | {frameCopy}");
+                $"  {ratio,5:0.00} | {dirtyPixels,10} | {direct} | {isolationHit} | {isolationMiss} | {frameCopy}");
         }
 
         report.AppendLine("  region merging (8 boxes holding the ratio between them):");
         report.AppendLine("  ratio | scattered union px | scattered split us | scattered merged us | " +
             "clustered union px | clustered split us | clustered merged us");
 
-        foreach (double ratio in _damageRatios)
+        foreach (double ratio in _dirtyRatios)
         {
             var scattered = SplitRegions(ratio, clustered: false);
             var clustered = SplitRegions(ratio, clustered: true);
@@ -471,16 +471,16 @@ public sealed class RetainedDamageCostTests
             var clusteredUnion = Union(clustered);
 
             var scatteredSplit = canRepaintPart
-                ? Measure(() => RenderDamageRegions(scene, target, targetContext, scattered))
+                ? Measure(() => RenderDirtyRegions(scene, target, targetContext, scattered))
                 : Samples.Missing;
             var scatteredMerged = canRepaintPart
-                ? Measure(() => RenderDamageRegions(scene, target, targetContext, [scatteredUnion]))
+                ? Measure(() => RenderDirtyRegions(scene, target, targetContext, [scatteredUnion]))
                 : Samples.Missing;
             var clusteredSplit = canRepaintPart
-                ? Measure(() => RenderDamageRegions(scene, target, targetContext, clustered))
+                ? Measure(() => RenderDirtyRegions(scene, target, targetContext, clustered))
                 : Samples.Missing;
             var clusteredMerged = canRepaintPart
-                ? Measure(() => RenderDamageRegions(scene, target, targetContext, [clusteredUnion]))
+                ? Measure(() => RenderDirtyRegions(scene, target, targetContext, [clusteredUnion]))
                 : Samples.Missing;
 
             report.AppendLine(CultureInfo.InvariantCulture,
@@ -503,11 +503,11 @@ public sealed class RetainedDamageCostTests
         report.AppendLine("  composite only (DrawImage of a same-size source):");
         report.AppendLine("  ratio | opaque us p50/p95 | alpha us p50/p95");
 
-        foreach (double ratio in _damageRatios)
+        foreach (double ratio in _dirtyRatios)
         {
-            var damage = DamageRect(ratio);
-            var opaque = MeasureCompositeOnce(factory, target, targetContext, damage, hasAlpha: false);
-            var alpha = MeasureCompositeOnce(factory, target, targetContext, damage, hasAlpha: true);
+            var dirtyRect = DirtyRect(ratio);
+            var opaque = MeasureCompositeOnce(factory, target, targetContext, dirtyRect, hasAlpha: false);
+            var alpha = MeasureCompositeOnce(factory, target, targetContext, dirtyRect, hasAlpha: true);
             report.AppendLine(CultureInfo.InvariantCulture, $"  {ratio,5:0.00} | {opaque} | {alpha}");
         }
     }
@@ -516,17 +516,17 @@ public sealed class RetainedDamageCostTests
         IGraphicsFactory factory,
         IRenderSurface target,
         IGraphicsContext targetContext,
-        Rect damage,
+        Rect dirtyRect,
         bool hasAlpha)
     {
         IRenderSurface? source = null;
         try
         {
             source = factory.CreateSurface(RenderSurfaceDescriptor.CachedImage(
-                (int)damage.Width,
-                (int)damage.Height,
+                (int)dirtyRect.Width,
+                (int)dirtyRect.Height,
                 1.0,
-                "damage-cost-composite",
+                "dirty-cost-composite",
                 hasAlpha));
 
             using (var sourceContext = factory.CreateContext(source))
@@ -543,7 +543,7 @@ public sealed class RetainedDamageCostTests
                 try
                 {
                     targetContext.BeginFrame(target);
-                    targetContext.DrawImage(view, damage);
+                    targetContext.DrawImage(view, dirtyRect);
                     targetContext.EndFrame();
                 }
                 finally
@@ -590,7 +590,7 @@ public sealed class RetainedDamageCostTests
         }
         else
         {
-            ((IOpaqueDamageContext)context).ClearRectangle(rectangle.Value, _background);
+            ((IOpaqueDirtyRectContext)context).ClearRectangle(rectangle.Value, _background);
         }
 
         context.EndFrame();
@@ -644,20 +644,20 @@ public sealed class RetainedDamageCostTests
         }
     }
 
-    private static void RenderDamageDirect(
+    private static void RenderDirtyDirect(
         RenderScene scene,
         IRenderSurface target,
         IGraphicsContext context,
-        Rect damage)
+        Rect dirtyRect)
     {
         SetPreserve(target, true);
         context.BeginFrame(target);
-        ((IOpaqueDamageContext)context).ClearRectangle(damage, _background);
-        FrameRenderer.Replay(scene, context, damage);
+        ((IOpaqueDirtyRectContext)context).ClearRectangle(dirtyRect, _background);
+        FrameRenderer.Replay(scene, context, dirtyRect);
         context.EndFrame();
     }
 
-    private static void RenderDamageRegions(
+    private static void RenderDirtyRegions(
         RenderScene scene,
         IRenderSurface target,
         IGraphicsContext context,
@@ -665,10 +665,10 @@ public sealed class RetainedDamageCostTests
     {
         SetPreserve(target, true);
         context.BeginFrame(target);
-        var damageContext = (IOpaqueDamageContext)context;
+        var dirtyRectContext = (IOpaqueDirtyRectContext)context;
         for (int index = 0; index < regions.Length; index++)
         {
-            damageContext.ClearRectangle(regions[index], _background);
+            dirtyRectContext.ClearRectangle(regions[index], _background);
             FrameRenderer.Replay(scene, context, regions[index]);
         }
 
@@ -680,7 +680,7 @@ public sealed class RetainedDamageCostTests
         RenderScene scene,
         IRenderSurface target,
         IGraphicsContext targetContext,
-        Rect damage,
+        Rect dirtyRect,
         bool recreateEveryFrame)
     {
         IRenderSurface? shared = null;
@@ -689,21 +689,21 @@ public sealed class RetainedDamageCostTests
         {
             if (!recreateEveryFrame)
             {
-                shared = CreateIsolationSurface(factory, damage);
+                shared = CreateIsolationSurface(factory, dirtyRect);
                 sharedContext = factory.CreateContext(shared);
             }
 
             return Measure(() =>
             {
-                var isolation = shared ?? CreateIsolationSurface(factory, damage);
+                var isolation = shared ?? CreateIsolationSurface(factory, dirtyRect);
                 var isolationContext = sharedContext ?? factory.CreateContext(isolation);
                 try
                 {
                     isolationContext.BeginFrame(isolation);
                     isolationContext.Clear(_background);
                     isolationContext.SetTransform(
-                        Matrix3x2.CreateTranslation((float)-damage.X, (float)-damage.Y));
-                    FrameRenderer.Replay(scene, isolationContext, damage);
+                        Matrix3x2.CreateTranslation((float)-dirtyRect.X, (float)-dirtyRect.Y));
+                    FrameRenderer.Replay(scene, isolationContext, dirtyRect);
                     isolationContext.SetTransform(Matrix3x2.Identity);
                     isolationContext.EndFrame();
 
@@ -712,7 +712,7 @@ public sealed class RetainedDamageCostTests
                     {
                         SetPreserve(target, true);
                         targetContext.BeginFrame(target);
-                        targetContext.DrawImage(view, damage);
+                        targetContext.DrawImage(view, dirtyRect);
                         targetContext.EndFrame();
                     }
                     finally
@@ -750,7 +750,7 @@ public sealed class RetainedDamageCostTests
         RenderScene scene,
         IRenderSurface target,
         IGraphicsContext targetContext,
-        Rect damage)
+        Rect dirtyRect)
     {
         IRenderSurface? frameSurface = null;
         IGraphicsContext? frameContext = null;
@@ -760,7 +760,7 @@ public sealed class RetainedDamageCostTests
                 SURFACE_WIDTH,
                 SURFACE_HEIGHT,
                 1.0,
-                "damage-cost-frame",
+                "dirty-cost-frame",
                 hasAlpha: false));
 
             if (frameSurface is not IPersistentFrameSurface persistentFrame)
@@ -775,7 +775,7 @@ public sealed class RetainedDamageCostTests
             frameContext.EndFrame();
             persistentFrame.PreserveContentsOnBeginFrame = true;
 
-            if (frameContext is not IOpaqueDamageContext damageContext)
+            if (frameContext is not IOpaqueDirtyRectContext dirtyRectContext)
             {
                 return Samples.Unavailable;
             }
@@ -785,8 +785,8 @@ public sealed class RetainedDamageCostTests
             return Measure(() =>
             {
                 readyContext.BeginFrame(readySurface);
-                damageContext.ClearRectangle(damage, _background);
-                FrameRenderer.Replay(scene, readyContext, damage);
+                dirtyRectContext.ClearRectangle(dirtyRect, _background);
+                FrameRenderer.Replay(scene, readyContext, dirtyRect);
                 readyContext.EndFrame();
 
                 var view = factory.CreateImageView(readySurface);
@@ -814,12 +814,12 @@ public sealed class RetainedDamageCostTests
         }
     }
 
-    private static IRenderSurface CreateIsolationSurface(IGraphicsFactory factory, Rect damage)
+    private static IRenderSurface CreateIsolationSurface(IGraphicsFactory factory, Rect dirtyRect)
         => factory.CreateSurface(RenderSurfaceDescriptor.CachedImage(
-            (int)damage.Width,
-            (int)damage.Height,
+            (int)dirtyRect.Width,
+            (int)dirtyRect.Height,
             1.0,
-            "damage-cost-isolation",
+            "dirty-cost-isolation",
             hasAlpha: false));
 
     private static void SetPreserve(IRenderSurface surface, bool preserve)
@@ -875,7 +875,7 @@ public sealed class RetainedDamageCostTests
             => Note ?? string.Create(CultureInfo.InvariantCulture, $"{Median,8:0.0}/{P95,8:0.0}");
     }
 
-    private static Rect DamageRect(double ratio)
+    private static Rect DirtyRect(double ratio)
     {
         double scale = Math.Sqrt(ratio);
         int width = Math.Max(1, (int)Math.Round(SURFACE_WIDTH * scale));
@@ -886,7 +886,7 @@ public sealed class RetainedDamageCostTests
     }
 
     /// <summary>
-    /// Spreads the damaged area over several boxes, which is what merging has to beat. Scattered
+    /// Spreads the dirty area over several boxes, which is what merging has to beat. Scattered
     /// boxes sit in the four quadrants, clustered boxes sit half a box apart.
     /// </summary>
     private static Rect[] SplitRegions(double ratio, bool clustered)
@@ -1016,7 +1016,7 @@ public sealed class RetainedDamageCostTests
             SURFACE_WIDTH,
             SURFACE_HEIGHT,
             1.0,
-            "damage-cost-target",
+            "dirty-cost-target",
             hasAlpha));
 
     private readonly record struct PixelDifference(int DifferingPixels, int MaxChannelDelta, string FirstDifference);

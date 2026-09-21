@@ -105,9 +105,9 @@ public sealed class RetainedGridViewTests
             6,
             window.RetainedStatistics!.ContentRecordCount,
             $"a hover over one row recorded {window.RetainedStatistics!.ContentRecordCount} drawings again");
-        var damage = window.LastRetainedDamage;
+        var dirtyRect = window.LastRetainedDirtyRect;
         Assert.IsTrue(
-            damage is Rect hovered && hovered.Height > 0 && hovered.Height < 100,
-            $"a hover over one row repainted {damage} of a {grid.Bounds} grid ({window.LastWholeFrameReason})");
+            dirtyRect is Rect hovered && hovered.Height > 0 && hovered.Height < 100,
+            $"a hover over one row repainted {dirtyRect} of a {grid.Bounds} grid ({window.LastWholeFrameReason})");
     }
 }

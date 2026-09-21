@@ -9,13 +9,13 @@ internal static class FrameRenderer
     private const int OWN_CONTENT_SLOT = 0;
 
     internal static void Replay(RenderScene scene, IGraphicsContext context)
-        => Replay(scene, context, damage: null);
+        => Replay(scene, context, dirtyRect: null);
 
     /// <summary>
-    /// Draws the scene, restricted to <paramref name="damage"/> when one is given: the area is
+    /// Draws the scene, restricted to <paramref name="dirtyRect"/> when one is given: the area is
     /// clipped and visuals that fall outside it are skipped, while the drawing order is unchanged.
     /// </summary>
-    internal static void Replay(RenderScene scene, IGraphicsContext context, Rect? damage)
+    internal static void Replay(RenderScene scene, IGraphicsContext context, Rect? dirtyRect)
     {
         ArgumentNullException.ThrowIfNull(scene);
         ArgumentNullException.ThrowIfNull(context);
@@ -31,7 +31,7 @@ internal static class FrameRenderer
             return;
         }
 
-        if (damage == null)
+        if (dirtyRect == null)
         {
             ReplayRoots(scene, root, context, null);
             return;
@@ -40,19 +40,19 @@ internal static class FrameRenderer
         context.Save();
         try
         {
-            // The damage is in surface coordinates and a clip is set in the context's own, which differ
+            // The dirty region is in surface coordinates and a clip is set in the context's own, which differ
             // when the scene is replayed under a transform, as a popup window does.
-            var clip = damage.Value;
+            var clip = dirtyRect.Value;
             var transform = context.GetTransform();
             if (!transform.IsIdentity && System.Numerics.Matrix3x2.Invert(transform, out var toLocal))
             {
                 // The way there and back is not exact, and the caller has already clipped the surface
-                // to the damage itself, so this clip only has to not fall short of it.
+                // to the dirty region itself, so this clip only has to not fall short of it.
                 clip = RetainedGeometry.TransformRect(clip, toLocal).Inflate(1, 1);
             }
 
             context.IntersectClip(clip);
-            ReplayRoots(scene, root, context, damage);
+            ReplayRoots(scene, root, context, dirtyRect);
         }
         finally
         {
@@ -61,9 +61,9 @@ internal static class FrameRenderer
     }
 
     /// <summary>Draws the body and then every layer over it, in the order the scene holds them.</summary>
-    private static void ReplayRoots(RenderScene scene, VisualNode root, IGraphicsContext context, Rect? damage)
+    private static void ReplayRoots(RenderScene scene, VisualNode root, IGraphicsContext context, Rect? dirtyRect)
     {
-        ReplayNode(scene, root, context, damage);
+        ReplayNode(scene, root, context, dirtyRect);
 
         var layerRoots = scene.LayerRoots;
         for (int layerIndex = 0; layerIndex < layerRoots.Count; layerIndex++)
@@ -71,19 +71,19 @@ internal static class FrameRenderer
             var layer = scene.FindNode(layerRoots[layerIndex]);
             if (layer != null)
             {
-                ReplayNode(scene, layer, context, damage);
+                ReplayNode(scene, layer, context, dirtyRect);
             }
         }
     }
 
-    private static void ReplayNode(RenderScene scene, VisualNode node, IGraphicsContext context, Rect? damage)
+    private static void ReplayNode(RenderScene scene, VisualNode node, IGraphicsContext context, Rect? dirtyRect)
     {
         if (!node.State.IsVisible)
         {
             return;
         }
 
-        if (damage != null && !Intersects(node.SurfaceSubtreeBounds, damage.Value))
+        if (dirtyRect != null && !Intersects(node.SurfaceSubtreeBounds, dirtyRect.Value))
         {
             return;
         }
@@ -100,7 +100,7 @@ internal static class FrameRenderer
         var group = default(OpacityGroup);
         if (opacityScope)
         {
-            var reach = damage is Rect damaged ? node.SurfaceSubtreeBounds.Intersect(damaged) : node.SurfaceSubtreeBounds;
+            var reach = dirtyRect is Rect dirty ? node.SurfaceSubtreeBounds.Intersect(dirty) : node.SurfaceSubtreeBounds;
             group = OpacityGroup.Begin(context, scene.GroupFactory, node.State.Opacity, reach);
             context = group.Target;
             if (!ReferenceEquals(context, group.Outer))
@@ -117,7 +117,7 @@ internal static class FrameRenderer
 
         try
         {
-            ReplayEntries(scene, node, context, 0, node.Plan.Entries.Length, damage);
+            ReplayEntries(scene, node, context, 0, node.Plan.Entries.Length, dirtyRect);
         }
         finally
         {
@@ -139,7 +139,7 @@ internal static class FrameRenderer
         IGraphicsContext context,
         int startIndex,
         int count,
-        Rect? damage)
+        Rect? dirtyRect)
     {
         var entries = node.Plan.Entries;
         int entryIndex = startIndex;
@@ -159,7 +159,7 @@ internal static class FrameRenderer
                     var childNode = scene.FindNode(entry.Child!);
                     if (childNode != null)
                     {
-                        ReplayNode(scene, childNode, context, damage);
+                        ReplayNode(scene, childNode, context, dirtyRect);
                     }
 
                     entryIndex++;
@@ -170,7 +170,7 @@ internal static class FrameRenderer
                     try
                     {
                         ApplyScope(context, in entry);
-                        ReplayEntries(scene, node, context, entryIndex + 1, entry.ScopeLength, damage);
+                        ReplayEntries(scene, node, context, entryIndex + 1, entry.ScopeLength, dirtyRect);
                     }
                     finally
                     {
@@ -201,8 +201,8 @@ internal static class FrameRenderer
         }
     }
 
-    private static bool Intersects(Rect bounds, Rect damage)
-        => bounds.Width > 0 && bounds.Height > 0 && bounds.IntersectsWith(damage);
+    private static bool Intersects(Rect bounds, Rect dirtyRect)
+        => bounds.Width > 0 && bounds.Height > 0 && bounds.IntersectsWith(dirtyRect);
 
     private static void ReplaySlot(
         RenderScene scene,

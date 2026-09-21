@@ -9,12 +9,12 @@ namespace MewUI.Test.Rendering;
 /// <summary>
 /// What a visual inks is what reaches the surface, not what it asked to draw. A canvas zoomed in on a
 /// picture draws far past its own box and clips it away; a scrolled list holds rows that lie outside
-/// the viewport. Counting the clipped-away part as damage makes a small change repaint the window.
+/// the viewport. Counting the clipped-away part as dirty makes a small change repaint the window.
 /// Not parallelizable: assigns the process-wide Application.DefaultGraphicsFactory.
 /// </summary>
 [TestClass]
 [DoNotParallelize]
-public sealed class RetainedClippedDamageTests
+public sealed class RetainedClippedDirtyRegionTests
 {
     private const int WIDTH = 400;
     private const int HEIGHT = 300;
@@ -45,7 +45,7 @@ public sealed class RetainedClippedDamageTests
     }
 
     [TestMethod]
-    public void ChangeOfAVisualThatDrawsPastItsClip_DamagesOnlyWhatTheClipLetsThrough()
+    public void ChangeOfAVisualThatDrawsPastItsClip_DirtiesOnlyWhatTheClipLetsThrough()
     {
         if (!TryStart(out var factory))
         {
@@ -71,11 +71,11 @@ public sealed class RetainedClippedDamageTests
             window.RetainedStatistics!.Reset();
             Frames(window, surface, 1);
 
-            var damage = window.LastRetainedDamage;
-            Assert.IsNotNull(damage, "the frame was drawn whole");
+            var dirtyRect = window.LastRetainedDirtyRect;
+            Assert.IsNotNull(dirtyRect, "the frame was drawn whole");
             Assert.IsTrue(
-                damage.Value.Width <= picture.Bounds.Width + 2 && damage.Value.Height <= picture.Bounds.Height + 2,
-                $"the damage {damage} reaches past the clipped picture at {picture.Bounds}");
+                dirtyRect.Value.Width <= picture.Bounds.Width + 2 && dirtyRect.Value.Height <= picture.Bounds.Height + 2,
+                $"the dirty region {dirtyRect} reaches past the clipped picture at {picture.Bounds}");
             Assert.IsLessThanOrEqualTo(
                 3,
                 window.RetainedStatistics!.ContentReplayCount,
@@ -84,7 +84,7 @@ public sealed class RetainedClippedDamageTests
     }
 
     [TestMethod]
-    public void ScrollingAList_DamagesOnlyItsViewport()
+    public void ScrollingAList_DirtiesOnlyItsViewport()
     {
         if (!TryStart(out var factory))
         {
@@ -111,11 +111,11 @@ public sealed class RetainedClippedDamageTests
             scroll.SetScrollOffsets(0, 48);
             Frames(window, surface, 1);
 
-            var damage = window.LastRetainedDamage;
-            Assert.IsNotNull(damage, "scrolling a list that covers a small part of the window drew the whole frame");
+            var dirtyRect = window.LastRetainedDirtyRect;
+            Assert.IsNotNull(dirtyRect, "scrolling a list that covers a small part of the window drew the whole frame");
             Assert.IsTrue(
-                damage.Value.Bottom <= scroll.Bounds.Bottom + 1 && damage.Value.Right <= scroll.Bounds.Right + 1,
-                $"the damage {damage} reaches past the scroll viewer at {scroll.Bounds}: rows outside the viewport were counted");
+                dirtyRect.Value.Bottom <= scroll.Bounds.Bottom + 1 && dirtyRect.Value.Right <= scroll.Bounds.Right + 1,
+                $"the dirty region {dirtyRect} reaches past the scroll viewer at {scroll.Bounds}: rows outside the viewport were counted");
         }
     }
 
@@ -167,7 +167,7 @@ public sealed class RetainedClippedDamageTests
     }
 
     [TestMethod]
-    public void PanningAZoomedPicture_DamagesOnlyItsViewport()
+    public void PanningAZoomedPicture_DirtiesOnlyItsViewport()
     {
         if (!TryStart(out var factory))
         {
@@ -214,12 +214,12 @@ public sealed class RetainedClippedDamageTests
             preview.SetScrollOffsets(40, 60);
             Frames(window, surface, 1);
 
-            var damage = window.LastRetainedDamage;
-            Assert.IsNotNull(damage, $"panning the picture drew the whole frame: {window.LastWholeFrameReason}");
+            var dirtyRect = window.LastRetainedDirtyRect;
+            Assert.IsNotNull(dirtyRect, $"panning the picture drew the whole frame: {window.LastWholeFrameReason}");
             Assert.IsTrue(
-                damage.Value.X >= preview.Bounds.X - 1 && damage.Value.Y >= preview.Bounds.Y - 1 &&
-                damage.Value.Right <= preview.Bounds.Right + 1 && damage.Value.Bottom <= preview.Bounds.Bottom + 1,
-                $"the damage {damage} reaches past the preview at {preview.Bounds}");
+                dirtyRect.Value.X >= preview.Bounds.X - 1 && dirtyRect.Value.Y >= preview.Bounds.Y - 1 &&
+                dirtyRect.Value.Right <= preview.Bounds.Right + 1 && dirtyRect.Value.Bottom <= preview.Bounds.Bottom + 1,
+                $"the dirty region {dirtyRect} reaches past the preview at {preview.Bounds}");
             Assert.IsLessThanOrEqualTo(
                 4,
                 window.RetainedStatistics!.ContentRecordCount,
@@ -229,7 +229,7 @@ public sealed class RetainedClippedDamageTests
             // Laying the window out again without anything having changed draws what is already there.
             tabs.InvalidateArrange();
             Frames(window, surface, 1);
-            Assert.AreEqual(default(Rect), window.LastRetainedDamage, $"arranging again damaged {window.LastRetainedDamage} ({window.LastWholeFrameReason})");
+            Assert.AreEqual(default(Rect), window.LastRetainedDirtyRect, $"arranging again dirtied {window.LastRetainedDirtyRect} ({window.LastWholeFrameReason})");
             AssertMatchesReference(factory, window, surface, "after arranging again");
         }
     }

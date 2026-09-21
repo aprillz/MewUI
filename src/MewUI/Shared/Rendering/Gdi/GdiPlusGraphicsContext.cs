@@ -14,7 +14,7 @@ namespace Aprillz.MewUI.Rendering.Gdi;
 /// <summary>
 /// GDI+ graphics context (vector/clip quality), while keeping GDI text measurement/rendering.
 /// </summary>
-internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparentDamageContext, IOpaqueDamageContext, IPartialPresentContext
+internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparentDirtyRectContext, IOpaqueDirtyRectContext, IPartialPresentContext
 {
     private readonly nint _hwnd;
     private readonly bool _ownsDc;
@@ -452,10 +452,10 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
         }
     }
 
-    void ITransparentDamageContext.ClearRectangleToTransparent(Rect rect)
+    void ITransparentDirtyRectContext.ClearRectangleToTransparent(Rect rect)
         => ClearRectangleCore(rect, Color.FromArgb(0, 0, 0, 0));
 
-    void IOpaqueDamageContext.ClearRectangle(Rect rect, Color color)
+    void IOpaqueDirtyRectContext.ClearRectangle(Rect rect, Color color)
         => ClearRectangleCore(rect, color);
 
     private const double ERASE_EDGE_TOLERANCE_PX = 0.001;

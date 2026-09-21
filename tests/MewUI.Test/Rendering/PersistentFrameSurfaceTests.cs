@@ -12,7 +12,7 @@ namespace MewUI.Test.Rendering;
 /// <summary>
 /// Measures the persistent-frame capability on real offscreen surfaces: with preservation on, a
 /// second frame that draws one small rectangle must leave every other pixel of the first frame
-/// untouched, and the damage-erase entry points must overwrite exactly the rectangle they are
+/// untouched, and the dirty-erase entry points must overwrite exactly the rectangle they are
 /// given. Without preservation the backend clears at BeginFrame and partial repaint is impossible.
 /// </summary>
 [TestClass]
@@ -20,10 +20,10 @@ public sealed class PersistentFrameSurfaceTests
 {
     private const int WIDTH = 32;
     private const int HEIGHT = 16;
-    private const int DAMAGE_X = 8;
-    private const int DAMAGE_Y = 4;
-    private const int DAMAGE_WIDTH = 8;
-    private const int DAMAGE_HEIGHT = 6;
+    private const int DIRTY_X = 8;
+    private const int DIRTY_Y = 4;
+    private const int DIRTY_WIDTH = 8;
+    private const int DIRTY_HEIGHT = 6;
 
     private static readonly Color _firstFrameColor = Color.FromArgb(255, 200, 30, 30);
     private static readonly Color _secondFrameColor = Color.FromArgb(255, 20, 40, 220);
@@ -56,7 +56,7 @@ public sealed class PersistentFrameSurfaceTests
     }
 
     [TestMethod]
-    public void GdiContext_ErasesOnlyTheDamagedRectangle()
+    public void GdiContext_ErasesOnlyTheDirtyRectangle()
     {
         if (!OperatingSystem.IsWindows())
         {
@@ -65,11 +65,11 @@ public sealed class PersistentFrameSurfaceTests
         }
 
         using var factory = new GdiGraphicsFactory();
-        AssertDamageErase(factory);
+        AssertDirtyErase(factory);
     }
 
     [TestMethod]
-    public void Direct2DContext_ErasesOnlyTheDamagedRectangle()
+    public void Direct2DContext_ErasesOnlyTheDirtyRectangle()
     {
         if (!OperatingSystem.IsWindows())
         {
@@ -78,7 +78,7 @@ public sealed class PersistentFrameSurfaceTests
         }
 
         using var factory = new Direct2DGraphicsFactory();
-        AssertDamageErase(factory);
+        AssertDirtyErase(factory);
     }
 
     [TestMethod]
@@ -98,7 +98,7 @@ public sealed class PersistentFrameSurfaceTests
 
     [TestMethod]
     [DoNotParallelize]
-    public void MewVGWin32Context_ErasesOnlyTheDamagedRectangle()
+    public void MewVGWin32Context_ErasesOnlyTheDirtyRectangle()
     {
         if (!OperatingSystem.IsWindows())
         {
@@ -108,7 +108,7 @@ public sealed class PersistentFrameSurfaceTests
 
         using var factory = new MewVGWin32GraphicsFactory();
         using var backgroundScope = factory.AcquireBackgroundRenderScope();
-        AssertDamageErase(factory);
+        AssertDirtyErase(factory);
     }
 
     private static void AssertPreservesUntouchedPixels(IGraphicsFactory factory)
@@ -137,7 +137,7 @@ public sealed class PersistentFrameSurfaceTests
         {
             context.BeginFrame(surface);
             context.FillRectangle(
-                new Rect(DAMAGE_X, DAMAGE_Y, DAMAGE_WIDTH, DAMAGE_HEIGHT),
+                new Rect(DIRTY_X, DIRTY_Y, DIRTY_WIDTH, DIRTY_HEIGHT),
                 _secondFrameColor);
             context.EndFrame();
         }
@@ -146,23 +146,23 @@ public sealed class PersistentFrameSurfaceTests
         var pixels = cpu.GetReadOnlyPixelSpan();
         int stride = cpu.StrideBytes;
 
-        AssertPixel(pixels, stride, DAMAGE_X + 2, DAMAGE_Y + 2, _secondFrameColor, "the redrawn rectangle");
+        AssertPixel(pixels, stride, DIRTY_X + 2, DIRTY_Y + 2, _secondFrameColor, "the redrawn rectangle");
         AssertPixel(pixels, stride, 1, 1, _firstFrameColor, "the top-left corner of frame one");
         AssertPixel(pixels, stride, WIDTH - 2, HEIGHT - 2, _firstFrameColor, "the bottom-right corner of frame one");
-        AssertPixel(pixels, stride, DAMAGE_X - 2, DAMAGE_Y + 2, _firstFrameColor, "the pixels left of the redraw");
+        AssertPixel(pixels, stride, DIRTY_X - 2, DIRTY_Y + 2, _firstFrameColor, "the pixels left of the redraw");
         AssertPixel(
             pixels,
             stride,
-            DAMAGE_X + DAMAGE_WIDTH + 1,
-            DAMAGE_Y + 2,
+            DIRTY_X + DIRTY_WIDTH + 1,
+            DIRTY_Y + 2,
             _firstFrameColor,
             "the pixels right of the redraw");
     }
 
-    private static void AssertDamageErase(IGraphicsFactory factory)
+    private static void AssertDirtyErase(IGraphicsFactory factory)
     {
         using var surface = factory.CreateSurface(
-            RenderSurfaceDescriptor.CachedImage(WIDTH, HEIGHT, 1.0, "damage-erase"));
+            RenderSurfaceDescriptor.CachedImage(WIDTH, HEIGHT, 1.0, "dirty-erase"));
         var persistentSurface = surface as IPersistentFrameSurface;
         Assert.IsNotNull(persistentSurface, $"{factory.Backend} offscreen surfaces cannot preserve contents.");
 
@@ -174,17 +174,17 @@ public sealed class PersistentFrameSurfaceTests
         }
 
         persistentSurface.PreserveContentsOnBeginFrame = true;
-        var damage = new Rect(DAMAGE_X, DAMAGE_Y, DAMAGE_WIDTH, DAMAGE_HEIGHT);
+        var dirtyRect = new Rect(DIRTY_X, DIRTY_Y, DIRTY_WIDTH, DIRTY_HEIGHT);
         using (var context = factory.CreateContext(surface))
         {
-            var opaqueDamage = context as IOpaqueDamageContext;
-            Assert.IsNotNull(opaqueDamage, $"{factory.Backend} contexts cannot erase an opaque rectangle.");
-            var transparentDamage = context as ITransparentDamageContext;
-            Assert.IsNotNull(transparentDamage, $"{factory.Backend} contexts cannot erase to transparent.");
+            var opaqueDirty = context as IOpaqueDirtyRectContext;
+            Assert.IsNotNull(opaqueDirty, $"{factory.Backend} contexts cannot erase an opaque rectangle.");
+            var transparentDirty = context as ITransparentDirtyRectContext;
+            Assert.IsNotNull(transparentDirty, $"{factory.Backend} contexts cannot erase to transparent.");
 
             context.BeginFrame(surface);
-            opaqueDamage.ClearRectangle(damage, _eraseColor);
-            transparentDamage.ClearRectangleToTransparent(new Rect(0, 0, 4, 4));
+            opaqueDirty.ClearRectangle(dirtyRect, _eraseColor);
+            transparentDirty.ClearRectangleToTransparent(new Rect(0, 0, 4, 4));
             context.EndFrame();
         }
 
@@ -192,8 +192,8 @@ public sealed class PersistentFrameSurfaceTests
         var pixels = cpu.GetReadOnlyPixelSpan();
         int stride = cpu.StrideBytes;
 
-        AssertPixel(pixels, stride, DAMAGE_X + 2, DAMAGE_Y + 2, _eraseColor, "the opaque erase");
-        AssertPixel(pixels, stride, DAMAGE_X - 2, DAMAGE_Y + 2, _firstFrameColor, "the pixels left of the erase");
+        AssertPixel(pixels, stride, DIRTY_X + 2, DIRTY_Y + 2, _eraseColor, "the opaque erase");
+        AssertPixel(pixels, stride, DIRTY_X - 2, DIRTY_Y + 2, _firstFrameColor, "the pixels left of the erase");
         AssertPixel(pixels, stride, WIDTH - 2, HEIGHT - 2, _firstFrameColor, "the pixels outside both erases");
 
         int transparentOffset = 1 * stride + 1 * 4;

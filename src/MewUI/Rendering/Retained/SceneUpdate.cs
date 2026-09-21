@@ -140,7 +140,7 @@ internal sealed class SceneUpdate
     }
 
     /// <summary>
-    /// Narrows the damage of the slot staged last to where its new recording draws differently from the
+    /// Narrows the dirty region of the slot staged last to where its new recording draws differently from the
     /// one it replaces. Without it the slot answers for everything either recording reaches.
     /// </summary>
     internal void StageSlotChange(VisualNode node, int slotIndex, Rect change)
@@ -240,7 +240,7 @@ internal sealed class SceneUpdate
             if (visit.AttachmentChanged)
             {
                 // The recorded coordinates belong to the previous parent, so nothing of them survives.
-                _scene.AddDamage(visit.Node.SurfaceSubtreeBounds);
+                _scene.AddDirtyRect(visit.Node.SurfaceSubtreeBounds);
                 visit.Node.AttachmentGeneration++;
                 StructureChanged = true;
                 visit.Node.ClearSlots();
@@ -265,7 +265,7 @@ internal sealed class SceneUpdate
                 (planChanged && !PlanChange.TryFindRemoved(composition.Node.Plan, composition.Plan, _removedEntries)))
             {
                 // What the visual looked like still occupies the surface, so both extents are stale.
-                _scene.AddDamage(composition.Node.SurfaceSubtreeBounds);
+                _scene.AddDirtyRect(composition.Node.SurfaceSubtreeBounds);
             }
             else if (planChanged)
             {
@@ -277,12 +277,12 @@ internal sealed class SceneUpdate
                     if (removedEntry.Kind == CompositionEntryKind.Child)
                     {
                         var removedNode = _scene.FindNode(removedEntry.Child!);
-                        _scene.AddDamage(removedNode?.SurfaceSubtreeBounds ?? composition.Node.SurfaceSubtreeBounds);
+                        _scene.AddDirtyRect(removedNode?.SurfaceSubtreeBounds ?? composition.Node.SurfaceSubtreeBounds);
                     }
                     else
                     {
                         var removedData = composition.Node.GetSlot(removedEntry.SlotIndex);
-                        _scene.AddDamage(removedData?.SurfaceExtent ?? composition.Node.SurfaceBounds);
+                        _scene.AddDirtyRect(removedData?.SurfaceExtent ?? composition.Node.SurfaceBounds);
                     }
                 }
             }
@@ -299,7 +299,7 @@ internal sealed class SceneUpdate
             var previous = slot.Node.GetSlot(slot.SlotIndex);
             if (previous != null && slot.Data != null && slot.RejectionReason == null && previous.DrawsTheSameAs(slot.Data))
             {
-                // Taken again and found identical: the surface already shows it, so nothing is damaged
+                // Taken again and found identical: the surface already shows it, so nothing is dirty
                 // and the recording the node holds stays.
                 slot.Data.Dispose();
                 slot.Node.RecordedContentVersion = slot.ContentVersion;
@@ -319,22 +319,22 @@ internal sealed class SceneUpdate
             if (wasDrawnLive || isDrawnLive)
             {
                 // A slot without a recording is drawn live across the visual, before or after this pass.
-                _scene.AddDamage(slot.Node.SurfaceBounds);
-                _scene.AddDamage(slot.Extent);
-                _scene.AddDamage(previous?.SurfaceExtent ?? default);
+                _scene.AddDirtyRect(slot.Node.SurfaceBounds);
+                _scene.AddDirtyRect(slot.Extent);
+                _scene.AddDirtyRect(previous?.SurfaceExtent ?? default);
             }
             else if (previous != null && slot.Data != null && slot.Change is Rect change)
             {
                 // Only some of the drawing calls differ, and the rest already stands on the surface.
                 // The margin around them never reaches past what the two recordings answer for as a whole.
-                _scene.AddDamage(change.Intersect(previous.SurfaceExtent.Union(slot.Extent)));
+                _scene.AddDirtyRect(change.Intersect(previous.SurfaceExtent.Union(slot.Extent)));
                 slot.Data.SurfaceExtent = previous.SurfaceExtent;
             }
             else
             {
                 // A slot the plan did not have before reached nowhere, which an empty extent says.
-                _scene.AddDamage(previous?.SurfaceExtent ?? default);
-                _scene.AddDamage(slot.Extent);
+                _scene.AddDirtyRect(previous?.SurfaceExtent ?? default);
+                _scene.AddDirtyRect(slot.Extent);
             }
 
             slot.Node.SetSlot(slot.SlotIndex, slot.Data);
@@ -350,8 +350,8 @@ internal sealed class SceneUpdate
             // recording to do that, so its box does.
             if (bounds.Node.NonRecordableReason != null && bounds.Node.SurfaceBounds != bounds.SurfaceBounds)
             {
-                _scene.AddDamage(bounds.Node.SurfaceBounds);
-                _scene.AddDamage(bounds.SurfaceBounds);
+                _scene.AddDirtyRect(bounds.Node.SurfaceBounds);
+                _scene.AddDirtyRect(bounds.SurfaceBounds);
             }
 
             bounds.Node.SurfaceBounds = bounds.SurfaceBounds;
@@ -371,15 +371,15 @@ internal sealed class SceneUpdate
                 // and covers where it is.
                 if (data.SurfaceExtent != extent.Extent)
                 {
-                    _scene.AddDamage(data.SurfaceExtent);
-                    _scene.AddDamage(extent.Extent);
+                    _scene.AddDirtyRect(data.SurfaceExtent);
+                    _scene.AddDirtyRect(extent.Extent);
                 }
 
                 data.SurfaceExtent = extent.Extent;
             }
         }
 
-        DamageLayersFrom(firstReorderedLayer);
+        MarkLayersDirtyFrom(firstReorderedLayer);
 
         _slots.Clear();
         _compositions.Clear();
@@ -395,7 +395,7 @@ internal sealed class SceneUpdate
     /// <summary>
     /// Takes the staged layer order and returns the first position whose root changed, or -1. A layer
     /// that kept its visual and its bounds but changed its place among the others still changes what the
-    /// surface shows wherever layers overlap, so everything from that position up is damaged: what stood
+    /// surface shows wherever layers overlap, so everything from that position up is dirty: what stood
     /// there before here, and what stands there now once the new bounds are in.
     /// </summary>
     private int CommitLayerRoots()
@@ -422,7 +422,7 @@ internal sealed class SceneUpdate
             var node = _scene.FindNode(previous[index]);
             if (node != null)
             {
-                _scene.AddDamage(node.SurfaceSubtreeBounds);
+                _scene.AddDirtyRect(node.SurfaceSubtreeBounds);
             }
         }
 
@@ -430,7 +430,7 @@ internal sealed class SceneUpdate
         return first;
     }
 
-    private void DamageLayersFrom(int firstReorderedLayer)
+    private void MarkLayersDirtyFrom(int firstReorderedLayer)
     {
         if (firstReorderedLayer < 0)
         {
@@ -443,7 +443,7 @@ internal sealed class SceneUpdate
             var node = _scene.FindNode(roots[index]);
             if (node != null)
             {
-                _scene.AddDamage(node.SurfaceSubtreeBounds);
+                _scene.AddDirtyRect(node.SurfaceSubtreeBounds);
             }
         }
     }

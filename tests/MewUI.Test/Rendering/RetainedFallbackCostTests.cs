@@ -78,7 +78,7 @@ public sealed class RetainedFallbackCostTests
         window.PerformLayout();
         window.RenderFrameToSurface(surface);
 
-        Assert.IsNull(window.LastRetainedDamage, "the frame was expected to be painted whole");
+        Assert.IsNull(window.LastRetainedDirtyRect, "the frame was expected to be painted whole");
         Assert.AreEqual(before, small.Sum(visual => visual.Renders), "painting the frame whole asked unchanged visuals to render again");
 
         using var reference = factory.CreateSurface(RenderSurfaceDescriptor.Offscreen(WIDTH, HEIGHT, 1.0, hasAlpha: false));

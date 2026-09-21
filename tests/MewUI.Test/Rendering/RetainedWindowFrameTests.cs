@@ -7,7 +7,7 @@ using MewUI.Test.Infrastructure;
 namespace MewUI.Test.Rendering;
 
 /// <summary>
-/// Validates the window frame on the retained path: a frame that repaints only the damaged box must
+/// Validates the window frame on the retained path: a frame that repaints only the dirty box must
 /// leave the surface exactly as a frame that repaints everything would, and a window whose target
 /// cannot keep its contents must keep drawing whole frames.
 /// Not parallelizable: assigns the process-wide Application.DefaultGraphicsFactory.
@@ -56,11 +56,11 @@ public sealed class RetainedWindowFrameTests
             top.InvalidateVisual();
             window.RenderFrameToSurface(live);
 
-            var damage = window.LastRetainedDamage;
-            Assert.IsNotNull(damage, "the frame was drawn whole, so this test would not exercise a partial repaint");
+            var dirtyRect = window.LastRetainedDirtyRect;
+            Assert.IsNotNull(dirtyRect, "the frame was drawn whole, so this test would not exercise a partial repaint");
             Assert.IsFalse(
-                damage.Value.Contains(new Point(bottom.Bounds.X + 4, bottom.Bounds.Y + 4)),
-                $"the damage {damage} covers the item that did not change at {bottom.Bounds}");
+                dirtyRect.Value.Contains(new Point(bottom.Bounds.X + 4, bottom.Bounds.Y + 4)),
+                $"the dirty region {dirtyRect} covers the item that did not change at {bottom.Bounds}");
 
             byte[] partialPixels = ReadPixels(live);
 
@@ -106,8 +106,8 @@ public sealed class RetainedWindowFrameTests
         Assert.AreEqual(1, framesRendered, "a frame that repainted nothing was not reported as rendered");
 
         Assert.IsTrue(
-            Window.RepaintsNothing(window.LastRetainedDamage),
-            $"a frame with nothing changed repainted {window.LastRetainedDamage?.ToString() ?? "the whole surface"}");
+            Window.RepaintsNothing(window.LastRetainedDirtyRect),
+            $"a frame with nothing changed repainted {window.LastRetainedDirtyRect?.ToString() ?? "the whole surface"}");
         AssertPixelsEqual(settled, ReadPixels(live));
     }
 
@@ -136,13 +136,13 @@ public sealed class RetainedWindowFrameTests
         top.Opacity = 0.35;
         window.RenderFrameToSurface(live);
 
-        var damage = window.LastRetainedDamage;
-        Assert.IsFalse(Window.RepaintsNothing(damage), "a changed opacity repainted nothing");
-        if (damage is Rect repainted)
+        var dirtyRect = window.LastRetainedDirtyRect;
+        Assert.IsFalse(Window.RepaintsNothing(dirtyRect), "a changed opacity repainted nothing");
+        if (dirtyRect is Rect repainted)
         {
             Assert.IsTrue(
                 repainted.Contains(new Point(top.Bounds.X + 2, top.Bounds.Y + 2)),
-                $"the damage {repainted} does not cover the visual at {top.Bounds}");
+                $"the dirty region {repainted} does not cover the visual at {top.Bounds}");
         }
     }
 
@@ -181,11 +181,11 @@ public sealed class RetainedWindowFrameTests
         overlay.InvalidateVisual();
         window.RenderFrameToSurface(live);
 
-        var damage = window.LastRetainedDamage;
-        Assert.IsNotNull(damage, "a changed overlay repainted the whole surface");
+        var dirtyRect = window.LastRetainedDirtyRect;
+        Assert.IsNotNull(dirtyRect, "a changed overlay repainted the whole surface");
         Assert.IsTrue(
-            damage.Value.Width > 0 && damage.Value.Contains(new Point(overlay.Bounds.X + 1, overlay.Bounds.Y + 1)),
-            $"the damage {damage} does not cover the overlay at {overlay.Bounds}");
+            dirtyRect.Value.Width > 0 && dirtyRect.Value.Contains(new Point(overlay.Bounds.X + 1, overlay.Bounds.Y + 1)),
+            $"the dirty region {dirtyRect} does not cover the overlay at {overlay.Bounds}");
     }
 
     [TestMethod]

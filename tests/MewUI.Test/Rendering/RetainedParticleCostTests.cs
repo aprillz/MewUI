@@ -110,7 +110,7 @@ public sealed class RetainedParticleCostTests
         Console.Error.WriteLine(string.Create(CultureInfo.InvariantCulture, $"""
 
             === moving particles ({backend}, {particleCount} shapes, overlay layer {onTheOverlayLayer}, {FRAMES} frames) ===
-            scene-driven : first 50 {Median(retained, 0, 50):0.00} ms, last 50 {Median(retained, FRAMES - 50, 50):0.00} ms, {retainedBytes / FRAMES / 1024.0:0.0} KB per frame, last damage {window.LastRetainedDamage?.ToString() ?? "whole"} ({window.LastWholeFrameReason})
+            scene-driven : first 50 {Median(retained, 0, 50):0.00} ms, last 50 {Median(retained, FRAMES - 50, 50):0.00} ms, {retainedBytes / FRAMES / 1024.0:0.0} KB per frame, last dirty region {window.LastRetainedDirtyRect?.ToString() ?? "whole"} ({window.LastWholeFrameReason})
             straight     : first 50 {Median(direct, 0, 50):0.00} ms, last 50 {Median(direct, FRAMES - 50, 50):0.00} ms, {directBytes / FRAMES / 1024.0:0.0} KB per frame
             """));
     }

@@ -7,20 +7,20 @@ using MewUI.Test.Infrastructure;
 namespace MewUI.Test.Rendering;
 
 /// <summary>
-/// The damage overlay reports what a frame did, so it must not change what a frame does: the same
-/// changes have to record, damage and count the same with it on as with it off, and showing it must
+/// The dirty region overlay reports what a frame did, so it must not change what a frame does: the same
+/// changes have to record, mark dirty and count the same with it on as with it off, and showing it must
 /// not make frames of its own.
 /// Not parallelizable: assigns the process-wide Application.DefaultGraphicsFactory.
 /// </summary>
 [TestClass]
 [DoNotParallelize]
-public sealed class RetainedDamageOverlayTests
+public sealed class RetainedDirtyRegionOverlayTests
 {
     private const int WIDTH = 320;
     private const int HEIGHT = 240;
 
     [TestMethod]
-    public void Overlay_ChangesNeitherWhatIsRecordedNorWhatIsDamaged()
+    public void Overlay_ChangesNeitherWhatIsRecordedNorWhatIsDirty()
     {
         if (!OperatingSystem.IsWindows())
         {
@@ -60,14 +60,14 @@ public sealed class RetainedDamageOverlayTests
         window.RenderFrameToSurface(surface);
         byte[] plain = Read(surface);
 
-        window.ToggleDamageOverlay();
+        window.ToggleDirtyRegionOverlay();
         button.Background = Color.FromArgb(255, 200, 60, 60);
         window.PerformLayout();
         window.RenderFrameToSurface(surface);
         byte[] marked = Read(surface);
 
         button.Background = Color.FromArgb(255, 60, 60, 200);
-        window.ToggleDamageOverlay();
+        window.ToggleDirtyRegionOverlay();
         window.PerformLayout();
         window.RenderFrameToSurface(surface);
         window.RenderFrameToSurface(surface);
@@ -109,7 +109,7 @@ public sealed class RetainedDamageOverlayTests
         window.PerformLayout();
         if (overlay)
         {
-            window.ToggleDamageOverlay();
+            window.ToggleDirtyRegionOverlay();
         }
 
         using var surface = factory.CreateSurface(RenderSurfaceDescriptor.Offscreen(WIDTH, HEIGHT, 1.0, hasAlpha: false));
@@ -138,10 +138,10 @@ public sealed class RetainedDamageOverlayTests
         window.RetainedStatistics?.Reset();
         window.RenderFrameToSurface(surface);
         var statistics = window.RetainedStatistics!;
-        log.Append(window.LastRetainedDamage?.ToString() ?? "whole")
+        log.Append(window.LastRetainedDirtyRect?.ToString() ?? "whole")
             .Append(" records=").Append(statistics.ContentRecordCount)
             .Append(" replays=").Append(statistics.ContentReplayCount)
-            .Append(" areas=").Append(window.LastRetainedDamageAreas.Count)
+            .Append(" areas=").Append(window.LastRetainedDirtyRects.Count)
             .AppendLine();
     }
 }

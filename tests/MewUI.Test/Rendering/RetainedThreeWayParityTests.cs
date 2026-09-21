@@ -105,7 +105,7 @@ public sealed class RetainedThreeWayParityTests
 
             check.IsChecked = (round & 1) == 0;
             Frames(window, partial, 1);
-            if (window.LastRetainedDamage is Rect area && area.Width > 0)
+            if (window.LastRetainedDirtyRect is Rect area && area.Width > 0)
             {
                 partialFrames++;
             }
@@ -118,9 +118,9 @@ public sealed class RetainedThreeWayParityTests
 
         using var whole = CreateSurface(factory);
         var scene = (RenderScene)typeof(Window).GetField("_renderScene", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(window)!;
-        scene.RequestFullDamage();
+        scene.MarkFullyDirty();
         window.RenderFrameToSurface(whole);
-        Assert.IsNull(window.LastRetainedDamage, $"{backend}: the frame asked to be whole repainted only {window.LastRetainedDamage}");
+        Assert.IsNull(window.LastRetainedDirtyRect, $"{backend}: the frame asked to be whole repainted only {window.LastRetainedDirtyRect}");
 
         var immediatePixels = Read(factory, immediate);
         AssertSame(backend, "a whole replay", immediatePixels, Read(factory, whole), allowedDelta: 0);

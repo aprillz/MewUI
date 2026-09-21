@@ -126,7 +126,7 @@ internal sealed class CompositionPlanBuilder
 
     /// <summary>
     /// Completes the declaration. When it matches <paramref name="previous"/> that instance is
-    /// returned unchanged, so an unchanged composition allocates nothing and reports no damage.
+    /// returned unchanged, so an unchanged composition allocates nothing and reports no dirty region.
     /// </summary>
     internal CompositionPlan Build(CompositionPlan? previous = null)
     {
