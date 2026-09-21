@@ -101,7 +101,10 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
     }
 
     internal static void TrimWindowResourceCaches()
-        => WindowRenderResources.TrimAll();
+    {
+        WindowRenderResources.TrimAll();
+        FaceCoverageCache.Clear();
+    }
 
     internal GdiPlusGraphicsContext(
         nint hwnd,
@@ -1625,6 +1628,9 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
     protected override TextInkOverhang MeasureRunInkOverhang(ReadOnlySpan<char> text, IFont font, BackendTextLayout layout)
         => font is IWin32TextFace face ? face.GetRunInkOverhang(text) : TextInkOverhang.None;
 
+    // What a face rasterizes into, grown as needed and reused for every run.
+    private byte[]? _faceRasterBuffer;
+
     /// <summary>
     /// Draws a run whose face rasterizes itself. The bitmap comes back with straight alpha, which
     /// <c>AlphaBlend</c> cannot take, so it is premultiplied on the way into the blend surface.
@@ -1647,10 +1653,17 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
             return;
         }
 
+        // Either result is blended into the target before this method returns, so one buffer serves every run.
+        int rasterBytes = widthPx * heightPx * 4;
+        if (_faceRasterBuffer is null || _faceRasterBuffer.Length < rasterBytes)
+        {
+            _faceRasterBuffer = new byte[Math.Max(rasterBytes, 16384)];
+        }
+
         var request = new Win32TextRasterizeRequest(
             widthPx, heightPx, color,
             format.HorizontalAlignment, format.VerticalAlignment,
-            format.Wrapping, format.Trimming, _dpiScale, inkInset);
+            format.Wrapping, format.Trimming, _dpiScale, inkInset, _faceRasterBuffer);
 
         // Subpixel antialiasing needs a coverage value per channel, which one alpha per pixel cannot
         // carry. Blending it takes reading the pixels under the run, so it is only available where
@@ -1658,10 +1671,19 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
         // opaque backdrop behind it. That is the same condition the GDI path uses for ClearType.
         bool destinationIsKnown = !TryGetTextWorldTransform(out _) && color.A == 255 && !EnableAlphaTextHint
             && (!(_pixelSurface?.HasAlpha ?? false) || _opaqueBackdropDepth > 0);
-        if (destinationIsKnown && face.TryRasterizeSubpixel(text, request, out var coverage))
+        if (destinationIsKnown)
         {
-            BlendSubpixelCoverage(coverage, target, color);
-            return;
+            if (!FaceCoverageCache.TryGet(text, face, in request, out var coverage, out bool hasSubpixelForm))
+            {
+                hasSubpixelForm = face.TryRasterizeSubpixel(text, request, out coverage);
+                FaceCoverageCache.Add(text, face, in request, in coverage, hasSubpixelForm);
+            }
+
+            if (hasSubpixelForm)
+            {
+                BlendSubpixelCoverage(coverage, target, color);
+                return;
+            }
         }
 
         if (!face.TryRasterize(text, request, out var bitmap) || bitmap.Data.Length == 0)

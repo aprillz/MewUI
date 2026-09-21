@@ -13,6 +13,31 @@ internal static unsafe class DirectWriteTextRasterizer
 {
     private static readonly byte[] _emptyPixel = new byte[4];
 
+    // Planes that never leave a call, kept per thread and grown as needed: a backend without a text
+    // cache rasterizes every run every frame, and a fresh plane each time is megabytes a frame.
+    [ThreadStatic]
+    private static byte[]? _runTexture;
+
+    [ThreadStatic]
+    private static byte[]? _coveragePlane;
+
+    private static Span<byte> Scratch(ref byte[]? buffer, int length, bool clear)
+    {
+        if (buffer is null || buffer.Length < length)
+        {
+            buffer = new byte[Math.Max(length, 4096)];
+            return buffer.AsSpan(0, length);
+        }
+
+        var span = buffer.AsSpan(0, length);
+        if (clear)
+        {
+            span.Clear();
+        }
+
+        return span;
+    }
+
     // The layout is built with CreateGdiCompatibleTextLayout, which places glyphs on GDI's metrics.
     // Rasterizing in a natural mode instead would render shapes the layout never measured, so both
     // the rendering and the measuring mode follow the layout.
@@ -86,7 +111,7 @@ internal static unsafe class DirectWriteTextRasterizer
             // Coverage is accumulated for the whole box before it is tinted, so glyphs that touch the
             // same pixel do not blend with each other the way successive alpha writes would. Colour
             // glyphs cannot share that plane because each layer carries its own colour.
-            var coverage = new byte[widthPx * heightPx];
+            var coverage = Scratch(ref _coveragePlane, widthPx * heightPx, clear: true);
             float[]? colorPlane = null;
             foreach (var run in DWriteGlyphRunExtractor.Capture(textLayout, retainFontFaces: true))
             {
@@ -117,14 +142,15 @@ internal static unsafe class DirectWriteTextRasterizer
     /// Lays the text out the same way <see cref="Rasterize"/> does and returns the raw per-channel
     /// coverage instead of a tinted bitmap, so a caller drawing over known pixels can blend each
     /// channel itself. Colour glyphs have no per-channel form, so a run that carries them is left
-    /// to the tinted path by returning false.
+    /// to the tinted path by returning false. A <paramref name="buffer"/> of at least
+    /// <c>widthPx * heightPx * 3</c> bytes is filled in place and aliased by the result.
     /// </summary>
     internal static bool TryRasterizeSubpixel(
         nint factory, DirectWriteFont font, ReadOnlySpan<char> text,
         int widthPx, int heightPx,
         TextAlignment horizontalAlignment, TextAlignment verticalAlignment,
         TextWrapping wrapping, TextTrimming trimming, float pixelsPerDip,
-        TextInkInsetPx inkInset, out Win32TextCoverage coverage)
+        TextInkInsetPx inkInset, byte[]? buffer, out Win32TextCoverage coverage)
     {
         coverage = default;
         widthPx = Math.Max(1, widthPx);
@@ -157,7 +183,18 @@ internal static unsafe class DirectWriteTextRasterizer
             ApplyTrimming(factory, textFormat, textLayout, trimming);
             DirectWriteTextMeasure.ApplyCustomFontFallback(factory, textLayout);
 
-            var channels = new byte[widthPx * heightPx * 3];
+            int channelBytes = widthPx * heightPx * 3;
+            byte[] channels;
+            if (buffer is not null && buffer.Length >= channelBytes)
+            {
+                channels = buffer;
+                channels.AsSpan(0, channelBytes).Clear();
+            }
+            else
+            {
+                channels = new byte[channelBytes];
+            }
+
             foreach (var run in DWriteGlyphRunExtractor.Capture(textLayout, retainFontFaces: true))
             {
                 using (run)
@@ -238,7 +275,7 @@ internal static unsafe class DirectWriteTextRasterizer
                     return true;
                 }
 
-                var texture = new byte[runWidth * runHeight * 3];
+                var texture = Scratch(ref _runTexture, runWidth * runHeight * 3, clear: false);
                 if (DWriteGlyphRunAnalysis.CreateAlphaTexture(analysis, DWRITE_TEXTURE_TYPE.CLEARTYPE_3x1,
                         in bounds, texture) < 0)
                 {
@@ -355,7 +392,7 @@ internal static unsafe class DirectWriteTextRasterizer
                     return;
                 }
 
-                var texture = new byte[runWidth * runHeight * 3];
+                var texture = Scratch(ref _runTexture, runWidth * runHeight * 3, clear: false);
                 if (DWriteGlyphRunAnalysis.CreateAlphaTexture(analysis, DWRITE_TEXTURE_TYPE.CLEARTYPE_3x1,
                         in bounds, texture) < 0)
                 {

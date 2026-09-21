@@ -52,7 +52,9 @@ internal readonly record struct Win32TextCoverage(int WidthPx, int HeightPx, byt
 
 /// <summary>
 /// The box a run is rasterized into. <see cref="InkInset"/> grows the raster past the run box so
-/// glyph ink that overhangs it is kept; the run box then sits inset inside the raster.
+/// glyph ink that overhangs it is kept; the run box then sits inset inside the raster. A
+/// <see cref="Buffer"/> large enough for the result is filled in place and aliased by it, so the
+/// caller has to be done with the previous result before it rasterizes again.
 /// </summary>
 internal readonly record struct Win32TextRasterizeRequest(
     int WidthPx,
