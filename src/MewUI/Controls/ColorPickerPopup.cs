@@ -78,9 +78,9 @@ internal sealed class ColorPickerPopup : Control, IVisualTreeHost
         var bounds = Bounds;
         if (bounds.Width <= 0 || bounds.Height <= 0) return;
 
-        const double radius = 4;
+        double radius = Theme.Metrics.ControlCornerRadius;
         context.FillRoundedRectangle(bounds, radius, radius, Theme.Palette.ButtonFace);
-        context.DrawRoundedRectangle(bounds, radius, radius, Theme.Palette.ControlBorder, 1, strokeInset: true);
+        context.DrawRoundedRectangle(bounds, radius, radius, Theme.Palette.ControlBorder, Theme.Metrics.ControlBorderThickness, strokeInset: true);
     }
 
     public void Configure(ColorPickerKind kind, bool showAlpha)
