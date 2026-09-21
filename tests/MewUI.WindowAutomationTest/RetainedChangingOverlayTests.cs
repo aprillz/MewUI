@@ -37,7 +37,7 @@ public sealed class RetainedChangingOverlayTests
         try
         {
             await Task.Delay(WARM_UP_MS);
-            Assert.IsTrue(overlay.RenderCount > 35, $"precondition: the overlay animates ({overlay.RenderCount} frames in {WARM_UP_MS} ms)");
+            Assert.IsGreaterThan(35, overlay.RenderCount, $"precondition: the overlay animates ({overlay.RenderCount} frames in {WARM_UP_MS} ms)");
 
             window.RetainedStatistics!.Reset();
             int framesBefore = overlay.RenderCount;
@@ -45,15 +45,16 @@ public sealed class RetainedChangingOverlayTests
             int frames = overlay.RenderCount - framesBefore;
             int replays = window.RetainedStatistics.ContentReplayCount;
 
-            Assert.IsTrue(frames > 8, $"precondition: frames kept coming ({frames})");
-            Assert.IsTrue(
-                replays <= frames / 4,
+            Assert.IsGreaterThan(8, frames, $"precondition: frames kept coming ({frames})");
+            Assert.IsLessThanOrEqualTo(
+                frames / 4,
+                replays,
                 $"{window.GraphicsFactory.Backend}: {frames} frames of a changing overlay replayed {replays} recordings of the body under it");
 
             if (OperatingSystem.IsWindows())
             {
                 var shot = ScreenCapture.OfClientArea(window.Handle);
-                Assert.IsTrue(CountOf(shot.Bgra, MovingOverlay.Ink) > 50, "the overlay is not on the screen");
+                Assert.IsGreaterThan(50, CountOf(shot.Bgra, MovingOverlay.Ink), "the overlay is not on the screen");
             }
         }
         finally
@@ -68,14 +69,15 @@ public sealed class RetainedChangingOverlayTests
         await Task.Delay(400);
         body.Children(new Button { Content = new TextBlock { Text = "and another" }, Margin = new Thickness(2) });
         await Task.Delay(400);
-        Assert.IsTrue(
-            overlay.RenderCount - rendersAfterSettling <= 2,
+        Assert.IsLessThanOrEqualTo(
+            2,
+            overlay.RenderCount - rendersAfterSettling,
             $"a settled overlay was drawn {overlay.RenderCount - rendersAfterSettling} more times while only the body changed");
 
         if (OperatingSystem.IsWindows())
         {
             var shot = ScreenCapture.OfClientArea(window.Handle);
-            Assert.IsTrue(CountOf(shot.Bgra, MovingOverlay.Ink) > 50, "the settled overlay left the screen");
+            Assert.IsGreaterThan(50, CountOf(shot.Bgra, MovingOverlay.Ink), "the settled overlay left the screen");
         }
     });
 
