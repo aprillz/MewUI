@@ -266,6 +266,53 @@ public sealed class TextEngineTier0Tests
     }
 
     [TestMethod]
+    public void RealizationCache_HoldsEveryRunAFrameDraws()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("GDI is Windows-only.");
+            return;
+        }
+
+        // A frame that draws more runs than the cache holds would realize all of them again every frame.
+        const int RUNS_A_FRAME = 300;
+        using var factory = new GdiGraphicsFactory();
+        using var surface = factory.CreateSurface(RenderSurfaceDescriptor.CachedImage(320, 48, 1));
+        using var context = factory.CreateContext(surface);
+        var renderContext = (ManagedTextRenderContext)context.Text;
+        var layouts = new ITextLayout[RUNS_A_FRAME];
+        for (int index = 0; index < RUNS_A_FRAME; index++)
+        {
+            layouts[index] = factory.TextEngine.CreateLayout(CreateRequest($"frame entry {index}", TextWrapping.NoWrap, 300));
+        }
+
+        for (int frame = 0; frame < 3; frame++)
+        {
+            context.BeginFrame(surface);
+            for (int index = 0; index < RUNS_A_FRAME; index++)
+            {
+                renderContext.Draw(layouts[index], Point.Zero, new TextDrawOptions(Color.White));
+            }
+
+            context.EndFrame();
+        }
+
+        Assert.AreEqual(RUNS_A_FRAME, renderContext.CachedLayoutCount,
+            "The runs one frame draws did not all stay realized for the next frame.");
+
+        // Frames that draw little give the room back.
+        for (int frame = 0; frame < 2; frame++)
+        {
+            context.BeginFrame(surface);
+            renderContext.Draw(layouts[0], Point.Zero, new TextDrawOptions(Color.White));
+            context.EndFrame();
+        }
+
+        Assert.IsLessThanOrEqualTo(128, renderContext.CachedLayoutCount,
+            "The cache kept the room of a busy frame after the frames went quiet.");
+    }
+
+    [TestMethod]
     public void OwnerCache_RebuildsWhenOnlyTheTextChanges()
     {
         if (!OperatingSystem.IsWindows())
