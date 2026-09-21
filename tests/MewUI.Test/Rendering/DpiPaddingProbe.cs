@@ -63,9 +63,8 @@ public sealed class DpiPaddingProbe
             }
         }
 
-        File.WriteAllText(
-            @"C:\Users\al6uiz\AppData\Local\Temp\claude\e--Personal-Mew\994a7e7c-855d-43b4-bfce-aed40318e04f\scratchpad\dpi-probe.txt",
-            report.ToString());
+        // The report goes to the test output: a file path would only exist on the machine that wrote it.
+        Console.Error.WriteLine(report.ToString());
     }
 
     /// <summary>Draws on a DPI-scaled surface, returning the drawing context width and the rightmost ink column.</summary>
