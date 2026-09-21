@@ -12,7 +12,7 @@
 #
 # Usage: ./win-remote-test.sh <ssh-target> [-- <extra runner args>]
 #   ./win-remote-test.sh mewui-testbox
-#   ./win-remote-test.sh mewui-testbox -- --filter-class MenuCaptionTrimTests
+#   ./win-remote-test.sh mewui-testbox -- --filter "FullyQualifiedName~MenuCaptionTrimTests"
 set -euo pipefail
 
 SSH_TARGET="${1:?usage: win-remote-test.sh <ssh-target> [-- <extra runner args>]}"
@@ -21,8 +21,12 @@ if [[ "${1:-}" == "--" ]]; then shift; fi
 RUNNER_ARGS="$*"
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
-PROJECT="$HERE/../../tests/MewUI.WindowAutomationTest/MewUI.WindowAutomationTest.csproj"
-PUBLISH_DIR="$HERE/publish"
+REPO="$(cd "$HERE/../.." && pwd)"
+PROJECT="$REPO/tests/MewUI.WindowAutomationTest/MewUI.WindowAutomationTest.csproj"
+# Everything a run writes stays under the ignored .artifacts, never next to the script.
+OUT="$REPO/.artifacts/win-remote-test"
+PUBLISH_DIR="$OUT/publish"
+mkdir -p "$OUT"
 REMOTE_ROOT="${MEWUI_REMOTE_ROOT:-C:\\Workspace\\Dev}"
 JOB_ID="run-$(date +%Y%m%d-%H%M%S)"
 # The whole suite takes a little over five minutes on the test machine, and a filtered run seconds.
@@ -40,9 +44,9 @@ echo "== checking the broker"
 ssh "$SSH_TARGET" "powershell -NoProfile -Command \"if (Test-Path '$REMOTE_ROOT\\broker.alive') { Get-Content '$REMOTE_ROOT\\broker.alive' } else { 'NO_BROKER'; exit 1 }\""
 
 echo "== shipping the payload"
-tar -C "$HERE" -czf "$HERE/payload.tgz" publish
-scp -q "$HERE/payload.tgz" "$SSH_TARGET:$REMOTE_ROOT\\payload.tgz"
-rm "$HERE/payload.tgz"
+tar -C "$OUT" -czf "$OUT/payload.tgz" publish
+scp -q "$OUT/payload.tgz" "$SSH_TARGET:$REMOTE_ROOT\\payload.tgz"
+rm "$OUT/payload.tgz"
 ssh "$SSH_TARGET" "powershell -NoProfile -Command \"Remove-Item -Recurse -Force '$REMOTE_ROOT\\publish' -ErrorAction SilentlyContinue; tar -C '$REMOTE_ROOT' -xzf '$REMOTE_ROOT\\payload.tgz'; Remove-Item '$REMOTE_ROOT\\payload.tgz'\""
 
 # The job is written to a staging name and renamed, so the broker never picks up a half-uploaded file.
@@ -56,12 +60,12 @@ if [[ -n "${MEWUI_REMOTE_ENV:-}" ]]; then
     [[ -n "$pair" ]] && ENV_LINES+="set $pair"$'\n'
   done
 fi
-cat > "$HERE/$JOB_ID.cmd" <<EOF
+cat > "$OUT/$JOB_ID.cmd" <<EOF
 @echo off
 ${ENV_LINES}"$REMOTE_ROOT\\publish\\Aprillz.MewUI.WindowAutomationTest.exe" --settings "$REMOTE_ROOT\\publish\\test.runsettings" $RUNNER_ARGS
 EOF
-scp -q "$HERE/$JOB_ID.cmd" "$SSH_TARGET:$REMOTE_ROOT\\jobs\\$JOB_ID.staging"
-rm "$HERE/$JOB_ID.cmd"
+scp -q "$OUT/$JOB_ID.cmd" "$SSH_TARGET:$REMOTE_ROOT\\jobs\\$JOB_ID.staging"
+rm "$OUT/$JOB_ID.cmd"
 ssh "$SSH_TARGET" "powershell -NoProfile -Command \"Move-Item '$REMOTE_ROOT\\jobs\\$JOB_ID.staging' '$REMOTE_ROOT\\jobs\\$JOB_ID.cmd' -Force\""
 
 echo "== waiting for the console session to finish"
