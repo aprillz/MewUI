@@ -1,6 +1,6 @@
 [![한국어](https://img.shields.io/badge/README.md-한국어-green.svg)](README.ko.md)
 
-![Aprillz.MewUI](https://raw.githubusercontent.com/aprillz/MewUI/main/assets/logo/logo_h-1280.png)
+![Aprillz.MewUI](https://raw.githubusercontent.com/aprillz/MewUI/main/assets/logo/logo_h.svg)
 
 
 [![Website](https://img.shields.io/badge/Website-mewui.aprillz.net-8F54DB)](https://mewui.aprillz.net)
@@ -8,6 +8,7 @@
 ![Windows](https://img.shields.io/badge/Windows-10%2B-0078D4?logo=windows&logoColor=white)
 ![Linux](https://img.shields.io/badge/Linux-X11-FCC624?logo=linux&logoColor=black)
 ![macOS](https://img.shields.io/badge/macOS-12%2B-901DBA?logo=Apple&logoColor=white)
+![Browser](https://img.shields.io/badge/Browser-WebAssembly-654FF0?logo=webassembly&logoColor=white)
 ![NativeAOT](https://img.shields.io/badge/NativeAOT-Ready-2E7D32)
 ![License: MIT](https://img.shields.io/badge/License-MIT-000000)
 [![NuGet](https://img.shields.io/nuget/v/Aprillz.MewUI.svg?label=NuGet)](https://www.nuget.org/packages/Aprillz.MewUI/)
@@ -65,6 +66,11 @@ Copilot using the [MewUI agent skill](https://github.com/aprillz/mewui-skill).
 ---
 
 ## 🚀 Try It Out
+
+### In the browser
+**Nothing to install.** Open the gallery, running on WebAssembly: **[Run the MewUI Gallery in your browser](https://www.aprillz.net/MewUI/Gallery/)**
+
+### On your machine
 **No clone. No download. No project setup.**  
 You can **run MewUI immediately** with a single command on **Windows**, **Linux** or **macOS**.  (.NET 10 SDK required)
 > [!TIP]
@@ -267,6 +273,7 @@ Optional packages layered on top of the core - reference only what you need.
 | [**SVG**](extensions/MewUI.Svg/README.md) | Pure C# SVG parsing/rendering (no System.Drawing, AOT compatible) | `Aprillz.MewUI.Svg` |
 | [**Skia**](extensions/MewUI.Skia/README.md) | `SkiaCanvasView` (draw with SkiaSharp) + GPU zero-copy interop | `Aprillz.MewUI.Skia` |
 | [**MewCharts**](extensions/MewUI.MewCharts/README.md) | Charts (Cartesian/Pie/Polar) via the LiveChartsCore engine, no SkiaSharp dependency | `Aprillz.MewUI.MewCharts` |
+| [**Markdown**](extensions/MewUI.Markdown/README.md) | `MarkdownViewer` - native Markdown rendering via Markdig: tables, footnotes, task lists, code blocks with copy, links, images, text selection (no web view) | `Aprillz.MewUI.Markdown` |
 | [**WebView2**](extensions/MewUI.WebView2.Win32/README.md) | Win32 WebView2 control (requires the Microsoft Edge WebView2 runtime, Windows only) | `Aprillz.MewUI.WebView2.Win32` |
 
 **Skia interop** - add the zero-copy bridge matching your backend to enable the GPU fast path.
@@ -281,7 +288,7 @@ Optional packages layered on top of the core - reference only what you need.
 
 > Without an interop package, Skia content still renders via the CPU upload fallback. Skia is also bundled as metapackages `Aprillz.MewUI.Skia.Windows` / `.Linux` / `.MacOS` / `.All`.
 
-> **MewDock** is a C# port of [FlexLayout](https://github.com/caplin/FlexLayout) (MIT). **MewCharts** bundles the [LiveChartsCore](https://github.com/beto-rodriguez/LiveCharts2) engine (MIT). See `THIRD_PARTY_NOTICES.md` for license notices.
+> **MewDock** is a C# port of [FlexLayout](https://github.com/caplin/FlexLayout) (MIT). **MewCharts** bundles the [LiveChartsCore](https://github.com/beto-rodriguez/LiveCharts2) engine (MIT). **Markdown** parses with [Markdig](https://github.com/xoofx/markdig) (BSD-2-Clause). See `THIRD_PARTY_NOTICES.md` for license notices.
 
 ---
 ## 🎨 Theme
@@ -308,8 +315,9 @@ Backends:
 | **MewVG** | Windows | `Aprillz.MewUI.Backend.MewVG.Win32` |
 | **MewVG** | Linux/X11 | `Aprillz.MewUI.Backend.MewVG.X11` |
 | **MewVG** | macOS | `Aprillz.MewUI.Backend.MewVG.MacOS` |
+| **MewVG** | Browser (WebAssembly) | `Aprillz.MewUI.Backend.MewVG.Browser` |
 
-> **[MewVG](https://github.com/aprillz/MewVG)** is a managed port of [NanoVG](https://github.com/memononen/nanovg), using OpenGL on Windows/Linux and Metal on macOS.
+> **[MewVG](https://github.com/aprillz/MewVG)** is a managed port of [NanoVG](https://github.com/memononen/nanovg), using OpenGL on Windows/Linux, Metal on macOS and WebGL2 in the browser.
 
 Backends are registered by the referenced backend packages (Trim/AOT-friendly). In app code you typically either:
 - call `*Backend.Register()` before `Application.Run(...)`, or
@@ -326,6 +334,7 @@ Currently implemented:
 - Windows (`Aprillz.MewUI.Platform.Win32`)
 - Linux/X11 (`Aprillz.MewUI.Platform.X11`)
 - macOS (`Aprillz.MewUI.Platform.MacOS`)
+- Browser/WebAssembly (`Aprillz.MewUI.Platform.Browser`) - renders into a canvas; see the [live gallery](https://www.aprillz.net/MewUI/Gallery/)
 
 ### Dialog integration
 
@@ -343,6 +352,7 @@ Set `PreferNative` to `false` to use the managed dialog directly.
 ## 📄Docs
 
 - [Installation & Packages](docs/Installation.md)
+- [Build Switches](docs/BuildSwitches.md)
 - [C# Markup](docs/CSharpMarkup.md)
 - [Command System](docs/CommandSystem.md)
 - [Binding](docs/Binding.md)
@@ -353,6 +363,7 @@ Set `PreferNative` to `false` to use the managed dialog directly.
 - [Window Visual Layers](docs/WindowLayers.md)
 - [RenderLoop](docs/RenderLoop.md)
 - [Hot Reload](docs/HotReload.md)
+- [DevTools](docs/DevTools.md)
 - [Editor Preview](docs/Preview.md)
 - [Custom Controls](docs/CustomControls.md)
 - [Control Template](docs/ControlTemplate.md)
@@ -374,8 +385,9 @@ Set `PreferNative` to `false` to use the managed dialog directly.
 - [ ] Linux framebuffer
 
 **Tooling**
-- [x] Hot Reload (experimental)
-- [ ] Design-time preview
+- [x] Hot Reload
+- [x] DevTools (element inspector, visual tree, frame statistics, profiler)
+- [x] Editor preview for [VS Code](https://marketplace.visualstudio.com/items?itemName=aprillz.mewui-preview-vscode), [Visual Studio](https://marketplace.visualstudio.com/items?itemName=aprillz.mewui-preview) and [Rider](https://plugins.jetbrains.com/plugin/34155-mewui-preview)
 
 ---
 ## License

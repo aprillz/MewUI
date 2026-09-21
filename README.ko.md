@@ -1,4 +1,4 @@
-![Aprillz.MewUI](https://raw.githubusercontent.com/aprillz/MewUI/main/assets/logo/logo_h-1280.png)
+![Aprillz.MewUI](https://raw.githubusercontent.com/aprillz/MewUI/main/assets/logo/logo_h.svg)
 
 
 [![Website](https://img.shields.io/badge/Website-mewui.aprillz.net-8F54DB)](https://mewui.aprillz.net)
@@ -6,6 +6,7 @@
 ![Windows](https://img.shields.io/badge/Windows-10%2B-0078D4?logo=windows&logoColor=white)
 ![Linux](https://img.shields.io/badge/Linux-X11-FCC624?logo=linux&logoColor=black)
 ![macOS](https://img.shields.io/badge/macOS-12%2B-901DBA?logo=Apple&logoColor=white)
+![Browser](https://img.shields.io/badge/Browser-WebAssembly-654FF0?logo=webassembly&logoColor=white)
 ![NativeAOT](https://img.shields.io/badge/NativeAOT-Ready-2E7D32)
 ![License: MIT](https://img.shields.io/badge/License-MIT-000000)
 [![NuGet](https://img.shields.io/nuget/v/Aprillz.MewUI.svg?label=NuGet)](https://www.nuget.org/packages/Aprillz.MewUI/)
@@ -39,6 +40,10 @@ Codex, Claude Code 또는 GitHub Copilot으로 패키지 기반 MewUI
 
 ## 🚀 빠르게 실행해 보기
 
+### 브라우저에서
+설치할 것이 없습니다. WebAssembly로 실행되는 갤러리를 바로 열 수 있습니다: **[브라우저에서 MewUI 갤러리 실행](https://www.aprillz.net/MewUI/Gallery/)**
+
+### 내 컴퓨터에서
 다음 명령어를 Windows 명령 프롬프트 또는 Linux 터미널에서 입력하면 즉시 실행할 수 있습니다.
 (.NET 10 SDK가 필요합니다.)
 > [!WARNING]
@@ -244,6 +249,7 @@ var first = new TextBlock().Bind(TextBlock.TextProperty, order, x => x.Lines[0].
 | [**SVG**](extensions/MewUI.Svg/README.ko.md) | 순수 C# SVG 파싱/렌더링 (System.Drawing 비의존, AOT 호환) | `Aprillz.MewUI.Svg` |
 | [**Skia**](extensions/MewUI.Skia/README.ko.md) | `SkiaCanvasView` (SkiaSharp로 그리기) + GPU zero-copy 인터롭 | `Aprillz.MewUI.Skia` |
 | [**MewCharts**](extensions/MewUI.MewCharts/README.ko.md) | LiveChartsCore 엔진 기반 차트 (Cartesian/Pie/Polar), SkiaSharp 비의존 | `Aprillz.MewUI.MewCharts` |
+| [**Markdown**](extensions/MewUI.Markdown/README.md) | `MarkdownViewer` - Markdig 기반 네이티브 Markdown 렌더링: 표, 각주, 작업 목록, 복사 버튼이 있는 코드 블록, 링크, 이미지, 텍스트 선택 (웹 뷰 비의존) | `Aprillz.MewUI.Markdown` |
 | [**WebView2**](extensions/MewUI.WebView2.Win32/README.md) | Win32 WebView2 컨트롤 (Microsoft Edge WebView2 런타임 필요, Windows 전용) | `Aprillz.MewUI.WebView2.Win32` |
 
 **Skia 인터롭** - 사용 중인 백엔드에 맞는 zero-copy 브리지를 하나 추가하면 GPU 직행 경로가 켜집니다.
@@ -258,7 +264,7 @@ var first = new TextBlock().Bind(TextBlock.TextProperty, order, x => x.Lines[0].
 
 > 인터롭 없이도 Skia 콘텐츠는 CPU 업로드 폴백으로 렌더링됩니다. Skia는 메타패키지 `Aprillz.MewUI.Skia.Windows` / `.Linux` / `.MacOS` / `.All`로도 묶여 있습니다.
 
-> **MewDock**은 [FlexLayout](https://github.com/caplin/FlexLayout)(MIT)의 C# 포팅입니다. 라이선스 고지는 `THIRD_PARTY_NOTICES.md` 참고.
+> **MewDock**은 [FlexLayout](https://github.com/caplin/FlexLayout)(MIT)의 C# 포팅입니다. **Markdown**은 [Markdig](https://github.com/xoofx/markdig)(BSD-2-Clause)로 파싱합니다. 라이선스 고지는 `THIRD_PARTY_NOTICES.md` 참고.
 
 ---
 ## 🎨 테마(Theme)
@@ -285,8 +291,9 @@ MewUI는 `Theme` 객체(색상 + 메트릭)와 `ThemeManager`를 사용하여 �
 | **MewVG** | Windows | `Aprillz.MewUI.Backend.MewVG.Win32` |
 | **MewVG** | Linux/X11 | `Aprillz.MewUI.Backend.MewVG.X11` |
 | **MewVG** | macOS | `Aprillz.MewUI.Backend.MewVG.MacOS` |
+| **MewVG** | 브라우저 (WebAssembly) | `Aprillz.MewUI.Backend.MewVG.Browser` |
 
-> **[MewVG](https://github.com/aprillz/MewVG)**는 [NanoVG](https://github.com/memononen/nanovg)의 Managed 포트로, Windows/Linux에서는 OpenGL, macOS에서는 Metal을 사용합니다.
+> **[MewVG](https://github.com/aprillz/MewVG)**는 [NanoVG](https://github.com/memononen/nanovg)의 Managed 포트로, Windows/Linux에서는 OpenGL, macOS에서는 Metal, 브라우저에서는 WebGL2를 사용합니다.
 
 백엔드는 참조된 백엔드 패키지에 의해 등록됩니다 (Trim/AOT 친화적 구조).
 
@@ -305,6 +312,7 @@ MewUI는 `Theme` 객체(색상 + 메트릭)와 `ThemeManager`를 사용하여 �
 - Windows (`Aprillz.MewUI.Platform.Win32`)
 - Linux/X11 (`Aprillz.MewUI.Platform.X11`)
 - macOS (`Aprillz.MewUI.Platform.MacOS`)
+- 브라우저/WebAssembly (`Aprillz.MewUI.Platform.Browser`) - 캔버스에 렌더링합니다. [라이브 갤러리](https://www.aprillz.net/MewUI/Gallery/) 참고
 
 ### 대화상자 통합
 
@@ -322,21 +330,24 @@ MewUI는 크로스플랫폼 관리형 파일 및 폴더 대화상자를 제공�
 ## 📄 문서
 
 - [설치 및 패키지 구성](docs/Installation.ko.md)
-- [C# Markup](docs/CSharpMarkup.ko.md)
-- [Command System](docs/CommandSystem.ko.md)
-- [Binding](docs/Binding.ko.md)
-- [Items and Templates](docs/ItemsAndTemplates.ko.md)
-- [Theme](docs/Theme.ko.md)
-- [Application Lifecycle](docs/ApplicationLifecycle.ko.md)
-- [Layout](docs/Layout.ko.md)
+- [빌드 스위치](docs/BuildSwitches.ko.md)
+- [C# 마크업](docs/CSharpMarkup.ko.md)
+- [명령 시스템](docs/CommandSystem.ko.md)
+- [바인딩](docs/Binding.ko.md)
+- [아이템과 템플릿](docs/ItemsAndTemplates.ko.md)
+- [테마](docs/Theme.ko.md)
+- [애플리케이션 수명 주기](docs/ApplicationLifecycle.ko.md)
+- [레이아웃](docs/Layout.ko.md)
 - [Window 시각 레이어](docs/WindowLayers.ko.md)
-- [RenderLoop](docs/RenderLoop.ko.md)
+- [렌더 루프](docs/RenderLoop.ko.md)
 - [Hot Reload](docs/HotReload.ko.md)
+- [DevTools](docs/DevTools.ko.md)
 - [에디터 프리뷰](docs/Preview.ko.md)
-- [Custom Controls](docs/CustomControls.ko.md)
-- [Control Template](docs/ControlTemplate.ko.md)
+- [커스텀 컨트롤](docs/CustomControls.ko.md)
+- [컨트롤 템플릿](docs/ControlTemplate.ko.md)
+- [텍스트 시스템과 엔진](docs/TextEngine.ko.md)
 - [텍스트 뷰 확장](docs/TextViewExtensions.ko.md)
-- [Localization](docs/Localization.ko.md)
+- [지역화](docs/Localization.ko.md)
 
 ---
 ## 🤝 커뮤니티
@@ -352,8 +363,9 @@ MewUI는 크로스플랫폼 관리형 파일 및 폴더 대화상자를 제공�
 - [ ] Linux 프레임버퍼
 
 **툴링**
-- [x] Hot Reload (실험적)
-- [ ] 디자인 타임 미리보기
+- [x] Hot Reload
+- [x] DevTools (요소 인스펙터, 비주얼 트리, 프레임 통계, 프로파일러)
+- [x] 에디터 프리뷰: [VS Code](https://marketplace.visualstudio.com/items?itemName=aprillz.mewui-preview-vscode), [Visual Studio](https://marketplace.visualstudio.com/items?itemName=aprillz.mewui-preview), [Rider](https://plugins.jetbrains.com/plugin/34155-mewui-preview)
 
 ---
 ## 라이선스
