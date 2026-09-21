@@ -43,6 +43,42 @@ public sealed class FluentExtensionCoverageTests
     }
 
     [TestMethod]
+    public void DropDownButtonTextContent_MakesALabelAndKeepsTheType()
+    {
+        DropDownButton withAccessKey = new DropDownButton()
+            .Content("_Export")
+            .DropDownMenu(new Menu());
+        DropDownButton plain = new DropDownButton()
+            .Content("A_B", accessKey: false)
+            .DropDownMenu(new Menu());
+
+        Assert.IsInstanceOfType<AccessText>(withAccessKey.Content);
+        Assert.AreEqual("_Export", ((AccessText)withAccessKey.Content!).RawText);
+        Assert.IsInstanceOfType<TextBlock>(plain.Content);
+        Assert.AreEqual("A_B", ((TextBlock)plain.Content!).Text);
+    }
+
+    [TestMethod]
+    public void DropDownButtonBoundTextContent_FollowsTheSource()
+    {
+        var label = new ObservableValue<string>("_Export");
+        var count = new ObservableValue<int>(1);
+
+        DropDownButton bound = new DropDownButton()
+            .BindContent(label)
+            .DropDownMenu(new Menu());
+        DropDownButton converted = new DropDownButton()
+            .BindContent(count, value => $"{value} items", accessKey: false)
+            .DropDownMenu(new Menu());
+
+        label.Value = "_Share";
+        count.Value = 3;
+
+        Assert.AreEqual("_Share", ((AccessText)bound.Content!).RawText);
+        Assert.AreEqual("3 items", ((TextBlock)converted.Content!).Text);
+    }
+
+    [TestMethod]
     public void DropDownExtensions_PreserveConcreteTypes()
     {
         var dropDownMenu = new Menu();

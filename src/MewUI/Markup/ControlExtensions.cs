@@ -5626,6 +5626,104 @@ public static class ControlExtensions
     #region DropDownButton
 
     /// <summary>
+    /// Sets the dropdown button content to a centered text label. When <paramref name="accessKey"/> is true
+    /// (default), "_" prefixes mark access key characters (e.g., "_Export" registers Alt+E).
+    /// </summary>
+    /// <param name="button">Target dropdown button.</param>
+    /// <param name="text">Content text.</param>
+    /// <param name="accessKey">Whether underscore prefixes define access keys.</param>
+    /// <returns>The dropdown button for chaining.</returns>
+    public static DropDownButton Content(this DropDownButton button, string text, bool accessKey = true)
+    {
+        if (accessKey)
+        {
+            var accessText = CreateCenteredAccessText();
+            accessText.RawText = text;
+            button.Content = accessText;
+        }
+        else
+        {
+            var textBlock = CreateCenteredTextBlock();
+            textBlock.Text = text;
+            button.Content = textBlock;
+        }
+
+        return button;
+    }
+
+    /// <summary>
+    /// Binds the dropdown button content to an observable string value (creates a centered text label).
+    /// </summary>
+    /// <param name="button">Target dropdown button.</param>
+    /// <param name="source">Observable source.</param>
+    /// <param name="accessKey">Whether underscore prefixes define access keys.</param>
+    /// <returns>The dropdown button for chaining.</returns>
+    public static DropDownButton BindContent(this DropDownButton button, ObservableValue<string> source, bool accessKey = true)
+    {
+        if (accessKey)
+        {
+            var accessText = CreateCenteredAccessText();
+            accessText.SetBinding(AccessText.RawTextProperty, source, BindingMode.OneWay);
+            button.Content = accessText;
+        }
+        else
+        {
+            var textBlock = CreateCenteredTextBlock();
+            textBlock.SetBinding(TextBlock.TextProperty, source, BindingMode.OneWay);
+            button.Content = textBlock;
+        }
+
+        return button;
+    }
+
+    /// <summary>
+    /// Binds the dropdown button content to an observable value with converter (creates a centered text label).
+    /// </summary>
+    /// <typeparam name="TSource">Source value type.</typeparam>
+    /// <param name="button">Target dropdown button.</param>
+    /// <param name="source">Observable source.</param>
+    /// <param name="convert">Conversion function.</param>
+    /// <param name="accessKey">Whether underscore prefixes define access keys.</param>
+    /// <returns>The dropdown button for chaining.</returns>
+    public static DropDownButton BindContent<TSource>(
+        this DropDownButton button,
+        ObservableValue<TSource> source,
+        Func<TSource, string> convert,
+        bool accessKey = true)
+    {
+        if (accessKey)
+        {
+            var accessText = CreateCenteredAccessText();
+            accessText.SetBinding(AccessText.RawTextProperty, source, value => convert(value) ?? string.Empty);
+            button.Content = accessText;
+        }
+        else
+        {
+            var textBlock = CreateCenteredTextBlock();
+            textBlock.SetBinding(TextBlock.TextProperty, source, value => convert(value) ?? string.Empty);
+            button.Content = textBlock;
+        }
+
+        return button;
+    }
+
+    private static AccessText CreateCenteredAccessText() => new()
+    {
+        HorizontalAlignment = HorizontalAlignment.Center,
+        VerticalAlignment = VerticalAlignment.Center,
+        TextAlignment = MewUI.TextAlignment.Center,
+        VerticalTextAlignment = MewUI.TextAlignment.Center,
+    };
+
+    private static TextBlock CreateCenteredTextBlock() => new()
+    {
+        HorizontalAlignment = HorizontalAlignment.Center,
+        VerticalAlignment = VerticalAlignment.Center,
+        TextAlignment = MewUI.TextAlignment.Center,
+        VerticalTextAlignment = MewUI.TextAlignment.Center,
+    };
+
+    /// <summary>
     /// Sets the menu opened by the dropdown button.
     /// </summary>
     /// <param name="button">Target dropdown button.</param>

@@ -192,7 +192,7 @@ internal sealed class InSurfaceDialogHost : UIElement, IVisualTreeHost
         {
             border.Background = dialog.EffectiveOpaqueBackground;
             border.BorderBrush = BorderColorFor(theme);
-        }).Cached();
+        });
         frame.Transitions = [Transition.Create(Control.BorderBrushProperty, SCRIM_FADE_IN_MS)];
         _frame = frame;
 
