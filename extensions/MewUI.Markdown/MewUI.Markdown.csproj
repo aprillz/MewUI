@@ -4,7 +4,6 @@
     <AssemblyName>$(MewUITitle).Markdown</AssemblyName>
     <PackageId>$(MewUITitle).Markdown</PackageId>
     <Description>Native Markdown controls for MewUI using Markdig.</Description>
-    <EnableAotAnalyzer>true</EnableAotAnalyzer>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\MewUI\MewUI.csproj" />

@@ -8,6 +8,7 @@
     <SuppressDependenciesWhenPacking>false</SuppressDependenciesWhenPacking>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <IsTrimmable>false</IsTrimmable>
+    <IsAotCompatible>false</IsAotCompatible>
     <IncludeSymbols>false</IncludeSymbols>
     <IncludeSource>false</IncludeSource>
     <NoWarn>$(NoWarn);NU5128</NoWarn>

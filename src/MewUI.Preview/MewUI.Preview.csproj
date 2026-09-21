@@ -6,9 +6,12 @@
     <AssemblyName>$(MewUITitle).Preview</AssemblyName>
     <PackageId>$(MewUITitle).Preview</PackageId>
     <Description>Editor preview session host for $(MewUITitle). Referenced only during IDE preview sessions; never ships in production builds.</Description>
-    <!-- Preview sessions always run untrimmed under the JIT (hot reload requires it), so
-         reflection trimming diagnostics do not apply to this assembly. -->
-    <NoWarn>$(NoWarn);IL2026;IL2070</NoWarn>
+    <!-- Preview sessions always run untrimmed under the JIT from a directory on disk (hot reload
+         requires it), and the previewer resolves preview targets and their source through
+         reflection and the assembly's PDB. It is not trimmed, published single-file or AOT
+         compiled, so it stays out of that analysis instead of suppressing what it reports. -->
+    <IsAotCompatible>false</IsAotCompatible>
+    <IsTrimmable>false</IsTrimmable>
   </PropertyGroup>
 
   <ItemGroup>
