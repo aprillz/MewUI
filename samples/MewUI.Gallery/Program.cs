@@ -296,8 +296,10 @@ static void Startup()
     var args = Environment.GetCommandLineArgs();
 
 #if MEWUI_GALLERY_BROWSER
+#pragma warning disable CA1416
     BrowserPlatform.Register();
     MewVGBrowserBackend.Register();
+#pragma warning restore CA1416
 #elif MEWUI_GALLERY_WIN
 #pragma warning disable CA1416
     Win32Platform.Register();
