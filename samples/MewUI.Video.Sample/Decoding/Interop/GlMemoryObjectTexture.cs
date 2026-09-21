@@ -36,7 +36,8 @@ internal sealed unsafe class GlMemoryObjectTexture : IExternalRasterSource
     private static delegate* unmanaged[Stdcall]<nint, void> _glDeleteSync;
     private static int _readFenceTimeouts;
 
-    private static bool _importAttemptsLogged;
+    // Index of the import attempt that last produced a usable texture, tried first for the next texture.
+    private static int _workingAttempt = -1;
     private static bool _missingContextLogged;
 
     private readonly GlSharedSemaphores? _semaphores;
@@ -80,58 +81,77 @@ internal sealed unsafe class GlMemoryObjectTexture : IExternalRasterSource
         PixelHeight = pixelHeight;
 
         ulong byteSize = (ulong)pixelWidth * (ulong)pixelHeight * 4;
-        // D3D11_IMAGE is the dedicated handle type; some drivers (Intel) reject it and accept the opaque NT handle.
+        // The allocation behind a D3D11 texture is padded and its size cannot be queried; storage fails when the declared
+        // size is smaller than the driver's layout (NVIDIA), and Intel rejects the D3D11_IMAGE handle type outright.
         (uint HandleType, ulong Size)[] attempts =
         [
             (GL_HANDLE_TYPE_D3D11_IMAGE_EXT, byteSize),
+            (GL_HANDLE_TYPE_D3D11_IMAGE_EXT, byteSize * 2),
+            (GL_HANDLE_TYPE_D3D11_IMAGE_EXT, 0),
             (GL_HANDLE_TYPE_OPAQUE_WIN32_EXT, byteSize),
+            (GL_HANDLE_TYPE_OPAQUE_WIN32_EXT, byteSize * 2),
         ];
 
-        uint importError = 0;
+        int firstAttempt = _workingAttempt >= 0 ? _workingAttempt : 0;
         var attemptLog = new System.Text.StringBuilder();
-        foreach (var (handleType, size) in attempts)
+        for (int index = firstAttempt; index < attempts.Length; index++)
         {
-            uint staleError = DrainErrors();
-            uint memoryObject = 0;
-            _glCreateMemoryObjectsEXT(1, &memoryObject);
-            int dedicated = 1;
-            _glMemoryObjectParameterivEXT(memoryObject, GL_DEDICATED_MEMORY_OBJECT_EXT, &dedicated);
-            uint parameterError = glGetError();
-            _glImportMemoryWin32HandleEXT(memoryObject, size, handleType, sharedHandle);
-            importError = glGetError();
-            attemptLog.Append($" [type=0x{handleType:X} size={size} stale=0x{staleError:X} param=0x{parameterError:X} import=0x{importError:X}]");
-            if (importError == 0)
+            var (handleType, size) = attempts[index];
+            if (TryImport(sharedHandle, handleType, size, pixelWidth, pixelHeight, out uint importError, out uint storageError))
             {
-                _memoryObject = memoryObject;
-                break;
+                attemptLog.Append($" [type=0x{handleType:X} size={size} ok]");
+                if (_workingAttempt != index)
+                {
+                    _workingAttempt = index;
+                    Aprillz.MewUI.Video.Sample.Diagnostics.SampleLog.Write($"[memobj] import attempts:{attemptLog}");
+                }
+
+                return;
             }
 
-            _glDeleteMemoryObjectsEXT(1, &memoryObject);
+            attemptLog.Append($" [type=0x{handleType:X} size={size} import=0x{importError:X} storage=0x{storageError:X}]");
         }
 
-        if (!_importAttemptsLogged || importError != 0)
+        Aprillz.MewUI.Video.Sample.Diagnostics.SampleLog.Write($"[memobj] import attempts:{attemptLog}");
+        throw new InvalidOperationException("no memory object import attempt produced a usable texture.");
+    }
+
+    private bool TryImport(nint sharedHandle, uint handleType, ulong size, int pixelWidth, int pixelHeight, out uint importError, out uint storageError)
+    {
+        _ = DrainErrors();
+        uint memoryObject = 0;
+        _glCreateMemoryObjectsEXT(1, &memoryObject);
+        int dedicated = 1;
+        _glMemoryObjectParameterivEXT(memoryObject, GL_DEDICATED_MEMORY_OBJECT_EXT, &dedicated);
+        _glImportMemoryWin32HandleEXT(memoryObject, size, handleType, sharedHandle);
+        importError = glGetError();
+        storageError = 0;
+        if (importError != 0)
         {
-            _importAttemptsLogged = true;
-            Aprillz.MewUI.Video.Sample.Diagnostics.SampleLog.Write($"[memobj] import attempts:{attemptLog}");
+            _glDeleteMemoryObjectsEXT(1, &memoryObject);
+            return false;
         }
 
         int previousBinding = 0;
         glGetIntegerv(GL_TEXTURE_BINDING_2D, &previousBinding);
         uint textureId = 0;
         glGenTextures(1, &textureId);
-        _textureId = textureId;
-        glBindTexture(GL_TEXTURE_2D, _textureId);
-        _glTexStorageMem2DEXT(GL_TEXTURE_2D, 1, GL_RGBA8, pixelWidth, pixelHeight, _memoryObject, 0);
-        uint storageError = glGetError();
+        glBindTexture(GL_TEXTURE_2D, textureId);
+        _glTexStorageMem2DEXT(GL_TEXTURE_2D, 1, GL_RGBA8, pixelWidth, pixelHeight, memoryObject, 0);
+        storageError = glGetError();
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glBindTexture(GL_TEXTURE_2D, (uint)previousBinding);
-
-        if (importError != 0 || storageError != 0)
+        if (storageError != 0)
         {
-            Dispose();
-            throw new InvalidOperationException($"memory object import failed: import glError=0x{importError:X}, storage glError=0x{storageError:X}.");
+            glDeleteTextures(1, &textureId);
+            _glDeleteMemoryObjectsEXT(1, &memoryObject);
+            return false;
         }
+
+        _memoryObject = memoryObject;
+        _textureId = textureId;
+        return true;
     }
 
     public IExternalRasterLease Acquire()
