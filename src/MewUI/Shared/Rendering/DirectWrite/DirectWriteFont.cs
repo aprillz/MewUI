@@ -274,7 +274,7 @@ internal sealed unsafe partial class DirectWriteFont : FontBase, IGlyphOutlineFo
         return DirectWriteTextRasterizer.TryRasterizeSubpixel(
             _dwriteFactoryHandle, this, text, request.WidthPx, request.HeightPx,
             request.HorizontalAlignment, request.VerticalAlignment, request.Wrapping, request.Trimming,
-            request.DpiScale > 0 ? (float)request.DpiScale : 1f, request.InkInset, out coverage);
+            request.DpiScale > 0 ? (float)request.DpiScale : 1f, request.InkInset, request.Buffer, out coverage);
     }
 
     public unsafe bool TryAppendGlyphOutline(PathGeometry path, char ch, Point baselineOrigin, out double advance)
