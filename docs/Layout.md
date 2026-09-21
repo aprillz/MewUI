@@ -19,19 +19,19 @@ If you want a parent-relative accessor, use `RenderSize` (just the `Size`, no or
 
 ## Pipeline overview
 
-MewUI renders in immediate mode (every frame is repainted), but keeps the layout/control tree retained for hit-testing and for reusing Measure/Arrange results between frames.
+MewUI keeps the layout/control tree between frames for hit-testing and for reusing Measure/Arrange results, and it also keeps what each element drew. An element is drawn again only after it is invalidated; a frame reuses the kept drawing of every other element and repaints only the part of the window that changed.
 
 The pass order is:
 
 1) **Measure**: computes `DesiredSize`, recursing top-down (a parent's `MeasureOverride`/`MeasureContent` calls `Measure` on its children before returning its own size).
 2) **Arrange**: assigns `Bounds`, recursing top-down the same way.
-3) **Render**: draws using `Bounds` and current visual state (`OnRender` for the element's own visuals, then `RenderSubtree` for children).
+3) **Render**: draws invalidated elements using `Bounds` and current visual state (`OnRender` for the element's own visuals, then `RenderSubtree` for children), and reuses the kept drawing of the rest.
 
 ### When each pass runs
 
 - `InvalidateMeasure()`: marks `IsMeasureDirty` **and** `IsArrangeDirty` true, then propagates to `Parent.InvalidateMeasure()` unconditionally (even if this element was already dirty - a stale ancestor flag must still be re-notified, and this is also what wakes the `Window`). It then calls `InvalidateVisual()`.
 - `InvalidateArrange()`: marks only `IsArrangeDirty` true and propagates to `Parent.InvalidateArrange()` the same way. Does **not** imply Measure is invalid.
-- `InvalidateVisual()`: just propagates up to `Parent.InvalidateVisual()`. On `Window`, this schedules a repaint only (`RequestRender()`) - it does **not** schedule a layout pass.
+- `InvalidateVisual()`: says that this element's own drawing changed. The element is drawn again on the next frame and its window schedules a repaint; it does **not** schedule a layout pass. Ancestors are not told that their own drawing changed, so an `InvalidateVisual()` override on an ancestor is not called for a descendant's invalidation. `Window.InvalidateVisual()` schedules a repaint of the window (`RequestRender()`).
 - `InvalidateVisualState()` (on `UIElement`/`Control`): queues the element for visual-state reconciliation (style triggers, state transitions) and calls `Window.RequestUpdatePass()`. This is distinct from the two above: a property that only `AffectsVisualState` (not layout or render) still needs the *update pass* to run, because trigger-resolved values may feed into layout or render that hasn't happened yet.
 
 Both `Window.InvalidateMeasure()` and `Window.InvalidateArrange()` additionally call `RequestUpdatePass()`.
@@ -120,6 +120,9 @@ Render draws the element using `Bounds` and current visual state.
 ### Rules
 
 - Render must not perform layout: `UIElement.Render` is `sealed` and never calls `Measure`/`Arrange`. Avoid triggering `InvalidateMeasure()`/`InvalidateArrange()` from inside `OnRender` - it won't corrupt the current frame, but it schedules another update pass right after this one finishes, which can turn into continuous re-layout every frame.
+- `OnRender` does not run on every frame. Everything `OnRender` reads has to invalidate the element when it changes. A MewProperty registered with `AffectsRender` does so by itself (see [Property System](PropertySystem.md)); any other input, such as a field, a model value or a timer, needs an explicit `InvalidateVisual()`. Without it the screen keeps showing the previous drawing.
+- An element that draws from the state of its parent is invalidated by the parent when that state changes; the parent's own invalidation does not redraw its children.
+- Content that changes continuously, such as a particle effect, calls `InvalidateVisual()` on every frame it changes.
 - Render should draw using already-snapped geometry whenever possible (see the Arrange rounding table above).
 - Elements outside the window's client viewport are culled: `Render` releases any bitmap cache and returns without calling `OnRender` when the element's `Bounds` don't intersect `new Rect(root.ClientSize)`. Set `SkipViewportCull` (an inherited property) on subtrees rendered under a parent-applied transform, since their `Bounds` don't reflect their actual visible area and would otherwise get culled incorrectly.
 

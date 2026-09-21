@@ -112,6 +112,8 @@ Inside the actual render (`Window.RenderFrame` -> `RenderFrameCore`), `Animation
 .Update()` runs first to advance active animation clocks before the draw traversal, so animated
 values are current for that frame's paint.
 
+A frame does not repaint the whole window. Elements invalidated since the previous frame are drawn again, the kept drawing of every other element is reused, and only the area of the window that changed is repainted. A frame in which nothing changed has nothing to repaint. What this asks of `OnRender` is described in [Layout](Layout.md) under the Render rules.
+
 ### Win32 specifics
 
 - `WM_PAINT` is still handled (`Win32WindowBackend.HandlePaint`) and renders immediately inside
@@ -159,3 +161,4 @@ platform host, not the graphics backend) - `VSyncEnabled` just has nothing to co
   invalidations collapse into one render per wake-up.
 - Continuous mode renders even without invalidation so animations - and anything else driving
   `AnimationActive` - can advance every frame.
+- Scheduling decides when a frame runs; invalidation decides what that frame repaints. Continuous mode runs frames back to back, but an element is still drawn again only after `InvalidateVisual()`.
