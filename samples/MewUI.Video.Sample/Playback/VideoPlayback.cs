@@ -40,10 +40,14 @@ public sealed class VideoPlayback : IDisposable
 
     public event Action? FrameReady;
 
-    public VideoPlayback(string path, nint preferredD3D11Device = 0)
+    // Passed to every decoder this playback creates; see VideoDecoder's sharedTextureOutput.
+    private readonly bool _sharedTextureOutput;
+
+    public VideoPlayback(string path, nint preferredD3D11Device = 0, bool sharedTextureOutput = false)
     {
         SampleLog.Write($"VideoPlayback ctor: {path}");
-        _decoder = new VideoDecoder(path, preferredD3D11Device);
+        _sharedTextureOutput = sharedTextureOutput;
+        _decoder = new VideoDecoder(path, preferredD3D11Device, sharedTextureOutput);
         _queue = new VideoFrameQueue(capacity: 4);
         _clock = new PlaybackClock();
         SourcePath = path;
@@ -230,7 +234,7 @@ public sealed class VideoPlayback : IDisposable
         ThrowIfDisposed();
         SampleLog.Write($"VideoPlayback.RecreateDecoder position={position}");
 
-        var replacement = new VideoDecoder(SourcePath, preferredD3D11Device);
+        var replacement = new VideoDecoder(SourcePath, preferredD3D11Device, _sharedTextureOutput);
         if (position > TimeSpan.Zero)
         {
             var clampedPosition = replacement.Duration > TimeSpan.Zero && position > replacement.Duration
