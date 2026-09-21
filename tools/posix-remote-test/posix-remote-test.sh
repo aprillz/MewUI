@@ -25,7 +25,11 @@ if [[ "${1:-}" == "--" ]]; then shift; fi
 RUNNER_ARGS="$*"
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
-PROJECT="$HERE/../../tests/MewUI.WindowAutomationTest/MewUI.WindowAutomationTest.csproj"
+REPO="$(cd "$HERE/../.." && pwd)"
+PROJECT="$REPO/tests/MewUI.WindowAutomationTest/MewUI.WindowAutomationTest.csproj"
+# Everything a run writes stays under the ignored .artifacts: this folder is synchronized to other machines.
+OUT="$REPO/.artifacts/posix-remote-test"
+mkdir -p "$OUT"
 REMOTE_ROOT="${MEWUI_REMOTE_ROOT:-mewui-window-automation}"
 FRAMEWORK=net10.0
 # Non-interactive SSH shells on macOS do not read the profile that puts dotnet on PATH.
@@ -45,14 +49,14 @@ ssh "$SSH_TARGET" "$REMOTE_PATH; dotnet --list-runtimes | grep 'Microsoft.NETCor
 PUBLISH_NAME="publish-$RID"
 # UseVSTest=false selects the MSTest runner, which produces a plain executable application.
 echo "== publishing the suite ($RID, framework-dependent)"
-rm -rf "$HERE/$PUBLISH_NAME"
+rm -rf "$OUT/$PUBLISH_NAME"
 dotnet publish "$PROJECT" -c Debug -f "$FRAMEWORK" -r "$RID" --self-contained false \
-  -p:UseVSTest=false -o "$HERE/$PUBLISH_NAME" -v:q --nologo
+  -p:UseVSTest=false -o "$OUT/$PUBLISH_NAME" -v:q --nologo
 
 echo "== shipping the payload"
-tar -C "$HERE" -czf "$HERE/payload-$RID.tgz" "$PUBLISH_NAME"
-scp -q "$HERE/payload-$RID.tgz" "$SSH_TARGET:payload-$RID.tgz"
-rm "$HERE/payload-$RID.tgz"
+tar -C "$OUT" -czf "$OUT/payload-$RID.tgz" "$PUBLISH_NAME"
+scp -q "$OUT/payload-$RID.tgz" "$SSH_TARGET:payload-$RID.tgz"
+rm "$OUT/payload-$RID.tgz"
 ssh "$SSH_TARGET" "rm -rf ~/$REMOTE_ROOT && mkdir -p ~/$REMOTE_ROOT && tar -C ~/$REMOTE_ROOT -xzf ~/payload-$RID.tgz && rm ~/payload-$RID.tgz"
 
 ENV_EXPORTS=""
