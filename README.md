@@ -238,10 +238,11 @@ See [Binding](docs/Binding.md) for segment kinds, null/fallback, TwoWay, collect
 
 Controls (Implemented):
 - `Button`, `ToggleButton`, `RepeatButton`, `SplitButton`, `DropDownButton`
-- `Label`, `TextBlock`, `Image`
+- `SegmentedControl`, `ButtonGroup`
+- `Label`, `TextBlock`, `MarkupTextBlock`, `Image`
 - `TextBox`, `MultiLineTextBox`, `SyntaxViewer`, `PasswordBox`
 - `CheckBox`, `RadioButton`, `ToggleSwitch`
-- `ComboBox`, `ListBox`, `TreeView`, `GridView`
+- `ComboBox`, `ListBox`, `ItemsControl`, `TreeView`, `GridView`
 - `Slider`, `ProgressBar`, `ProgressRing`, `NumericUpDown`
 - `TabControl`, `GroupBox`, `Expander`, `Border`
 - `ColorPicker`, `DatePicker`, `Calendar`
@@ -249,6 +250,9 @@ Controls (Implemented):
 - `ToolBar` (declared bands of command groups, dragged by their grips)
 - `NavigationView`
 - `ScrollViewer`
+- `ContentControl`, `UserControl`, `TransitionContentControl`
+- `Popup`, `Separator`
+- `MessageBox`, `FileDialog`
 - `Window`, `DispatcherTimer`
 
 Panels:
