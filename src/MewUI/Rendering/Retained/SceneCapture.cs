@@ -57,6 +57,7 @@ internal sealed class SceneCapture
         ArgumentNullException.ThrowIfNull(layerRoots);
 
         PromoteChangesOfVisualsWithoutNodes(scene, registry);
+        QueueVisualsThatSettled(scene, registry);
         registry.BeginPass();
         try
         {
@@ -65,6 +66,29 @@ internal sealed class SceneCapture
         finally
         {
             registry.EndPass();
+        }
+    }
+
+    /// <summary>
+    /// A visual drawn live because it kept changing has no recording. Once a pass has gone by without it
+    /// changing, it is queued so that this pass takes one and later frames replay it again.
+    /// </summary>
+    private static void QueueVisualsThatSettled(RenderScene scene, RenderDirtyRegistry registry)
+    {
+        var drawnLive = scene.DrawnLiveWhileChanging;
+        for (int index = drawnLive.Count - 1; index >= 0; index--)
+        {
+            var node = drawnLive[index];
+            bool gone = !ReferenceEquals(scene.FindNode(node.Element), node);
+            if (gone || node.LastChangedPass < scene.PassId)
+            {
+                drawnLive.RemoveAt(index);
+                if (!gone && node.NonRecordableReason == VisualNode.CHANGES_EVERY_PASS)
+                {
+                    // Through the visual, so that the visuals above it are looked into as well.
+                    node.Element.InvalidateVisual();
+                }
+            }
         }
     }
 
@@ -121,6 +145,7 @@ internal sealed class SceneCapture
         update.Begin(scene);
         update.StageRoot(root);
         _ambientClip = null;
+        _surfaceBox = RetainedGeometry.TransformRect(root.Bounds, context.GetTransform());
         update.StageLayerRoots(layerRoots);
 
         try
@@ -325,7 +350,7 @@ internal sealed class SceneCapture
 
         var bounds = default(BoundsAccumulator);
         var subtreeExtent = Visible(RetainedGeometry.TransformRect(SlotBounds(update, node, OWN_CONTENT_SLOT), transform));
-        update.StageSlotExtent(node, OWN_CONTENT_SLOT, subtreeExtent);
+        update.StageSlotExtent(node, OWN_CONTENT_SLOT, subtreeExtent, StaysInsideTheVisual(subtreeExtent, element, transform));
         StageChangeWithinSlot(update, node, OWN_CONTENT_SLOT, transform);
         bounds.Add(subtreeExtent);
         update.StageBounds(node, bounds.Result, bounds.Result, Origin(element), IsClippedAway(element, transform, bounds.Result));
@@ -368,7 +393,7 @@ internal sealed class SceneCapture
                     }
 
                     var slotExtent = Visible(RetainedGeometry.TransformRect(SlotBounds(update, node, slotIndex), transform));
-                    update.StageSlotExtent(node, slotIndex, slotExtent);
+                    update.StageSlotExtent(node, slotIndex, slotExtent, StaysInsideTheVisual(slotExtent, node.Element, transform));
                     StageChangeWithinSlot(update, node, slotIndex, transform);
                     ownBounds.Add(slotExtent);
                     entryIndex++;
@@ -438,7 +463,7 @@ internal sealed class SceneCapture
             // A slot that could not be recorded is drawn live. What it inks is not known, so it answers
             // for the bounds of its visual: enough to be found by a damaged area and to damage its own.
             bool drawnLive = stagedThisPass || node.NonRecordableReason != null;
-            return drawnLive ? node.Element.Bounds : default;
+            return drawnLive ? node.Element.Bounds.Inflate(LIVE_INK_MARGIN, LIVE_INK_MARGIN) : default;
         }
 
         if (data.LocalBounds.IsEmpty)
@@ -583,6 +608,24 @@ internal sealed class SceneCapture
         return visible.Width > 0 && visible.Height > 0 ? visible : default;
     }
 
+    // How far past its box a visual drawn live is taken to ink: an antialiased edge, the overhang of a glyph.
+    private const double LIVE_INK_MARGIN = 2;
+
+    // The box of the root, which is as far as the surface shows anything.
+    private Rect _surfaceBox;
+
+    /// <summary>Whether everything the slot shows on the surface lies within the box of its visual.</summary>
+    private bool StaysInsideTheVisual(Rect slotExtent, UIElement element, Matrix3x2 transform)
+    {
+        var shown = slotExtent.Intersect(_surfaceBox);
+        if (shown.Width <= 0 || shown.Height <= 0)
+        {
+            return true;
+        }
+
+        return RetainedGeometry.TransformRect(element.Bounds.Inflate(LIVE_INK_MARGIN, LIVE_INK_MARGIN), transform).Contains(shown);
+    }
+
     private static Point Origin(UIElement element) => new(element.Bounds.X, element.Bounds.Y);
 
     private void RecordSlot(
@@ -593,6 +636,20 @@ internal sealed class SceneCapture
         RenderDataRecorder recorder,
         bool compatibilitySubtree)
     {
+        if (node.ChangesEveryPass(scene.PassId + 1))
+        {
+            // Nothing replays a recording of content that is different again next frame, so none is taken
+            // and the frame draws the visual itself, as it does for a slot that cannot be recorded.
+            update.StageSlot(
+                node,
+                slotIndex,
+                null,
+                VisualNode.CHANGES_EVERY_PASS,
+                node.Element.RenderContentVersion,
+                node.Element.SubtreeContentVersion);
+            return;
+        }
+
         _slotBuilder.Discard();
         recorder.Slot = _slotBuilder;
         try

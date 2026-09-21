@@ -125,13 +125,17 @@ internal sealed class SceneUpdate
     /// new place. A recording that changed is repainted there and where it reached before, which can be
     /// far less than the box of a visual with more than one drawing of its own.
     /// </summary>
-    internal void StageSlotExtent(VisualNode node, int slotIndex, Rect extent)
+    /// <summary>
+    /// Stages where a slot reaches on the surface. <paramref name="staysInsideTheVisual"/> says whether
+    /// all of that lies within the visual's own box, which is what a slot drawn live answers for.
+    /// </summary>
+    internal void StageSlotExtent(VisualNode node, int slotIndex, Rect extent, bool staysInsideTheVisual)
     {
         _extents.Add(new PendingExtent(node, slotIndex, extent));
         int last = _slots.Count - 1;
         if (last >= 0 && ReferenceEquals(_slots[last].Node, node) && _slots[last].SlotIndex == slotIndex)
         {
-            _slots[last] = _slots[last] with { Extent = extent };
+            _slots[last] = _slots[last] with { Extent = extent, StaysInsideTheVisual = staysInsideTheVisual };
         }
     }
 
@@ -303,13 +307,21 @@ internal sealed class SceneUpdate
                 continue;
             }
 
+            slot.Node.NoteContentChanged(passId, slot.Data == null || slot.StaysInsideTheVisual);
+
             bool wasDrawnLive = previous == null && slot.Node.NonRecordableReason != null;
             bool isDrawnLive = slot.Data == null;
+            if (slot.RejectionReason == VisualNode.CHANGES_EVERY_PASS && slot.Node.NonRecordableReason != VisualNode.CHANGES_EVERY_PASS)
+            {
+                _scene.DrawnLiveWhileChanging.Add(slot.Node);
+            }
+
             if (wasDrawnLive || isDrawnLive)
             {
                 // A slot without a recording is drawn live across the visual, before or after this pass.
                 _scene.AddDamage(slot.Node.SurfaceBounds);
                 _scene.AddDamage(slot.Extent);
+                _scene.AddDamage(previous?.SurfaceExtent ?? default);
             }
             else if (previous != null && slot.Data != null && slot.Change is Rect change)
             {
@@ -480,7 +492,8 @@ internal sealed class SceneUpdate
         int ContentVersion,
         int SubtreeVersion,
         Rect Extent = default,
-        Rect? Change = null);
+        Rect? Change = null,
+        bool StaysInsideTheVisual = false);
 
     private readonly record struct PendingExtent(VisualNode Node, int SlotIndex, Rect Extent);
 

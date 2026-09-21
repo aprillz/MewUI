@@ -57,6 +57,9 @@ internal sealed class RenderScene : IDisposable
     /// <summary>Makes the surfaces that faded groups are drawn into. Without one a group is faded call by call.</summary>
     internal IGraphicsFactory? GroupFactory { get; set; }
 
+    /// <summary>Nodes whose content is drawn live because it kept changing; looked over for ones that settled.</summary>
+    internal List<VisualNode> DrawnLiveWhileChanging { get; } = [];
+
     internal int NodeCount => _nodes.Count;
 
     /// <summary>Identifies the pass being captured, so nodes it never reaches can be dropped.</summary>
