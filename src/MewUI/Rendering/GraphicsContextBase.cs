@@ -583,6 +583,7 @@ internal abstract class GraphicsContextBase : IGraphicsContext, ITextBackendRend
             IsActive = false;
             _cullStack.Clear();
             ReleaseFrameResources();
+            TextServices.FrameEnded(this);
         }
     }
 

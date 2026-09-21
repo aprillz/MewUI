@@ -1,9 +1,9 @@
 namespace Aprillz.MewUI.Text;
 
-/// <summary>Fixed-capacity LRU cache that runs a dispose action on evicted and replaced values.</summary>
+/// <summary>LRU cache of a bounded capacity that runs a dispose action on evicted and replaced values.</summary>
 internal sealed class BoundedCache<TKey, TValue> : IDisposable where TKey : notnull
 {
-    private readonly int _capacity;
+    private int _capacity;
     private readonly Action<TValue> _dispose;
     private readonly Dictionary<TKey, Entry> _entries = [];
     private readonly LinkedList<TKey> _order = [];
@@ -16,6 +16,18 @@ internal sealed class BoundedCache<TKey, TValue> : IDisposable where TKey : notn
     }
 
     public int Count => _entries.Count;
+
+    /// <summary>How many entries the cache holds at most. Lowering it evicts the least recently used.</summary>
+    public int Capacity
+    {
+        get => _capacity;
+        set
+        {
+            ArgumentOutOfRangeException.ThrowIfLessThan(value, 1);
+            _capacity = value;
+            EvictDownToCapacity();
+        }
+    }
     public IReadOnlyCollection<TValue> Values => _entries.Values.Select(static entry => entry.Value).ToArray();
 
     public bool TryGetValue(TKey key, out TValue value)
@@ -40,6 +52,11 @@ internal sealed class BoundedCache<TKey, TValue> : IDisposable where TKey : notn
         }
         var node = _order.AddLast(key);
         _entries.Add(key, new Entry(value, node));
+        EvictDownToCapacity();
+    }
+
+    private void EvictDownToCapacity()
+    {
         while (_entries.Count > _capacity && _order.First is LinkedListNode<TKey> oldest)
         {
             _order.RemoveFirst();
