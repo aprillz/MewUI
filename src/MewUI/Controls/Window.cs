@@ -2722,6 +2722,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
         // Dispose the cached render context BEFORE the factory tears down its window
         // resources - backends may still hold references that the factory is about to free.
+        ReleaseRetainedFrameSurface();
         _renderContext?.Dispose();
         _renderContext = null;
         _cachedRenderTarget = null;
@@ -3018,10 +3019,23 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
         // Render surfaces are one-shot (different target instance per call).
         // Window-targeted contexts are cached so backends can pool per-frame state.
-        bool oneShot = target is IRenderSurface;
-        IGraphicsContext context = oneShot
-            ? GraphicsFactory.CreateContext(target)
-            : (_renderContext ??= GraphicsFactory.CreateContext(target));
+        // The frame surface is drawn into every frame, so its context stays too: what a context gathers
+        // as it draws, the realized text runs above all, would otherwise be built again every frame.
+        bool keptFrame = ReferenceEquals(target, _retainedFrameSurface);
+        bool oneShot = target is IRenderSurface && !keptFrame;
+        IGraphicsContext context;
+        if (oneShot)
+        {
+            context = GraphicsFactory.CreateContext(target);
+        }
+        else if (keptFrame)
+        {
+            context = _retainedFrameContext ??= GraphicsFactory.CreateContext(target);
+        }
+        else
+        {
+            context = _renderContext ??= GraphicsFactory.CreateContext(target);
+        }
 
         try
         {
@@ -3158,6 +3172,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
                             sceneDrewTheSurface = TryRenderRetainedBody(context, paintedArea);
                             if (!sceneDrewTheSurface)
                             {
+                                _frameDrewEveryRoot = true;
                                 bodyRoot.Render(context);
                             }
                         }
