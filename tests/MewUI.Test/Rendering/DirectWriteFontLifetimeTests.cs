@@ -18,10 +18,10 @@ public sealed class DirectWriteFontLifetimeTests
         }
 
         using var factory = new Direct2DGraphicsFactory();
-        var font = (DirectWriteFont)factory.CreateFont("Segoe UI", 16);
+        var font = factory.CreateFont("Segoe UI", 16);
         var path = new PathGeometry();
 
-        Assert.IsTrue(font.TryAppendGlyphOutline(path, 'A', new Point(0, 20), out _));
+        Assert.IsTrue(((IGlyphOutlineFont)font).TryAppendGlyphOutline(path, 'A', new Point(0, 20), out _));
         Assert.AreNotEqual(0, GetCachedFace(font));
 
         font.Dispose();
@@ -29,8 +29,11 @@ public sealed class DirectWriteFontLifetimeTests
         Assert.AreEqual(0, GetCachedFace(font));
     }
 
-    private static nint GetCachedFace(DirectWriteFont font)
-        => (nint)(typeof(DirectWriteFont)
+    // The DirectWrite sources are linked into every Win32 backend, so naming the type here would be
+    // ambiguous between the assemblies the test references. The font comes from the Direct2D factory,
+    // so reading the field off its own type reaches the right copy.
+    private static nint GetCachedFace(IFont font)
+        => (nint)(font.GetType()
             .GetField("_cachedFontFace", BindingFlags.Instance | BindingFlags.NonPublic)!
             .GetValue(font) ?? 0);
 }

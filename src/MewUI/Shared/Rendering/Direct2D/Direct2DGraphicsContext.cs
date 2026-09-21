@@ -6,6 +6,7 @@ using Aprillz.MewUI.Native.Com;
 using Aprillz.MewUI.Native.Direct2D;
 using Aprillz.MewUI.Native.DirectWrite;
 using Aprillz.MewUI.Text;
+using Aprillz.MewUI.Rendering.DirectWrite;
 
 using static Aprillz.MewUI.Rendering.GradientBrushHelper;
 

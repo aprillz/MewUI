@@ -1,7 +1,7 @@
 using Aprillz.MewUI.Native.Com;
 using Aprillz.MewUI.Native.DirectWrite;
 
-namespace Aprillz.MewUI.Rendering.Direct2D;
+namespace Aprillz.MewUI.Rendering.DirectWrite;
 
 internal readonly record struct DWriteTextFormatKey(
     string FontFamily,

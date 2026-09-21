@@ -15,6 +15,11 @@
 
   <ItemGroup>
     <Compile Include="..\MewUI\Shared\Rendering\Direct2D\**\*.cs" LinkBase="Rendering\Direct2D"/>
+    <Compile Include="..\MewUI\Shared\Rendering\Common\TextBitmap.cs" LinkBase="Rendering\Common"/>
+    <Compile Include="..\MewUI\Shared\Rendering\Common\TextInkInsetPx.cs" LinkBase="Rendering\Common"/>
+    <Compile Include="..\MewUI\Shared\Rendering\DirectWrite\**\*.cs" LinkBase="Rendering\DirectWrite"/>
+    <!-- The text face contract only; the engine gate belongs to the backends that branch on it. -->
+    <Compile Include="..\MewUI\Shared\Rendering\Win32\IWin32TextFace.cs" LinkBase="Rendering\Win32"/>
     <Compile Include="..\MewUI\Shared\Native\Win32\User32.cs" LinkBase="Native"/>
     <Compile Include="..\MewUI\Shared\Native\Win32\Gdi32.cs" LinkBase="Native"/>
     <Compile Include="..\MewUI\Shared\Native\Win32\Win32Fonts.cs" LinkBase="Native"/>

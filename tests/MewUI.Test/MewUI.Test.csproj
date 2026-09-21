@@ -12,9 +12,14 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\MewUI\MewUI.csproj" />
     <!-- GDI backend (Windows-only at runtime) for offscreen render-surface validation tests. -->
-    <ProjectReference Include="..\..\src\MewUI.Backend.Gdi\MewUI.Backend.Gdi.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Backend.Gdi\MewUI.Backend.Gdi.csproj"
+                      Aliases="global,gdibackend" />
     <!-- Backend/platform audit coverage only; product reference graph remains unchanged. -->
-    <ProjectReference Include="..\..\src\MewUI.Backend.Direct2D\MewUI.Backend.Direct2D.csproj" />
+    <!-- The DirectWrite sources are linked into every Win32 backend, so a test that names one of
+         those types sees it in two referenced assemblies. The extra alias lets such a test say which
+         copy it means; everything else keeps reaching the backend through the global namespace. -->
+    <ProjectReference Include="..\..\src\MewUI.Backend.Direct2D\MewUI.Backend.Direct2D.csproj"
+                      Aliases="global,direct2d" />
     <ProjectReference Include="..\..\src\MewUI.Backend.MewVG.Win32\MewUI.Backend.MewVG.Win32.csproj"
                       Aliases="MewVGWin32" />
     <ProjectReference Include="..\..\src\MewUI.Backend.MewVG.X11\MewUI.Backend.MewVG.X11.csproj"

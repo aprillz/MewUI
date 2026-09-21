@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using Aprillz.MewUI.Native.Com;
 using Aprillz.MewUI.Native.DirectWrite;
 using Aprillz.MewUI.Text;
+using Aprillz.MewUI.Rendering.DirectWrite;
 
 namespace Aprillz.MewUI.Rendering.Direct2D;
 
@@ -158,110 +159,6 @@ internal sealed unsafe class Direct2DMeasurementContext : MeasureGraphicsContext
             throw new ArgumentException("Font must be a DirectWriteFont.", nameof(font));
         }
 
-        nint textFormat = 0;
-        nint textLayout = 0;
-        bool ownFormat = false;
-        try
-        {
-            if (_textFormatCache is not null)
-            {
-                textFormat = _textFormatCache.GetOrCreate(
-                    _dwriteFactory,
-                    dwFont,
-                    TextAlignment.Left,
-                    TextAlignment.Top,
-                    TextWrapping.NoWrap);
-            }
-            else
-            {
-                int formatHr = DWriteVTable.CreateTextFormat(
-                    (IDWriteFactory*)_dwriteFactory,
-                    dwFont.Family,
-                    dwFont.PrivateFontCollection,
-                    (DWRITE_FONT_WEIGHT)(int)dwFont.Weight,
-                    dwFont.IsItalic ? DWRITE_FONT_STYLE.ITALIC : DWRITE_FONT_STYLE.NORMAL,
-                    (float)dwFont.Size,
-                    out textFormat);
-                if (formatHr < 0 || textFormat == 0)
-                {
-                    Marshal.ThrowExceptionForHR(formatHr);
-                }
-                DWriteVTable.SetWordWrapping(textFormat, DWRITE_WORD_WRAPPING.NO_WRAP);
-                ownFormat = true;
-            }
-
-            int hr = DWriteVTable.CreateGdiCompatibleTextLayout(
-                (IDWriteFactory*)_dwriteFactory,
-                text,
-                textFormat,
-                float.MaxValue,
-                float.MaxValue,
-                _pixelsPerDip,
-                useGdiNatural: false,
-                out textLayout);
-            if (hr < 0 || textLayout == 0)
-            {
-                Marshal.ThrowExceptionForHR(hr);
-            }
-
-            ApplyCustomFontFallback(textLayout);
-            var runs = DWriteGlyphRunExtractor.Capture(textLayout);
-            foreach (var run in runs)
-            {
-                var glyphPrefix = new double[run.Advances.Length + 1];
-                for (int i = 0; i < run.Advances.Length; i++)
-                {
-                    glyphPrefix[i + 1] = glyphPrefix[i] + run.Advances[i];
-                }
-
-                int local = 0;
-                while (local < run.ClusterMap.Length)
-                {
-                    ushort glyphStart = run.ClusterMap[local];
-                    int nextLocal = local + 1;
-                    while (nextLocal < run.ClusterMap.Length && run.ClusterMap[nextLocal] == glyphStart)
-                    {
-                        nextLocal++;
-                    }
-
-                    // A run whose glyphs were all deleted still maps every character to a glyph
-                    // slot, so the map runs past the glyph array. Those slots carry no width.
-                    int clusterStart = Math.Min(glyphStart, run.GlyphIndices.Length);
-                    int nextGlyph = nextLocal < run.ClusterMap.Length
-                        ? run.ClusterMap[nextLocal]
-                        : run.GlyphIndices.Length;
-                    nextGlyph = Math.Clamp(nextGlyph, clusterStart, run.GlyphIndices.Length);
-                    double clusterEnd = run.BaselineOriginX + glyphPrefix[nextGlyph];
-                    for (int textIndex = local; textIndex < nextLocal; textIndex++)
-                    {
-                        int destination = checked((int)run.TextPosition + textIndex);
-                        if ((uint)destination < (uint)result.Length)
-                        {
-                            result[destination] = clusterEnd;
-                        }
-                    }
-                    local = nextLocal;
-                }
-            }
-
-            double previous = 0;
-            for (int i = 0; i < result.Length; i++)
-            {
-                if (result[i] <= 0)
-                {
-                    result[i] = previous;
-                }
-                previous = Math.Max(previous, result[i]);
-                result[i] = previous;
-            }
-        }
-        finally
-        {
-            ComHelpers.Release(textLayout);
-            if (ownFormat)
-            {
-                ComHelpers.Release(textFormat);
-            }
-        }
+        DirectWriteTextMeasure.FillPrefixAdvances(_dwriteFactory, dwFont, _textFormatCache, text, _pixelsPerDip, result);
     }
 }

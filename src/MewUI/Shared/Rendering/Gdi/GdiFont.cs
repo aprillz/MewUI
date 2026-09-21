@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Native.Constants;
 using Aprillz.MewUI.Native.Structs;
+using Aprillz.MewUI.Rendering.Win32;
 using Aprillz.MewUI.Text;
 
 namespace Aprillz.MewUI.Rendering.Gdi;
@@ -10,7 +11,7 @@ namespace Aprillz.MewUI.Rendering.Gdi;
 /// <summary>
 /// GDI font implementation.
 /// </summary>
-internal sealed partial class GdiFont : FontBase, IGlyphOutlineFont
+internal sealed partial class GdiFont : FontBase, IGlyphOutlineFont, IWin32TextFace
 {
     private bool _disposed;
     private nint _outlineDc;
@@ -116,7 +117,7 @@ internal sealed partial class GdiFont : FontBase, IGlyphOutlineFont
     /// Ink of a single-line run that falls outside its advance box and the font's ascent/descent band,
     /// in device-independent units. Zero for code units the outline query cannot answer.
     /// </summary>
-    internal TextInkOverhang GetRunInkOverhang(ReadOnlySpan<char> text)
+    public TextInkOverhang GetRunInkOverhang(ReadOnlySpan<char> text)
     {
         if (text.IsEmpty || Handle == 0)
         {
@@ -151,6 +152,93 @@ internal sealed partial class GdiFont : FontBase, IGlyphOutlineFont
 
         double scale = 96.0 / Dpi;
         return TextInkOverhang.FromEdges(left * scale, above * scale, right * scale, below * scale);
+    }
+
+    public bool TryGetPrefixAdvances(ReadOnlySpan<char> text, double dpiScale, Span<double> destination)
+    {
+        if (destination.Length < text.Length)
+        {
+            return false;
+        }
+
+        if (text.IsEmpty)
+        {
+            return true;
+        }
+
+        // The face measures through the device context it already owns for outline queries, so the
+        // caller does not have to hand one over. Advances come from the selected HFONT, not from the
+        // device, so a screen-compatible memory DC reports what a screen DC would.
+        EnsureOutlineDc();
+        if (_outlineDc == 0)
+        {
+            return false;
+        }
+
+        GdiTextAdvances.GetUtf16PrefixAdvances(_outlineDc, this, text, dpiScale, destination);
+        return true;
+    }
+
+    /// <summary>The GDI backends keep their own rasterizers, which draw straight into their target.</summary>
+    public bool TryRasterize(ReadOnlySpan<char> text, in Win32TextRasterizeRequest request, out TextBitmap bitmap)
+    {
+        bitmap = default;
+        return false;
+    }
+
+    public bool TryRasterizeSubpixel(ReadOnlySpan<char> text, in Win32TextRasterizeRequest request,
+        out Win32TextCoverage coverage)
+    {
+        coverage = default;
+        return false;
+    }
+
+    public unsafe Size Measure(ReadOnlySpan<char> text, double maxWidthDip, TextWrapping wrapping, double dpiScale)
+    {
+        if (text.IsEmpty)
+        {
+            return default;
+        }
+
+        EnsureOutlineDc();
+        if (_outlineDc == 0)
+        {
+            return default;
+        }
+
+        double scale = dpiScale > 0 ? dpiScale : 1.0;
+        bool constrained = !double.IsNaN(maxWidthDip) && !double.IsInfinity(maxWidthDip) && maxWidthDip > 0;
+        bool hasLineBreaks = text.IndexOfAny('\r', '\n') >= 0;
+
+        if (!constrained && !hasLineBreaks)
+        {
+            SIZE extent;
+            fixed (char* textPointer = text)
+            {
+                if (Gdi32.GetTextExtentPoint32(_outlineDc, textPointer, text.Length, &extent))
+                {
+                    return new Size(extent.cx / scale, extent.cy / scale);
+                }
+            }
+        }
+
+        int maxWidthPx = LayoutRounding.RoundToPixelInt(constrained ? maxWidthDip : 1_000_000, scale);
+        if (maxWidthPx <= 0)
+        {
+            maxWidthPx = LayoutRounding.RoundToPixelInt(1_000_000, scale);
+        }
+
+        bool singleLine = !constrained && !hasLineBreaks;
+        var rect = singleLine ? new RECT(0, 0, 0, 0) : new RECT(0, 0, maxWidthPx, 0);
+        uint format = GdiConstants.DT_CALCRECT | GdiConstants.DT_NOPREFIX
+            | (singleLine ? GdiConstants.DT_SINGLELINE : GdiConstants.DT_WORDBREAK);
+
+        fixed (char* pText = text)
+        {
+            Gdi32.DrawText(_outlineDc, pText, text.Length, ref rect, format);
+        }
+
+        return new Size(rect.Width / scale, rect.Height / scale);
     }
 
     private unsafe GlyphInk GetGlyphInk(char ch)

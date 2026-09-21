@@ -5,6 +5,8 @@ using Aprillz.MewUI.Native.Structs;
 using Aprillz.MewUI.Platform;
 using Aprillz.MewUI.Platform.Win32;
 using Aprillz.MewUI.Rendering.Gdi.Core;
+using Aprillz.MewUI.Rendering.DirectWrite;
+using Aprillz.MewUI.Rendering.Win32;
 using Aprillz.MewUI.Resources;
 using Aprillz.MewUI.Text;
 
@@ -50,19 +52,23 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, ITextBackendFactory, 
 
     public IFont CreateFont(string family, double size, FontWeight weight = FontWeight.Normal,
         bool italic = false, bool underline = false, bool strikethrough = false)
-    {
-        uint dpi = DpiHelper.GetSystemDpi();
-        family = GdiFont.SelectFamilyCandidate(family);
-        family = ResolveFontFamilyOrFile(family);
-        return new GdiFont(family, size, weight, italic, underline, strikethrough, dpi);
-    }
+        => CreateFontCore(family, size, DpiHelper.GetSystemDpi(), weight, italic, underline, strikethrough);
 
     /// <summary>
     /// Creates a font with a specific DPI.
     /// </summary>
     public IFont CreateFont(string family, double size, uint dpi, FontWeight weight = FontWeight.Normal,
         bool italic = false, bool underline = false, bool strikethrough = false)
+        => CreateFontCore(family, size, dpi, weight, italic, underline, strikethrough);
+
+    private IFont CreateFontCore(string family, double size, uint dpi, FontWeight weight,
+        bool italic, bool underline, bool strikethrough)
     {
+        if (DirectWriteTextGate.IsSupported)
+        {
+            return Win32DirectWriteFonts.CreateFont(family, size, weight, italic, underline, strikethrough, dpi);
+        }
+
         family = GdiFont.SelectFamilyCandidate(family);
         family = ResolveFontFamilyOrFile(family);
         return new GdiFont(family, size, weight, italic, underline, strikethrough, dpi);
@@ -259,6 +265,10 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, ITextBackendFactory, 
         ImageSource.RetireRealizationsForFactory(this);
         TextServices.ReleaseIfCreated(this);
         _renderResourceCache.Dispose();
+        if (DirectWriteTextGate.IsSupported)
+        {
+            Win32DirectWriteFonts.DisposeIfCreated();
+        }
 
         lock (_layeredLock)
         {

@@ -5,6 +5,8 @@ using Aprillz.MewUI.Native.Structs;
 using Aprillz.MewUI.Platform;
 using Aprillz.MewUI.Platform.Win32;
 using Aprillz.MewUI.Rendering.Gdi;
+using Aprillz.MewUI.Rendering.DirectWrite;
+using Aprillz.MewUI.Rendering.Win32;
 using Aprillz.MewUI.Rendering.OpenGL;
 using Aprillz.MewUI.Resources;
 using Aprillz.MewUI.Text;
@@ -40,15 +42,15 @@ public sealed partial class MewVGWin32GraphicsFactory : IPersistentFrameGraphics
     private MewVGWin32LayeredPresenter? _layeredPresenterField;
 
     private partial IFont CreateFontCore(string family, double size, FontWeight weight, bool italic, bool underline, bool strikethrough)
-    {
-        uint dpi = DpiHelper.GetSystemDpi();
-        family = GdiFont.SelectFamilyCandidate(family);
-        family = ResolveWin32FontFamilyOrFile(family);
-        return new GdiFont(family, size, weight, italic, underline, strikethrough, dpi);
-    }
+        => CreateFontCore(family, size, DpiHelper.GetSystemDpi(), weight, italic, underline, strikethrough);
 
     private partial IFont CreateFontCore(string family, double size, uint dpi, FontWeight weight, bool italic, bool underline, bool strikethrough)
     {
+        if (DirectWriteTextGate.IsSupported)
+        {
+            return Win32DirectWriteFonts.CreateFont(family, size, weight, italic, underline, strikethrough, dpi);
+        }
+
         family = GdiFont.SelectFamilyCandidate(family);
         family = ResolveWin32FontFamilyOrFile(family);
         return new GdiFont(family, size, weight, italic, underline, strikethrough, dpi);
@@ -239,6 +241,10 @@ public sealed partial class MewVGWin32GraphicsFactory : IPersistentFrameGraphics
         _pixelSurfacePresentHwnd.Dispose();
         _pixelSurfacePresentHdc.Dispose();
         _pixelSurfacePresentTarget.Dispose();
+        if (DirectWriteTextGate.IsSupported)
+        {
+            Win32DirectWriteFonts.DisposeIfCreated();
+        }
     }
 
     // -------------------------------------------------------------------------
