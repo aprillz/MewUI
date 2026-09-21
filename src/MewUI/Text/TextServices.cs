@@ -14,6 +14,15 @@ internal static class TextServices
     public static ITextRenderContext GetRenderContext(IGraphicsContext context)
         => RenderContexts.GetValue(context, static value => new RenderContextEntry(value)).GetOrCreate();
 
+    /// <summary>Tells the text render context of a graphics context, when it has one, that its frame ended.</summary>
+    public static void FrameEnded(IGraphicsContext context)
+    {
+        if (RenderContexts.TryGetValue(context, out var entry))
+        {
+            entry.FrameEndedIfCreated();
+        }
+    }
+
     public static void ReleaseRenderContext(IGraphicsContext context)
         => RenderContexts.GetValue(context, static value => new RenderContextEntry(value)).DisposeIfCreated();
 
@@ -74,6 +83,14 @@ internal static class TextServices
             {
                 ObjectDisposedException.ThrowIf(_disposed, owner);
                 return _value ??= new ManagedTextRenderContext(owner);
+            }
+        }
+
+        internal void FrameEndedIfCreated()
+        {
+            lock (_sync)
+            {
+                _value?.FrameEnded();
             }
         }
 

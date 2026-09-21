@@ -9,7 +9,13 @@ namespace Aprillz.MewUI.Text;
 /// </summary>
 internal sealed class ManagedTextRenderContext : ITextRenderContext, IDisposable
 {
+    // What the cache holds when frames draw little text, and the most it grows to for frames that draw a lot.
     private const int REALIZATION_CAPACITY = 128;
+    private const int REALIZATION_CAPACITY_LIMIT = 4096;
+
+    // Runs asked for since the last frame ended. A frame that draws more runs than the cache holds
+    // realizes every one of them again, every frame, so the capacity follows what a frame draws.
+    private int _runsThisFrame;
     private const string ELLIPSIS = "...";
 
     private readonly IGraphicsContext _context;
@@ -479,6 +485,11 @@ internal sealed class ManagedTextRenderContext : ITextRenderContext, IDisposable
         bool transient)
     {
         var key = new RunRealizationKey(layout, textStart, textLength, font, Math.Round(width, 6), Math.Round(height, 6));
+        if (!transient)
+        {
+            _runsThisFrame++;
+        }
+
         if (!transient && _runs.TryGetValue(key, out var cached))
         {
             return cached;
@@ -506,6 +517,21 @@ internal sealed class ManagedTextRenderContext : ITextRenderContext, IDisposable
 
     private void DrawRun(RealizedRun realized, Point origin, Color color, object? owner)
         => _backend.DrawRun(realized.Run, origin, color, owner);
+
+    /// <summary>
+    /// Sizes the cache for the frame that just ended: room for every run it drew and a quarter more,
+    /// never under the base capacity and never over the limit. A frame that draws less gives the room back.
+    /// </summary>
+    internal void FrameEnded()
+    {
+        int wanted = _runsThisFrame + (_runsThisFrame / 4);
+        _runsThisFrame = 0;
+        int capacity = Math.Clamp(wanted, REALIZATION_CAPACITY, REALIZATION_CAPACITY_LIMIT);
+        if (capacity != _runs.Capacity)
+        {
+            _runs.Capacity = capacity;
+        }
+    }
 
     public void Dispose() => _runs.Dispose();
 
