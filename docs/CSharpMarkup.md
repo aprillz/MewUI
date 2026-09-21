@@ -331,7 +331,7 @@ new Button()
 ```csharp
 new DropDownButton()
     .DropDownMenu(new Menu().Item(exportPdf).Item(print))
-    .Content(new TextBlock().Text("More"));
+    .Content("_More");
 
 new SplitButton
 {
@@ -343,6 +343,9 @@ new SplitButton
 
 | Method | Description |
 |--------|-------------|
+| `Content(string)` | Text label; `_` marks the access key unless `accessKey: false` |
+| `BindContent(ObservableValue<string>)` | Text label binding |
+| `BindContent(source, convert)` | Converted text label binding |
 | `DropDownMenu` | Menu opened by the drop-down face |
 | `IsDropDownOpen` | Read or change the open state |
 | `MaxDropDownHeight` | Maximum menu height before scrolling |

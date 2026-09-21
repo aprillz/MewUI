@@ -291,7 +291,6 @@ internal sealed partial class ManagedFileDialogWindow : Window
             .RowHeight(26)
             .HeaderHeight(26)
             .CellPadding(new Thickness(8, 2))
-            .Cached()
             .ZebraStriping()
             .Columns(
                 new GridViewColumn<FileSystemEntry>()
@@ -343,7 +342,6 @@ internal sealed partial class ManagedFileDialogWindow : Window
             .TabIndex(5)
             .WrapPresenter(98, 88)
             .ZebraStriping(false)
-            .Cached()
             .ItemTemplate<FileSystemEntry>(
                 build: ctx => new StackPanel()
                     .Vertical()

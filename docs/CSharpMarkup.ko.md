@@ -331,7 +331,7 @@ new Button()
 ```csharp
 new DropDownButton()
     .DropDownMenu(new Menu().Item(exportPdf).Item(print))
-    .Content(new TextBlock().Text("More"));
+    .Content("_More");
 
 new SplitButton
 {
@@ -343,6 +343,9 @@ new SplitButton
 
 | 메서드 | 설명 |
 |--------|------|
+| `Content(string)` | 텍스트 라벨. `accessKey: false`가 아니면 `_`가 액세스 키를 표시 |
+| `BindContent(ObservableValue<string>)` | 텍스트 라벨 바인딩 |
+| `BindContent(source, convert)` | 변환된 텍스트 라벨 바인딩 |
 | `DropDownMenu` | drop-down face가 여는 메뉴 |
 | `IsDropDownOpen` | 열림 상태 조회 또는 변경 |
 | `MaxDropDownHeight` | 스크롤되기 전 메뉴의 최대 높이 |
