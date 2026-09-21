@@ -144,8 +144,6 @@ public sealed class ColorPicker : DropDownBase
         } 
 
         context.FillRoundedRectangle(swatchRect, 2, 2, color);
-
-        //context.DrawRoundedRectangle(swatchRect, 2, 2, Theme.Palette.ControlBorder, 1, strokeInset: true);
     }
 
     protected override bool PopupSizesToContent => true;
