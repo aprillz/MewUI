@@ -47,8 +47,9 @@ public sealed class RetainedPartialRepaintTests
             await Task.Delay(600);
 
             var counts = window.RetainedFrames;
-            Assert.IsTrue(
-                counts.Untouched > 0,
+            Assert.IsGreaterThan(
+                0,
+                counts.Untouched,
                 "the loop drew no frame at all, so this run says nothing about what an idle frame costs");
             Assert.AreEqual(
                 0,
@@ -87,13 +88,13 @@ public sealed class RetainedPartialRepaintTests
                 0,
                 idle.Presented - before.Presented,
                 $"an idle window was put on screen {idle.Presented - before.Presented} times (skipped {idle.Skipped - before.Skipped})");
-            Assert.IsTrue(idle.Skipped > before.Skipped, "no frame was skipped, so this run says nothing");
+            Assert.IsGreaterThan(before.Skipped, idle.Skipped, "no frame was skipped, so this run says nothing");
 
             // A change after a run of skipped frames still has to reach the screen.
             await scene.Input.MoveAsync(window, CaptureScene.Center(first));
             await Task.Delay(300);
             var hovered = window.PresentCounts;
-            Assert.IsTrue(hovered.Presented > idle.Presented, "the hover was drawn but never put on screen");
+            Assert.IsGreaterThan(idle.Presented, hovered.Presented, "the hover was drawn but never put on screen");
         });
     });
 
@@ -115,8 +116,9 @@ public sealed class RetainedPartialRepaintTests
         window.ResetRetainedFrameCounts();
         await Task.Delay(400);
         var inView = window.RetainedFrames;
-        Assert.IsTrue(
-            inView.Whole + inView.Partial > 0,
+        Assert.IsGreaterThan(
+            0,
+            inView.Whole + inView.Partial,
             "the animation drew no frame while in view, so this run says nothing");
 
         scroll.SetScrollOffsets(0, 400);
@@ -135,7 +137,7 @@ public sealed class RetainedPartialRepaintTests
         window.ResetRetainedFrameCounts();
         await Task.Delay(400);
         var back = window.RetainedFrames;
-        Assert.IsTrue(back.Whole + back.Partial > 0, "the animation stayed still after it was scrolled back into view");
+        Assert.IsGreaterThan(0, back.Whole + back.Partial, "the animation stayed still after it was scrolled back into view");
     });
 
     [TestMethod]
@@ -153,8 +155,9 @@ public sealed class RetainedPartialRepaintTests
             await Task.Delay(300);
 
             var counts = window.RetainedFrames;
-            Assert.IsTrue(
-                counts.Partial > 0,
+            Assert.IsGreaterThan(
+                0,
+                counts.Partial,
                 $"a hover repainted no frame in part (whole {counts.Whole}, untouched {counts.Untouched})");
             Assert.AreEqual(
                 0,
@@ -168,8 +171,9 @@ public sealed class RetainedPartialRepaintTests
                 Assert.IsFalse(
                     repainted.Contains(new Point(second.Bounds.X + 2, second.Bounds.Y + 2)),
                     $"the damage {repainted} covers the button the pointer never reached at {second.Bounds}");
-                Assert.IsTrue(
-                    repainted.Width * repainted.Height < clientArea / 2,
+                Assert.IsLessThan(
+                    clientArea / 2,
+                    repainted.Width * repainted.Height,
                     $"the damage {repainted} covers more than half of the {window.ClientSize} client area");
             }
         });

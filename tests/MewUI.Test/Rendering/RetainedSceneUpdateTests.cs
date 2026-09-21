@@ -146,8 +146,9 @@ public sealed class RetainedSceneUpdateTests
         box.IsVisible = true;
         Render(factory, context => capture.Capture(scene, root, context, registry));
 
-        Assert.IsTrue(
-            box.RenderCount > renderCountWhileHidden,
+        Assert.IsGreaterThan(
+            renderCountWhileHidden,
+            box.RenderCount,
             "the change made while hidden was lost instead of being recorded when shown again");
         Assert.IsNotNull(scene.FindNode(box)!.GetSlot(0));
     }
@@ -185,7 +186,7 @@ public sealed class RetainedSceneUpdateTests
         Render(factory, context => capture.Capture(scene, stack, context));
 
         Assert.AreEqual(generation + 1, scene.FindNode(box)!.AttachmentGeneration);
-        Assert.IsTrue(scene.Statistics.ContentRecordCount > 0, "the moved visual kept the data of its old parent");
+        Assert.IsGreaterThan(0, scene.Statistics.ContentRecordCount, "the moved visual kept the data of its old parent");
     }
 
     [TestMethod]

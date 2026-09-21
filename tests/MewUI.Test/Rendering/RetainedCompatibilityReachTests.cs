@@ -119,7 +119,7 @@ public sealed class RetainedCompatibilityReachTests
         }
 
         Console.Error.WriteLine($"compared with live instances: {compared}");
-        Assert.IsTrue(compared > types.Count / 2, $"only {compared} of {types.Count} visual types could be created to compare");
+        Assert.IsGreaterThan(types.Count / 2, compared, $"only {compared} of {types.Count} visual types could be created to compare");
     }
 
     /// <summary>The same rule as the product's, worked out by looking the two methods up by name.</summary>

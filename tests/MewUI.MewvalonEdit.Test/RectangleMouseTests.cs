@@ -87,7 +87,7 @@ public sealed class RectangleMouseTests
         Drag(window, PointAt(editor, 1, 2), PointAt(editor, 2, 4), ModifierKeys.None);
 
         Assert.IsNotInstanceOfType<RectangleSelection>(editor.TextArea.Selection);
-        Assert.IsTrue(editor.SelectionLength > 0, "The surface's own drag selection must still work.");
+        Assert.IsGreaterThan(0, editor.SelectionLength, "The surface's own drag selection must still work.");
     }
 
     [TestMethod]

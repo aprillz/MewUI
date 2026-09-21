@@ -45,7 +45,7 @@ public sealed class MarkdownVirtualizationTests
             Assert.AreEqual(trackedTop + 120, after.Bounds.Y, 1.0, $"step {step}: the tracked block moved by more than the wheel step (offset {offset} -> {scroll.VerticalOffset})");
             AssertConsistent(scroll, host, $"step {step}");
         }
-        Assert.IsTrue(corrections > 0, "the fixture must exercise the correction path");
+        Assert.IsGreaterThan(0, corrections, "the fixture must exercise the correction path");
     }
 
     [TestMethod]
@@ -62,12 +62,12 @@ public sealed class MarkdownVirtualizationTests
         clock.Stop();
 
         int measured = Enumerable.Range(0, host.BlockCount).Count(host.IsMeasured);
-        Assert.IsTrue(host.RealizedCount <= initialRealized * 3, $"realized {host.RealizedCount} vs initial {initialRealized}");
-        Assert.IsTrue(measured < 300, $"measured {measured} blocks; the jump must not measure the skipped range");
+        Assert.IsLessThanOrEqualTo(initialRealized * 3, host.RealizedCount, $"realized {host.RealizedCount} vs initial {initialRealized}");
+        Assert.IsLessThan(300, measured, $"measured {measured} blocks; the jump must not measure the skipped range");
         Assert.IsFalse(host.IsMeasured(1500));
         Assert.IsTrue(host.IsMeasured(2700));
         AssertConsistent(scroll, host, "after jump");
-        Assert.IsTrue(clock.ElapsedMilliseconds < 500, $"jump took {clock.ElapsedMilliseconds} ms");
+        Assert.IsLessThan(500, clock.ElapsedMilliseconds, $"jump took {clock.ElapsedMilliseconds} ms");
     }
 
     [TestMethod]
@@ -138,7 +138,7 @@ public sealed class MarkdownVirtualizationTests
         var (scroll, host) = Layout(viewer);
         scroll.SetScrollOffsets(0, host.GetBlockTop(300));
         Layout(viewer);
-        Assert.IsTrue(scroll.VerticalOffset > 0);
+        Assert.IsGreaterThan(0, scroll.VerticalOffset);
 
         viewer.Markdown = VariedDocument(50);
         Layout(viewer);
@@ -186,14 +186,14 @@ public sealed class MarkdownVirtualizationTests
             }
             if (previous != null && host.GetRealized(index - 1) == previous)
             {
-                Assert.IsTrue(element.Bounds.Y >= previous.Bounds.Bottom - 0.5, $"{phase}: block {index} overlaps block {index - 1}");
+                Assert.IsGreaterThanOrEqualTo(previous.Bounds.Bottom - 0.5, element.Bounds.Y, $"{phase}: block {index} overlaps block {index - 1}");
             }
             coveredTop = Math.Min(coveredTop, element.Bounds.Y);
             coveredBottom = Math.Max(coveredBottom, element.Bounds.Bottom);
             previous = element;
         }
-        Assert.IsTrue(coveredTop <= viewportTop + 1, $"{phase}: realized blocks start at {coveredTop - viewportTop:F1} below the viewport top");
-        Assert.IsTrue(coveredBottom >= viewportBottom - 1, $"{phase}: realized blocks end at {viewportBottom - coveredBottom:F1} above the viewport bottom");
+        Assert.IsLessThanOrEqualTo(viewportTop + 1, coveredTop, $"{phase}: realized blocks start at {coveredTop - viewportTop:F1} below the viewport top");
+        Assert.IsGreaterThanOrEqualTo(viewportBottom - 1, coveredBottom, $"{phase}: realized blocks end at {viewportBottom - coveredBottom:F1} above the viewport bottom");
     }
 
     private static (ScrollViewer Scroll, MarkdownBlockHost Host) Layout(MarkdownViewer viewer)

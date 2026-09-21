@@ -16,10 +16,10 @@ public sealed class MarkdownFootnoteTests
 
         ParsedMarkdown document = MarkdownParser.ParseDocument(source, new MarkdownOptions());
 
-        Assert.AreEqual(2, document.Blocks.Count);
+        Assert.HasCount(2, document.Blocks);
         MarkdownBlock paragraph = document.Blocks[0];
         MarkdownSpan[] references = paragraph.Spans.Where(static span => span.Anchor != null).ToArray();
-        Assert.AreEqual(2, references.Length);
+        Assert.HasCount(2, references);
         Assert.AreEqual("1", references[0].Text);
         Assert.AreEqual("#fn:1", references[0].Url);
         Assert.AreEqual("fnref:1", references[0].Anchor);
@@ -138,7 +138,7 @@ public sealed class MarkdownFootnoteTests
         int target = host.BlockCount - 1;
         Assert.IsTrue(host.IsMeasured(target));
         Assert.IsFalse(host.IsMeasured(host.BlockCount / 2));
-        Assert.IsTrue(forward.ElapsedMilliseconds < 500, $"forward jump took {forward.ElapsedMilliseconds} ms");
+        Assert.IsLessThan(500, forward.ElapsedMilliseconds, $"forward jump took {forward.ElapsedMilliseconds} ms");
 
         var backward = System.Diagnostics.Stopwatch.StartNew();
         Assert.IsTrue(viewer.NavigateToAnchor("fnref:1"));
@@ -150,8 +150,8 @@ public sealed class MarkdownFootnoteTests
         TestContext.WriteLine(
             $"blocks={host.BlockCount}, measured={measured}, forward={forward.Elapsed.TotalMilliseconds:F1} ms, back={backward.Elapsed.TotalMilliseconds:F1} ms");
         Assert.IsTrue(host.IsMeasured(0));
-        Assert.IsTrue(measured < 300, $"measured {measured} blocks; jumps must not measure the skipped range");
-        Assert.IsTrue(backward.ElapsedMilliseconds < 500, $"back jump took {backward.ElapsedMilliseconds} ms");
+        Assert.IsLessThan(300, measured, $"measured {measured} blocks; jumps must not measure the skipped range");
+        Assert.IsLessThan(500, backward.ElapsedMilliseconds, $"back jump took {backward.ElapsedMilliseconds} ms");
     }
 
     private static void Layout(MarkdownViewer viewer)

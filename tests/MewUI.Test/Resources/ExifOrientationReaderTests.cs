@@ -5,7 +5,7 @@ namespace MewUI.Test.Resources;
 [TestClass]
 public sealed class ExifOrientationReaderTests
 {
-    [DataTestMethod]
+    [TestMethod]
     [DataRow(1, ImageOrientation.Normal)]
     [DataRow(2, ImageOrientation.MirrorHorizontal)]
     [DataRow(3, ImageOrientation.Rotate180)]

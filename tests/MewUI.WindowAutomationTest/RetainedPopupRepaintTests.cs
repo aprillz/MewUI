@@ -46,15 +46,17 @@ public sealed class RetainedPopupRepaintTests
         await Task.Delay(500);
 
         var counts = popup.RetainedFrames;
-        Assert.IsTrue(
-            counts.Partial > 0,
+        Assert.IsGreaterThan(
+            0,
+            counts.Partial,
             $"moving between menu items repainted no frame in part (whole {counts.Whole}, partial {counts.Partial}, untouched {counts.Untouched}; {popup.LastWholeFrameReason})");
         Assert.AreEqual(
             0,
             counts.Whole,
             $"moving between menu items painted {counts.Whole} whole popup frames ({popup.LastWholeFrameReason})");
-        Assert.IsTrue(
-            popup.LargestPartialRepaintArea < popupArea * 0.7,
+        Assert.IsLessThan(
+            popupArea * 0.7,
+            popup.LargestPartialRepaintArea,
             $"the largest repaint {popup.LargestPartialRepaint} covers most of the {popup.ClientSize} popup");
 
         menu.CloseTree(window);
@@ -91,10 +93,11 @@ public sealed class RetainedPopupRepaintTests
         await Task.Delay(500);
 
         var hover = surface.RetainedFrames;
-        Assert.IsTrue(hover.Partial > 0, $"hovering list items in a popup repainted no frame in part (whole {hover.Whole}; {surface.LastWholeFrameReason})");
+        Assert.IsGreaterThan(0, hover.Partial, $"hovering list items in a popup repainted no frame in part (whole {hover.Whole}; {surface.LastWholeFrameReason})");
         Assert.AreEqual(0, hover.Whole, $"hovering list items in a popup painted {hover.Whole} whole frames ({surface.LastWholeFrameReason})");
-        Assert.IsTrue(
-            surface.LargestPartialRepaintArea < surfaceArea * 0.3,
+        Assert.IsLessThan(
+            surfaceArea * 0.3,
+            surface.LargestPartialRepaintArea,
             $"hovering a list item repainted {surface.LargestPartialRepaint} of the {surface.ClientSize} popup");
 
         surface.ResetRetainedFrameCounts();
@@ -102,10 +105,11 @@ public sealed class RetainedPopupRepaintTests
         await Task.Delay(800);
 
         var animated = surface.RetainedFrames;
-        Assert.IsTrue(animated.Partial > 3, $"an animation inside a popup painted {animated.Partial} partial frames (whole {animated.Whole}; {surface.LastWholeFrameReason})");
-        Assert.IsTrue(animated.Whole <= 1, $"an animation inside a popup painted {animated.Whole} whole frames ({surface.LastWholeFrameReason})");
-        Assert.IsTrue(
-            surface.LargestPartialRepaintArea < surfaceArea * 0.3,
+        Assert.IsGreaterThan(3, animated.Partial, $"an animation inside a popup painted {animated.Partial} partial frames (whole {animated.Whole}; {surface.LastWholeFrameReason})");
+        Assert.IsLessThanOrEqualTo(1, animated.Whole, $"an animation inside a popup painted {animated.Whole} whole frames ({surface.LastWholeFrameReason})");
+        Assert.IsLessThan(
+            surfaceArea * 0.3,
+            surface.LargestPartialRepaintArea,
             $"an animated bar repainted {surface.LargestPartialRepaint} of the {surface.ClientSize} popup");
 
         popup.Close();

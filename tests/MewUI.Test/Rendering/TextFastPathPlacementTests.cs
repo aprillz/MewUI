@@ -30,7 +30,7 @@ public sealed class TextFastPathPlacementTests
     }
 
     [TestMethod]
-    [DynamicData(nameof(Backends), DynamicDataSourceType.Method)]
+    [DynamicData(nameof(Backends))]
     public void FastPath_DrawsOnTheSameRowsAsTheRunPath(string backend)
     {
         RunOnBackend(backend, factory =>

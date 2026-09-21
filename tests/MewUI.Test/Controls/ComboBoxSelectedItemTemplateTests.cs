@@ -74,7 +74,7 @@ public sealed class ComboBoxSelectedItemTemplateTests
         var comboBox = CreateComboBox();
         comboBox.SelectedIndex = 0;
 
-        Assert.AreEqual(0, VisitedChildren(comboBox).Count, "without a template the header keeps drawing text and hosts nothing");
+        Assert.IsEmpty(VisitedChildren(comboBox), "without a template the header keeps drawing text and hosts nothing");
     }
 
     [TestMethod]
@@ -87,12 +87,12 @@ public sealed class ComboBoxSelectedItemTemplateTests
         comboBox.ItemTemplate = itemCounter.Create();
         comboBox.SelectedIndex = 0;
         Assert.AreEqual(1, itemCounter.Builds, "with no SelectedItemTemplate the header is built from ItemTemplate");
-        Assert.AreEqual(1, VisitedChildren(comboBox).Count);
+        Assert.HasCount(1, VisitedChildren(comboBox));
 
         comboBox.SelectedItemTemplate = selectedCounter.Create();
         Assert.AreEqual(1, selectedCounter.Builds, "setting SelectedItemTemplate replaces the fallback view");
         Assert.AreEqual(1, itemCounter.Unbinds, "the fallback view is unbound when it is replaced");
-        Assert.AreEqual(1, VisitedChildren(comboBox).Count, "only one header view is hosted at a time");
+        Assert.HasCount(1, VisitedChildren(comboBox), "only one header view is hosted at a time");
     }
 
     [TestMethod]
@@ -173,7 +173,7 @@ public sealed class ComboBoxSelectedItemTemplateTests
         window.PerformLayout();
 
         var children = VisitedChildren(comboBox);
-        Assert.AreEqual(1, children.Count);
+        Assert.HasCount(1, children);
         Assert.AreSame(comboBox.TemplateVisualRoot, children[0], "under a control template only the template root is hosted");
     }
 
@@ -188,6 +188,6 @@ public sealed class ComboBoxSelectedItemTemplateTests
         comboBox.Dispose();
 
         Assert.AreEqual(1, counter.Unbinds);
-        Assert.AreEqual(0, VisitedChildren(comboBox).Count);
+        Assert.IsEmpty(VisitedChildren(comboBox));
     }
 }

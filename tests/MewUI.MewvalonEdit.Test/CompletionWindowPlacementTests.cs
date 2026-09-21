@@ -242,7 +242,11 @@ public sealed class CompletionWindowPlacementTests
 
     private sealed class SingleOverloadProvider : IOverloadProvider
     {
-        public event PropertyChangedEventHandler? PropertyChanged;
+        public event PropertyChangedEventHandler? PropertyChanged
+        {
+            add { }
+            remove { }
+        }
 
         public int SelectedIndex { get; set; }
         public int Count => 1;

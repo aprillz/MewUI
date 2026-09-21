@@ -25,7 +25,7 @@ public sealed class LegacyTextSurfaceSnapshotTests
         }
 
         var missing = _textBoxPublicSurface.Where(entry => !chain.Contains(entry)).ToList();
-        Assert.IsTrue(missing.Count == 0,
+        Assert.IsEmpty(missing,
             $"Rebuilt TextBox chain lost legacy public surface.\nMissing:\n  {string.Join("\n  ", missing)}");
     }
 
@@ -38,7 +38,7 @@ public sealed class LegacyTextSurfaceSnapshotTests
         var chain = GetPublicChainSurface(typeof(PasswordBox), typeof(SingleLineTextBase), typeof(TextBase));
 
         var missing = _passwordBoxPublicSurface.Where(entry => !chain.Contains(entry)).ToList();
-        Assert.IsTrue(missing.Count == 0,
+        Assert.IsEmpty(missing,
             $"Rebuilt PasswordBox chain lost legacy public surface.\nMissing:\n  {string.Join("\n  ", missing)}");
 
         // Deferral design: the password surface must never expose document text publicly.

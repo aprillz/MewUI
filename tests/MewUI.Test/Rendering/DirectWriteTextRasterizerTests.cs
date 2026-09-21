@@ -29,7 +29,7 @@ public sealed class DirectWriteTextRasterizerTests
 
         Assert.AreEqual(WIDTH_PX, bitmap.WidthPx);
         Assert.AreEqual(HEIGHT_PX, bitmap.HeightPx);
-        Assert.AreEqual(WIDTH_PX * HEIGHT_PX * 4, bitmap.Data.Length);
+        Assert.HasCount(WIDTH_PX * HEIGHT_PX * 4, bitmap.Data);
         Assert.IsGreaterThan(0, InkedPixels(bitmap), "The run should leave coverage in the box.");
     }
 

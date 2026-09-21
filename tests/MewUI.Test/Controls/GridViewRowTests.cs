@@ -119,7 +119,7 @@ public sealed class GridViewRowTests
         grid.ClearContainer<string>((_, _, index, _) => cleared.Add(index));
         Layout(grid);
 
-        Assert.AreEqual(0, cleared.Count);
+        Assert.IsEmpty(cleared);
 
         grid.ScrollIntoView(80);
         Layout(grid);

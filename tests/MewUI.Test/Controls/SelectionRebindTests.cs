@@ -159,6 +159,6 @@ public sealed class SelectionRebindTests
     {
         public string Name { get; } = name;
 
-        public IReadOnlyList<Node>? Children => null;
+        public IReadOnlyList<Node> Children => [];
     }
 }

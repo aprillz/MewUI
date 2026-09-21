@@ -13,7 +13,7 @@ namespace MewUI.WindowAutomationTest;
 public sealed class PresentationPathTextTests
 {
     [TestMethod]
-    [Timeout(60_000)]
+    [Timeout(60_000, CooperativeCancellation = true)]
     public Task Text_LooksTheSameThroughTheFrameSurfaceAndStraightIntoTheTarget() => CaptureScene.RunAsync(async scene =>
     {
         if (!OperatingSystem.IsWindows())

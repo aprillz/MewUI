@@ -304,7 +304,7 @@ public sealed class EditorExtensionTests
         editor.Measure(new Size(360, 200));
         editor.Arrange(new Rect(0, 0, 360, 200));
 
-        Assert.AreEqual(before, editor.TextArea.TextView.Host.VisibleTextLines.Count,
+        Assert.HasCount(before, editor.TextArea.TextView.Host.VisibleTextLines,
             "Unfolding did not bring the hidden lines back.");
         FoldingManager.Uninstall(manager);
     }

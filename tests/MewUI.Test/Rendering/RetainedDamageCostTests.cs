@@ -1,6 +1,7 @@
 extern alias MewVGWin32;
 
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Numerics;
 using System.Text;
@@ -318,7 +319,7 @@ public sealed class RetainedDamageCostTests
 
     private static readonly double[] _policyRatios = [0.05, 0.25, 0.5, 0.7, 0.8, 0.9, 1.0];
 
-    private static bool RequestedByEnvironment(out string? reason)
+    private static bool RequestedByEnvironment([NotNullWhen(false)] out string? reason)
     {
         if (!OperatingSystem.IsWindows())
         {

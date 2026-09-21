@@ -56,14 +56,15 @@ public sealed class RetainedDamageRegionTests
 
             // One box around both tiles would replay every tile between them.
             int replayed = window.RetainedStatistics!.ContentReplayCount;
-            Assert.IsTrue(replayed <= 8, $"repainting two tiles replayed {replayed} recordings");
+            Assert.IsLessThanOrEqualTo(8, replayed, $"repainting two tiles replayed {replayed} recordings");
 
             var areas = window.LastRetainedDamageAreas;
             Assert.IsNotNull(window.LastRetainedDamage, "the frame was drawn whole");
-            Assert.AreEqual(2, areas.Count, $"two distant changes became {areas.Count} area(s)");
+            Assert.HasCount(2, areas, $"two distant changes became {areas.Count} area(s)");
             double repainted = areas.Sum(area => area.Width * area.Height);
-            Assert.IsTrue(
-                repainted < WIDTH * HEIGHT * 0.05,
+            Assert.IsLessThan(
+                WIDTH * HEIGHT * 0.05,
+                repainted,
                 $"two small tiles repainted {repainted} of {WIDTH * HEIGHT} layout units squared");
             AssertMatchesReference(factory, window, surface, "after changing two distant tiles");
         }

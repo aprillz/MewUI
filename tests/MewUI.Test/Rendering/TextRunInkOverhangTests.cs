@@ -32,7 +32,7 @@ public sealed class TextRunInkOverhangTests
     }
 
     [TestMethod]
-    [DynamicData(nameof(Backends), DynamicDataSourceType.Method)]
+    [DynamicData(nameof(Backends))]
     public void ItalicOverhang_SurvivesTheRunBox(string backend)
     {
         RunOnBackend(backend, factory =>
@@ -59,7 +59,7 @@ public sealed class TextRunInkOverhangTests
     }
 
     [TestMethod]
-    [DynamicData(nameof(Backends), DynamicDataSourceType.Method)]
+    [DynamicData(nameof(Backends))]
     public void FlushDescender_SurvivesTheLineBox(string backend)
     {
         RunOnBackend(backend, factory =>
@@ -84,7 +84,7 @@ public sealed class TextRunInkOverhangTests
     }
 
     [TestMethod]
-    [DynamicData(nameof(Backends), DynamicDataSourceType.Method)]
+    [DynamicData(nameof(Backends))]
     public void ColourSplitRun_KeepsTheOverhangOfItsOuterSegments(string backend)
     {
         RunOnBackend(backend, factory =>
@@ -104,7 +104,7 @@ public sealed class TextRunInkOverhangTests
     }
 
     [TestMethod]
-    [DynamicData(nameof(Backends), DynamicDataSourceType.Method)]
+    [DynamicData(nameof(Backends))]
     public void LeftOverhang_SurvivesTheRunBox(string backend)
     {
         RunOnBackend(backend, factory =>

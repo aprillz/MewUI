@@ -26,7 +26,7 @@ public sealed class HighlightingStateScanTests
         colorizer.OnVisualLinesChanged();
 
         // Only a change crossing the first line in view may repaint; the scan itself must not.
-        Assert.IsTrue(repaints <= 1, $"The scan to the viewport issued {repaints} repaints.");
+        Assert.IsLessThanOrEqualTo(1, repaints, $"The scan to the viewport issued {repaints} repaints.");
     }
 
     [TestMethod]
@@ -72,7 +72,7 @@ public sealed class HighlightingStateScanTests
         document.Insert(0, "/*");
         colorizer.GetHighlighter(document).HighlightLine(1);
 
-        Assert.IsTrue(repaints > baseline,
-            "A state change crossing below the highlighted line was suppressed.");
+        Assert.IsGreaterThan(baseline,
+repaints, "A state change crossing below the highlighted line was suppressed.");
     }
 }

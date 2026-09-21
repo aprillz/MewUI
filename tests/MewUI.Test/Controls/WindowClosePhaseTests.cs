@@ -74,10 +74,10 @@ public sealed class WindowClosePhaseTests
         Assert.AreEqual(1, content.DisposeCount);
     }
 
-    private sealed class DisposeCountingContent : ContentControl, IDisposable
+    private sealed class DisposeCountingContent : ContentControl
     {
         public int DisposeCount { get; private set; }
 
-        public void Dispose() => DisposeCount++;
+        protected override void OnDispose() => DisposeCount++;
     }
 }

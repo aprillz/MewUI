@@ -189,7 +189,7 @@ public sealed class RetainedAnimationSweepTests
 
         window.FocusManager.MoveFocusPrevious();
         Run("focus moved back");
-        Assert.IsTrue(focused.Count >= 2, $"{group}: focus reached {focused.Count} visuals, so the keys proved nothing");
+        Assert.IsGreaterThanOrEqualTo(2, focused.Count, $"{group}: focus reached {focused.Count} visuals, so the keys proved nothing");
     }
 
     private static FrameworkElement Create(string name)

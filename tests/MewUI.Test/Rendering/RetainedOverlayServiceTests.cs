@@ -59,7 +59,7 @@ public sealed class RetainedOverlayServiceTests
                 ((Button)window.Content!).Background = Color.FromArgb(255, 200, 60, 60);
                 window.PerformLayout();
                 window.RenderFrameToSurface(surface);
-                Assert.IsTrue(window.RetainedStatistics.GroupSurfaceCount > 0, "the busy indicator was not faded as a group part-way through its fade");
+                Assert.IsGreaterThan(0, window.RetainedStatistics.GroupSurfaceCount, "the busy indicator was not faded as a group part-way through its fade");
             }
         }
 
