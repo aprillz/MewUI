@@ -4,54 +4,86 @@ namespace Aprillz.MewUI.Gallery;
 
 partial class GalleryView
 {
-    private FrameworkElement ShowDialogPage()
+    private FrameworkElement PromptDialogCard()
     {
-        var syncStatus = new ObservableValue<string>("Result: -");
-        var asyncStatus = new ObservableValue<string>("Result: -");
+        var promptStatus = new ObservableValue<string>("Result: -");
 
-        return CardGrid(
-            Card(
-                "Synchronous ShowDialog",
-                new StackPanel()
-                    .Vertical()
-                    .Spacing(8)
-                    .Children(
-                        new TextBlock()
-                            .FontSize(ThemeFontSize.Small)
-                            .Text("ShowDialog() blocks this click handler (no await)\nwhile a nested loop keeps input and paint live."),
-                        new Button()
-                            .Content("Show (sync)")
-                            .OnClick(() =>
-                            {
-                                // Note: this handler is NOT async. ShowDialog blocks here until the dialog closes.
-                                var dialog = new SyncDialogWindow();
-                                dialog.ShowDialog(window);
-                                syncStatus.Value = $"Result: {dialog.Result}, clicks={dialog.ClickCount}";
-                            }),
-                        new TextBlock().BindText(syncStatus).FontSize(ThemeFontSize.Small)
-                    )
-            ),
-            Card(
-                "Asynchronous ShowDialogAsync",
-                new StackPanel()
-                    .Vertical()
-                    .Spacing(8)
-                    .Children(
-                        new TextBlock()
-                            .FontSize(ThemeFontSize.Small)
-                            .Text("ShowDialogAsync() returns a Task on the same loop.\nSame dialog, awaited instead of blocking."),
-                        new Button()
-                            .Content("Show (async)")
-                            .OnClick(async () =>
-                            {
-                                var dialog = new SyncDialogWindow();
-                                await dialog.ShowDialogAsync(window);
-                                asyncStatus.Value = $"Result: {dialog.Result}, clicks={dialog.ClickCount}";
-                            }),
-                        new TextBlock().BindText(asyncStatus).FontSize(ThemeFontSize.Small)
-                    )
-            )
+        return Card(
+            "Prompt Dialog (FitContentHeight)",
+            new StackPanel()
+                .Vertical()
+                .Spacing(8)
+                .Children(
+                    new TextBlock()
+                        .FontSize(ThemeFontSize.Small)
+                        .Text("Opens a FitContentHeight dialog.\nWindow height adjusts to content."),
+                    new Button()
+                        .Content("Show Prompt")
+                        .OnClick(async () =>
+                        {
+                            var result = await ShowPromptAsync(
+                                window,
+                                "Input",
+                                "Enter your name:",
+                                "Name...");
+                            promptStatus.Value = result is null
+                                ? "Result: canceled"
+                                : $"Result: {result}";
+                        }),
+                    new TextBlock()
+                        .BindText(promptStatus)
+                        .FontSize(ThemeFontSize.Small)
+                )
         );
+    }
+
+    private async Task<string?> ShowPromptAsync(
+        Window owner,
+        string title,
+        string message,
+        string? placeholder = null)
+    {
+        string? result = null;
+        TextBox input = null!;
+        Window dialog = null!;
+        var acceptCommand = new Command("gallery.dialog.accept", "OK");
+
+        await new Window()
+            .Ref(out dialog)
+            .Apply(w => w.Commands.Register(acceptCommand, () =>
+            {
+                result = input.Text;
+                dialog.Close();
+            }, () => !string.IsNullOrWhiteSpace(input.Text)))
+            .Title(title)
+            .FitContentHeight(300, 300)
+            .Padding(12)
+            .Content(
+                new StackPanel()
+                    .Vertical()
+                    .Spacing(12)
+                    .Children(
+                        new TextBlock()
+                            .Text(message),
+                        new TextBox()
+                            .Ref(out input)
+                            .Placeholder(placeholder ?? string.Empty),
+                        new StackPanel()
+                            .Horizontal()
+                            .Right()
+                            .Spacing(6)
+                            .Children(
+                                new Button()
+                                    .Content("OK")
+                                    .Command(acceptCommand),
+                                new Button()
+                                    .Content("Cancel")
+                                    .OnClick(dialog.Close)
+                            )
+                    )
+            ).ShowDialogAsync(owner);
+
+        return result;
     }
 }
 

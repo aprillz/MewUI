@@ -112,32 +112,7 @@ partial class GalleryView
             delayView.Content = MakeTransitionBlock(fadeItems[delayIndex], delayIndex);
         }
 
-        // --- ProgressRing ---
-        var ring = new ProgressRing { IsActive = false };
-
         return CardGrid(
-            Card(
-                "ProgressRing",
-                new StackPanel()
-                    .Vertical()
-                    .Spacing(8)
-                    .Children(
-                        new Border()
-                            .Height(60)
-                            .HorizontalAlignment(HorizontalAlignment.Center)
-                            .Child(
-                                ring
-                                    .Width(48)
-                                    .Height(48)
-                                    .WithTheme((t, c) => c.Foreground(t.Palette.Accent))
-                            ),
-                        new Button()
-                            .Content("Toggle")
-                            .OnClick(() => ring.IsActive = !ring.IsActive)
-                    )
-            ),
-
-
             Card(
                 "Fade",
                 new StackPanel()
@@ -165,6 +140,21 @@ partial class GalleryView
                         new Button()
                             .Content("Next")
                             .OnClick(NextFadeImage)
+                    )
+            ),
+
+            Card(
+                "Fade + Delay (200ms)",
+                new StackPanel()
+                    .Vertical()
+                    .Spacing(8)
+                    .Children(
+                        new Border()
+                            .Height(60)
+                            .Child(delayView),
+                        new Button()
+                            .Content("Next")
+                            .OnClick(NextDelay)
                     )
             ),
 
@@ -225,21 +215,6 @@ partial class GalleryView
                         new Button()
                             .Content("Next")
                             .OnClick(NextRotate)
-                    )
-            ),
-
-            Card(
-                "Fade + Delay (200ms)",
-                new StackPanel()
-                    .Vertical()
-                    .Spacing(8)
-                    .Children(
-                        new Border()
-                            .Height(60)
-                            .Child(delayView),
-                        new Button()
-                            .Content("Next")
-                            .OnClick(NextDelay)
                     )
             )
         );

@@ -7,51 +7,7 @@ partial class GalleryView
     // Popup inheritance samples plus StyleSheet scope, type rules, BasedOn and Unset.
     private FrameworkElement StylingPage()
     {
-        var contextMenu = new ContextMenu()
-            .Item("Cut")
-            .Item("Copy")
-            .Item("Paste")
-            .Separator()
-            .Item("Select All");
-
         return CardGrid(
-            Card(
-                "Tooltip font isolation",
-                new StackPanel()
-                    .Vertical()
-                    .Spacing(8)
-                    .Children(
-                        new TextBlock()
-                            .Text("The button is 20pt Consolas. Hover it: the tooltip keeps the theme font, not the button's font. A popup no longer inherits the triggering control's font.")
-                            .TextWrapping(TextWrapping.Wrap)
-                            .FontSize(ThemeFontSize.Small),
-                        new Button()
-                            .Content("Hover me (20pt / Consolas)")
-                            .FontSize(20)
-                            .FontFamily("Consolas")
-                            .ToolTip("This tooltip stays in the theme font.")
-                            .HorizontalAlignment(HorizontalAlignment.Left)
-                    )
-            ),
-
-            Card(
-                "ContextMenu font isolation",
-                new StackPanel()
-                    .Vertical()
-                    .Spacing(8)
-                    .Children(
-                        new TextBlock()
-                            .Text("Right-click the button. It renders at 22pt, but the context menu stays in the theme font.")
-                            .TextWrapping(TextWrapping.Wrap)
-                            .FontSize(ThemeFontSize.Small),
-                        new Button()
-                            .Content("Right-click me (22pt)")
-                            .FontSize(22)
-                            .ContextMenu(contextMenu)
-                            .HorizontalAlignment(HorizontalAlignment.Left)
-                    )
-            ),
-
             Card(
                 "Named StyleSheet + Setter.Unset",
                 NamedStyleUnsetDemo()
@@ -60,49 +16,8 @@ partial class GalleryView
             Card(
                 "Scoped StyleSheet type rule",
                 TypeRuleDemo()
-            ),
-
-            Card(
-                "MenuBar dropdown font",
-                new StackPanel()
-                    .Vertical()
-                    .Spacing(8)
-                    .Children(
-                        new TextBlock()
-                            .Text("Both menu bars are identical. The second sits in a FontSize 16 container. Open the menus: the dropdown follows the ambient font.")
-                            .TextWrapping(TextWrapping.Wrap)
-                            .FontSize(ThemeFontSize.Small),
-                        new TextBlock().Text("Default (theme font):").FontSize(ThemeFontSize.Small),
-                        MenuDemoBar(),
-                        new TextBlock().Text("Inside a FontSize 16 container:").FontSize(ThemeFontSize.Small),
-                        new Border()
-                            .FontSize(16)
-                            .Child(MenuDemoBar())
-                    )
             )
         );
-    }
-
-    private MenuBar MenuDemoBar()
-    {
-        var fileMenu = new Menu()
-            .Item("New")
-            .Item("Open")
-            .Separator()
-            .SubMenu("Export", new Menu()
-                .Item("PNG")
-                .Item("JPEG"));
-
-        var editMenu = new Menu()
-            .Item("Undo")
-            .Item("Redo");
-
-        // No fixed Height: the bar auto-sizes to the (inherited) font so the font-size effect shows.
-        return new MenuBar()
-            .Items(
-                new MenuItem("File").Menu(fileMenu),
-                new MenuItem("Edit").Menu(editMenu)
-            );
     }
 
     private FrameworkElement NamedStyleUnsetDemo()

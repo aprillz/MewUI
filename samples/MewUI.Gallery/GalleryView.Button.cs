@@ -111,13 +111,13 @@ partial class GalleryView
         var splitButton = new SplitButton()
             .DropDownMenu(CommandMenu())
             .Command(save)
-            .Left()
-            .Content(new TextBlock().Text("Save"));
+            .Content("Save")
+            .Left();
 
         // No primary action at all: every part of it opens the menu.
         var dropDownButton = new DropDownButton()
             .DropDownMenu(new Menu().Item(exportPdf).Separator().Item(print))
-            .Content(new TextBlock().Text("More actions"))
+            .Content("More actions")
             .Left();
 
         // The face and the menu rows materialize text and icons from the Commands themselves, and the menu
@@ -135,7 +135,7 @@ partial class GalleryView
 
         return CardGrid(
             Card(
-                "Buttons",
+                "Button",
                 new StackPanel()
                     .Vertical()
                     .Spacing(8)
@@ -171,19 +171,6 @@ partial class GalleryView
                             .Children(
                                 new Button().Content("Accent Button"),
                                 new Button().Content("Accent Disabled").Disable())
-                    )
-            ),
-
-            Card(
-                "ToggleButton",
-                new StackPanel()
-                    .Vertical()
-                    .Spacing(8)
-                    .Children(
-                        new ToggleButton().Content("Toggle"),
-                        new ToggleButton().Content("Checked").IsChecked(true),
-                        new ToggleButton().Content("Disabled").Disable(),
-                        new ToggleButton().Content("Disabled (Checked)").IsChecked(true).Disable()
                     )
             ),
 
@@ -250,34 +237,6 @@ partial class GalleryView
                                 new SegmentItem("text_align_right_regular", "Right"))
                                 .Disable()
                                 .Left())
-                    )
-            ),
-
-            Card(
-                "Toggle / Switch",
-                new StackPanel()
-                    .Vertical()
-                    .Spacing(8)
-                    .Children(
-                        new ToggleSwitch().IsChecked(true),
-                        new ToggleSwitch().IsChecked(false),
-                        new ToggleSwitch().IsChecked(true).Disable(),
-                        new ToggleSwitch().IsChecked(false).Disable()
-                    )
-            ),
-
-            Card(
-                "Progress",
-                new StackPanel()
-                    .Vertical()
-                    .Spacing(8)
-                    .Children(
-                        new ProgressBar().Value(20),
-                        new ProgressBar().Value(65),
-                        new ProgressBar().Value(65).Disable(),
-                        new ProgressBar().IsIndeterminate(),
-                        new Slider().Minimum(0).Maximum(100).Value(25),
-                        new Slider().Minimum(0).Maximum(100).Value(25).Disable()
                     )
             )
         );
