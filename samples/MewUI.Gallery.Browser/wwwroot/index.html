@@ -19,7 +19,26 @@
     /* Only visible until the first frame; matching the scheme avoids a dark flash on a light page. */
     body { background: #ffffff; }
     @media (prefers-color-scheme: dark) { body { background: #202124; } }
-    /* Sized so a boot failure's message stays readable on a phone instead of one clipped line. */
+    /* Drawn by the page itself so it shows on the first paint, before the runtime has downloaded. */
+    #loader { --loader-fg: #7a6aa8; --loader-track: #ece6fb; --loader-bar: linear-gradient(90deg, #b19dfa, #dcc1fd);
+      --loader-error: #c0475e;
+      position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 27px; background: inherit; transition: opacity .35s ease; }
+    @media (prefers-color-scheme: dark) {
+      #loader { --loader-fg: #b8aee0; --loader-track: #342f45; --loader-bar: linear-gradient(90deg, #a18aed, #cfccfd); }
+    }
+    #loader.done { opacity: 0; pointer-events: none; }
+    #loader img { width: 96px; height: 96px; animation: loader-breathe 1.6s ease-in-out infinite; }
+    #loader .track { width: 222px; height: 6px; border-radius: 3px; background: var(--loader-track); overflow: hidden; }
+    #loader .bar { width: 0; height: 100%; border-radius: inherit; background: var(--loader-bar); transition: width .25s ease; }
+    #loader .stage { color: var(--loader-fg); font: 18px system-ui, sans-serif; letter-spacing: .02em;
+      max-width: min(80vw, 480px); text-align: center; white-space: pre-wrap; word-break: break-word; }
+    #loader.failed img { animation: none; opacity: .5; }
+    #loader.failed .bar { background: var(--loader-error); }
+    #loader.failed .stage { color: var(--loader-error); }
+    @keyframes loader-breathe { 50% { transform: scale(.94); opacity: .8; } }
+    @media (prefers-reduced-motion: reduce) { #loader img { animation: none; } }
+    /* Reports a frame failure after the loader has gone; sized so it stays readable on a phone. */
     #status { position: fixed; right: 8px; bottom: 8px; padding: 4px 7px; color: white;
       background: rgba(0, 0, 0, .65); font: 12px sans-serif; pointer-events: none;
       max-width: min(80vw, 640px); white-space: pre-wrap; word-break: break-word; }
@@ -35,7 +54,12 @@
 <body class="notranslate">
   <canvas id="canvas"></canvas>
   <input id="textinput" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
-  <div id="status">Starting MewUI WASM...</div>
+  <div id="loader" role="progressbar" aria-label="Loading MewUI Gallery" aria-valuemin="0" aria-valuemax="100">
+    <img src="./logo.svg" alt="" width="96" height="96">
+    <div class="track"><div class="bar"></div></div>
+    <div class="stage">Loading .NET runtime</div>
+  </div>
+  <div id="status" hidden></div>
   <script type="module" src="./main.js"></script>
 </body>
 </html>

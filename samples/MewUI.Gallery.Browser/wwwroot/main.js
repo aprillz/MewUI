@@ -1,18 +1,60 @@
 const canvas = document.getElementById('canvas');
 const status = document.getElementById('status');
 const textInput = document.getElementById('textinput');
+const loader = document.getElementById('loader');
+const loaderBar = loader.querySelector('.bar');
+const loaderStage = loader.querySelector('.stage');
+
+// Downloads fill the bar up to this point; the stages after them take the rest.
+const DOWNLOAD_PROGRESS_SHARE = 85;
+
+function setProgress(percent) {
+    const clamped = Math.max(0, Math.min(100, percent));
+    loaderBar.style.width = `${clamped}%`;
+    loader.setAttribute('aria-valuenow', String(Math.round(clamped)));
+}
+
+function setBootStage(stage, percent) {
+    bootStage = stage;
+    loaderStage.textContent = stage;
+    if (percent !== undefined) {
+        setProgress(percent);
+    }
+}
+
+function showStatus(text) {
+    status.hidden = false;
+    status.textContent = text;
+}
+
+function hideLoader() {
+    setProgress(100);
+    loader.classList.add('done');
+    // The bar's own width transition bubbles up here too, and removing on that would cut the fade.
+    loader.addEventListener('transitionend', event => {
+        if (event.target === loader && event.propertyName === 'opacity') {
+            loader.remove();
+        }
+    });
+}
 
 // A device that cannot boot at all (an old WebAssembly engine, WebGL2 refused, a fetch that never
 // arrives) otherwise dies with nothing but a devtools console it may not have. The hooks go in
-// before the first await so even the runtime import failing lands on the label.
+// before the first await so even the runtime import failing lands on the loader.
 function reportFatal(stage, error) {
     const detail = error && (error.message || error.reason && error.reason.message || error.reason) || error;
-    status.textContent = `${stage} failed: ${String(detail).slice(0, 400)}`;
-    status.style.background = 'rgba(150, 18, 34, .92)';
+    const message = `${stage} failed: ${String(detail).slice(0, 400)}`;
+    if (loader.isConnected && !loader.classList.contains('done')) {
+        loader.classList.add('failed');
+        loaderStage.textContent = message;
+    } else {
+        showStatus(message);
+        status.style.background = 'rgba(150, 18, 34, .92)';
+    }
 }
 
 let bootStage = 'Loading .NET runtime';
-status.textContent = bootStage + '...';
+setBootStage(bootStage, 2);
 window.addEventListener('error', event => reportFatal(bootStage, event.error ?? event.message));
 window.addEventListener('unhandledrejection', event => reportFatal(bootStage, event.reason));
 
@@ -21,7 +63,7 @@ window.addEventListener('unhandledrejection', event => reportFatal(bootStage, ev
 // requests files that no longer exist. Pages offers no cache headers, so this file's own version
 // query is carried over to pin both halves of the loader to the same deploy.
 const { dotnet } = await import(`./_framework/dotnet.js${new URL(import.meta.url).search}`);
-bootStage = 'Starting runtime';
+setBootStage('Downloading assemblies', 5);
 let pixelConfirmed = false;
 let frameErrorCount = 0;
 const MAX_LOGGED_FRAME_ERRORS = 5;
@@ -64,7 +106,17 @@ function syncCanvasSize() {
 
 syncCanvasSize();
 
-const { getAssemblyExports, getConfig, runMain, setModuleImports } = await dotnet.create();
+// The count is of files, not bytes, so the bar can pause on a large one.
+const { getAssemblyExports, getConfig, runMain, setModuleImports } = await dotnet
+    .withModuleConfig({
+        onDownloadResourceProgress: (loaded, total) => {
+            if (total > 0) {
+                setProgress(5 + (DOWNLOAD_PROGRESS_SHARE - 5) * loaded / total);
+            }
+        },
+    })
+    .create();
+setBootStage('Starting runtime', DOWNLOAD_PROGRESS_SHARE);
 // Writing needs a user gesture, which a copy or cut always is, and nothing waits on the result.
 setModuleImports('main.js', {
     writeClipboard: text => { navigator.clipboard?.writeText(text).catch(() => {}); },
@@ -81,8 +133,7 @@ const darkScheme = window.matchMedia('(prefers-color-scheme: dark)');
 app.SetSystemDarkMode(darkScheme.matches);
 darkScheme.addEventListener('change', event => { wake(); app.SetSystemDarkMode(event.matches); });
 
-bootStage = 'Starting app';
-status.textContent = bootStage + '...';
+setBootStage('Starting app', 92);
 
 // A managed startup failure (WebGL2 refused, an unsupported wasm feature) surfaces here rather
 // than as an unobserved rejection.
@@ -471,7 +522,7 @@ function frame(frameTimeMs) {
                     pixel);
                 if (pixel[0] !== 0 || pixel[1] !== 0 || pixel[2] !== 0) {
                     pixelConfirmed = true;
-                    status.textContent = 'MewUI Gallery First Boot: rendered';
+                    hideLoader();
                     console.log('MewUI Gallery first pixel confirmed.', Array.from(pixel));
                 }
             }
@@ -480,7 +531,7 @@ function frame(frameTimeMs) {
         // Keep the loop alive: stopping here freezes the canvas, and every later symptom looks
         // like resize or input being broken rather than the one frame that actually failed.
         frameErrorCount++;
-        status.textContent = `MewUI Gallery frame failed (${frameErrorCount}): ${error}`;
+        showStatus(`MewUI Gallery frame failed (${frameErrorCount}): ${error}`);
         if (frameErrorCount <= MAX_LOGGED_FRAME_ERRORS) {
             console.error('MewUI Gallery frame failed.', error);
         }
@@ -498,6 +549,6 @@ function frame(frameTimeMs) {
 wake();
 window.addEventListener('resize', wake);
 runPromise.catch(error => {
-    status.textContent = 'MewUI Gallery failed - see console';
+    showStatus('MewUI Gallery failed - see console');
     console.error('MewUI Gallery runtime failed.', error);
 });
