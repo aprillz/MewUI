@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "status": "pay-for-play-reachability-baseline",
+  "mewUIVersion": "0.22.0",
+  "measuredAtUtc": "2026-09-21T06:28:48.4569675Z",
+  "commit": "0ac4a00f",
+  "dotnetSdk": "10.0.303",
+  "runtimeIdentifier": "win-x64",
+  "backend": "MewVG",
+  "publish": {
+    "targetFramework": "net10.0",
+    "selfContained": true,
+    "publishAot": true,
+    "trimMode": "full",
+    "optimization": "Size",
+    "invariantGlobalization": true
+  },
+  "probes": [
+    {
+      "probe": "Empty",
+      "executableBytes": 3618816,
+      "methodCodeBytes": 1528897,
+      "constructedTypeBytes": 479276,
+      "metadataBytes": 231071,
+      "methodCount": 8469,
+      "constructedTypeCount": 4974
+    },
+    {
+      "probe": "Text",
+      "executableBytes": 4028416,
+      "methodCodeBytes": 1747327,
+      "constructedTypeBytes": 528320,
+      "metadataBytes": 252793,
+      "methodCount": 9514,
+      "constructedTypeCount": 5494
+    },
+    {
+      "probe": "Button",
+      "executableBytes": 4131840,
+      "methodCodeBytes": 1781173,
+      "constructedTypeBytes": 557016,
+      "metadataBytes": 256688,
+      "methodCount": 9749,
+      "constructedTypeCount": 5746
+    },
+    {
+      "probe": "Image",
+      "executableBytes": 4115968,
+      "methodCodeBytes": 1770270,
+      "constructedTypeBytes": 515292,
+      "metadataBytes": 249794,
+      "methodCount": 9301,
+      "constructedTypeCount": 5357
+    }
+  ]
+}
