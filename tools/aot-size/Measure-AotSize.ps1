@@ -48,7 +48,9 @@ $backendDefine = if ($Backend -eq 'Direct2D') {
 }
 
 $backendProject = if ($RuntimeIdentifier.StartsWith('win-')) {
-    Join-Path $repoRoot "src\MewUI.Backend.$Backend\MewUI.Backend.$Backend.csproj"
+    # The Windows MewVG backend carries its platform in its project name, as the other MewVG backends do.
+    $windowsBackend = if ($Backend -eq 'MewVG') { 'MewVG.Win32' } else { $Backend }
+    Join-Path $repoRoot "src\MewUI.Backend.$windowsBackend\MewUI.Backend.$windowsBackend.csproj"
 } elseif ($RuntimeIdentifier.StartsWith('linux-')) {
     Join-Path $repoRoot 'src\MewUI.Backend.MewVG.X11\MewUI.Backend.MewVG.X11.csproj'
 } else {
