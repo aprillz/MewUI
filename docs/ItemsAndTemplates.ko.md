@@ -162,11 +162,11 @@ list.PrepareContainer<ChatMessage>((container, message, index, ctx) => container
 
 | 컨트롤 | 컨테이너 | 훅이 없을 때 |
 |---|---|---|
-| `ListBox`, `ItemsControl` | `ItemContainer`. 훅을 등록한 동안만 템플릿 루트를 감싼다 | 템플릿 루트가 곧 컨테이너. 래퍼 없음 |
+| `ListBox`, `ItemsControl` | `ItemContainer`. 템플릿 루트를 감싼다 | 같은 컨테이너. 아이템의 선택과 호버도 그리므로 항상 있다 |
 | `TreeView` | `ItemContainer`. 들여쓰기와 확장기까지 행 전체를 덮고 콘텐츠를 그 뒤로 밀어 넣는다 | 템플릿 루트가 콘텐츠 구간에만 놓임 |
 | `GridView` | `GridViewRow`. 항상 있는 행 요소를 그대로 넘긴다 | 변화 없음 |
 
-훅을 쓰지 않는 앱은 요소를 하나도 더 만들지 않는다. 훅을 등록하거나 해제하면 컨테이너가 새로 만들어진다.
+훅을 등록하거나 해제하면 컨테이너가 새로 만들어진다.
 
 ### 컨테이너가 알려주는 것
 
@@ -176,7 +176,9 @@ list.PrepareContainer<ChatMessage>((container, message, index, ctx) => container
 
 ### 되돌려지는 것
 
-컨테이너는 아이템 사이에 재활용된다. 훅이 컨테이너에 직접 대입한 다음 속성은 다음 바인드 전에 기본값으로 돌아간다: `ContextMenu`, `ToolTip`, `IsEnabled`, `IsHitTestVisible`, `Cursor`, `Opacity`, `Tag`. 그 밖의 속성은 템플릿과 같은 규칙이다. 매번 대입하거나 `ctx.Bind`로 건다.
+컨테이너는 아이템 사이에 재활용된다. 훅이 컨테이너에 쓴 속성은 다음 바인드 전에 훅이 실행되기 전의 값으로 돌아간다. 컨트롤이 설정한 값이 있었으면 그 값이 돌아오고, 값이 없던 속성은 다시 비워진다. `ContextMenu`, `ToolTip`, `Background`, `Opacity`, `Padding` 같은 컨테이너의 `MewProperty` 속성이 모두 해당하므로, 훅은 한 아이템에만 속성을 설정해도 된다.
+
+세 가지는 추적하지 않는다. `StyleName` 같은 일반 .NET 속성, 컨테이너가 아닌 객체에 쓴 값, 훅이 반환된 뒤(`await` 이후 등)에 쓴 값이다. 이런 값은 `ClearContainer`에서 되돌리거나 매 바인드 대입한다.
 
 `ctx.Bind`와 `ctx.Subscribe`로 건 것은 컨텍스트가 정리한다. `+=`로 직접 건 구독만 `ClearContainer`에서 뗀다.
 
