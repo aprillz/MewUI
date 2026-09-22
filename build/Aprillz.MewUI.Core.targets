@@ -83,7 +83,7 @@
     the value the trimmer sees undefined.
   -->
   <PropertyGroup>
-    <MewUIWin32TextEngine Condition="'$(MewUIWin32TextEngine)' == ''">Gdi</MewUIWin32TextEngine>
+    <MewUIWin32TextEngine Condition="'$(MewUIWin32TextEngine)' == ''">DirectWrite</MewUIWin32TextEngine>
     <_MewUIWin32DirectWriteText>false</_MewUIWin32DirectWriteText>
     <_MewUIWin32DirectWriteText Condition="'$(MewUIWin32TextEngine)' == 'DirectWrite'">true</_MewUIWin32DirectWriteText>
   </PropertyGroup>
