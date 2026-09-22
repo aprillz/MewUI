@@ -131,6 +131,69 @@ public sealed class Win32TextEngineDrawPathTests
         Assert.IsGreaterThan(1.0, overhang.Right, "the italic f reaches past its advance, but no overhang was reported");
     }
 
+    /// <summary>
+    /// The face hands back an upright bitmap, and <c>AlphaBlend</c> only copies axis-aligned, so a
+    /// rotated run has to be resampled through the transform rather than blitted into its bounding box.
+    /// </summary>
+    [TestMethod]
+    public void GdiBackend_TurnsADirectWriteRunWithTheTransform()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("The Win32 text engines are Windows-only.");
+            return;
+        }
+
+        using var gdi = new GdiGraphicsFactory();
+        using var fonts = new GdiDirectWriteFonts();
+        using var font = fonts.CreateFont("Segoe UI", 16, FontWeight.Normal, false, false, false, 96);
+
+        const int sizePx = 240;
+        using var surface = gdi.CreateSurface(RenderSurfaceDescriptor.CachedImage(sizePx, sizePx, 1.0, hasAlpha: false));
+        using (var context = gdi.CreateContext(surface))
+        {
+            context.BeginFrame(surface);
+            context.Clear(Color.FromArgb(255, 255, 255, 255));
+            context.Translate(120, 10);
+            context.Rotate(Math.PI / 2);
+
+            var format = new BackendTextFormat
+            {
+                Font = font,
+                HorizontalAlignment = TextAlignment.Left,
+                VerticalAlignment = TextAlignment.Top,
+                Wrapping = TextWrapping.NoWrap,
+                Trimming = TextTrimming.None,
+            };
+            var constraints = new BackendTextLayoutConstraints(new Rect(0, 0, 200, 24));
+            var contextBase = (GraphicsContextBase)context;
+            var layout = contextBase.CreateBackendTextLayout(TEXT, format, in constraints);
+            Assert.IsNotNull(layout, "The backend produced no text layout.");
+            contextBase.DrawBackendTextLayout(TEXT, format, layout, Color.FromArgb(255, 0, 0, 0));
+            context.EndFrame();
+        }
+
+        var cpu = (ICpuPixelSurface)surface;
+        var pixels = cpu.GetReadOnlyPixelSpan();
+        int left = sizePx, right = -1, top = sizePx, bottom = -1;
+        for (int y = 0; y < sizePx; y++)
+        {
+            for (int x = 0; x < sizePx; x++)
+            {
+                if (pixels[(y * cpu.StrideBytes) + (x * 4) + 1] < 160)
+                {
+                    left = Math.Min(left, x);
+                    right = Math.Max(right, x);
+                    top = Math.Min(top, y);
+                    bottom = Math.Max(bottom, y);
+                }
+            }
+        }
+
+        Assert.IsGreaterThanOrEqualTo(0, right, "The rotated run drew nothing.");
+        Assert.IsGreaterThan(right - left, bottom - top, $"the run was drawn upright: ink spans {right - left + 1} x {bottom - top + 1}");
+    }
+
     private static int ColourFringedPixels(IGraphicsFactory factory, IFont font)
         => Render(factory, font, static (pixels, stride) =>
         {

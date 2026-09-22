@@ -1645,6 +1645,12 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
         }
 
         var inkInset = TextInkInsetPx.FromOverhang(layout.InkOverhang, _dpiScale);
+        if (TryGetTextWorldTransform(out var textTransform))
+        {
+            DrawFaceRasterizedTextTransformed(text, format, layout, color, face, inkInset, textTransform);
+            return;
+        }
+
         var target = ToDeviceRect(InflateByInset(TransformRect(layout.EffectiveBounds), inkInset));
         int widthPx = target.right - target.left;
         int heightPx = target.bottom - target.top;
@@ -1709,6 +1715,111 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
         }
 
         surface.AlphaBlendTo(Hdc, target.left, target.top);
+    }
+
+    /// <summary>
+    /// Draws a face-rasterized run under a rotating, scaling or skewing transform: the run is rasterized
+    /// upright at the device scale, and every device pixel of its transformed box samples it back
+    /// through the inverse transform, because <c>AlphaBlend</c> only copies axis-aligned.
+    /// </summary>
+    private void DrawFaceRasterizedTextTransformed(ReadOnlySpan<char> text, BackendTextFormat format,
+        BackendTextLayout layout, Color color, IWin32TextFace face, TextInkInsetPx inkInset, XFORM transform)
+    {
+        var local = ToDeviceRect(InflateByInset(layout.EffectiveBounds, inkInset));
+        int sourceWidth = local.right - local.left;
+        int sourceHeight = local.bottom - local.top;
+        double determinant = transform.eM11 * transform.eM22 - transform.eM12 * transform.eM21;
+        if (sourceWidth <= 0 || sourceHeight <= 0 || Math.Abs(determinant) < 1e-9)
+        {
+            return;
+        }
+
+        double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
+        foreach (var (cornerX, cornerY) in new[] { (local.left, local.top), (local.right, local.top), (local.left, local.bottom), (local.right, local.bottom) })
+        {
+            double deviceX = cornerX * transform.eM11 + cornerY * transform.eM21 + transform.eDx;
+            double deviceY = cornerX * transform.eM12 + cornerY * transform.eM22 + transform.eDy;
+            minX = Math.Min(minX, deviceX);
+            minY = Math.Min(minY, deviceY);
+            maxX = Math.Max(maxX, deviceX);
+            maxY = Math.Max(maxY, deviceY);
+        }
+
+        var target = RECT.FromLTRB((int)Math.Floor(minX), (int)Math.Floor(minY), (int)Math.Ceiling(maxX), (int)Math.Ceiling(maxY));
+        int targetWidth = target.right - target.left;
+        int targetHeight = target.bottom - target.top;
+        if (targetWidth <= 0 || targetHeight <= 0 || Gdi32.RectVisible(Hdc, ref target) == 0
+            || targetWidth > GdiRenderingConstants.MaxAaSurfaceSize || targetHeight > GdiRenderingConstants.MaxAaSurfaceSize)
+        {
+            return;
+        }
+
+        var request = new Win32TextRasterizeRequest(
+            sourceWidth, sourceHeight, color,
+            format.HorizontalAlignment, format.VerticalAlignment,
+            format.Wrapping, format.Trimming, _dpiScale, inkInset);
+        if (!face.TryRasterize(text, request, out var bitmap) || bitmap.Data.Length == 0)
+        {
+            return;
+        }
+
+        using var surface = new AaSurface(Hdc, targetWidth, targetHeight);
+        if (!surface.IsValid)
+        {
+            return;
+        }
+
+        var destination = surface.GetPixelSpan();
+        destination.Clear();
+        double inverse11 = transform.eM22 / determinant;
+        double inverse12 = -transform.eM12 / determinant;
+        double inverse21 = -transform.eM21 / determinant;
+        double inverse22 = transform.eM11 / determinant;
+        for (int row = 0; row < targetHeight; row++)
+        {
+            for (int column = 0; column < targetWidth; column++)
+            {
+                double offsetX = target.left + column + 0.5 - transform.eDx;
+                double offsetY = target.top + row + 0.5 - transform.eDy;
+                double sourceX = offsetX * inverse11 + offsetY * inverse21 - local.left - 0.5;
+                double sourceY = offsetX * inverse12 + offsetY * inverse22 - local.top - 0.5;
+                SampleBilinearPremultiplied(bitmap, sourceX, sourceY, destination.Slice(((row * targetWidth) + column) * 4, 4));
+            }
+        }
+
+        surface.AlphaBlendTo(Hdc, target.left, target.top);
+    }
+
+    /// <summary>Writes the premultiplied bilinear sample of a straight-alpha bitmap; outside it reads as transparent.</summary>
+    private static void SampleBilinearPremultiplied(TextBitmap bitmap, double x, double y, Span<byte> pixel)
+    {
+        int left = (int)Math.Floor(x);
+        int top = (int)Math.Floor(y);
+        double fractionX = x - left;
+        double fractionY = y - top;
+        double blue = 0, green = 0, red = 0, alpha = 0;
+        for (int tap = 0; tap < 4; tap++)
+        {
+            int sampleX = left + (tap & 1);
+            int sampleY = top + (tap >> 1);
+            if (sampleX < 0 || sampleY < 0 || sampleX >= bitmap.WidthPx || sampleY >= bitmap.HeightPx)
+            {
+                continue;
+            }
+
+            double weight = ((tap & 1) == 0 ? 1 - fractionX : fractionX) * ((tap >> 1) == 0 ? 1 - fractionY : fractionY);
+            int index = ((sampleY * bitmap.WidthPx) + sampleX) * 4;
+            double sampleAlpha = bitmap.Data[index + 3] * weight;
+            blue += bitmap.Data[index] * sampleAlpha / 255;
+            green += bitmap.Data[index + 1] * sampleAlpha / 255;
+            red += bitmap.Data[index + 2] * sampleAlpha / 255;
+            alpha += sampleAlpha;
+        }
+
+        pixel[0] = (byte)Math.Round(blue);
+        pixel[1] = (byte)Math.Round(green);
+        pixel[2] = (byte)Math.Round(red);
+        pixel[3] = (byte)Math.Round(alpha);
     }
 
     /// <summary>
