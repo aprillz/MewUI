@@ -16,7 +16,7 @@ internal static class Win32DirectWriteFonts
     internal static IFont CreateFont(string family, double size, FontWeight weight,
         bool italic, bool underline, bool strikethrough, uint dpi)
         => (_factory ??= new DirectWriteFontFactory())
-            .CreateFont(family, size, weight, italic, underline, strikethrough, dpi);
+            .CreateFont(family, size, weight, italic, underline, strikethrough, dpi, gridFitMetrics: true);
 
     internal static void DisposeIfCreated()
     {

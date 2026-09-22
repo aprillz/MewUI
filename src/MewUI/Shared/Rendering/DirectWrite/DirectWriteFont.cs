@@ -31,7 +31,8 @@ internal sealed unsafe partial class DirectWriteFont : FontBase, IGlyphOutlineFo
     private bool _faceLookupAttempted;
 
     public DirectWriteFont(string family, double size, FontWeight weight, bool italic,
-        bool underline, bool strikethrough, nint dwriteFactory, nint privateFontCollection = 0, uint outlineDpi = 96)
+        bool underline, bool strikethrough, nint dwriteFactory, nint privateFontCollection = 0, uint outlineDpi = 96,
+        bool gridFitMetrics = false)
         : base(ValidateFamilyName(family), size, weight, italic, underline, strikethrough)
     {
         _dwriteFactoryHandle = dwriteFactory;
@@ -41,6 +42,15 @@ internal sealed unsafe partial class DirectWriteFont : FontBase, IGlyphOutlineFo
             return;
         }
 
+        LoadMetrics(dwriteFactory, privateFontCollection, size, weight, italic);
+        if (gridFitMetrics)
+        {
+            ApplyGridFittedMetrics();
+        }
+    }
+
+    private void LoadMetrics(nint dwriteFactory, nint privateFontCollection, double size, FontWeight weight, bool italic)
+    {
         PrivateFontCollection = privateFontCollection;
 
         var resolvedFamily = Family;
@@ -202,6 +212,66 @@ internal sealed unsafe partial class DirectWriteFont : FontBase, IGlyphOutlineFo
         InternalLeading = Math.Max(0, leading);
         CapHeight = metrics.capHeight > 0 ? metrics.capHeight * scale : Ascent * 0.7;
         XHeight = metrics.xHeight > 0 ? metrics.xHeight * scale : CapHeight * 0.72;
+    }
+
+    /// <summary>
+    /// Replaces the design metrics with the ones the GDI-classic rasterizer draws with at this font's
+    /// pixel grid, so the baseline and the cap line a line box is trimmed to are where the ink lands.
+    /// </summary>
+    private void ApplyGridFittedMetrics()
+    {
+        nint face = ResolveFontFace();
+        if (face == 0)
+        {
+            return;
+        }
+
+        if (DWriteVTable.GetGdiCompatibleMetrics(face, (float)Size, PixelsPerDip, out var metrics) < 0
+            || metrics.designUnitsPerEm == 0)
+        {
+            return;
+        }
+
+        ApplyMetrics(metrics, Size);
+        // The face metrics round each size on their own; the layout the rasterizer draws is what places
+        // the baseline, and at some sizes the two land a device pixel apart.
+        if (DirectWriteTextMeasure.TryGetLineMetrics(_dwriteFactoryHandle, this, PixelsPerDip, out double baseline, out double lineHeight))
+        {
+            Ascent = baseline;
+            Descent = Math.Max(0, lineHeight - baseline);
+        }
+
+        double scale = Size / metrics.designUnitsPerEm;
+        if (TryGetGridFittedGlyphTop(face, 'H', out int capTop))
+        {
+            CapHeight = capTop * scale;
+        }
+
+        if (TryGetGridFittedGlyphTop(face, 'x', out int xTop))
+        {
+            XHeight = xTop * scale;
+        }
+    }
+
+    private bool TryGetGridFittedGlyphTop(nint face, char character, out int top)
+    {
+        top = 0;
+        uint codePoint = character;
+        ushort glyphIndex = 0;
+        if (DWriteVTable.GetGlyphIndices(face, &codePoint, 1, &glyphIndex) < 0 || glyphIndex == 0)
+        {
+            return false;
+        }
+
+        DWRITE_GLYPH_METRICS glyphMetrics;
+        if (DWriteVTable.GetGdiCompatibleGlyphMetrics(
+                face, (float)Size, PixelsPerDip, useGdiNatural: 0, &glyphIndex, 1, &glyphMetrics, isSideways: 0) < 0)
+        {
+            return false;
+        }
+
+        top = glyphMetrics.verticalOriginY - glyphMetrics.topSideBearing;
+        return top > 0;
     }
 
     /// <summary>

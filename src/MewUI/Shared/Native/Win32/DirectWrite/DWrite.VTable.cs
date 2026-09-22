@@ -465,6 +465,29 @@ internal static unsafe class DWriteVTable
         var fn = (delegate* unmanaged[Stdcall]<nint, ushort*, uint, DWRITE_GLYPH_METRICS*, int, int>)vtbl[10];
         return fn(fontFace, glyphIndices, glyphCount, glyphMetrics, isSideways);
     }
+
+    /// <summary>IDWriteFontFace::GetGdiCompatibleMetrics (vtable index 16). Null transform.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int GetGdiCompatibleMetrics(nint fontFace, float emSize, float pixelsPerDip, out DWRITE_FONT_METRICS metrics)
+    {
+        metrics = default;
+        var vtbl = *(nint**)fontFace;
+        var fn = (delegate* unmanaged[Stdcall]<nint, float, float, nint, DWRITE_FONT_METRICS*, int>)vtbl[16];
+        fixed (DWRITE_FONT_METRICS* pointer = &metrics)
+        {
+            return fn(fontFace, emSize, pixelsPerDip, 0, pointer);
+        }
+    }
+
+    /// <summary>IDWriteFontFace::GetGdiCompatibleGlyphMetrics (vtable index 17). Null transform.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int GetGdiCompatibleGlyphMetrics(nint fontFace, float emSize, float pixelsPerDip, int useGdiNatural,
+        ushort* glyphIndices, uint glyphCount, DWRITE_GLYPH_METRICS* glyphMetrics, int isSideways)
+    {
+        var vtbl = *(nint**)fontFace;
+        var fn = (delegate* unmanaged[Stdcall]<nint, float, float, nint, int, ushort*, uint, DWRITE_GLYPH_METRICS*, int, int>)vtbl[17];
+        return fn(fontFace, emSize, pixelsPerDip, 0, useGdiNatural, glyphIndices, glyphCount, glyphMetrics, isSideways);
+    }
 }
 
 [StructLayout(LayoutKind.Sequential)]

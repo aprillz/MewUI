@@ -40,12 +40,12 @@ internal sealed unsafe class DirectWriteFontFactory : IDisposable
     }
 
     internal DirectWriteFont CreateFont(string family, double size, FontWeight weight,
-        bool italic, bool underline, bool strikethrough, uint dpi = 96)
+        bool italic, bool underline, bool strikethrough, uint dpi = 96, bool gridFitMetrics = false)
     {
         family = SelectFamilyCandidate(ValidateFamilyName(family));
         var (resolvedFamily, fontCollection) = ResolveWithCollection(family);
         return new DirectWriteFont(resolvedFamily, size, weight, italic, underline, strikethrough,
-            Factory, fontCollection, dpi);
+            Factory, fontCollection, dpi, gridFitMetrics);
     }
 
     /// <summary>Picks the first installed family from a comma-separated list; single names pass through.</summary>
