@@ -23,9 +23,12 @@ Aprillz.MewUI                  ← All-in-one metapackage (all platforms + all b
     └─ .Backend.MewVG.MacOS     (macOS, NanoVG/Metal)
 ```
 
-Separately managed packages (not included in metapackages):
-- `Aprillz.MewUI.Svg` — SVG parsing/rendering
-- `Aprillz.MewUI.WebView2.Win32` — WebView2 integration (Windows only)
+Separately managed packages (not included in the metapackages):
+- `Aprillz.MewUI.Svg` - SVG parsing/rendering
+- `Aprillz.MewUI.MewDock` - Visual Studio style docking
+- `Aprillz.MewUI.MewCharts` - cartesian, pie and polar charts
+- `Aprillz.MewUI.WebView2.Win32` - WebView2 integration (Windows only)
+- `Aprillz.MewUI.Skia` - SkiaCanvasView, with a GPU interop package per backend (`.Skia.Interop.Direct2D`, `.Skia.Interop.Gdi`, `.Skia.Interop.MewVG.Win32`, `.Skia.Interop.MewVG.X11`, `.Skia.Interop.MewVG.MacOS`) and the metapackages `.Skia.Windows`, `.Skia.Linux`, `.Skia.MacOS`, `.Skia.All`
 
 ---
 
@@ -65,9 +68,9 @@ Instead of a metapackage, you can reference only the packages you need.
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="Aprillz.MewUI.Core" Version="0.10.3" />
-  <PackageReference Include="Aprillz.MewUI.Platform.Win32" Version="0.10.3" />
-  <PackageReference Include="Aprillz.MewUI.Backend.Gdi" Version="0.10.3" />
+  <PackageReference Include="Aprillz.MewUI.Core" Version="0.21.1" />
+  <PackageReference Include="Aprillz.MewUI.Platform.Win32" Version="0.21.1" />
+  <PackageReference Include="Aprillz.MewUI.Backend.Gdi" Version="0.21.1" />
 </ItemGroup>
 ```
 
@@ -181,7 +184,7 @@ In .NET 10 file-based apps, reference packages with the `#:package` directive.
 #:property OutputType=Exe
 #:property TargetFramework=net10.0
 
-#:package Aprillz.MewUI@0.10.3
+#:package Aprillz.MewUI@0.21.1
 
 using Aprillz.MewUI;
 using Aprillz.MewUI.Controls;

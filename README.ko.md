@@ -88,7 +88,7 @@ curl -sL https://raw.githubusercontent.com/aprillz/MewUI/refs/heads/main/samples
     #:property OutputType=Exe
     #:property TargetFramework=net10.0
 
-    #:package Aprillz.MewUI@0.19.1
+    #:package Aprillz.MewUI@0.21.1
 
     //...
     ```

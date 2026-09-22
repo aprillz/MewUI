@@ -115,7 +115,7 @@ https://github.com/user-attachments/assets/fc2d6ad8-3317-4784-a6e5-a00c68e9ed3b
     #:property OutputType=Exe
     #:property TargetFramework=net10.0
 
-    #:package Aprillz.MewUI@0.19.1
+    #:package Aprillz.MewUI@0.21.1
 
     // ...
     ```

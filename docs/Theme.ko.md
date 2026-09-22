@@ -145,8 +145,6 @@ Application.Run(mainWindow);
 
 ```csharp
 using Aprillz.MewUI;
-using Aprillz.MewUI.Backends;
-using Aprillz.MewUI.PlatformHosts;
 
 var mainWindow = new Window()
     .Title("Theme + Builder")

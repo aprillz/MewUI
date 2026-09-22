@@ -24,8 +24,11 @@ Aprillz.MewUI                  ← 올인원 메타패키지 (모든 플랫폼 +
 ```
 
 별도 관리 패키지 (메타패키지에 포함되지 않음):
-- `Aprillz.MewUI.Svg` — SVG 파싱/렌더링
-- `Aprillz.MewUI.WebView2.Win32` — WebView2 통합 (Windows 전용)
+- `Aprillz.MewUI.Svg` - SVG 파싱/렌더링
+- `Aprillz.MewUI.MewDock` - Visual Studio 스타일 도킹
+- `Aprillz.MewUI.MewCharts` - 직교/파이/폴라 차트
+- `Aprillz.MewUI.WebView2.Win32` - WebView2 통합 (Windows 전용)
+- `Aprillz.MewUI.Skia` - SkiaCanvasView. 백엔드별 GPU interop 패키지(`.Skia.Interop.Direct2D`, `.Skia.Interop.Gdi`, `.Skia.Interop.MewVG.Win32`, `.Skia.Interop.MewVG.X11`, `.Skia.Interop.MewVG.MacOS`)와 메타패키지 `.Skia.Windows`, `.Skia.Linux`, `.Skia.MacOS`, `.Skia.All`가 함께 있다
 
 ---
 
@@ -65,9 +68,9 @@ Windows, Linux, 브라우저의 등록 코드와 빌더 체인은 [Application �
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="Aprillz.MewUI.Core" Version="0.10.3" />
-  <PackageReference Include="Aprillz.MewUI.Platform.Win32" Version="0.10.3" />
-  <PackageReference Include="Aprillz.MewUI.Backend.Gdi" Version="0.10.3" />
+  <PackageReference Include="Aprillz.MewUI.Core" Version="0.21.1" />
+  <PackageReference Include="Aprillz.MewUI.Platform.Win32" Version="0.21.1" />
+  <PackageReference Include="Aprillz.MewUI.Backend.Gdi" Version="0.21.1" />
 </ItemGroup>
 ```
 
@@ -181,7 +184,7 @@ dotnet publish -r win-x64 -p:MewUIBackend=Direct2D
 #:property OutputType=Exe
 #:property TargetFramework=net10.0
 
-#:package Aprillz.MewUI@0.10.3
+#:package Aprillz.MewUI@0.21.1
 
 using Aprillz.MewUI;
 using Aprillz.MewUI.Controls;
