@@ -126,8 +126,13 @@ https://github.com/user-attachments/assets/fc2d6ad8-3317-4784-a6e5-a00c68e9ed3b
 ## 🧪 C# Markup at a Glance
 
 - Sample source: https://github.com/aprillz/MewUI/blob/main/samples/MewUI.Sample/Program.cs
+- An app registers a platform host and a rendering backend before `Application.Run`; MewUI does not pick them for you. See [Application Lifecycle](docs/ApplicationLifecycle.md).
 
    ```csharp
+    // Windows here; Linux and macOS register their own host and backend.
+    Win32Platform.Register();
+    Direct2DBackend.Register();
+
     var window = new Window()
         .Title("Hello MewUI")
         .Resizable(520, 360)

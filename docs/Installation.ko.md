@@ -50,6 +50,15 @@ dotnet add package Aprillz.MewUI.Windows
 dotnet add package Aprillz.MewUI
 ```
 
+패키지 설치만으로는 실행되지 않는다. 앱이 `Application.Run` 전에 플랫폼 호스트와 렌더링 백엔드를 등록해야 하며, 등록이 없으면 텍스트를 측정하는 첫 컨트롤에서 `InvalidOperationException`이 발생한다. macOS라면 다음과 같다.
+
+```csharp
+MacOSPlatform.Register();
+MewVGMacOSBackend.Register();
+```
+
+Windows, Linux, 브라우저의 등록 코드와 빌더 체인은 [Application 수명 주기](ApplicationLifecycle.ko.md)를 참고한다.
+
 ### 2.2 개별 패키지 조합
 
 메타패키지 대신 필요한 패키지만 직접 참조할 수 있다.

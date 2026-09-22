@@ -50,6 +50,15 @@ dotnet add package Aprillz.MewUI.Windows
 dotnet add package Aprillz.MewUI
 ```
 
+Installing a package is not enough to run: the app registers a platform host and a rendering backend before `Application.Run`, and a missing registration throws `InvalidOperationException` at the first control that measures text. On macOS that is:
+
+```csharp
+MacOSPlatform.Register();
+MewVGMacOSBackend.Register();
+```
+
+See [Application Lifecycle](ApplicationLifecycle.md) for the Windows, Linux and browser equivalents and for the builder chain.
+
 ### 2.2 Individual Packages
 
 Instead of a metapackage, you can reference only the packages you need.
