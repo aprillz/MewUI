@@ -130,6 +130,11 @@ Application.Create()
 
 #### 예시: 최소 구성
 ```csharp
+// 플랫폼 호스트와 백엔드를 먼저 등록한다(1.1 참고). 등록하지 않으면 텍스트를 측정하는
+// 첫 컨트롤에서 InvalidOperationException이 발생한다.
+Win32Platform.Register();
+Direct2DBackend.Register();
+
 var window = new Window()
     .Title("Hello")
     .Content(new TextBlock().Text("Hello, MewUI"));

@@ -131,6 +131,11 @@ When `Application.Run(Window)` is called, the flow is:
 
 #### Example: Minimal Setup
 ```csharp
+// The platform host and the backend are registered first (see 1.1); without them the
+// first control that measures text throws InvalidOperationException.
+Win32Platform.Register();
+Direct2DBackend.Register();
+
 var window = new Window()
     .Title("Hello")
     .Content(new TextBlock().Text("Hello, MewUI"));

@@ -99,7 +99,12 @@ curl -sL https://raw.githubusercontent.com/aprillz/MewUI/refs/heads/main/samples
 ## 🧪 C# 마크업 예시
 
 - 샘플 소스: https://github.com/aprillz/MewUI/blob/main/samples/MewUI.Sample/Program.cs
+- 앱이 `Application.Run` 전에 플랫폼 호스트와 렌더링 백엔드를 등록한다. MewUI가 대신 고르지 않는다. [Application 수명 주기](docs/ApplicationLifecycle.ko.md) 참고.
     ```csharp
+    // Windows 기준. Linux와 macOS는 각자의 호스트와 백엔드를 등록한다.
+    Win32Platform.Register();
+    Direct2DBackend.Register();
+
     var window = new Window()
         .Title("Hello MewUI")
         .Resizable(520, 360)
