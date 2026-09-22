@@ -111,6 +111,26 @@ public sealed class Win32TextEngineDrawPathTests
         CollectionAssert.AreNotEqual(first, recoloured, "the kept coverage carried the first colour with it");
     }
 
+    /// <summary>
+    /// DirectWrite measures overhangs against the layout's max width and height, so a run laid out in an
+    /// unbounded box reports none and the italic's tail is clipped at the run box.
+    /// </summary>
+    [TestMethod]
+    public void DirectWriteFace_ReportsTheItalicOverhangPastItsAdvance()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("The Win32 text engines are Windows-only.");
+            return;
+        }
+
+        using var fonts = new GdiDirectWriteFonts();
+        using var font = fonts.CreateFont("Segoe UI", 29.12, FontWeight.Bold, true, false, false, 96);
+
+        var overhang = ((gdibackend::Aprillz.MewUI.Rendering.Win32.IWin32TextFace)font).GetRunInkOverhang("ff");
+        Assert.IsGreaterThan(1.0, overhang.Right, "the italic f reaches past its advance, but no overhang was reported");
+    }
+
     private static int ColourFringedPixels(IGraphicsFactory factory, IFont font)
         => Render(factory, font, static (pixels, stride) =>
         {
