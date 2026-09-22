@@ -79,6 +79,48 @@ internal static unsafe class DirectWriteTextMeasure
         }
     }
 
+    /// <summary>Baseline and height of one laid-out line at this pixel grid, in device-independent units.</summary>
+    internal static bool TryGetLineMetrics(nint factory, DirectWriteFont font, float pixelsPerDip,
+        out double baseline, out double height)
+    {
+        baseline = 0;
+        height = 0;
+        if (factory == 0)
+        {
+            return false;
+        }
+
+        nint textFormat = AcquireTextFormat(factory, font, null, TextWrapping.NoWrap, out bool ownFormat);
+        if (textFormat == 0)
+        {
+            return false;
+        }
+
+        nint textLayout = 0;
+        try
+        {
+            int hr = DWriteVTable.CreateGdiCompatibleTextLayout(
+                (IDWriteFactory*)factory, "H", textFormat, float.MaxValue, float.MaxValue, pixelsPerDip,
+                useGdiNatural: false, out textLayout);
+            if (hr < 0 || textLayout == 0 || DWriteVTable.GetFirstLineMetrics(textLayout, out var line) < 0)
+            {
+                return false;
+            }
+
+            baseline = line.baseline;
+            height = line.height;
+            return baseline > 0;
+        }
+        finally
+        {
+            ComHelpers.Release(textLayout);
+            if (ownFormat)
+            {
+                ComHelpers.Release(textFormat);
+            }
+        }
+    }
+
     /// <summary>Ink of a single-line run that falls outside its layout box, in device-independent units.</summary>
     internal static TextInkOverhang GetRunInkOverhang(nint factory, DirectWriteFont font,
         DWriteTextFormatCache? formatCache, ReadOnlySpan<char> text, float pixelsPerDip)
