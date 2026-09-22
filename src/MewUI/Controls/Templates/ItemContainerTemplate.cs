@@ -56,7 +56,18 @@ internal sealed class ItemContainerTemplate : IDataTemplate
         _configure(container, index);
 
         _inner.Bind(ContentOf(container), item, index, context);
-        _prepare?.Invoke(container, item, index, context);
+        if (_prepare != null)
+        {
+            container.BeginHook();
+            try
+            {
+                _prepare(container, item, index, context);
+            }
+            finally
+            {
+                container.EndHook();
+            }
+        }
     }
 
     public void Unbind(FrameworkElement view, object? item, int index, TemplateContext context)

@@ -53,6 +53,9 @@ public sealed class GridViewRow : Control, IVisualTreeHost, ICommandArgumentSour
     private bool _isAlternate;
     private Color _alternateBackground;
 
+    // Created on the first hook run: a row nobody hooks records nothing.
+    private HookLocalWrites? _hookWrites;
+
     private static readonly MewPropertyKey<bool> IsSelectedPropertyKey =
         MewProperty<bool>.RegisterReadOnly<GridViewRow>(nameof(IsSelected), false,
             MewPropertyOptions.AffectsRender);
@@ -69,7 +72,6 @@ public sealed class GridViewRow : Control, IVisualTreeHost, ICommandArgumentSour
     internal GridViewRow(GridView owner)
     {
         _owner = owner;
-        IsHitTestVisible = true;
     }
 
     /// <summary>Gets the index of the item this row currently holds, or -1 when it holds none.</summary>
@@ -126,21 +128,17 @@ public sealed class GridViewRow : Control, IVisualTreeHost, ICommandArgumentSour
         InvalidateVisual();
     }
 
+    /// <summary>Starts recording what an app prepare hook writes. Pair with <see cref="EndHook"/>.</summary>
+    internal void BeginHook() => (_hookWrites ??= new()).BeginHook(this);
+
+    /// <summary>Records what the hook wrote, for <see cref="ResetForItem"/> to put back.</summary>
+    internal void EndHook() => _hookWrites!.EndHook(this);
+
     /// <summary>
-    /// Clears the local values a prepare hook may have assigned, so a recycled row does not carry
-    /// the previous item's state. Bindings survive: the template context clears those.
+    /// Puts back what the previous item's prepare hook wrote, so a recycled row does not carry that
+    /// item's state. Bindings survive: the template context clears those.
     /// </summary>
-    internal void ResetForItem()
-    {
-        ClearLocalValue(ContextMenuProperty);
-        ClearLocalValue(ToolTipProperty);
-        ClearLocalValue(IsEnabledProperty);
-        ClearLocalValue(IsHitTestVisibleProperty);
-        ClearLocalValue(CursorProperty);
-        ClearLocalValue(OpacityProperty);
-        ClearLocalValue(TagProperty);
-        IsHitTestVisible = true;
-    }
+    internal void ResetForItem() => _hookWrites?.Restore(this);
 
     protected override void OnMouseDown(MouseEventArgs e)
     {

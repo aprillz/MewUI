@@ -1147,7 +1147,18 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
         row.Bind(item, index);
         row.SetIsSelected(_core.IsItemSelected(index));
         ConfigureRowAlternate(row, index);
-        _prepareRow?.Invoke(row, item, index, context);
+        if (_prepareRow != null)
+        {
+            row.BeginHook();
+            try
+            {
+                _prepareRow(row, item, index, context);
+            }
+            finally
+            {
+                row.EndHook();
+            }
+        }
     }
 
     private void UnbindRowTemplate(FrameworkElement element, object? item, int index, TemplateContext context)

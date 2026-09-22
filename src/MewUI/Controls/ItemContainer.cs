@@ -24,6 +24,9 @@ public class ItemContainer : ContentControl, ICommandArgumentSource
 
     private const double HOVER_ACCENT_SHARE = 0.15;
 
+    // Created on the first hook run: a container nobody hooks records nothing.
+    private HookLocalWrites? _hookWrites;
+
     /// <summary>The style of a row: a hover tint of the given strength, and the selection over it.</summary>
     internal static Style CreateRowStyle(double hoverAccentShare)
         => new(typeof(ItemContainer))
@@ -186,20 +189,19 @@ public class ItemContainer : ContentControl, ICommandArgumentSource
         DrawBackgroundAndBorder(context, row, background, BorderBrush, BorderThickness, CornerRadius);
     }
 
+    /// <summary>Starts recording what an app prepare hook writes. Pair with <see cref="EndHook"/>.</summary>
+    internal void BeginHook() => (_hookWrites ??= new()).BeginHook(this);
+
+    /// <summary>Records what the hook wrote, for <see cref="ResetForItem"/> to put back.</summary>
+    internal void EndHook() => _hookWrites!.EndHook(this);
+
     /// <summary>
-    /// Clears the local values a prepare hook may have assigned, so a recycled container does not
-    /// carry the previous item's state. Bindings survive: the template context clears those.
+    /// Puts back what the previous item's prepare hook wrote, so a recycled container does not carry
+    /// that item's state. Bindings survive: the template context clears those.
     /// </summary>
     internal void ResetForItem()
     {
-        ClearLocalValue(ContextMenuProperty);
-        ClearLocalValue(ToolTipProperty);
-        ClearLocalValue(IsEnabledProperty);
-        ClearLocalValue(IsHitTestVisibleProperty);
-        ClearLocalValue(CursorProperty);
-        ClearLocalValue(OpacityProperty);
-        ClearLocalValue(TagProperty);
-        ClearLocalValue(CornerRadiusProperty);
+        _hookWrites?.Restore(this);
         SetIsHovered(false);
         SetAlternate(false, default);
         ShowsRowState = true;
