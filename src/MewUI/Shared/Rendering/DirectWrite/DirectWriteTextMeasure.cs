@@ -149,8 +149,24 @@ internal static unsafe class DirectWriteTextMeasure
 
             ApplyCustomFontFallback(factory, textLayout);
 
-            // An unconstrained layout's box is the text box, so DirectWrite reports the overhangs
-            // against exactly the rectangle the caller will reserve.
+            // DirectWrite reports overhangs against the layout's max width and height, not the text, so
+            // the run is laid out again in a box of exactly its own size, the one the caller reserves.
+            if (DWriteVTable.GetMetrics(textLayout, out var metrics) < 0)
+            {
+                return TextInkOverhang.None;
+            }
+
+            ComHelpers.Release(textLayout);
+            textLayout = 0;
+            hr = DWriteVTable.CreateGdiCompatibleTextLayout(
+                (IDWriteFactory*)factory, text, textFormat, metrics.widthIncludingTrailingWhitespace, metrics.height,
+                pixelsPerDip, useGdiNatural: false, out textLayout);
+            if (hr < 0 || textLayout == 0)
+            {
+                return TextInkOverhang.None;
+            }
+
+            ApplyCustomFontFallback(factory, textLayout);
             if (DWriteVTable.GetOverhangMetrics(textLayout, out var overhangs) < 0)
             {
                 return TextInkOverhang.None;
