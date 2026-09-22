@@ -52,14 +52,15 @@ partial class GalleryView
                 return icon;
             });
 
-        // The card is the command scope: every drop-down below registers on it, so one panel owns the
-        // handlers, the gate and the shortcut map.
-        StackPanel dropDownGroup = new();
+        // The page is the command scope: the drop-down and split button cards both register on it, so one
+        // element owns the handlers, the gate and the shortcut map.
+        Border commandScope = new();
 
-        // What ran goes to a line under the card rather than a message box: a dialog takes the focus the
+        // What ran goes to a line under each card rather than a message box: a dialog takes the focus the
         // buttons are being tried with, and a menu row that runs on close would be judged by the dialog.
-        var dropDownLog = new TextBlock().Text("Nothing run yet");
-        void Log(string what) => dropDownLog.Text = $"Ran: {what}";
+        var lastRun = new ObservableValue<string>("Nothing run yet");
+        void Log(string what) => lastRun.Value = $"Ran: {what}";
+        TextBlock RunLog() => new TextBlock().BindText(lastRun);
 
         // One set of commands for every button below: what differs between them is how a button presents a
         // command, not the command. Save All carries no handler of its own so a dead menu row shows too.
@@ -74,18 +75,18 @@ partial class GalleryView
 
         // Save and Save As share the gate: the primary face and a menu row grey out together, so the
         // checkbox shows command state reaching both surfaces.
-        dropDownGroup.Commands.Register(save, () => Log("Save"), () => canSave);
-        dropDownGroup.Commands.Register(saveAs, () => Log("Save As"), () => canSave);
-        dropDownGroup.Commands.Register(newDocument, () => Log("New document"));
-        dropDownGroup.Commands.Register(saveCopy, () => Log("Save a Copy"));
-        dropDownGroup.Commands.Register(saveAll, () => Log("Save All"), () => false);
-        dropDownGroup.Commands.Register(exportPdf, () => Log("Export PDF"));
-        dropDownGroup.Commands.Register(print, () => Log("Print"));
+        commandScope.Commands.Register(save, () => Log("Save"), () => canSave);
+        commandScope.Commands.Register(saveAs, () => Log("Save As"), () => canSave);
+        commandScope.Commands.Register(newDocument, () => Log("New document"));
+        commandScope.Commands.Register(saveCopy, () => Log("Save a Copy"));
+        commandScope.Commands.Register(saveAll, () => Log("Save All"), () => false);
+        commandScope.Commands.Register(exportPdf, () => Log("Export PDF"));
+        commandScope.Commands.Register(print, () => Log("Print"));
 
-        dropDownGroup.InputMap.Map(save, new KeyGesture(Key.S, ModifierKeys.Primary));
-        dropDownGroup.InputMap.Map(newDocument, new KeyGesture(Key.N, ModifierKeys.Primary));
-        dropDownGroup.InputMap.Map(saveCopy, new KeyGesture(Key.S, ModifierKeys.Primary | ModifierKeys.Shift));
-        dropDownGroup.InputMap.Map(print, new KeyGesture(Key.P, ModifierKeys.Primary));
+        commandScope.InputMap.Map(save, new KeyGesture(Key.S, ModifierKeys.Primary));
+        commandScope.InputMap.Map(newDocument, new KeyGesture(Key.N, ModifierKeys.Primary));
+        commandScope.InputMap.Map(saveCopy, new KeyGesture(Key.S, ModifierKeys.Primary | ModifierKeys.Shift));
+        commandScope.InputMap.Map(print, new KeyGesture(Key.P, ModifierKeys.Primary));
 
         // The checkbox gates Save and Save As wherever they appear: the dispatcher re-evaluates command
         // state after each drain, so flipping the flag is enough.
@@ -133,7 +134,7 @@ partial class GalleryView
             .DropDownMenu(CommandMenu())
             .Left();
 
-        return CardGrid(
+        return commandScope.Child(CardGrid(
             Card(
                 "Button",
                 new StackPanel()
@@ -175,21 +176,31 @@ partial class GalleryView
             ),
 
             Card(
-                "Drop-down buttons",
-                dropDownGroup
+                "DropDownButton",
+                new StackPanel()
                     .Vertical()
                     .Spacing(8)
                     .Children(
-                        Row("DropDownButton (menu only)", dropDownButton),
-                        Row("SplitButton (primary + menu)", new StackPanel()
+                        Row("Menu only", dropDownButton),
+                        RunLog()
+                    )
+            ),
+
+            Card(
+                "SplitButton",
+                new StackPanel()
+                    .Vertical()
+                    .Spacing(8)
+                    .Children(
+                        Row("Primary + menu", new StackPanel()
                             .Horizontal()
                             .Spacing(8)
                             .Children(splitButton, saveGate.CenterVertical())),
-                        Row("SplitButton command presentation", new StackPanel()
+                        Row("Command presentation", new StackPanel()
                             .Horizontal()
                             .Spacing(8)
                             .Children(presentedSplitButton, accentSplitButton)),
-                        dropDownLog
+                        RunLog()
                     )
             ),
 
@@ -239,6 +250,6 @@ partial class GalleryView
                                 .Left())
                     )
             )
-        );
+        ));
     }
 }
