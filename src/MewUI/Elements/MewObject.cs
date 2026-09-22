@@ -489,6 +489,25 @@ public abstract class MewObject : IPropertyOwner
     }
 
     /// <summary>
+    /// Returns a property to the local value it had before an earlier write, or to no local value.
+    /// Framework bookkeeping, so it reports nothing to the binding diagnostics.
+    /// </summary>
+    internal void RestoreLocalValue(MewProperty property, bool hadLocal, object? value)
+    {
+        var oldSource = PropertyStore.GetSource(property.Id);
+        if (hadLocal)
+        {
+            PropertyStore.RestoreLocal(property, value);
+        }
+        else
+        {
+            PropertyStore.ClearLocalValue(property);
+        }
+
+        NotifyIfValueSourceChanged(property, oldSource);
+    }
+
+    /// <summary>
     /// Sets the local value of a read-only property using its capability key.
     /// </summary>
     /// <exception cref="ArgumentException">Thrown when <paramref name="key"/> does not match the property's registered key.</exception>

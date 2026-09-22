@@ -383,6 +383,39 @@ internal sealed class PropertyValueStore
     }
 
     /// <summary>
+    /// Appends every property that holds a local value, with the value as it was set.
+    /// </summary>
+    internal void CollectLocalValues(List<KeyValuePair<int, object?>> result)
+    {
+        if (_entries != null)
+        {
+            for (int i = 0; i < _entries.Length; i++)
+            {
+                if (HasSlot(_entries[i], ValueSource.Local))
+                    result.Add(new(i, RawSlotValue(_entries[i], ValueSource.Local)));
+            }
+            return;
+        }
+
+        if (_sparseEntries == null) return;
+        for (int i = 0; i < _sparseCount; i++)
+        {
+            if (HasSlot(_sparseEntries[i].Entry, ValueSource.Local))
+                result.Add(new(_sparseEntries[i].PropertyId, RawSlotValue(_sparseEntries[i].Entry, ValueSource.Local)));
+        }
+    }
+
+    private static object? RawSlotValue(in Entry entry, ValueSource source)
+        => entry.Shadow != null ? entry.Shadow.Get(source) : entry.RawValue;
+
+    /// <summary>
+    /// Puts back a local value recorded earlier. It was valid when it was set, and it is written
+    /// straight to the slot: a transition does not animate the property back to it.
+    /// </summary>
+    internal void RestoreLocal(MewProperty property, object? value)
+        => SetValueCore(property, value, ValueSource.Local, validateCandidate: false);
+
+    /// <summary>
     /// Appends the ids of properties currently holding a cached inherited value.
     /// Used by reparent propagation to diff them against the new context chain.
     /// </summary>

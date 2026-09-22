@@ -356,7 +356,7 @@ public sealed partial class TreeView : Control, ISubtreeInvalidationHost, IFocus
             template,
             IsSelected,
             ConfigureRowContainer,
-            PrepareRowContainer,
+            _prepareContainer,
             _clearContainer,
             static () => new TreeRowContainer());
 
@@ -364,6 +364,9 @@ public sealed partial class TreeView : Control, ISubtreeInvalidationHost, IFocus
     {
         container.RowPadding = _presenter.ItemPadding;
         container.CornerRadius = _presenter.ItemRadius;
+        // The tree draws the indent and the expander underneath the container, so the content is
+        // pushed past them here rather than by the presenter's container rect.
+        container.Padding = new Thickness(_itemsSource.GetDepth(index) * Indent + Indent, 0, 0, 0);
         container.SetIsHovered(index == _hoverVisibleIndex);
 
         if (container is TreeRowContainer row)
@@ -395,14 +398,6 @@ public sealed partial class TreeView : Control, ISubtreeInvalidationHost, IFocus
                 container.SetIsHovered(visibleIndex == index);
             }
         });
-    }
-
-    private void PrepareRowContainer(ItemContainer container, object? item, int index, TemplateContext context)
-    {
-        // The tree draws the indent and the expander underneath the container, so the content is
-        // pushed past them here rather than by the presenter's container rect.
-        container.Padding = new Thickness(_itemsSource.GetDepth(index) * Indent + Indent, 0, 0, 0);
-        _prepareContainer?.Invoke(container, item, index, context);
     }
 
     private void RefreshContainerSelection()
