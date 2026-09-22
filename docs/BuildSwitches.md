@@ -10,18 +10,18 @@ Every switch is an MSBuild property in your app project. The `Aprillz.MewUI.Core
 
 ```xml
 <PropertyGroup>
-  <MewUIWin32TextEngine>DirectWrite</MewUIWin32TextEngine>
+  <MewUIWin32TextEngine>Gdi</MewUIWin32TextEngine>
 </PropertyGroup>
 ```
 
-A property can also be passed on the command line: `dotnet publish -p:MewUIWin32TextEngine=DirectWrite`.
+A property can also be passed on the command line: `dotnet publish -p:MewUIWin32TextEngine=Gdi`.
 
 At build time each property is written into `runtimeconfig.json` as an `AppContext` switch, and MewUI reads that switch once at startup. Most switches are also handed to the trimmer, so a trimmed or NativeAOT publish removes the code of the side that was not selected instead of only disabling it.
 
 | Property | Values | Default | Runtime switch | Trimmed away when off |
 |---|---|---|---|---|
 | `MewUIBackend` | `Direct2D`, `Gdi`, `MewVG` | all backends | none (publish filter) | not applicable |
-| `MewUIWin32TextEngine` | `Gdi`, `DirectWrite` | `Gdi` | `Aprillz.MewUI.Win32.DirectWriteText.Enabled` | yes, the path not selected |
+| `MewUIWin32TextEngine` | `DirectWrite`, `Gdi` | `DirectWrite` | `Aprillz.MewUI.Win32.DirectWriteText.Enabled` | yes, the path not selected |
 | `MewUIManagedFileDialogs` | `true`, `false` | `true` | `Aprillz.MewUI.ManagedFileDialogs.Enabled` | yes |
 | `MewUIDevTools` | `true`, `false` | `true` in Debug, `false` in Release | `Aprillz.MewUI.DevTools.Enabled` | yes |
 | `MewUIHotReload` | `true`, `false` | `true` | `Aprillz.MewUI.HotReload.Enabled` | no |
@@ -39,16 +39,22 @@ Keeps a single rendering backend when an app that references a metapackage is pu
 
 ## 3. MewUIWin32TextEngine
 
-Selects how the `Gdi` and `MewVG` backends draw text on Windows. The `Direct2D` backend always uses DirectWrite and ignores this property, and Linux and macOS are not affected.
+Text on Windows is laid out and rasterized with DirectWrite on every backend. The `Gdi` and `MewVG` backends can use GDI text instead by setting this property to `Gdi`. The `Direct2D` backend always uses DirectWrite and ignores this property, and Linux and macOS are not affected.
+
+```xml
+<PropertyGroup>
+  <MewUIWin32TextEngine>Gdi</MewUIWin32TextEngine>
+</PropertyGroup>
+```
 
 | Value | Font matching | Colour glyphs |
 |---|---|---|
-| `Gdi` (default) | legacy family names | no |
-| `DirectWrite` | typographic family names, so every weight of a family is reachable | yes, colour emoji |
+| `DirectWrite` (default) | typographic family names, so every weight of a family is reachable | yes, colour emoji |
+| `Gdi` (`Gdi` and `MewVG` backends only) | legacy family names | no |
 
 Any other value fails the build with an error.
 
-A NativeAOT publish with `DirectWrite` is about 70 to 85 KB larger than the same app with `Gdi`. An app that draws no text is the same size either way.
+A NativeAOT publish with `Gdi` is about 70 to 95 KB smaller than the same app with `DirectWrite`. An app that draws no text is the same size either way.
 
 ---
 

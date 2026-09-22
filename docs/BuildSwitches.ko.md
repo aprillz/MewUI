@@ -10,18 +10,18 @@
 
 ```xml
 <PropertyGroup>
-  <MewUIWin32TextEngine>DirectWrite</MewUIWin32TextEngine>
+  <MewUIWin32TextEngine>Gdi</MewUIWin32TextEngine>
 </PropertyGroup>
 ```
 
-명령줄로도 전달할 수 있다: `dotnet publish -p:MewUIWin32TextEngine=DirectWrite`.
+명령줄로도 전달할 수 있다: `dotnet publish -p:MewUIWin32TextEngine=Gdi`.
 
 빌드 시 각 속성은 `runtimeconfig.json`에 `AppContext` 스위치로 기록되고, MewUI는 시작할 때 그 스위치를 한 번 읽는다. 대부분의 스위치는 트리머에도 전달되므로, 트림·NativeAOT 게시에서는 선택하지 않은 쪽의 코드가 비활성화되는 데 그치지 않고 출력에서 제거된다.
 
 | 속성 | 값 | 기본값 | 런타임 스위치 | 끄면 트림으로 제거 |
 |---|---|---|---|---|
 | `MewUIBackend` | `Direct2D`, `Gdi`, `MewVG` | 모든 백엔드 | 없음 (게시 필터) | 해당 없음 |
-| `MewUIWin32TextEngine` | `Gdi`, `DirectWrite` | `Gdi` | `Aprillz.MewUI.Win32.DirectWriteText.Enabled` | 예, 선택하지 않은 경로 |
+| `MewUIWin32TextEngine` | `DirectWrite`, `Gdi` | `DirectWrite` | `Aprillz.MewUI.Win32.DirectWriteText.Enabled` | 예, 선택하지 않은 경로 |
 | `MewUIManagedFileDialogs` | `true`, `false` | `true` | `Aprillz.MewUI.ManagedFileDialogs.Enabled` | 예 |
 | `MewUIDevTools` | `true`, `false` | Debug는 `true`, Release는 `false` | `Aprillz.MewUI.DevTools.Enabled` | 예 |
 | `MewUIHotReload` | `true`, `false` | `true` | `Aprillz.MewUI.HotReload.Enabled` | 아니오 |
@@ -39,16 +39,22 @@
 
 ## 3. MewUIWin32TextEngine
 
-Windows에서 `Gdi`와 `MewVG` 백엔드가 텍스트를 그리는 방식을 고른다. `Direct2D` 백엔드는 항상 DirectWrite를 쓰므로 이 속성을 보지 않으며, Linux와 macOS에는 영향이 없다.
+Windows에서는 모든 백엔드가 DirectWrite로 텍스트를 배치하고 래스터화한다. `Gdi`와 `MewVG` 백엔드는 이 속성을 `Gdi`로 지정하면 GDI 텍스트를 쓴다. `Direct2D` 백엔드는 항상 DirectWrite를 쓰므로 이 속성을 보지 않으며, Linux와 macOS에는 영향이 없다.
+
+```xml
+<PropertyGroup>
+  <MewUIWin32TextEngine>Gdi</MewUIWin32TextEngine>
+</PropertyGroup>
+```
 
 | 값 | 글꼴 매칭 | 컬러 글리프 |
 |---|---|---|
-| `Gdi` (기본값) | 레거시 패밀리 이름 | 없음 |
-| `DirectWrite` | 타이포그래픽 패밀리 이름. 한 패밀리의 모든 굵기를 쓸 수 있다 | 있음 (컬러 이모지) |
+| `DirectWrite` (기본값) | 타이포그래픽 패밀리 이름. 한 패밀리의 모든 굵기를 쓸 수 있다 | 있음 (컬러 이모지) |
+| `Gdi` (`Gdi`, `MewVG` 백엔드만) | 레거시 패밀리 이름 | 없음 |
 
 그 밖의 값을 주면 빌드가 오류로 실패한다.
 
-`DirectWrite`로 NativeAOT 게시한 앱은 `Gdi`로 게시한 같은 앱보다 약 70~85 KB 크다. 텍스트를 그리지 않는 앱은 어느 쪽이든 크기가 같다.
+`Gdi`로 NativeAOT 게시한 앱은 `DirectWrite`로 게시한 같은 앱보다 약 70~95 KB 작다. 텍스트를 그리지 않는 앱은 어느 쪽이든 크기가 같다.
 
 ---
 
