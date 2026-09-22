@@ -4,7 +4,7 @@ using Aprillz.MewUI.Resources;
 namespace Aprillz.MewUI.Gallery;
 
 /// <summary>
-/// The images and icon dictionary the pages draw, held as values a host fills. This app reads them
+/// The images, icon dictionary and font the pages draw, held as values a host fills. This app reads them
 /// from disk before the window shows; the file-based app downloads them and they arrive later.
 /// </summary>
 sealed class GalleryResources
@@ -28,6 +28,15 @@ sealed class GalleryResources
     /// <summary>The icon dictionary's XAML, or null until it arrives.</summary>
     public ObservableValue<string?> Icons { get; } = new(null);
 
+    /// <summary>
+    /// The family name of Inter Variable once it is registered, or null until it arrives. One file
+    /// with a weight axis supplies every weight.
+    /// </summary>
+    public ObservableValue<string?> InterVariable { get; } = new(null);
+
+    // Kept for the process: disposing a registered font deletes its cached file.
+    private FontResource? _interVariable;
+
     /// <summary>File names the hosts fetch, in the order the pages need them.</summary>
     public static string[] FileNames { get; } =
     [
@@ -39,6 +48,7 @@ sealed class GalleryResources
         "folder-horizontal.png",
         "document.png",
         "Icons.xaml",
+        "Inter-Variable.ttf",
     ];
 
     /// <summary>
@@ -57,7 +67,15 @@ sealed class GalleryResources
             case "folder-horizontal.png": FolderClosed.Value = ImageSource.FromBytes(content); break;
             case "document.png": Document.Value = ImageSource.FromBytes(content); break;
             case "Icons.xaml": Icons.Value = System.Text.Encoding.UTF8.GetString(content); break;
+            case "Inter-Variable.ttf": InterVariable.Value = RegisterFont(content); break;
         }
+    }
+
+    private string RegisterFont(byte[] content)
+    {
+        using var stream = new MemoryStream(content, writable: false);
+        _interVariable ??= FontResources.Register(stream, ".ttf");
+        return _interVariable.FontFamily;
     }
 }
 
