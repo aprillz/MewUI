@@ -17,25 +17,22 @@ Instead, each package provides registration and selection to remain trim/AOT-fri
 Register the platform/backend packages before calling `Application.Run(...)`.
 ```csharp
 using Aprillz.MewUI;
-using Aprillz.MewUI.Backends;
-using Aprillz.MewUI.PlatformHosts;
 
 // Detect OS at runtime and register only the platform/backend valid for that OS.
-// (In this example: Windows=Win32, Linux=X11, macOS is planned.)
 if (OperatingSystem.IsWindows())
 {
     Win32Platform.Register();
-    Direct2DBackend.Register(); // or GdiBackend.Register() / OpenGLWin32Backend.Register()
+    Direct2DBackend.Register(); // or GdiBackend.Register() / MewVGWin32Backend.Register()
 }
 else if (OperatingSystem.IsLinux())
 {
     X11Platform.Register();
-    OpenGLX11Backend.Register();
+    MewVGX11Backend.Register();
 }
 else if (OperatingSystem.IsMacOS())
 {
-    // TODO: register once macOS platform host/backend are implemented
-    throw new PlatformNotSupportedException("macOS platform host is not implemented yet.");
+    MacOSPlatform.Register();
+    MewVGMacOSBackend.Register();
 }
 else
 {
@@ -44,6 +41,8 @@ else
 
 Application.Run(mainWindow);
 ```
+
+A WebAssembly build registers `BrowserPlatform` and `MewVGBrowserBackend`, and starts with `Application.RunAsync`. See [2.5](#25-browser-lifetime-webassembly).
 
 ### 1.2 Single-target Apps: Application.Create() Chain
 If your app is fixed to **one platform + one graphics backend** (e.g., Windows-only), an `Application.Create()` chain is the simplest.
@@ -54,8 +53,6 @@ Assumptions:
 
 ```csharp
 using Aprillz.MewUI;
-using Aprillz.MewUI.Backends;
-using Aprillz.MewUI.PlatformHosts;
 
 Application.Create()
     .UseWin32()
@@ -95,8 +92,6 @@ This is also convenient for trimming/distribution, because you can structure pac
 #### 1.3.2 Fix the chain in Program.cs (example)
 ```csharp
 using Aprillz.MewUI;
-using Aprillz.MewUI.Backends;
-using Aprillz.MewUI.PlatformHosts;
 
 Application.Create()
 
@@ -105,9 +100,10 @@ Application.Create()
     .UseDirect2D()
 #elif LINUX
     .UseX11()
-    .UseOpenGL()
+    .UseMewVGX11()
 #elif MACOS
-    .ThrowPlatformNotSupported("macOS platform host is not implemented yet.")
+    .UseMacOS()
+    .UseMewVGMetal()
 #else
     .ThrowPlatformNotSupported()
 #endif
@@ -199,7 +195,19 @@ For ThemeVariant/Accent/ThemeSeed/ThemeMetrics configuration, see:
 
 - [Theme documentation](Theme.md)
 
-The default font family is decided when the platform package registers (`Win32Platform.Register()`, `UseWin32()`, and their X11/macOS equivalents), which precedes `Application.Create()` and window construction. Reading `ThemeMetrics.Default.FontFamily` or `ThemeManager.DefaultMetrics.FontFamily` after that point reports the family that will actually be used. See [Theme documentation](Theme.md) for how an unspecified family follows the system UI font.
+The default font family is decided when the platform package registers (`Win32Platform.Register()`, `UseWin32()`, and their X11/macOS/browser equivalents), which precedes `Application.Create()` and window construction. Reading `ThemeMetrics.Default.FontFamily` or `ThemeManager.DefaultMetrics.FontFamily` after that point reports the family that will actually be used. See [Theme documentation](Theme.md) for how an unspecified family follows the system UI font.
+
+### 2.5 Browser lifetime (WebAssembly)
+
+The browser host differs from the desktop hosts in how a run starts, ends, and renders.
+
+- `Application.RunAsync` is the entry point. `Application.Run` throws `NotSupportedException`, because the JavaScript event loop must keep running while the application is alive.
+- `RunAsync` installs the dispatcher, runs the startup callback, shows the main window and returns immediately. The task it returns completes at shutdown.
+- The host page drives the frames: it calls the render entry point from its own animation-frame loop, so MewUI runs no loop of its own.
+- One top-level `Window`. Showing a second one throws `NotSupportedException`, since the page surface is the only one.
+- `ShowDialogAsync` is the only modal form; `ShowDialog` throws `NotSupportedException` because this host runs no nested loop. Dialogs, popups and menus are drawn inside the single surface.
+- `Application.Shutdown()` completes the `RunAsync` task and stops the frames. The page itself stays loaded, since a tab cannot close itself.
+- Closing the single window shuts the application down whatever `ShutdownMode` says.
 
 ---
 
@@ -218,6 +226,7 @@ At `Window.Show()` time:
 ### 3.3 ShowDialogAsync (Modal)
 `ShowDialogAsync` shows a window as a modal dialog and completes when it is closed.
 When an `owner` is provided, the owner window is disabled while the dialog is open (platform dependent).
+In the browser it is the only modal form available (see [2.5](#25-browser-lifetime-webassembly)).
 
 ```csharp
 var dialog = new Window()
@@ -250,6 +259,8 @@ RenderLoop behavior is controlled via `Application.Current.RenderLoopSettings`:
 - `Mode`: `OnRequest` / `Continuous`
 - `TargetFps`: 0 means unlimited
 - `VSyncEnabled`: controls backend present/swap behavior
+
+In the browser, `Continuous` and `VSyncEnabled` still decide whether every frame repaints, while `TargetFps` has no effect: the page's animation frames set the cadence.
 
 #### Example: RenderLoop Settings
 ```csharp
@@ -288,6 +299,8 @@ window.Closed += () => SaveWindowPlacement();
 - `OnLastWindowClose` (the default): exits when the last window closes. This also applies to a window opened after `Application.Run(Action)` started without one.
 - `OnMainWindowClose`: exits when the main window closes. The window-based `Run` overloads record that identity; a run started without a main window has none until one is assigned (see 5.3).
 - `OnExplicitShutdown`: window closes never exit the loop; the application waits for `Application.Shutdown()`.
+
+The browser host has one window and ends the run when it closes, so the policy makes no difference there.
 
 The policy is scoped to one run and starts at `OnLastWindowClose` every time. Configure it before the run with the builder, or assign `Application.Current.ShutdownMode` from the startup callback.
 

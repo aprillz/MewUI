@@ -16,25 +16,22 @@ MewUI의 플랫폼/그래픽스 백엔드는 **코어가 enum/switch로 선택�
 플랫폼/백엔드 패키지의 `Register()`를 호출해 등록한 뒤, `Application.Run(...)`으로 진입한다.
 ```csharp
 using Aprillz.MewUI;
-using Aprillz.MewUI.Backends;
-using Aprillz.MewUI.PlatformHosts;
 
 // 런타임에서 현재 OS를 보고, 해당 OS에서만 유효한 플랫폼/백엔드를 "등록"한다.
-// (현재 예시 기준: Windows=Win32, Linux=X11, macOS는 추후 지원)
 if (OperatingSystem.IsWindows())
 {
     Win32Platform.Register();
-    Direct2DBackend.Register(); // 또는 GdiBackend.Register() / OpenGLWin32Backend.Register()
+    Direct2DBackend.Register(); // 또는 GdiBackend.Register() / MewVGWin32Backend.Register()
 }
 else if (OperatingSystem.IsLinux())
 {
     X11Platform.Register();
-    OpenGLX11Backend.Register();
+    MewVGX11Backend.Register();
 }
 else if (OperatingSystem.IsMacOS())
 {
-    // TODO: macOS 플랫폼 호스트/백엔드가 준비되면 여기서 등록
-    throw new PlatformNotSupportedException("macOS platform host is not implemented yet.");
+    MacOSPlatform.Register();
+    MewVGMacOSBackend.Register();
 }
 else
 {
@@ -43,6 +40,8 @@ else
 
 Application.Run(mainWindow);
 ```
+
+WebAssembly 빌드는 `BrowserPlatform`과 `MewVGBrowserBackend`를 등록하고 `Application.RunAsync`로 시작한다. [2.5](#25-브라우저-수명webassembly)를 참고한다.
 
 ### 1.2 단일 타깃 앱: Application.Create() 체인
 한 앱이 **단일 플랫폼 + 단일 그래픽 백엔드로 고정**되어 있다면(예: Windows 전용), `Application.Create()` 체인을 쓰는 방식이 가장 간단하다.
@@ -53,8 +52,6 @@ Application.Run(mainWindow);
 
 ```csharp
 using Aprillz.MewUI;
-using Aprillz.MewUI.Backends;
-using Aprillz.MewUI.PlatformHosts;
 
 Application.Create()
     .UseWin32()
@@ -94,8 +91,6 @@ Application.Create()
 #### 1.3.2 Program.cs에서 체인 고정 예시
 ```csharp
 using Aprillz.MewUI;
-using Aprillz.MewUI.Backends;
-using Aprillz.MewUI.PlatformHosts;
 
 Application.Create()
 
@@ -104,9 +99,10 @@ Application.Create()
     .UseDirect2D()
 #elif LINUX
     .UseX11()
-    .UseOpenGL()
+    .UseMewVGX11()
 #elif MACOS
-    .ThrowPlatformNotSupported("macOS platform host is not implemented yet.")
+    .UseMacOS()
+    .UseMewVGMetal()
 #else
     .ThrowPlatformNotSupported()
 #endif
@@ -198,7 +194,19 @@ ThemeVariant/Accent/ThemeSeed/ThemeMetrics 설정은 아래 문서를 참고한�
 
 - [Theme 문서](Theme.ko.md)
 
-기본 폰트는 플랫폼 패키지 등록 시점(`Win32Platform.Register()`, `UseWin32()` 및 X11/macOS 대응 API)에 확정된다. 이 시점은 `Application.Create()`와 창 생성보다 앞서므로, 그 이후에 `ThemeMetrics.Default.FontFamily`나 `ThemeManager.DefaultMetrics.FontFamily`를 읽으면 실제 적용될 폰트명을 얻는다. 폰트를 지정하지 않았을 때 시스템 UI 폰트를 따르는 규칙은 [Theme 문서](Theme.ko.md)를 참고한다.
+기본 폰트는 플랫폼 패키지 등록 시점(`Win32Platform.Register()`, `UseWin32()` 및 X11/macOS/브라우저 대응 API)에 확정된다. 이 시점은 `Application.Create()`와 창 생성보다 앞서므로, 그 이후에 `ThemeMetrics.Default.FontFamily`나 `ThemeManager.DefaultMetrics.FontFamily`를 읽으면 실제 적용될 폰트명을 얻는다. 폰트를 지정하지 않았을 때 시스템 UI 폰트를 따르는 규칙은 [Theme 문서](Theme.ko.md)를 참고한다.
+
+### 2.5 브라우저 수명(WebAssembly)
+
+브라우저 호스트는 실행을 시작하고 끝내는 방식과 프레임을 그리는 주체가 데스크톱 호스트와 다르다.
+
+- 진입점은 `Application.RunAsync`다. `Application.Run`은 `NotSupportedException`을 던진다. 애플리케이션이 실행되는 동안 자바스크립트 이벤트 루프가 계속 돌아야 하기 때문이다.
+- `RunAsync`는 디스패처를 설치하고 startup 콜백을 실행하고 메인 창을 표시한 뒤 곧바로 반환한다. 반환한 Task는 종료 시점에 완료된다.
+- 프레임은 호스트 페이지가 돌린다. 페이지가 자신의 애니메이션 프레임 루프에서 렌더링 진입점을 호출하므로, MewUI는 자체 루프를 돌리지 않는다.
+- 최상위 `Window`는 하나다. 페이지의 표면이 유일하므로 두 번째 창을 표시하면 `NotSupportedException`이 발생한다.
+- 모달은 `ShowDialogAsync`뿐이다. 이 호스트는 중첩 루프를 돌리지 않으므로 `ShowDialog`는 `NotSupportedException`을 던진다. 다이얼로그와 팝업, 메뉴는 그 표면 안에 그려진다.
+- `Application.Shutdown()`은 `RunAsync`가 반환한 Task를 완료하고 프레임을 멈춘다. 탭은 스스로 닫을 수 없으므로 페이지 자체는 그대로 남는다.
+- 창 하나를 닫으면 `ShutdownMode`와 무관하게 애플리케이션이 종료된다.
 
 ---
 
@@ -217,6 +225,7 @@ ThemeVariant/Accent/ThemeSeed/ThemeMetrics 설정은 아래 문서를 참고한�
 ### 3.3 ShowDialogAsync (모달)
 `ShowDialogAsync`는 창을 모달 다이얼로그로 띄우고 **닫힐 때 완료**된다.  
 `owner`를 지정하면 다이얼로그가 열려 있는 동안 **owner가 비활성화**된다(플랫폼 의존).
+브라우저에서는 이 방식이 유일한 모달이다([2.5](#25-브라우저-수명webassembly) 참고).
 
 ```csharp
 var dialog = new Window()
@@ -249,6 +258,8 @@ RenderLoop 동작은 `Application.Current.RenderLoopSettings`로 제어한다:
 - `Mode`: `OnRequest` / `Continuous`
 - `TargetFps`: 0이면 제한 없음
 - `VSyncEnabled`: 백엔드 프레젠트/스왑 동작 제어
+
+브라우저에서는 `Continuous`와 `VSyncEnabled`가 매 프레임 다시 그릴지를 그대로 결정하지만, `TargetFps`는 효과가 없다. 프레임 간격을 페이지의 애니메이션 프레임이 정하기 때문이다.
 
 #### 예시: RenderLoop 설정
 ```csharp
@@ -287,6 +298,8 @@ window.Closed += () => SaveWindowPlacement();
 - `OnLastWindowClose`(기본값): 마지막 창이 닫히면 종료한다. 메인 창 없이 시작했더라도 나중에 연 마지막 창을 닫으면 종료한다.
 - `OnMainWindowClose`: 메인 창이 닫히면 종료한다. 창을 받는 `Run` 오버로드가 그 정체성을 기록하며, 메인 창 없이 시작한 실행은 대입하기 전까지 정체성이 없다(5.3 참고).
 - `OnExplicitShutdown`: 창 닫힘으로 종료하지 않고 `Application.Shutdown()`을 기다린다.
+
+브라우저 호스트는 창이 하나이고 그 창이 닫힐 때 실행이 끝나므로, 이 정책이 구분을 만들지 않는다.
 
 이 정책은 실행 하나에만 적용되고 매번 `OnLastWindowClose`에서 시작한다. 실행 전에는 빌더로 지정하고, 실행 중에는 startup 콜백에서 `Application.Current.ShutdownMode`에 대입한다.
 
