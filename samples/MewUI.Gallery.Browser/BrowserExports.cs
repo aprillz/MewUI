@@ -110,9 +110,13 @@ internal static partial class BrowserExports
     [JSExport]
     internal static void FocusChanged(bool focused) => BrowserPlatform.FocusChanged(focused);
 
-    /// <summary>File names the host should fetch, in the order the pages need them.</summary>
+    /// <summary>
+    /// File names the host should fetch, in the order the pages need them. Font files are left out: this
+    /// backend draws with the browser's fonts, which a registered font file does not reach.
+    /// </summary>
     [JSExport]
-    internal static string[] ResourceFileNames() => GalleryResources.FileNames;
+    internal static string[] ResourceFileNames()
+        => GalleryResources.FileNames.Where(name => !name.EndsWith(".ttf", StringComparison.OrdinalIgnoreCase)).ToArray();
 
     /// <summary>Hands one fetched resource to the gallery; the bound pages pick it up on the next frame.</summary>
     [JSExport]
