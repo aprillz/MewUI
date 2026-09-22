@@ -162,11 +162,11 @@ The callback receives `(container, item, index, context)` and runs after the tem
 
 | Control | Container | Without a hook |
 |---|---|---|
-| `ListBox`, `ItemsControl` | `ItemContainer`, wrapped around the template root only while a hook is registered | The template root is the container; no wrapper |
+| `ListBox`, `ItemsControl` | `ItemContainer` around the template root | The same container. It also paints the item's selection and hover, so it is always there |
 | `TreeView` | `ItemContainer` covering the whole row, indent and expander included, with the content padded past them | The template root sits in the content area only |
 | `GridView` | `GridViewRow`, the row element the grid always has | Unchanged |
 
-Applications that do not use the hook pay for no extra element. Registering or removing a hook rebuilds the containers.
+Registering or removing a hook rebuilds the containers.
 
 ### What the container tells you
 
@@ -176,7 +176,9 @@ Applications that do not use the hook pay for no extra element. Registering or r
 
 ### What is reset
 
-Containers are recycled between items. These properties, when a hook assigns them directly, return to their defaults before the next bind: `ContextMenu`, `ToolTip`, `IsEnabled`, `IsHitTestVisible`, `Cursor`, `Opacity`, `Tag`. Every other property follows the template rule: assign it on every bind or bind it through `ctx.Bind`.
+Containers are recycled between items. Before the next bind, every property the hook wrote on the container returns to the value it had before the hook ran: a value the control configures comes back, and a property that had no value is cleared again. This covers every `MewProperty` of the container, such as `ContextMenu`, `ToolTip`, `Background`, `Opacity`, and `Padding`, so a hook can set a property for one item only.
+
+Three kinds of change are not tracked. Plain .NET properties such as `StyleName`, values written to objects other than the container, and values written after the hook returns, for example after an `await`. Restore those in `ClearContainer`, or assign them on every bind.
 
 Whatever you attach with `ctx.Bind` and `ctx.Subscribe` is undone by the context. Only a subscription made with `+=` needs a `ClearContainer` to detach it.
 
