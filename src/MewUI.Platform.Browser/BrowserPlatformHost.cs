@@ -140,15 +140,32 @@ internal sealed class BrowserPlatformHost : IPlatformHost
 
         try
         {
+            bool diagnose = BrowserFrameDiagnostics.Enabled;
+            long phase = diagnose ? BrowserFrameDiagnostics.Now() : 0;
+            if (diagnose)
+            {
+                BrowserFrameDiagnostics.BeginFrame();
+            }
+
             _dispatcher?.ClearWakeRequest();
             _dispatcher?.ProcessWorkItems();
             _window.NoteFrameTime(frameTimeMs);
+            if (diagnose)
+            {
+                BrowserFrameDiagnostics.NoteDispatcher(BrowserFrameDiagnostics.Since(phase));
+                phase = BrowserFrameDiagnostics.Now();
+            }
 
             // A coasting scroll has to move before the frame is drawn, and it keeps the loop awake
             // for as long as it lasts: a step small enough to be banked draws nothing by itself.
             if (_window.AdvanceFling(frameTimeMs))
             {
                 _framePending = true;
+            }
+
+            if (diagnose)
+            {
+                BrowserFrameDiagnostics.NoteFling(BrowserFrameDiagnostics.Since(phase));
             }
 
             // Sizing the drawing buffer discards its contents, so a frame that resized it must
@@ -162,21 +179,42 @@ internal sealed class BrowserPlatformHost : IPlatformHost
 
             if (!ShouldRenderFrame())
             {
+                if (diagnose)
+                {
+                    BrowserFrameDiagnostics.EndFrame();
+                }
+
                 return false;
             }
 
             // Advances every animation clock for this frame; without a pulse the clocks never
             // move and animated properties stay at their first value.
             var app = Application.Current;
+            phase = diagnose ? BrowserFrameDiagnostics.Now() : 0;
             using var pulse = AnimationManager.Instance.BeginPulse(app.RenderLoopSettings);
             bool wanted = _framePending || pulse.ShouldRender(_window.Window, _window.NeedsRender);
             _framePending = false;
+            if (diagnose)
+            {
+                BrowserFrameDiagnostics.NotePulse(BrowserFrameDiagnostics.Since(phase));
+            }
+
             if (!wanted)
             {
+                if (diagnose)
+                {
+                    BrowserFrameDiagnostics.EndFrame();
+                }
+
                 return false;
             }
 
             _window.RenderFrame(cssWidth, cssHeight, devicePixelRatio, pixelWidth, pixelHeight);
+            if (diagnose)
+            {
+                BrowserFrameDiagnostics.EndFrame();
+            }
+
             return true;
         }
         catch (Exception ex)
