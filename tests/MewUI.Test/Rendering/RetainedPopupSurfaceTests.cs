@@ -28,6 +28,86 @@ public sealed class RetainedPopupSurfaceTests
         protected override void OnRender(IGraphicsContext context) => context.FillRectangle(Bounds, Fill);
     }
 
+    /// <summary>Sets its transform outright from the one it is drawn under, the way an SVG icon does.</summary>
+    private sealed class AbsoluteTransformTile : Control
+    {
+        internal Color Fill { get; set; }
+
+        protected override Size MeasureContent(Size availableSize) => new(180, 30);
+
+        protected override void OnRender(IGraphicsContext context)
+        {
+            var ambient = context.GetTransform();
+            context.Save();
+            context.SetTransform(System.Numerics.Matrix3x2.CreateTranslation(20, 0) * ambient);
+            context.FillRectangle(new Rect(Bounds.X, Bounds.Y + 5, 60, 20), Fill);
+            context.Restore();
+        }
+    }
+
+    [TestMethod]
+    [DataRow(1.0, TestBackend.Gdi)]
+    [DataRow(1.5, TestBackend.Gdi)]
+    [DataRow(1.0, TestBackend.Direct2D)]
+    [DataRow(1.5, TestBackend.Direct2D)]
+    [DataRow(1.0, TestBackend.MewVG)]
+    [DataRow(1.5, TestBackend.MewVG)]
+    public void ChangeOfContentDrawnUnderItsOwnTransform_RepaintsItInAPopupWindow(double portalScale, TestBackend backend)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("The backends under test are Windows-only.");
+        }
+
+        using var session = TestBackendSession.Open(backend);
+        var factory = session.Factory;
+
+        var changing = new AbsoluteTransformTile { Fill = Color.FromArgb(255, 40, 160, 90) };
+        var items = new StackPanel { Orientation = Orientation.Vertical };
+        items.Children(
+            new Tile { Fill = Color.FromArgb(255, 40, 120, 200) },
+            changing,
+            new Tile { Fill = Color.FromArgb(255, 120, 120, 200) });
+
+        var origin = new Point(300, 220);
+        var chrome = new PopupChrome(items);
+        chrome.AttachChild();
+        chrome.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        chrome.Arrange(new Rect(origin.X, origin.Y, chrome.DesiredSize.Width, chrome.DesiredSize.Height));
+
+        int pixelWidth = (int)Math.Ceiling(WIDTH * portalScale);
+        int pixelHeight = (int)Math.Ceiling(HEIGHT * portalScale);
+        var popupWindow = HeadlessWindow.Create(pixelWidth, pixelHeight);
+        popupWindow.SetHostedPortalRoot(chrome);
+        popupWindow.HostedPortalOrigin = origin;
+        popupWindow.HostedPortalScale = portalScale;
+        chrome.HostSurface = popupWindow;
+
+        using var surface = factory.CreateSurface(RenderSurfaceDescriptor.Offscreen(pixelWidth, pixelHeight, 1.0, hasAlpha: false));
+        popupWindow.RenderFrameToSurface(surface);
+        popupWindow.RenderFrameToSurface(surface);
+        using (var firstReference = factory.CreateSurface(RenderSurfaceDescriptor.Offscreen(pixelWidth, pixelHeight, 1.0, hasAlpha: false)))
+        {
+            popupWindow.RenderReferenceFrameToSurface(firstReference);
+            TestBackendSession.AssertSurfacesEqual(firstReference, surface, pixelWidth, session.ChannelTolerance, "first frames");
+        }
+
+        changing.Fill = Color.FromArgb(255, 220, 60, 60);
+        changing.InvalidateVisual();
+        popupWindow.RenderFrameToSurface(surface);
+
+        var dirtyRect = popupWindow.LastRetainedDirtyRect;
+        Assert.IsNotNull(dirtyRect, $"one item changed and the popup drew its whole frame: {popupWindow.LastWholeFrameReason}");
+        double expectedTop = (changing.Bounds.Y + 5 - origin.Y) * portalScale;
+        Assert.IsTrue(
+            dirtyRect.Value.Height > 0 && dirtyRect.Value.Y <= expectedTop && dirtyRect.Value.Bottom >= expectedTop + 20 * portalScale,
+            $"the dirty region {dirtyRect} does not cover the changed fill, expected from {expectedTop} in the popup's own coordinates");
+
+        using var reference = factory.CreateSurface(RenderSurfaceDescriptor.Offscreen(pixelWidth, pixelHeight, 1.0, hasAlpha: false));
+        popupWindow.RenderReferenceFrameToSurface(reference);
+        TestBackendSession.AssertSurfacesEqual(reference, surface, pixelWidth, session.ChannelTolerance, "after the item changed");
+    }
+
     [TestMethod]
     [DataRow(1.0)]
     [DataRow(1.5)]

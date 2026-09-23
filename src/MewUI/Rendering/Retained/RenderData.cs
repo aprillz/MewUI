@@ -317,6 +317,8 @@ internal sealed class RenderDataBuilder
     private Rect?[] _clipStack = new Rect?[TRANSFORM_STACK_CAPACITY];
     private Rect? _clip;
     private Matrix3x2 _transform = Matrix3x2.Identity;
+    // Undoes the transform the slot is drawn under, which a transform set outright already contains.
+    private Matrix3x2 _fromAmbient = Matrix3x2.Identity;
     private Rect _localBounds;
     private bool _hasBounds;
     private int _transformDepth;
@@ -333,6 +335,22 @@ internal sealed class RenderDataBuilder
     internal string? RejectionReason => _rejectionReason;
 
     internal int CommandCount => _commands.Count;
+
+    /// <summary>
+    /// Starts a slot drawn under <paramref name="ambientTransform"/>, which a transform the slot sets
+    /// outright is measured against.
+    /// </summary>
+    internal void Begin(Matrix3x2 ambientTransform)
+    {
+        if (Matrix3x2.Invert(ambientTransform, out var fromAmbient))
+        {
+            _fromAmbient = fromAmbient;
+        }
+        else
+        {
+            Reject("the slot is drawn under a transform that cannot be inverted");
+        }
+    }
 
     /// <summary>Records one command, snapshotting and interning the resources it references.</summary>
     internal void Add(
@@ -460,6 +478,7 @@ internal sealed class RenderDataBuilder
     private void Reset()
     {
         _transform = Matrix3x2.Identity;
+        _fromAmbient = Matrix3x2.Identity;
         _transformDepth = 0;
         _clip = null;
         _saveDepth = 0;
@@ -776,11 +795,11 @@ internal sealed class RenderDataBuilder
                     (float)values[2],
                     (float)values[3],
                     (float)values[4],
-                    (float)values[5]);
+                    (float)values[5]) * _fromAmbient;
                 break;
             case RenderCommandKind.ResetTransform:
                 _replacesTransform = true;
-                _transform = Matrix3x2.Identity;
+                _transform = _fromAmbient;
                 break;
         }
     }
