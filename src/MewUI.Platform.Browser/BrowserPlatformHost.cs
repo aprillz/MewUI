@@ -142,6 +142,7 @@ internal sealed class BrowserPlatformHost : IPlatformHost
         {
             _dispatcher?.ClearWakeRequest();
             _dispatcher?.ProcessWorkItems();
+            _window.NoteFrameTime(frameTimeMs);
 
             // A coasting scroll has to move before the frame is drawn, and it keeps the loop awake
             // for as long as it lasts: a step small enough to be banked draws nothing by itself.
