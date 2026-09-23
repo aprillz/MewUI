@@ -118,13 +118,12 @@ partial class GalleryView
                     ));
 
         return CardGrid(
-            Card("Font Weight Ramp (100 to 900)", FontWeightRampDemo(), minWidth: 560),
             Card("Font Size Inheritance", inheritanceDemo),
             Card("Font Family Inheritance", fontFamilyDemo),
             Card("Font Weight Inheritance", fontWeightDemo),
             Card("Font Style Inheritance", fontStyleDemo),
             Card("Nested Inheritance", nestedDemo),
-
+            Card("Font Weight Ramp (100 to 900)", FontWeightRampDemo(), minWidth: 400),
             Card(
                 "Emoji",
                 new StackPanel()
@@ -166,7 +165,7 @@ partial class GalleryView
         foreach (var weight in _weightRamp)
         {
             var sample = new TextBlock()
-                .FontSize(20)
+                .FontSize(22)
                 .FontWeight(weight)
                 .Text("Hamburgefonstiv 123");
             // The font arrives with the other gallery resources; until then the row uses the theme font.
@@ -193,7 +192,7 @@ partial class GalleryView
         rows.Add(new TextBlock()
             .FontSize(ThemeFontSize.Small)
             .TextWrapping(TextWrapping.Wrap)
-            .Width(520)
+            .Width(380)
             .WithTheme((t, b) => b.Foreground(t.Palette.PlaceholderText))
             .BindText(Resources.InterVariable, family => family != null
                 ? "Inter Variable, registered through FontResources.Register: one file with a weight axis "
