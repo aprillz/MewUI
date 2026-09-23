@@ -77,6 +77,39 @@ let idleFrames = 0;
 let wakeTimer = 0;
 const IDLE_FRAMES_BEFORE_SLEEP = 3;
 
+// Opt-in frame timing for looking at a device remotely: ?metrics posts batches to ./metrics on the
+// serving origin, which only a diagnostic server answers.
+const metricsEnabled = new URLSearchParams(location.search).has('metrics');
+const METRICS_FLUSH_MS = 1000;
+let metricsFrames = [];
+let metricsEvents = [];
+let metricsLastFrameMs = NaN;
+if (metricsEnabled) {
+    const post = body => fetch('./metrics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        keepalive: true,
+    }).catch(() => {});
+    post({
+        kind: 'session',
+        userAgent: navigator.userAgent,
+        dpr: window.devicePixelRatio,
+        screen: [screen.width, screen.height],
+    });
+    for (const type of ['pointerdown', 'pointerup', 'pointercancel']) {
+        canvas.addEventListener(type, event => metricsEvents.push({
+            type, t: event.timeStamp, pointer: event.pointerType,
+        }), { passive: true, capture: true });
+    }
+    setInterval(() => {
+        if (metricsFrames.length === 0 && metricsEvents.length === 0) return;
+        post({ kind: 'batch', frames: metricsFrames, events: metricsEvents });
+        metricsFrames = [];
+        metricsEvents = [];
+    }, METRICS_FLUSH_MS);
+}
+
 // Resizing the backing store clears the drawing buffer, and the context is created without
 // preserveDrawingBuffer, so the resize has to happen in the frame that redraws it. Doing this
 // from the resize event instead lets the browser composite a cleared buffer, which flickers.
@@ -125,6 +158,18 @@ setModuleImports('main.js', {
 const config = getConfig();
 const exports = await getAssemblyExports(config.mainAssemblyName);
 const app = exports.Aprillz.MewUI.Gallery.BrowserExports;
+
+// The platform keeps the per-frame breakdown behind its own exports, so a page that never asks for
+// metrics never pays for it.
+const frameDiagnostics = metricsEnabled
+    ? (await getAssemblyExports('Aprillz.MewUI.Platform.Browser')).Aprillz.MewUI.Platform.Browser.BrowserFrameDiagnostics
+    : null;
+frameDiagnostics?.Enable();
+const FRAME_DIAGNOSTIC_FIELDS = [
+    'dispatcher', 'fling', 'pulse', 'layout', 'draw',
+    'visited', 'recorded', 'replayed', 'liveFallbacks', 'wholeFrame', 'dirtyArea',
+    'flingStep', 'gen0', 'gen1', 'gen2', 'allocatedKb',
+];
 const textInputBridge = createTextInputBridge({ app, canvas, field: textInput, wake });
 
 // ThemeVariant.System resolves through the host, so the page's colour scheme has to be in place
@@ -496,6 +541,7 @@ function frame(frameTimeMs) {
     frameScheduled = false;
     try {
         const dpr = syncCanvasSize();
+        const renderStartMs = metricsEnabled ? performance.now() : 0;
         const drew = app.RenderFrame(
             canvasCssWidth,
             canvasCssHeight,
@@ -503,6 +549,22 @@ function frame(frameTimeMs) {
             canvas.width,
             canvas.height,
             frameTimeMs ?? performance.now());
+
+        if (metricsEnabled) {
+            const frameAtMs = frameTimeMs ?? renderStartMs;
+            const record = {
+                t: frameAtMs,
+                interval: frameAtMs - metricsLastFrameMs,
+                render: performance.now() - renderStartMs,
+                drew,
+            };
+            if (frameDiagnostics) {
+                const values = frameDiagnostics.TakeFrame();
+                FRAME_DIAGNOSTIC_FIELDS.forEach((name, index) => { record[name] = values[index]; });
+            }
+            metricsFrames.push(record);
+            metricsLastFrameMs = frameAtMs;
+        }
 
         // A few quiet frames in a row before sleeping, so a render that only queues more work
         // (layout settling, a late resource) still gets its follow-up frame.
