@@ -143,6 +143,57 @@ public sealed class RetainedScrollReuseTests
         AssertPixelsEqual(immediate, replayed);
     }
 
+    /// <summary>
+    /// A finger or a touchpad scrolls by any fraction of a pixel. The scene can only place a recording
+    /// that moved by whole device pixels, so a scroll that arranges its content at the fractional offset
+    /// takes every drawing again on every frame of a fling.
+    /// </summary>
+    [TestMethod]
+    public void AFractionalScroll_MovesTheContentWithoutRecordingItAgain()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("GDI backend is Windows-only.");
+            return;
+        }
+
+        using var factory = new GdiGraphicsFactory();
+        Application.DefaultGraphicsFactory = factory;
+
+        var leaves = new Leaf[LEAF_COUNT];
+        var content = new StackPanel { Orientation = Orientation.Vertical };
+        for (int index = 0; index < leaves.Length; index++)
+        {
+            leaves[index] = new Leaf { Height = LEAF_HEIGHT };
+            content.Children(leaves[index]);
+        }
+
+        var scroll = new ScrollViewer { VerticalScroll = ScrollMode.Visible, Content = content };
+        var root = new Border { Child = scroll };
+        Layout(root);
+
+        using var scene = new RenderScene();
+        var capture = new SceneCapture();
+        var dirty = new RenderDirtyRegistry();
+        Capture(factory, scene, capture, root, dirty);
+        int recordsAfterFirstFrame = TotalRecords(leaves);
+
+        foreach (double offset in new[] { 3.38, 9.71, 17.05, 30.4 })
+        {
+            scroll.SetScrollOffsets(0, offset);
+            Layout(root);
+            Capture(factory, scene, capture, root, dirty);
+        }
+
+        int recordsAfterScroll = TotalRecords(leaves) - recordsAfterFirstFrame;
+        Assert.AreEqual(0, recordsAfterScroll,
+            $"scrolling by fractions of a pixel re-recorded {recordsAfterScroll} leaf drawings");
+
+        byte[] replayed = RenderSurface(factory, context => FrameRenderer.Replay(scene, context));
+        byte[] immediate = RenderSurface(factory, context => root.Render(context));
+        AssertPixelsEqual(immediate, replayed);
+    }
+
     private static byte[] RenderSurface(GdiGraphicsFactory factory, Action<IGraphicsContext> draw)
     {
         using var surface = factory.CreateSurface(
