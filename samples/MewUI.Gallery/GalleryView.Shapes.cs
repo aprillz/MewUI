@@ -105,6 +105,14 @@ partial class GalleryView
                             .Stroke(Color.FromRgb(100, 100, 100), 3)
                             .StrokeStyle(new StrokeStyle { DashArray = [8, 4, 2, 4] })
                     )
+            ),
+
+            IconsCard(),
+
+            Card(
+                "Prompt Icons",
+                PromptIconsCard(),
+                minWidth: 720
             )
         );
 
