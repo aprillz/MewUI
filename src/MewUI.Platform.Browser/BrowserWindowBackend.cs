@@ -36,8 +36,12 @@ internal sealed class BrowserWindowBackend : IWindowBackend
     // the finger at the speed the finger had.
     private const double FLING_DECAY_PER_SECOND = 0.0225;
     // Below one device pixel per frame the content moves every second or third frame instead of
-    // every one, so the coast ends where that would begin rather than ratcheting to a halt.
-    private const double FLING_END_FRAME_RATE = 60;
+    // every one, so the coast ends where that would begin rather than ratcheting to a halt. A frame
+    // is what the page actually gets: 120Hz halves the step a given speed makes, 30Hz doubles it.
+    private const double FALLBACK_FRAME_INTERVAL_MS = 1000.0 / 60;
+    private const int FRAME_INTERVAL_SAMPLES = 9;
+    // Longer gaps are the loop waking from sleep, not the display's rhythm.
+    private const double MAX_FRAME_INTERVAL_MS = 50;
     private const double FLING_MAX_SPEED_DIP = 4000;
     private const double FLING_SAMPLE_WINDOW_SECONDS = 0.1;
     private const int FLING_SAMPLE_CAPACITY = 8;
@@ -58,6 +62,12 @@ internal sealed class BrowserWindowBackend : IWindowBackend
     private double _flingSentDistance;
     private double _flingStartMs;
     private bool _advancingFling;
+
+    private readonly double[] _frameIntervals = new double[FRAME_INTERVAL_SAMPLES];
+    private readonly double[] _frameIntervalScratch = new double[FRAME_INTERVAL_SAMPLES];
+    private int _frameIntervalCount;
+    private int _frameIntervalNext;
+    private double _lastFrameTimeMs = double.NaN;
     private bool _swallowTouchRelease;
 
     // Windows counts a double click inside 500ms and a few pixels; a finger is granted more room.
@@ -85,7 +95,41 @@ internal sealed class BrowserWindowBackend : IWindowBackend
     // at a time.
     private double MinPanStepDip => 96.0 / Dpi;
 
-    private double FlingEndSpeedDip => MinPanStepDip * FLING_END_FRAME_RATE;
+    private double FlingEndSpeedDip => MinPanStepDip * 1000.0 / FrameIntervalMs;
+
+    /// <summary>Records the timestamp of an animation frame, from which the frame interval is measured.</summary>
+    internal void NoteFrameTime(double frameTimeMs)
+    {
+        double interval = frameTimeMs - _lastFrameTimeMs;
+        _lastFrameTimeMs = frameTimeMs;
+        if (!(interval > 0 && interval <= MAX_FRAME_INTERVAL_MS))
+        {
+            return;
+        }
+
+        _frameIntervals[_frameIntervalNext] = interval;
+        _frameIntervalNext = (_frameIntervalNext + 1) % FRAME_INTERVAL_SAMPLES;
+        if (_frameIntervalCount < FRAME_INTERVAL_SAMPLES)
+        {
+            _frameIntervalCount++;
+        }
+    }
+
+    /// <summary>The median of the recent frame intervals, so one long frame does not move the estimate.</summary>
+    private double FrameIntervalMs
+    {
+        get
+        {
+            if (_frameIntervalCount == 0)
+            {
+                return FALLBACK_FRAME_INTERVAL_MS;
+            }
+
+            Array.Copy(_frameIntervals, _frameIntervalScratch, _frameIntervalCount);
+            Array.Sort(_frameIntervalScratch, 0, _frameIntervalCount);
+            return _frameIntervalScratch[_frameIntervalCount / 2];
+        }
+    }
 
     /// <summary>Set by invalidation, cleared once the frame is drawn.</summary>
     internal bool NeedsRender { get; private set; } = true;
