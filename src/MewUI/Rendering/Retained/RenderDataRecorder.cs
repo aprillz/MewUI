@@ -261,7 +261,8 @@ internal sealed class RenderDataRecorder : IGraphicsContext
             LineBounds(start, end, pen.Thickness),
             RenderResourcePolicy.ImmutableDescriptor,
             paint: pen,
-            values: [start.X, start.Y, end.X, end.Y]);
+            values: [start.X, start.Y, end.X, end.Y],
+            ink: StrokeInk.OfLine(start, end, pen.Thickness, pen.StrokeStyle));
         if (Draws)
         {
             _inner.DrawLine(start, end, pen);
@@ -456,7 +457,7 @@ internal sealed class RenderDataRecorder : IGraphicsContext
             color: color,
             resource: path,
             values: [thickness],
-            ink: StrokeBounds(path.GetBounds(), thickness));
+            ink: StrokeInk.OfPath(path, thickness, StrokeStyle.Default));
         if (Draws)
         {
             _inner.DrawPath(path, color, thickness);
@@ -472,7 +473,7 @@ internal sealed class RenderDataRecorder : IGraphicsContext
             GeometryPolicy(path) | RenderResourcePolicy.ImmutableDescriptor,
             resource: path,
             paint: pen,
-            ink: StrokeBounds(path.GetBounds(), pen.Thickness));
+            ink: StrokeInk.OfPath(path, pen.Thickness, pen.StrokeStyle));
         if (Draws)
         {
             _inner.DrawPath(path, pen);
