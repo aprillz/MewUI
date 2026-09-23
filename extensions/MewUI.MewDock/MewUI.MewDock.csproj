@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\MewUI\MewUI.csproj" />
+    <InternalsVisibleTo Include="Aprillz.MewUI.MewDock.Test" />
   </ItemGroup>
 
 </Project>

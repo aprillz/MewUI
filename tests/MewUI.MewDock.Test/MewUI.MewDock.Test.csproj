@@ -1,0 +1,21 @@
+<Project Sdk="MSTest.Sdk/4.0.1">
+
+  <PropertyGroup>
+    <AssemblyName>Aprillz.MewUI.MewDock.Test</AssemblyName>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UseVSTest>true</UseVSTest>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\extensions\MewUI.MewDock\MewUI.MewDock.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- A drawing sink for rendering a control outside a window. -->
+    <Compile Include="..\MewUI.Test\Infrastructure\NoOpGraphicsContext.cs" Link="Infrastructure\NoOpGraphicsContext.cs" />
+  </ItemGroup>
+
+</Project>
