@@ -105,11 +105,11 @@ public sealed class DockingManager : Panel
         }
 
         var model = ExtendedDockModel.FromJson(json);
+        DetachAllHandles();
+        _explicitContent.Clear();
         _model = model;
         _view = ExtendedDock.CreateView(model, ResolveContent, ResolveHeader, ConfigureTabMenuForNode, ConfigureGroupMenuForNode);
 
-        _panes.Clear();
-        _explicitContent.Clear();
         _view.Content = _centerContent;
         _model.AddChangeListener(OnModelChanged);
         Clear();
@@ -182,31 +182,66 @@ public sealed class DockingManager : Panel
     private void SyncActivePane()
     {
         var active = _model?.FocusedTabSet?.GetSelectedNode() is TabNode tab ? GetOrCreatePane(tab) : null;
-        if (!ReferenceEquals(active, _activePane))
+        var previous = _activePane;
+        _activePane = active;
+        // Sync before raising ActivePaneChanged so a handler reads the new state through the handles.
+        SyncHandles();
+        if (!ReferenceEquals(active, previous))
         {
-            _activePane = active;
             ActivePaneChanged?.Invoke(this, active);
+        }
+    }
+
+    private void SyncHandles()
+    {
+        // Handles created during the pass sync themselves on creation, so iterate a snapshot.
+        foreach (var pane in _panes.Values.ToList())
+        {
+            pane.SyncFromModel();
+        }
+        foreach (var group in _groups.Values.ToList())
+        {
+            group.SyncFromModel();
         }
     }
 
     private void PrunePanes()
     {
-        foreach (var id in _panes.Keys.ToList())
+        foreach (var (id, pane) in _panes.ToList())
         {
-            if (_model?.GetNodeById(id) is not TabNode)
+            if (!ReferenceEquals(_model?.GetNodeById(id), pane.Node))
             {
+                pane.Detach();
                 _panes.Remove(id);
                 _explicitContent.Remove(id);
             }
         }
-        foreach (var id in _groups.Keys.ToList())
+        foreach (var (id, group) in _groups.ToList())
         {
-            if (_model?.GetNodeById(id) is not TabSetNode)
+            if (!ReferenceEquals(_model?.GetNodeById(id), group.Node))
             {
+                group.Detach();
                 _groups.Remove(id);
             }
         }
     }
+
+    private void DetachAllHandles()
+    {
+        foreach (var pane in _panes.Values)
+        {
+            pane.Detach();
+        }
+        foreach (var group in _groups.Values)
+        {
+            group.Detach();
+        }
+        _panes.Clear();
+        _groups.Clear();
+        _activePane = null;
+    }
+
+    internal bool IsActiveNode(TabNode node) => ReferenceEquals(_model?.FocusedTabSet?.GetSelectedNode(), node);
 
     internal DockPane GetOrCreatePane(TabNode node)
     {
@@ -216,7 +251,9 @@ public sealed class DockingManager : Panel
             return pane;
         }
         pane = new DockPane(this, node);
+        // Cache before syncing: the sync resolves the group, whose sync resolves its selected pane.
         _panes[id] = pane;
+        pane.SyncFromModel();
         return pane;
     }
 
@@ -229,6 +266,7 @@ public sealed class DockingManager : Panel
         }
         group = new DockGroup(this, node);
         _groups[id] = group;
+        group.SyncFromModel();
         return group;
     }
 
