@@ -97,6 +97,53 @@ EM_JS(double, mewui_text_ink_extent, (const char* utf8_text, const char* utf8_fo
     return metrics.width;
 });
 
+// Advance after every UTF-16 code unit of the text, as the rasterizers lay the whole run out. A
+// glyph measured on its own can come out narrower than it sits in its word (desktop Firefox does
+// this by about 4%), so each word is measured in context by its prefixes and the sum is fitted to
+// the run's own width. Words are capped so an unbroken run costs a bounded number of calls per
+// unit. out_capacity[0] carries how many doubles out_advances holds; the parameter list matches
+// mewui_text_measure. Returns the width of the whole run.
+EM_JS(double, mewui_text_prefix_advances, (const char* utf8_text, const char* utf8_font, double* out_advances, double* out_capacity), {
+    mewui_text_ensure_context();
+    var ctx = Module.mewuiTextCtx;
+    var f = UTF8ToString(utf8_font);
+    if (Module.mewuiTextFont !== f) { ctx.font = f; ctx.textBaseline = "alphabetic"; Module.mewuiTextFont = f; }
+    var text = UTF8ToString(utf8_text);
+    var capacity = HEAPF64[out_capacity >> 3] | 0;
+    var count = Math.min(text.length, capacity);
+    var base = out_advances >> 3;
+    var whole = ctx.measureText(text).width;
+    var isSpace = function (code) { return code === 32 || code === 9 || code === 160 || code === 12288; };
+
+    var cursor = 0;
+    var start = 0;
+    while (start < count)
+    {
+        var end = start;
+        while (end < count && end - start < 48 && !isSpace(text.charCodeAt(end))) { end++; }
+        while (end < count && isSpace(text.charCodeAt(end))) { end++; }
+        if (end === start) { end = start + 1; }
+        // A capped word must not end between the halves of a surrogate pair.
+        if (end < count) { var next = text.charCodeAt(end); if (next >= 56320 && next <= 57343) { end++; } }
+        for (var index = start + 1; index <= end; index++)
+        {
+            HEAPF64[base + index - 1] = cursor + ctx.measureText(text.substring(start, index)).width;
+        }
+        cursor = HEAPF64[base + end - 1];
+        start = end;
+    }
+
+    if (count === text.length && cursor > 0 && whole > 0)
+    {
+        var fit = whole / cursor;
+        for (var unit = 0; unit < count; unit++) { HEAPF64[base + unit] *= fit; }
+    }
+
+    // Marshalling stops at an embedded NUL; the units past it keep the last edge.
+    for (var rest = count; rest < capacity; rest++) { HEAPF64[base + rest] = count > 0 ? HEAPF64[base + count - 1] : 0; }
+    return whole;
+});
+
 // Rasterizes one text run into straight-alpha RGBA. Returns the line count drawn.
 EM_JS(int, mewui_text_rasterize, (const char* utf8_text, const char* utf8_font, int width_px, int height_px,
     double scale, int red, int green, int blue, int alpha, int inset_left_px, int inset_top_px, int wrap,

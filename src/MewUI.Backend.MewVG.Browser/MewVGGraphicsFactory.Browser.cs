@@ -79,7 +79,11 @@ public sealed partial class MewVGWin32GraphicsFactory : IPersistentFrameGraphics
         handled = true;
     }
 
-    private sealed class BrowserMeasurementContext(uint dpi) : MeasureGraphicsContextBase
+    /// <summary>
+    /// Canvas-backed measurement whose prefix advances come from each run laid out whole, as the
+    /// rasterizer draws it.
+    /// </summary>
+    private sealed class BrowserMeasurementContext(uint dpi) : MeasureGraphicsContextBase, ITextAdvanceSource
     {
         public override double DpiScale { get; } = Math.Max(1, dpi) / 96.0;
 
@@ -91,6 +95,29 @@ public sealed partial class MewVGWin32GraphicsFactory : IPersistentFrameGraphics
 
         private static Size Measure(ReadOnlySpan<char> text, IFont font, double maxWidth)
             => BrowserTextMeasure.Measure(text, font, maxWidth);
+
+        double[] ITextAdvanceSource.GetUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font)
+        {
+            if (text.IsEmpty)
+            {
+                return [];
+            }
+
+            var advances = new double[text.Length];
+            BrowserTextMeasure.FillPrefixAdvances(text, font, advances);
+            return advances;
+        }
+
+        bool ITextAdvanceSource.TryGetUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font, Span<double> destination)
+        {
+            if (text.IsEmpty || destination.Length < text.Length)
+            {
+                return text.IsEmpty;
+            }
+
+            BrowserTextMeasure.FillPrefixAdvances(text, font, destination);
+            return true;
+        }
     }
 }
 

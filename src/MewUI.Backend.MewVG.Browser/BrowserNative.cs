@@ -26,6 +26,9 @@ internal static partial class BrowserNative
     [LibraryImport(LibraryName, EntryPoint = "mewui_text_ink_extent", StringMarshalling = StringMarshalling.Utf8)]
     internal static unsafe partial double MeasureInkExtent(string text, string cssFont, double* horizontal, double* vertical);
 
+    [LibraryImport(LibraryName, EntryPoint = "mewui_text_prefix_advances", StringMarshalling = StringMarshalling.Utf8)]
+    internal static unsafe partial double MeasurePrefixAdvances(string text, string cssFont, double* advances, double* capacity);
+
     [LibraryImport(LibraryName, EntryPoint = "mewui_text_rasterize", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int RasterizeText(string text, string cssFont, int widthPx, int heightPx, double scale,
         int red, int green, int blue, int alpha, int insetLeftPx, int insetTopPx, int wrap,
