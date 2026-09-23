@@ -5,13 +5,34 @@ using Aprillz.MewUI.MewDock.Model.Json;
 namespace Aprillz.MewUI.MewDock;
 
 /// <summary>
-/// A lightweight handle over one tab group (a tabset) managed by a <see cref="DockingManager"/>. Like
-/// <see cref="DockPane"/> it carries identity plus the common group verbs; the layout itself stays inside the
-/// manager. Auto-hide borders are not groups - an auto-hidden pane reports a null <see cref="DockPane.Group"/>.
+/// A handle over one tab group (a tabset) managed by a <see cref="DockingManager"/>. Like <see cref="DockPane"/> it
+/// carries identity, the common group verbs, and the group's changing state as bindable properties; the layout
+/// itself stays inside the manager. Auto-hide borders are not groups - an auto-hidden pane reports a null
+/// <see cref="DockPane.Group"/>. Removing the group or calling <see cref="DockingManager.LoadLayout"/> detaches the
+/// handle: it keeps its last values and its verbs do nothing.
 /// </summary>
-public sealed class DockGroup
+public sealed class DockGroup : MewObject
 {
+    private static readonly MewPropertyKey<bool> IsMaximizedPropertyKey =
+        MewProperty<bool>.RegisterReadOnly<DockGroup>(nameof(IsMaximized), false);
+
+    /// <summary>Whether this group is currently maximized.</summary>
+    public static readonly MewProperty<bool> IsMaximizedProperty = IsMaximizedPropertyKey.Property;
+
+    private static readonly MewPropertyKey<DockEdge?> EdgePropertyKey =
+        MewProperty<DockEdge?>.RegisterReadOnly<DockGroup>(nameof(Edge), null);
+
+    /// <summary>The edge this group is docked to, or null for a document / floating group.</summary>
+    public static readonly MewProperty<DockEdge?> EdgeProperty = EdgePropertyKey.Property;
+
+    private static readonly MewPropertyKey<DockPane?> ActivePanePropertyKey =
+        MewProperty<DockPane?>.RegisterReadOnly<DockGroup>(nameof(ActivePane), null);
+
+    /// <summary>The selected pane, or null when the group is empty.</summary>
+    public static readonly MewProperty<DockPane?> ActivePaneProperty = ActivePanePropertyKey.Property;
+
     private readonly DockingManager _manager;
+    private bool _detached;
 
     internal DockGroup(DockingManager manager, TabSetNode node)
     {
@@ -25,24 +46,33 @@ public sealed class DockGroup
     public bool IsDocument => Node.IsDocument;
 
     /// <summary>True when this group is currently maximized.</summary>
-    public bool IsMaximized => Node.IsMaximized;
+    public bool IsMaximized => GetValue(IsMaximizedProperty);
 
     /// <summary>The edge this group is docked to, or null for a document / floating group.</summary>
-    public DockEdge? Edge => DockingManager.EdgeOfGroup(Node);
+    public DockEdge? Edge => GetValue(EdgeProperty);
 
-    /// <summary>Add a tab to this group. The new pane's kind (document / tool) follows the group.</summary>
+    /// <summary>Add a tab to this group. The new pane's kind (document / tool) follows the group. Throws when the
+    /// handle is detached.</summary>
     public DockPane AddPane(string title, UIElement content, string? component = null)
     {
+        if (_detached)
+        {
+            throw new InvalidOperationException("The group is no longer part of the layout.");
+        }
         var json = new JsonTabNode { Name = title, Component = component, IsDocument = IsDocument ? null : false };
         return _manager.AddExplicitTab(json, Node.GetId(), DockLocation.Center, select: true, content);
     }
 
-    /// <summary>The tabs in this group.</summary>
+    /// <summary>The tabs in this group at the time of the call.</summary>
     public IReadOnlyList<DockPane> Panes
     {
         get
         {
             var result = new List<DockPane>();
+            if (_detached)
+            {
+                return result;
+            }
             foreach (var child in Node.Children)
             {
                 if (child is TabNode tab)
@@ -55,23 +85,23 @@ public sealed class DockGroup
     }
 
     /// <summary>The selected pane, or null when the group is empty.</summary>
-    public DockPane? ActivePane => Node.GetSelectedNode() is TabNode tab ? _manager.GetOrCreatePane(tab) : null;
+    public DockPane? ActivePane => GetValue(ActivePaneProperty);
 
     /// <summary>Make this the focused group.</summary>
-    public void Activate() => _manager.PerformAction(DockAction.SetActiveTabset(Node.GetId(), Node.LayoutId));
+    public void Activate() => Perform(DockAction.SetActiveTabset(Node.GetId(), Node.LayoutId));
 
     /// <summary>Close the whole group and every tab in it.</summary>
-    public void Close() => _manager.PerformAction(DockAction.DeleteTabset(Node.GetId()));
+    public void Close() => Perform(DockAction.DeleteTabset(Node.GetId()));
 
     /// <summary>Pop the whole group out into its own window.</summary>
-    public void Float() => _manager.PerformAction(DockAction.PopoutTabset(Node.GetId()));
+    public void Float() => Perform(DockAction.PopoutTabset(Node.GetId()));
 
     /// <summary>Toggle maximized/normal. No-op for a tool group (only document groups maximize).</summary>
     public void ToggleMaximize()
     {
         if (IsDocument)
         {
-            _manager.PerformAction(DockAction.MaximizeToggle(Node.GetId()));
+            Perform(DockAction.MaximizeToggle(Node.GetId()));
         }
     }
 
@@ -80,7 +110,30 @@ public sealed class DockGroup
     {
         if (!IsDocument)
         {
-            _manager.PerformAction(DockAction.UnpinTool(Node.GetId()));
+            Perform(DockAction.UnpinTool(Node.GetId()));
+        }
+    }
+
+    /// <summary>Copies the model's current state into the bindable properties.</summary>
+    internal void SyncFromModel()
+    {
+        if (_detached)
+        {
+            return;
+        }
+        SetValue(IsMaximizedPropertyKey, Node.IsMaximized);
+        SetValue(EdgePropertyKey, DockingManager.EdgeOfGroup(Node));
+        SetValue(ActivePanePropertyKey, Node.GetSelectedNode() is TabNode tab ? _manager.GetOrCreatePane(tab) : null);
+    }
+
+    /// <summary>Stops this handle from acting on the layout; it keeps its last values.</summary>
+    internal void Detach() => _detached = true;
+
+    private void Perform(DockAction action)
+    {
+        if (!_detached)
+        {
+            _manager.PerformAction(action);
         }
     }
 }

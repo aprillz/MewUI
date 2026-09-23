@@ -1,3 +1,10 @@
+
+**Handle lifetime.** A handle stays the same instance while its pane or group exists - moving, pinning / unpinning
+and floating keep it. Closing the pane (or removing the group) and `LoadLayout` detach it: a detached handle keeps
+its last values, its verbs and setters do nothing, and bindings on it must be re-attached to the new handle.
+
+Bindable properties: `TitleProperty` (two-way by default; a non-null new title renames the tab), and the read-only
+`IsActiveProperty`, `GroupProperty`, `EdgeProperty`. They follow every layout change, including user gestures.
 # MewDock
 
 A docking framework for MewUI: dockable document tabs and tool panes, drag-and-drop rearranging, splits,
@@ -67,8 +74,8 @@ One control that hosts the whole dock space. Add it to a window; it owns the mod
 
 ## `DockPane` (a handle)
 
-A lightweight handle over one pane. It carries identity plus the common verbs; the layout itself stays inside
-the manager.
+A handle over one pane. It carries identity, the common verbs, and the pane's changing state as bindable properties;
+the layout itself stays inside the manager.
 
 | Member | Description |
 |---|---|
@@ -82,6 +89,9 @@ the manager.
 | `MoveInto(DockGroup)` / `DockInto(DockGroup, DockEdge)` | Join another group as a tab / dock against one of its edges. |
 | `Pin()` / `Unpin()` | Pin an auto-hide pane into a docked group, or send a docked group back to auto-hide. |
 
+Bindable properties: `TitleProperty` (two-way by default; a new non-null title renames the tab) and the read-only
+`IsActiveProperty`, `GroupProperty`, `EdgeProperty`. They follow every layout change, including user gestures.
+
 ```csharp
 manager.ActivePane?.FloatGroup();      // pop the active group out
 manager.Panes[0].Unpin();              // send a tool back to its auto-hide edge
@@ -92,7 +102,7 @@ manager.Panes[0].Unpin();              // send a tool back to its auto-hide edge
 ## `DockGroup` (a handle)
 
 A handle over one tab group (a tabset). Auto-hide borders are not groups, so an auto-hidden pane reports a null
-`Group`.
+`Group`. Bindable read-only properties: `IsMaximizedProperty`, `EdgeProperty`, `ActivePaneProperty`.
 
 | Member | Description |
 |---|---|
@@ -104,6 +114,10 @@ A handle over one tab group (a tabset). Auto-hide borders are not groups, so an 
 | `Float()` | Pop the whole group out into a window. |
 | `ToggleMaximize()` | Maximize / restore (document groups only). |
 | `Unpin()` | Send a docked tool group back to its auto-hide edge (tool groups only). |
+
+**Handle lifetime.** A handle stays the same instance while its pane or group exists - moving, pinning / unpinning
+and floating keep it. Closing the pane (or removing the group) and `LoadLayout` detach it: a detached handle keeps
+its last values, its verbs and setters do nothing, and bindings on it must be re-attached to the new handle.
 
 ## Placement and lookup
 

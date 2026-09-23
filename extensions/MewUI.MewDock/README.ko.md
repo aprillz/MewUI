@@ -67,7 +67,7 @@ Application.Run(window);
 
 ## `DockPane` (핸들)
 
-패널 하나에 대한 가벼운 핸들. 식별자와 공통 동사를 담을 뿐, 레이아웃 자체는 매니저 안에 남아 있습니다.
+패널 하나에 대한 핸들. 식별자, 공통 동사, 그리고 바뀌는 상태를 바인딩 가능한 속성으로 담습니다. 레이아웃 자체는 매니저 안에 남아 있습니다.
 
 | 멤버 | 설명 |
 |---|---|
@@ -81,6 +81,8 @@ Application.Run(window);
 | `MoveInto(DockGroup)` / `DockInto(DockGroup, DockEdge)` | 다른 그룹에 탭으로 합류 / 그 그룹 기준 분할 도킹. |
 | `Pin()` / `Unpin()` | 자동 숨김 패널을 도킹 그룹으로 고정 / 도킹 그룹을 자동 숨김으로 되돌림. |
 
+바인딩 가능한 속성: `TitleProperty`(기본 양방향, null이 아닌 새 제목을 쓰면 탭 이름이 바뀜)와 읽기 전용 `IsActiveProperty`, `GroupProperty`, `EdgeProperty`. 사용자 조작을 포함한 모든 레이아웃 변경을 따라갑니다.
+
 ```csharp
 manager.ActivePane?.FloatGroup();      // 활성 그룹을 창으로 분리
 manager.Panes[0].Unpin();              // 툴을 자동 숨김 에지로 되돌림
@@ -90,7 +92,7 @@ manager.Panes[0].Unpin();              // 툴을 자동 숨김 에지로 되돌�
 
 ## `DockGroup` (핸들)
 
-탭 그룹(탭셋) 하나에 대한 핸들. 자동 숨김 보더는 그룹이 아니므로, 자동 숨김된 패널의 `Group`은 null입니다.
+탭 그룹(탭셋) 하나에 대한 핸들. 자동 숨김 보더는 그룹이 아니므로, 자동 숨김된 패널의 `Group`은 null입니다. 바인딩 가능한 읽기 전용 속성: `IsMaximizedProperty`, `EdgeProperty`, `ActivePaneProperty`.
 
 | 멤버 | 설명 |
 |---|---|
@@ -102,6 +104,8 @@ manager.Panes[0].Unpin();              // 툴을 자동 숨김 에지로 되돌�
 | `Float()` | 그룹 전체를 창으로 분리. |
 | `ToggleMaximize()` | 최대화/원복(문서 그룹만). |
 | `Unpin()` | 도킹된 툴 그룹을 자동 숨김 에지로 되돌림(툴 그룹만). |
+
+**핸들 수명.** 핸들은 패널이나 그룹이 있는 동안 같은 인스턴스입니다. 이동, 고정/고정 해제, 플로팅을 거쳐도 유지됩니다. 패널을 닫거나(그룹이 사라지거나) `LoadLayout`을 호출하면 핸들이 분리됩니다. 분리된 핸들은 마지막 값을 유지하고, 동사와 setter는 아무 동작도 하지 않으며, 걸어 둔 바인딩은 새 핸들에 다시 연결해야 합니다.
 
 ## 패널 배치와 탐색
 
