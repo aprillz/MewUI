@@ -15,6 +15,15 @@ internal static class BrowserTextMeasure
 
     private static int _widthCount;
 
+    // A prefix set costs a measurement per code unit, so sets of short runs are kept per font.
+    private static readonly Dictionary<string, Dictionary<string, double[]>> _prefixAdvances =
+        new(StringComparer.Ordinal);
+
+    private static int _prefixAdvanceCount;
+
+    private const int MAX_CACHED_PREFIX_LENGTH = 1024;
+    private const int MAX_CACHED_PREFIX_SETS = 2048;
+
     // The managed text engine owns line breaking and hands this backend one run at a time, so the
     // width limit never has to be honoured here.
     internal static Size Measure(ReadOnlySpan<char> text, IFont font, double maxWidth)
@@ -91,6 +100,59 @@ internal static class BrowserTextMeasure
         forFont[content] = width;
         _widthCount++;
         return width;
+    }
+
+    /// <summary>Writes the advance after every UTF-16 code unit of the run, laid out as the rasterizer draws it.</summary>
+    internal static void FillPrefixAdvances(ReadOnlySpan<char> text, IFont font, Span<double> destination)
+    {
+        if (text.IsEmpty)
+        {
+            return;
+        }
+
+        var cssFont = BrowserFont.CssFontFor(font);
+        if (!_prefixAdvances.TryGetValue(cssFont, out var forFont))
+        {
+            forFont = new Dictionary<string, double[]>(StringComparer.Ordinal);
+            _prefixAdvances[cssFont] = forFont;
+        }
+
+        var lookup = forFont.GetAlternateLookup<ReadOnlySpan<char>>();
+        if (lookup.TryGetValue(text, out var cached))
+        {
+            cached.AsSpan().CopyTo(destination);
+            return;
+        }
+
+        var content = text.ToString();
+        var advances = new double[content.Length];
+        MeasurePrefixAdvances(content, cssFont, advances);
+        advances.AsSpan().CopyTo(destination);
+
+        if (content.Length > MAX_CACHED_PREFIX_LENGTH)
+        {
+            return;
+        }
+
+        if (_prefixAdvanceCount > MAX_CACHED_PREFIX_SETS)
+        {
+            _prefixAdvances.Clear();
+            _prefixAdvanceCount = 0;
+            forFont = new Dictionary<string, double[]>(StringComparer.Ordinal);
+            _prefixAdvances[cssFont] = forFont;
+        }
+
+        forFont[content] = advances;
+        _prefixAdvanceCount++;
+    }
+
+    private static unsafe void MeasurePrefixAdvances(string text, string cssFont, double[] advances)
+    {
+        double capacity = advances.Length;
+        fixed (double* output = advances)
+        {
+            BrowserNative.MeasurePrefixAdvances(text, cssFont, output, &capacity);
+        }
     }
 
 }
