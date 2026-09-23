@@ -481,7 +481,9 @@ public abstract partial class Element : MewObject
         Bounds = arrangedRect;
         if (previousBounds != arrangedRect)
         {
-            if (Parent is Element parent)
+            // A child that kept its size and moved exactly as far as its parent is being carried, as
+            // everything under a scroll is; it did not move inside the parent.
+            if (Parent is Element parent && !parent.CarriesAlong(previousBounds, arrangedRect))
             {
                 parent._childBoundsChanged = true;
             }
@@ -489,10 +491,22 @@ public abstract partial class Element : MewObject
             OnBoundsChanged(previousBounds);
         }
 
-        using (DevToolsGate.IsSupported ? PerformanceProfiler.Instance.SampleElement(GetType(), ProfilerSampleCategory.Arrange) : default)
+        _arrangeShiftX = arrangedRect.X - previousBounds.X;
+        _arrangeShiftY = arrangedRect.Y - previousBounds.Y;
+        try
         {
-            ArrangeCore(arrangedRect);
+            using (DevToolsGate.IsSupported ? PerformanceProfiler.Instance.SampleElement(GetType(), ProfilerSampleCategory.Arrange) : default)
+            {
+                ArrangeCore(arrangedRect);
+            }
         }
+        finally
+        {
+            // Only a child arranged from inside this arrange can be carried by it.
+            _arrangeShiftX = 0;
+            _arrangeShiftY = 0;
+        }
+
         IsArrangeDirty = false;
         if (layoutInvalidated || _childBoundsChanged)
         {
@@ -611,6 +625,21 @@ public abstract partial class Element : MewObject
 
     // Set by a child whose bounds changed, so the parent knows its arrange moved something.
     private bool _childBoundsChanged;
+
+    // How far this element moved in the arrange now running, read by the children it arranges.
+    private double _arrangeShiftX;
+    private double _arrangeShiftY;
+
+    // Same size, moved by the same distance as this element: the child kept its place inside it.
+    private bool CarriesAlong(Rect childBefore, Rect childAfter)
+    {
+        const double EPSILON = 1e-6;
+        return (_arrangeShiftX != 0 || _arrangeShiftY != 0) &&
+            childBefore.Width == childAfter.Width &&
+            childBefore.Height == childAfter.Height &&
+            Math.Abs(childAfter.X - childBefore.X - _arrangeShiftX) < EPSILON &&
+            Math.Abs(childAfter.Y - childBefore.Y - _arrangeShiftY) < EPSILON;
+    }
 
     private bool TakeLayoutInvalidationHandOff()
     {
