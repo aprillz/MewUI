@@ -427,10 +427,14 @@ public sealed class ScrollViewer : ContentControl
 
         if (Content is UIElement content)
         {
+            // The offset keeps every fraction a finger or touchpad scrolled by, but content moves in whole
+            // device pixels: the scene can only reuse a drawing that moved by whole pixels, and a
+            // fractional move would record everything scrolled again on every frame of a fling.
+            var placement = new Point(_scroll.GetOffsetPx(0) / dpiScale, _scroll.GetOffsetPx(1) / dpiScale);
             if (content is IScrollContent scrollContent)
             {
                 scrollContent.SetViewport(_viewport);
-                scrollContent.SetOffset(new Point(_scroll.GetOffsetDip(0), _scroll.GetOffsetDip(1)));
+                scrollContent.SetOffset(placement);
 
                 // Do not translate content via Arrange when it is scroll-driven.
                 // Content renders/arranges internally based on the provided offset.
@@ -443,8 +447,8 @@ public sealed class ScrollViewer : ContentControl
             else
             {
                 content.Arrange(new Rect(
-                    viewport.X - _scroll.GetOffsetDip(0),
-                    viewport.Y - _scroll.GetOffsetDip(1),
+                    viewport.X - placement.X,
+                    viewport.Y - placement.Y,
                     Math.Max(_extent.Width, viewport.Width),
                     Math.Max(_extent.Height, viewport.Height)));
             }
