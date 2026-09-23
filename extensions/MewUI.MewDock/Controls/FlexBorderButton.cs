@@ -179,7 +179,6 @@ internal class FlexBorderButton : Button
         var (corner, thickness) = ButtonChrome();
         DrawBackgroundAndBorder(context, GetSnappedBorderBounds(Bounds),
             GetValue(BackgroundProperty), GetValue(BorderBrushProperty), thickness, corner);
-        Content?.Render(context);
     }
 
     // Faithful: when the border is EXPANDED the buttons open toward the panel (the active tab connects to it).
