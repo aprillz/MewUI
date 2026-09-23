@@ -82,10 +82,11 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
     }
 
     public static readonly MewProperty<double> MaxMenuHeightProperty =
-        MewProperty<double>.Register<ContextMenu>(nameof(MaxMenuHeight), 320.0, MewPropertyOptions.AffectsLayout);
+        MewProperty<double>.Register<ContextMenu>(nameof(MaxMenuHeight), double.PositiveInfinity, MewPropertyOptions.AffectsLayout);
 
     /// <summary>
-    /// Gets or sets the maximum height of the menu.
+    /// Gets or sets an upper bound on the menu height. The default is no bound; the menu is never taller
+    /// than the room on the side it opens toward, and scrolls beyond either limit.
     /// </summary>
     public double MaxMenuHeight
     {
@@ -483,29 +484,26 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
         {
             case MenuPlacement.Below:
                 x = PopupPlacement.ClampHorizontal(anchor.X + offset.X, width, region, floorToLeftEdge: false);
-                y = ResolveMainAxis(anchor.Bottom + offset.Y, anchor.Y - offset.Y - height, height, region.Y, region.Bottom);
+                (y, height) = FitVertically(height, anchor.Bottom + offset.Y, anchor.Y - offset.Y, preferBelow: true, region.Y, region.Bottom);
                 break;
             case MenuPlacement.Above:
                 x = PopupPlacement.ClampHorizontal(anchor.X + offset.X, width, region, floorToLeftEdge: false);
-                y = ResolveMainAxis(anchor.Y - offset.Y - height, anchor.Bottom + offset.Y, height, region.Y, region.Bottom);
+                (y, height) = FitVertically(height, anchor.Bottom + offset.Y, anchor.Y - offset.Y, preferBelow: false, region.Y, region.Bottom);
                 break;
             case MenuPlacement.Right:
+                height = Math.Min(height, Math.Max(0, region.Height));
                 x = ResolveMainAxis(anchor.Right + offset.X, anchor.X - offset.X - width, width, region.X, region.Right);
                 y = ClampCrossAxis(anchor.Y + offset.Y, height, region.Y, region.Bottom);
                 break;
             case MenuPlacement.Left:
+                height = Math.Min(height, Math.Max(0, region.Height));
                 x = ResolveMainAxis(anchor.X - offset.X - width, anchor.Right + offset.X, width, region.X, region.Right);
                 y = ClampCrossAxis(anchor.Y + offset.Y, height, region.Y, region.Bottom);
                 break;
             default:
+                // At the pointer: below it, flipped above it when there is no room below.
                 x = PopupPlacement.ClampHorizontal(anchor.X + offset.X, width, region, floorToLeftEdge: false);
-                y = anchor.Y + offset.Y;
-                if (y + height > region.Bottom)
-                {
-                    // Flip above the pointer, falling back to the region's bottom edge.
-                    double flippedY = anchor.Y - offset.Y - height;
-                    y = flippedY >= region.Y ? flippedY : Math.Max(region.Y, region.Bottom - height);
-                }
+                (y, height) = FitVertically(height, anchor.Y + offset.Y, anchor.Y - offset.Y, preferBelow: true, region.Y, region.Bottom);
                 break;
         }
 
@@ -522,6 +520,43 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
         }
 
         return flipped >= nearEdge ? flipped : Math.Max(nearEdge, farEdge - extent);
+    }
+
+    /// <summary>
+    /// Places a menu of <paramref name="height"/> below <paramref name="belowStart"/> or above
+    /// <paramref name="aboveEnd"/>: the preferred side when it fits, the other side when that fits, and
+    /// otherwise the roomier side with the height cut to its room.
+    /// </summary>
+    private static (double Y, double Height) FitVertically(double height, double belowStart, double aboveEnd, bool preferBelow, double top, double bottom)
+    {
+        belowStart = Math.Max(top, belowStart);
+        aboveEnd = Math.Min(bottom, aboveEnd);
+        double roomBelow = Math.Max(0, bottom - belowStart);
+        double roomAbove = Math.Max(0, aboveEnd - top);
+
+        bool below;
+        if (height <= (preferBelow ? roomBelow : roomAbove))
+        {
+            below = preferBelow;
+        }
+        else if (height <= (preferBelow ? roomAbove : roomBelow))
+        {
+            below = !preferBelow;
+        }
+        else
+        {
+            below = preferBelow ? roomBelow >= roomAbove : roomBelow > roomAbove;
+            height = below ? roomBelow : roomAbove;
+        }
+
+        if (below)
+        {
+            return (belowStart, height);
+        }
+        else
+        {
+            return (aboveEnd - height, height);
+        }
     }
 
     private static double ClampCrossAxis(double preferred, double extent, double nearEdge, double farEdge)
@@ -749,7 +784,7 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
 
         _extentHeight = height;
 
-        // Cap height (scrolling can come later).
+        // Placement also cuts the height to the room on the opening side; the rest scrolls.
         double maxH = Math.Max(0, MaxMenuHeight);
         if (maxH > 0)
         {
@@ -1125,6 +1160,7 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
         {
             height = Math.Min(height, maxH);
         }
+        height = Math.Min(height, Math.Max(0, region.Height));
 
         // Place to the right of the row (WPF-like), clamped to the placement region.
         const double horizontalOffset = 2;

@@ -23,7 +23,7 @@ public sealed partial class DropDownButton : ContentControl, IPopupOwner
             static (self, _, newValue) => self.OnIsDropDownOpenChanged(newValue));
 
     public static readonly MewProperty<double> MaxDropDownHeightProperty =
-        MewProperty<double>.Register<DropDownButton>(nameof(MaxDropDownHeight), 320.0);
+        MewProperty<double>.Register<DropDownButton>(nameof(MaxDropDownHeight), double.PositiveInfinity);
 
     private readonly DropDownMenuController _menu;
     private Button? _facePart;
@@ -58,7 +58,8 @@ public sealed partial class DropDownButton : ContentControl, IPopupOwner
         set => SetValue(IsDropDownOpenProperty, value);
     }
 
-    /// <summary>Gets or sets the maximum menu height; the menu scrolls beyond it.</summary>
+    /// <summary>Gets or sets an upper bound on the menu height. The default is no bound; the menu is never taller
+    /// than the room on the side it opens toward, and scrolls beyond either limit.</summary>
     public double MaxDropDownHeight
     {
         get => GetValue(MaxDropDownHeightProperty);
