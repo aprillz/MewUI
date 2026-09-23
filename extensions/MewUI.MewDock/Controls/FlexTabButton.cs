@@ -311,8 +311,8 @@ internal sealed class FlexTabButton : Button
     }
 
     // Document tab (top strip) opens DOWN into the content: top-rounded, no bottom border. A tool tab (bottom
-    // strip) is the vertical mirror: bottom-rounded, no top border. Snapped to pixels; the Button renders its
-    // content in OnRender, so call Content.Render too.
+    // strip) is the vertical mirror: bottom-rounded, no top border. Snapped to pixels; the content draws in the
+    // subtree pass, not here.
     protected override void OnRender(IGraphicsContext context)
     {
         var background = GetValue(BackgroundProperty);
@@ -324,7 +324,5 @@ internal sealed class FlexTabButton : Button
             ? (new Thickness(t, t, t, 0), new CornerRadius(r, r, 0, 0))
             : (new Thickness(t, 0, t, t), new CornerRadius(0, 0, r, r));
         DrawBackgroundAndBorder(context, GetSnappedBorderBounds(Bounds), background, borderBrush, thickness, corner);
-
-        Content?.Render(context);
     }
 }
