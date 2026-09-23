@@ -245,7 +245,8 @@ internal sealed class RenderDataRecorder : IGraphicsContext
             LineBounds(start, end, thickness),
             flags: RenderCommandFlags.UsesBooleanOverload | BooleanFlag(pixelSnap),
             color: color,
-            values: [start.X, start.Y, end.X, end.Y, thickness]);
+            values: [start.X, start.Y, end.X, end.Y, thickness],
+            ink: pixelSnap ? SnappedLineInk(start, end, thickness, DpiScale) : default);
         if (Draws)
         {
             _inner.DrawLine(start, end, color, thickness, pixelSnap);
@@ -641,6 +642,16 @@ internal sealed class RenderDataRecorder : IGraphicsContext
             shape.Y - overhang,
             shape.Width + overhang * 2,
             shape.Height + overhang * 2);
+    }
+
+    /// <summary>
+    /// Ink of a pixel-snapped line: the backend moves it onto the nearest device pixel and keeps at least
+    /// one pixel of width, which can put it up to a pixel past the line it was asked for.
+    /// </summary>
+    private static Rect SnappedLineInk(Point start, Point end, double thickness, double dpiScale)
+    {
+        double pixel = dpiScale > 0 ? 1 / dpiScale : 1;
+        return LineBounds(start, end, Math.Max(thickness, pixel)).Inflate(pixel, pixel);
     }
 
     private static Rect LineBounds(Point start, Point end, double thickness)
