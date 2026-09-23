@@ -127,14 +127,13 @@ public sealed class DockingManager : Panel
         TabNode node;
         if (FindDocumentTabSetId() is string tabSetId)
         {
-            node = (TabNode)model.DoAction(DockAction.AddTab(json, tabSetId, DockLocation.Center, -1, select: true))!;
+            node = AddTabWithContent(model, json, tabSetId, DockLocation.Center, select: true, content);
         }
         else
         {
             // No document tabset yet (empty / custom-center layout): edge-dock a fresh one onto the root row.
-            node = (TabNode)model.DoAction(DockAction.AddTab(json, model.GetRootRow().GetId(), DockLocation.Right, -1, select: true))!;
+            node = AddTabWithContent(model, json, model.GetRootRow().GetId(), DockLocation.Right, select: true, content);
         }
-        _explicitContent[node.GetId()] = content;
         return GetOrCreatePane(node);
     }
 
@@ -143,8 +142,7 @@ public sealed class DockingManager : Panel
         var model = RequireModel();
         var border = GetOrCreateBorder(model, ToDockLocation(edge));
         var json = new JsonTabNode { Name = title, IsDocument = false, Component = component };
-        var node = (TabNode)model.DoAction(DockAction.AddTab(json, border.GetId(), DockLocation.Center, -1, select: false))!;
-        _explicitContent[node.GetId()] = content;
+        var node = AddTabWithContent(model, json, border.GetId(), DockLocation.Center, select: false, content);
         // A new pane starts pinned as a docked group; Unpin() sends it back to auto-hide.
         model.DoAction(DockAction.PinTool(node.GetId()));
         return GetOrCreatePane(node);
@@ -152,10 +150,14 @@ public sealed class DockingManager : Panel
 
     // Add a tab built from json to an existing target node with explicit (non-factory) content. Used by DockGroup.Add.
     internal DockPane AddExplicitTab(JsonTabNode json, string toNodeId, DockLocation location, bool select, UIElement content)
+        => GetOrCreatePane(AddTabWithContent(RequireModel(), json, toNodeId, location, select, content));
+
+    private TabNode AddTabWithContent(DockModel model, JsonTabNode json, string toNodeId, DockLocation location, bool select, UIElement content)
     {
-        var node = (TabNode)RequireModel().DoAction(DockAction.AddTab(json, toNodeId, location, -1, select))!;
-        _explicitContent[node.GetId()] = content;
-        return GetOrCreatePane(node);
+        // The add rebuilds the view before it returns, so the content must be findable under the tab's id first.
+        json.Id ??= model.NextUniqueId();
+        _explicitContent[json.Id] = content;
+        return (TabNode)model.DoAction(DockAction.AddTab(json, toNodeId, location, -1, select))!;
     }
 
     // The single dispatch path every handle verb funnels through; internal because actions are id-based and not

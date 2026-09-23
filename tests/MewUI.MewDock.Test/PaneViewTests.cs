@@ -10,10 +10,35 @@ using static MewUI.MewDock.Test.DockTestSupport;
 
 namespace MewUI.MewDock.Test;
 
-/// <summary>Tab headers draw once.</summary>
+/// <summary>Explicit pane content shows as soon as the pane is added, and tab headers draw once.</summary>
 [TestClass]
 public sealed class PaneViewTests
 {
+    [TestMethod]
+    public void AddedDocumentShowsItsContentAtOnce()
+    {
+        var manager = Load(DockedTools(Tool("Explorer")));
+        manager.ContentFactory = _ => null;
+        var view = new TextBlock { Text = "document" };
+
+        manager.AddDocumentPane("File.st", view, "document");
+
+        Assert.IsInstanceOfType<FlexTabSetView>(view.Parent, "the new tab's content is hosted without another selection change");
+    }
+
+    [TestMethod]
+    public void PaneAddedToAGroupShowsItsContentAtOnce()
+    {
+        var manager = Load(DockedTools(Tool("Explorer")));
+        manager.ContentFactory = _ => null;
+        var group = Pane(manager, "Explorer").Group!;
+        var view = new TextBlock { Text = "tool" };
+
+        group.AddPane("Extra", view, "extra");
+
+        Assert.IsInstanceOfType<FlexTabSetView>(view.Parent);
+    }
+
     [TestMethod]
     public void DocumentTabDrawsItsHeaderOnce()
     {
