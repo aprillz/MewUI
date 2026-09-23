@@ -559,6 +559,10 @@ internal sealed class BrowserWindowBackend : IWindowBackend
         double travelled = _flingSpeed * (remaining - 1) / Math.Log(FLING_DECAY_PER_SECOND);
         double step = travelled - _flingSentDistance;
         _flingSentDistance = travelled;
+        if (BrowserFrameDiagnostics.Enabled)
+        {
+            BrowserFrameDiagnostics.NoteFlingStep(step);
+        }
         if (step <= 0)
         {
             return true;
@@ -782,8 +786,34 @@ internal sealed class BrowserWindowBackend : IWindowBackend
         }
 
         NeedsRender = false;
+        if (!BrowserFrameDiagnostics.Enabled)
+        {
+            Window.PerformLayout();
+            Window.RenderFrame(_surface);
+            return;
+        }
+
+        long phase = BrowserFrameDiagnostics.Now();
         Window.PerformLayout();
+        BrowserFrameDiagnostics.NoteLayout(BrowserFrameDiagnostics.Since(phase));
+
+        var statistics = Window.RetainedStatistics;
+        int visited = statistics?.CapturedNodeCount ?? 0;
+        int recorded = statistics?.ContentRecordCount ?? 0;
+        int replayed = statistics?.ContentReplayCount ?? 0;
+        int liveFallbacks = statistics?.LiveFallbackCount ?? 0;
+        phase = BrowserFrameDiagnostics.Now();
         Window.RenderFrame(_surface);
+        BrowserFrameDiagnostics.NoteRender(BrowserFrameDiagnostics.Since(phase));
+
+        statistics = Window.RetainedStatistics;
+        BrowserFrameDiagnostics.NoteScene(
+            (statistics?.CapturedNodeCount ?? 0) - visited,
+            (statistics?.ContentRecordCount ?? 0) - recorded,
+            (statistics?.ContentReplayCount ?? 0) - replayed,
+            (statistics?.LiveFallbackCount ?? 0) - liveFallbacks,
+            Window.LastRetainedDirtyRect,
+            _surface.DpiScale);
     }
 
     public void Dispose()
