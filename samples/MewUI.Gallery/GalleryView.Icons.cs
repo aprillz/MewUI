@@ -5,7 +5,7 @@ namespace Aprillz.MewUI.Gallery;
 
 partial class GalleryView
 {
-    private FrameworkElement IconsPage()
+    private FrameworkElement IconsCard()
     {
         IconItem[] AllIcons() => IconResource.GetAll(Resources.Icons.Value)
             .Select(e => new IconItem(e.Name, e.PathData))
@@ -58,8 +58,7 @@ partial class GalleryView
                     .Text(item => item.Name)
             );
 
-        return CardGrid(
-            Card(
+        return Card(
                 "Icons (Path)",
                 new DockPanel()
                     .Height(400)
@@ -89,14 +88,7 @@ partial class GalleryView
                         grid
                     ),
                 minWidth: 460
-            ),
-
-            Card(
-                "Prompt Icons",
-                PromptIconsCard(),
-                minWidth: 720
-            )
-        );
+            );
     }
 
     private sealed class IconItem(string name, string pathData)

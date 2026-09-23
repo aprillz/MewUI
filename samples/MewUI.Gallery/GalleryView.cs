@@ -224,7 +224,6 @@ partial class GalleryView : UserControl
 
             Group("Graphics"),
             Page("Shapes", ShapesPage, "shapes_regular"),
-            Page("Icons", IconsPage, "icons_regular"),
             Page("Media", MediaPage, "image_library_regular"),
             Page("Transform", TransformPage, "resize_regular"),
             Page("Transitions", TransitionsPage, "arrow_sync_circle_regular"),
