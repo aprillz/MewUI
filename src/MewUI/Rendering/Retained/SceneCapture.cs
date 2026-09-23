@@ -338,7 +338,7 @@ internal sealed class SceneCapture
             element,
             RenderDirtyKind.Composition | RenderDirtyKind.State | RenderDirtyKind.Placement);
 
-        if (NeedsCompatibilityRecording(node, element, dirty, attachmentChanged))
+        if (NeedsCompatibilityRecording(node, element, dirty, attachmentChanged, transform))
         {
             RecordSlot(scene, update, node, OWN_CONTENT_SLOT, recorder, compatibilitySubtree: true);
             update.StageConsumption(element, RenderDirtyKind.Content | RenderDirtyKind.Resource | RenderDirtyKind.Layout);
@@ -383,7 +383,7 @@ internal sealed class SceneCapture
             {
                 case CompositionEntryKind.Content:
                     int slotIndex = entry.SlotIndex;
-                    if (NeedsRecording(node, node.Element, slotIndex, dirty, attachmentChanged, recorder.DpiScale))
+                    if (NeedsRecording(node, node.Element, slotIndex, dirty, attachmentChanged, recorder.DpiScale, transform))
                     {
                         RecordSlot(scene, update, node, slotIndex, recorder, compatibilitySubtree: false);
                     }
@@ -500,7 +500,8 @@ internal sealed class SceneCapture
         int slotIndex,
         DirtyView dirty,
         bool attachmentChanged,
-        double dpiScale)
+        double dpiScale,
+        Matrix3x2 transform)
     {
         var data = node.GetSlot(slotIndex);
         bool changed = attachmentChanged ||
@@ -513,8 +514,15 @@ internal sealed class SceneCapture
             return changed || node.NonRecordableReason == null;
         }
 
-        return changed || !CanPlaceRecording(data, element.Bounds, dpiScale);
+        return changed || !CanPlaceRecording(data, element.Bounds, dpiScale) || !IsDrawnUnderTheSameTransform(data, transform);
     }
+
+    /// <summary>
+    /// Whether a recording replays as it was drawn under <paramref name="transform"/>. A transform set outright
+    /// carries the one the slot stood under when it was recorded.
+    /// </summary>
+    private static bool IsDrawnUnderTheSameTransform(RenderData data, Matrix3x2 transform)
+        => data.CanBePlaced || data.SurfaceTransform == transform;
 
     /// <summary>
     /// A compatibility subtree owns its descendants' drawing, so any repaint under it invalidates it.
@@ -524,7 +532,8 @@ internal sealed class SceneCapture
         VisualNode node,
         UIElement element,
         DirtyView dirty,
-        bool attachmentChanged)
+        bool attachmentChanged,
+        Matrix3x2 transform)
     {
         var data = node.GetSlot(OWN_CONTENT_SLOT);
         return attachmentChanged ||
@@ -532,7 +541,8 @@ internal sealed class SceneCapture
             node.RecordedContentVersion != element.RenderContentVersion ||
             dirty.IsDirty(element, RenderDirtyKind.Content | RenderDirtyKind.Resource | RenderDirtyKind.Layout) ||
             node.RecordedSubtreeVersion != element.SubtreeContentVersion ||
-            data.RecordedBounds != element.Bounds;
+            data.RecordedBounds != element.Bounds ||
+            !IsDrawnUnderTheSameTransform(data, transform);
     }
 
     /// <summary>
@@ -651,6 +661,7 @@ internal sealed class SceneCapture
         }
 
         _slotBuilder.Discard();
+        _slotBuilder.Begin(recorder.Inner.GetTransform());
         recorder.Slot = _slotBuilder;
         try
         {
