@@ -95,8 +95,18 @@ internal sealed class RenderScene : IDisposable
         IsFullyDirty = false;
     }
 
+    /// <summary>The time passes are taken at, in <see cref="System.Diagnostics.Stopwatch"/> ticks.</summary>
+    internal Func<long> Clock { get; set; } = System.Diagnostics.Stopwatch.GetTimestamp;
+
+    /// <summary>When the current pass was opened, on <see cref="Clock"/>.</summary>
+    internal long PassTimestamp { get; private set; }
+
     /// <summary>Opens the pass an update lands in and returns its id.</summary>
-    internal int BeginPass() => ++PassId;
+    internal int BeginPass()
+    {
+        PassTimestamp = Clock();
+        return ++PassId;
+    }
 
     /// <summary>Takes a node an update created once that update lands.</summary>
     internal void AddNode(VisualNode node) => _nodes.Add(node.Element, node);

@@ -27,6 +27,9 @@ public partial class Window
     /// <summary>Counters of what the scene recorded and replayed, for diagnostics and tests.</summary>
     internal RenderSceneStatistics? RetainedStatistics => _renderScene?.Statistics;
 
+    /// <summary>The time a pass is taken at, in <see cref="System.Diagnostics.Stopwatch"/> ticks. Tests replace it to space passes out.</summary>
+    internal Func<long> RetainedClock { get; set; } = System.Diagnostics.Stopwatch.GetTimestamp;
+
     /// <summary>The invalidations queued for the surface this window draws, by what they changed.</summary>
     internal RenderDirtyRegistry RenderDirtyQueue => _renderDirty ??= new RenderDirtyRegistry();
 
@@ -325,6 +328,7 @@ public partial class Window
         }
 
         _renderScene ??= new RenderScene();
+        _renderScene.Clock = RetainedClock;
         _sceneCapture ??= new SceneCapture();
         _renderDirty ??= new RenderDirtyRegistry();
 
@@ -796,7 +800,7 @@ public partial class Window
         }
 
         var node = _renderScene?.FindNode(layerRoot);
-        if (node != null && node.ChangesEveryPass(_renderScene!.PassId + 1))
+        if (node != null && node.ChangesEveryPass(_renderScene!.PassId + 1, _renderScene.Clock()))
         {
             _rootOverTheFrameLastChange[layerRoot] = _keptFrameNumber;
             return true;
