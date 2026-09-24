@@ -75,6 +75,9 @@ internal sealed class PropertyValueStore
     private Entry[]? _entries;
     private SparseEntry[]? _sparseEntries;
     private int _sparseCount;
+    // Inherited properties read while nothing above supplied them. They hold no slot, yet their reader saw the
+    // default, so a new parent chain has to be compared against it like any cached inherited value.
+    private List<int>? _inheritedDefaults;
 
     internal Type OwnerType => _ownerType;
 
@@ -307,6 +310,7 @@ internal sealed class PropertyValueStore
     /// </summary>
     internal void SetInherited<T>(MewProperty<T> property, T value)
     {
+        _inheritedDefaults?.Remove(property.Id);
         ref var entry = ref EnsureEntry(property.Id);
         // Inherited is a re-resolvable cache, not a preserved slot: skip it (and any shadow
         // allocation) when a higher source already wins, since clearing that source re-resolves
@@ -326,6 +330,7 @@ internal sealed class PropertyValueStore
     /// </summary>
     internal void SetInheritedBoxed(MewProperty property, object? value)
     {
+        _inheritedDefaults?.Remove(property.Id);
         ref var entry = ref EnsureEntry(property.Id);
         if (BaseSource(entry) > ValueSource.Inherited)
             return;
@@ -338,6 +343,7 @@ internal sealed class PropertyValueStore
     /// </summary>
     internal void ClearInherited(int propertyId)
     {
+        _inheritedDefaults?.Remove(propertyId);
         var snapshot = GetEntry(propertyId);
         if (!HasSlot(snapshot, ValueSource.Inherited))
             return;
@@ -356,6 +362,7 @@ internal sealed class PropertyValueStore
     /// </summary>
     internal void ClearAllInherited()
     {
+        _inheritedDefaults?.Clear();
         if (_entries != null)
         {
             for (int i = 0; i < _entries.Length; i++)
@@ -415,12 +422,27 @@ internal sealed class PropertyValueStore
     internal void RestoreLocal(MewProperty property, object? value)
         => SetValueCore(property, value, ValueSource.Local, validateCandidate: false);
 
+    /// <summary>Records that an inherited property was read as its default: no ancestor supplied it.</summary>
+    internal void MarkInheritedDefault(int propertyId)
+    {
+        _inheritedDefaults ??= new List<int>();
+        if (!_inheritedDefaults.Contains(propertyId))
+        {
+            _inheritedDefaults.Add(propertyId);
+        }
+    }
+
     /// <summary>
-    /// Appends the ids of properties currently holding a cached inherited value.
+    /// Appends the ids of properties currently holding a cached inherited value, and of those read as their default.
     /// Used by reparent propagation to diff them against the new context chain.
     /// </summary>
     internal void GetInheritedPropertyIds(List<int> result)
     {
+        if (_inheritedDefaults != null)
+        {
+            result.AddRange(_inheritedDefaults);
+        }
+
         if (_entries != null)
         {
             for (int i = 0; i < _entries.Length; i++)
