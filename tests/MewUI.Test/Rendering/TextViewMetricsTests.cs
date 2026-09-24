@@ -53,6 +53,27 @@ public sealed class TextViewMetricsTests
             "The document height does not cover the last line.");
     }
 
+    [TestMethod]
+    public void UniformLinesKeepTheDocumentHeightWhileScrolling()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("GDI is Windows-only.");
+            return;
+        }
+
+        using var view = CreateView(string.Concat(Enumerable.Repeat("x := 2;\n", 300)));
+        double initial = view.ExtentHeight;
+
+        view.SetViewport(new TextViewport(400, 200, 0, initial - 200));
+        double atEnd = view.ExtentHeight;
+        view.SetViewport(new TextViewport(400, 200, 0, 0));
+
+        Assert.AreEqual(initial, atEnd, 0.01, "Measuring the lines at the end changed the document height.");
+        Assert.AreEqual(initial, view.ExtentHeight, 0.01, "Scrolling back changed the document height.");
+        Assert.AreEqual(301 * view.DefaultLineHeight, initial, 0.01, "Unmeasured lines are not estimated at the real row height.");
+    }
+
     private static TextViewLayout CreateView(string text)
     {
         var factory = new GdiGraphicsFactory();

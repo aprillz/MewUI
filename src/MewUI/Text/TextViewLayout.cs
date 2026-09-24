@@ -45,7 +45,8 @@ public sealed class TextViewLayout : ITextViewLayout
         _paragraph = paragraph ?? new TextParagraphStyle { Wrapping = TextWrapping.Wrap };
         _extensions = extensions ?? new TextViewExtensionPipeline();
         _dpi = dpi == 0 ? 96 : dpi;
-        _estimatedLineHeight = Math.Max(1, _paragraph.LineHeight ?? defaultStyle.FontSize * 1.25);
+        // Seeded from a laid-out line: a guess that differs from the real row height makes the extent drift as lines are measured.
+        _estimatedLineHeight = Math.Max(1, _paragraph.LineHeight ?? EnsureDefaultMetrics().Height);
         _states = CreateStates(document.LineCount, _estimatedLineHeight);
         _metrics = new LineMetricsIndex(_states);
         ApplyLineCollapsing();
