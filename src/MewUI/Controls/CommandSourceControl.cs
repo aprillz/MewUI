@@ -31,7 +31,7 @@ public abstract class CommandSourceControl : ContentControl, ICommandSource
     public static readonly MewProperty<object?> CommandDataProperty =
         MewProperty<object?>.Register<CommandSourceControl>(nameof(CommandData), null,
             MewPropertyOptions.None,
-            static (self, _, _) => self.ReevaluateSuggestedIsEnabled());
+            static (self, _, _) => self.ReevaluateCommandEnabled());
 
     private Window? _commandSourceWindow;
 
@@ -61,7 +61,7 @@ public abstract class CommandSourceControl : ContentControl, ICommandSource
     protected virtual void OnCommandChanged(Command? oldValue, Command? newValue)
     {
         UpdateCommandSourceRegistration();
-        ReevaluateSuggestedIsEnabled();
+        ReevaluateCommandEnabled();
     }
 
     protected override void OnVisualRootChanged(Element? oldRoot, Element? newRoot)
@@ -83,7 +83,18 @@ public abstract class CommandSourceControl : ContentControl, ICommandSource
         window?.RegisterCommandSource(this);
     }
 
-    void ICommandSource.EvaluateCommandState() => ReevaluateSuggestedIsEnabled();
+    void ICommandSource.EvaluateCommandState() => ReevaluateCommandEnabled();
+
+    private void ReevaluateCommandEnabled()
+    {
+        bool wasEnabled = IsEffectivelyEnabled;
+        ReevaluateSuggestedIsEnabled();
+        if (IsEffectivelyEnabled != wasEnabled)
+        {
+            // The content takes its enabled state from this control, as it does when IsEnabled changes.
+            RefreshEnabledSubtree();
+        }
+    }
 
     /// <summary>
     /// A tooltip of the control's own always wins. Otherwise the parts <see cref="CommandToolTipMode"/> asks

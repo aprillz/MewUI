@@ -50,6 +50,42 @@ public sealed class CommandEvaluationTests
     }
 
     [TestMethod]
+    public void CommandStatePass_DisablesAndReEnablesTheButtonContent()
+    {
+        if (!OperatingSystem.IsWindows()) { Assert.Inconclusive("GDI backend is Windows-only."); return; }
+
+        var window = HeadlessWindow.Create();
+        var command = new Command("file.save", "Save");
+        var document = new TestDocument { IsDirty = true };
+        window.Commands.Register(command, document,
+            static doc => doc.Save(),
+            static doc => doc.IsDirty);
+
+        var icon = new Border();
+        var button = new Button
+        {
+            Command = command,
+            Content = icon,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Top,
+        };
+        window.Content = button;
+        window.PerformLayout();
+        Assert.IsTrue(icon.IsEffectivelyEnabled);
+
+        document.IsDirty = false;
+        window.EvaluateCommandStates();
+
+        Assert.IsFalse(button.IsEffectivelyEnabled);
+        Assert.IsFalse(icon.IsEffectivelyEnabled, "the pass that disables the button leaves its content enabled");
+
+        document.IsDirty = true;
+        window.EvaluateCommandStates();
+
+        Assert.IsTrue(icon.IsEffectivelyEnabled, "the pass that enables the button leaves its content disabled");
+    }
+
+    [TestMethod]
     public void StalePresentation_ClickDoesNotExecute()
     {
         if (!OperatingSystem.IsWindows()) { Assert.Inconclusive("GDI backend is Windows-only."); return; }
