@@ -78,4 +78,44 @@ public sealed class MultiLineTextBoxDocumentTests
         Assert.AreEqual(0, raised);
         Assert.AreEqual(2, box.SelectionLength);
     }
+
+    private sealed class ReadOnlyEverywhere : IEditableRegionProvider
+    {
+        public bool CanInsert(int offset) => false;
+
+        public void GetDeletableRanges(TextRange range, IList<TextRange> output)
+        {
+        }
+    }
+
+    /// <summary>
+    /// A subscriber to TextCommitted hears typing into a document that replaced the first one; an editor built on the
+    /// box subscribes once, when it is made, and must not go deaf when its document is swapped.
+    /// </summary>
+    [TestMethod]
+    public void ReplacingTheDocumentKeepsTextCommittedSubscribers()
+    {
+        var box = new MultiLineTextBox { Text = "old" };
+        var committed = new List<string>();
+        box.TextCommitted += committed.Add;
+
+        box.Document = new EditableTextDocument("new");
+        box.EnterText(0, 0, "x");
+
+        CollectionAssert.AreEqual(new[] { "x" }, committed);
+    }
+
+    [TestMethod]
+    public void ReplacingTheDocumentKeepsTheEditableRegions()
+    {
+        var box = new MultiLineTextBox { Text = "old" };
+        var regions = new ReadOnlyEverywhere();
+        box.EditableRegions = regions;
+
+        box.Document = new EditableTextDocument("new");
+        box.EnterText(0, 0, "x");
+
+        Assert.AreSame(regions, box.EditableRegions);
+        Assert.AreEqual("new", box.Text, "the regions still refuse the edit");
+    }
 }
