@@ -16,8 +16,23 @@ internal sealed class FlexSplitter : Control
     public event Action? SplitterDragCompleted;
 
     private bool _isDragging;
+    private readonly bool _isColumnAxis;
 
-    public bool IsColumnAxis { get; init; }
+    public FlexSplitter()
+    {
+        Cursor = CursorType.SizeWE;
+    }
+
+    /// <summary>Whether the children the bar sits between are stacked top to bottom, so it drags vertically.</summary>
+    public bool IsColumnAxis
+    {
+        get => _isColumnAxis;
+        init
+        {
+            _isColumnAxis = value;
+            Cursor = value ? CursorType.SizeNS : CursorType.SizeWE;
+        }
+    }
 
     public double BarThickness { get; init; }
 
