@@ -5,7 +5,7 @@ using Aprillz.MewUI.Text;
 namespace Aprillz.MewUI.Controls;
 
 /// <summary>Read-only, virtualized text surface for syntax and diagnostic extensions.</summary>
-public sealed partial class SyntaxViewer : Control, IVisualTreeHost, ITextViewHost
+public sealed partial class SyntaxViewer : Control, IVisualTreeHost, ITextViewHost, ITextViewLayerDrawing
 {
     static SyntaxViewer() { }
 
@@ -58,6 +58,8 @@ public sealed partial class SyntaxViewer : Control, IVisualTreeHost, ITextViewHo
         Cursor = CursorType.IBeam;
         Extensions = new TextViewExtensionPipeline();
         _layers = new TextViewLayerStack(CreateBuiltInLayer);
+        _layers.Changed += InvalidateVisual;
+        _layerVisuals = TextViewLayerVisuals.Create(this);
         _verticalScrollBar = new ScrollBar { Orientation = Orientation.Vertical, IsVisible = false };
         _horizontalScrollBar = new ScrollBar { Orientation = Orientation.Horizontal, IsVisible = false };
         _verticalScrollBar.Parent = this;
@@ -126,8 +128,7 @@ public sealed partial class SyntaxViewer : Control, IVisualTreeHost, ITextViewHo
             throw new ArgumentOutOfRangeException(nameof(start));
         _anchor = start;
         _caret = start + length;
-        EnsureSelectionVisible();
-        InvalidateVisual();
+        EnsureSelectionVisibleAndInvalidate();
     }
 
     public void SelectAll() => Select(0, _document.TextLength);
@@ -166,6 +167,15 @@ public sealed partial class SyntaxViewer : Control, IVisualTreeHost, ITextViewHo
         _contentBounds = GetContentBounds();
         UpdateViewport();
         ArrangeScrollBars();
+        TextViewLayerVisuals.Arrange(_layerVisuals, _contentBounds);
+
+        // A scroll asks for an arrange rather than a repaint, and every layer draws at the scroll offset.
+        var scrollOffset = new Point(_horizontalOffset, _verticalOffset);
+        if (scrollOffset != _layersScrollOffset)
+        {
+            _layersScrollOffset = scrollOffset;
+            TextViewLayerVisuals.InvalidateAll(_layerVisuals);
+        }
     }
 
     protected override void OnRender(IGraphicsContext context)
@@ -178,25 +188,23 @@ public sealed partial class SyntaxViewer : Control, IVisualTreeHost, ITextViewHo
             BorderThickness,
             CornerRadius);
         _contentBounds = GetContentBounds();
+    }
+
+    void ITextViewLayerDrawing.DrawLayerGroup(IGraphicsContext context, TextViewLayerAnchor anchor)
+    {
+        _contentBounds = GetContentBounds();
         if (_view is null) return;
 
-        context.Save();
-        try
-        {
-            context.SetClip(LayoutRounding.MakeClipRect(_contentBounds, GetDpi() / 96.0));
-            // Every anchor paints its extensions first and its own content after. The viewer draws
-            // no caret, so that anchor holds extensions only; keeping it preserves the slot.
-            var text = context.Text;
-            _layers.Draw(text, _contentBounds);
-        }
-        finally
-        {
-            context.Restore();
-        }
+        // Every anchor paints its extensions first and its own content after. The viewer draws
+        // no caret, so that anchor holds extensions only; keeping it preserves the slot.
+        _layers.Draw(context.Text, _contentBounds, anchor);
     }
+
+    private Rect GetTextClip() => LayoutRounding.MakeClipRect(GetContentBounds(), GetDpi() / 96.0);
 
     protected override void RenderSubtree(IGraphicsContext context)
     {
+        TextViewLayerVisuals.Render(_layerVisuals, context, GetTextClip());
         if (_verticalScrollBar.IsVisible)
         {
             _verticalScrollBar.Render(context);
@@ -210,6 +218,7 @@ public sealed partial class SyntaxViewer : Control, IVisualTreeHost, ITextViewHo
     internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
     {
         builder.Content(0);
+        TextViewLayerVisuals.WriteComposition(_layerVisuals, builder, GetTextClip());
         if (_verticalScrollBar.IsVisible)
         {
             builder.Child(_verticalScrollBar);
@@ -647,7 +656,25 @@ public sealed partial class SyntaxViewer : Control, IVisualTreeHost, ITextViewHo
         => _layers.Insert(layer, anchor, position);
 
     /// <inheritdoc/>
-    public void InvalidateLayer(TextViewLayerAnchor anchor) => InvalidateVisual();
+    public void InvalidateLayer(TextViewLayerAnchor anchor) => TextViewLayerVisuals.Invalidate(_layerVisuals, anchor);
+
+    /// <summary>Discards the viewer's own drawing and every layer's, unless only the frame changed.</summary>
+    public override void InvalidateVisual()
+    {
+        base.InvalidateVisual();
+        if (!_frameOnlyChanging && _layerVisuals is not null)
+        {
+            TextViewLayerVisuals.InvalidateAll(_layerVisuals);
+        }
+    }
+
+    private readonly TextViewLayerVisual[] _layerVisuals;
+
+    // The scroll offset the layers were last told to draw at.
+    private Point _layersScrollOffset;
+
+    // True while a property that only the viewer's own frame draws is changing: the layers stay recorded.
+    private bool _frameOnlyChanging;
 
     private readonly TextViewLayerStack _layers;
 
@@ -746,8 +773,27 @@ public sealed partial class SyntaxViewer : Control, IVisualTreeHost, ITextViewHo
         var hit = _view.HitTest(new Point(point.X - _contentBounds.X, point.Y - _contentBounds.Y));
         _caret = hit.DocumentOffset;
         if (!extend) _anchor = _caret;
+        EnsureSelectionVisibleAndInvalidate();
+    }
+
+    /// <summary>
+    /// Scrolls the caret into view after the selection moved. A scroll moves every layer; a selection
+    /// that moved in place changes the highlight and the glyphs it recolors, and leaves the rest recorded.
+    /// </summary>
+    private void EnsureSelectionVisibleAndInvalidate()
+    {
+        double startVertical = _verticalOffset;
         EnsureSelectionVisible();
-        InvalidateVisual();
+        if (_verticalOffset != startVertical)
+        {
+            InvalidateVisual();
+        }
+        else
+        {
+            // The glyphs carry the selection span, which recolors them when SelectionForeground is set.
+            InvalidateLayer(TextViewLayerAnchor.Selection);
+            InvalidateLayer(TextViewLayerAnchor.Text);
+        }
     }
 
     private void EnsureSelectionVisible()
@@ -767,8 +813,21 @@ public sealed partial class SyntaxViewer : Control, IVisualTreeHost, ITextViewHo
     {
         if (property.Id == FontFamilyProperty.Id || property.Id == FontSizeProperty.Id || property.Id == FontWeightProperty.Id)
             ResetView();
-        base.OnMewPropertyChanged(property);
+
+        // The frame's colours and corners change on hover and focus, often animated, and no layer reads them.
+        _frameOnlyChanging = property.Id == BackgroundProperty.Id ||
+            property.Id == BorderBrushProperty.Id ||
+            property.Id == CornerRadiusProperty.Id;
+        try
+        {
+            base.OnMewPropertyChanged(property);
+        }
+        finally
+        {
+            _frameOnlyChanging = false;
+        }
     }
+
 
     protected override void OnDpiChanged(uint oldDpi, uint newDpi)
     {
@@ -785,5 +844,5 @@ public sealed partial class SyntaxViewer : Control, IVisualTreeHost, ITextViewHo
     }
 
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
-        => visitor(_verticalScrollBar) && visitor(_horizontalScrollBar);
+        => TextViewLayerVisuals.Visit(_layerVisuals, visitor) && visitor(_verticalScrollBar) && visitor(_horizontalScrollBar);
 }

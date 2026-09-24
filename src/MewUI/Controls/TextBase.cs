@@ -579,7 +579,7 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextC
         SetValue(SelectionStartPropertyKey, selection.Start);
         SetValue(SelectionLengthPropertyKey, selection.Length);
         ResetCaretBlink();
-        InvalidateVisual();
+        InvalidateSelection();
     }
 
     protected override void OnGotFocus()
@@ -633,6 +633,12 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextC
     /// host that caches its layers repaints that one alone rather than the whole stack.
     /// </summary>
     private protected virtual void InvalidateCaret() => InvalidateVisual();
+
+    /// <summary>
+    /// Discards what the caret or selection moving changes. Overridden where the layers are cached
+    /// apart, so the glyphs stay recorded when only the caret, the selection or the line highlight move.
+    /// </summary>
+    private protected virtual void InvalidateSelection() => InvalidateVisual();
 
     protected override void OnDispose()
     {

@@ -11,7 +11,7 @@ namespace Aprillz.MewUI.Controls;
 /// Multi-line editor built on the extensible text view engine.
 /// It does not use the legacy Controls.Text formatter, view, or measurement caches.
 /// </summary>
-public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextViewHost
+public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextViewHost, ITextViewLayerDrawing
 {
     private static readonly bool _defaultStyleRegistered =
         DefaultStyles.Register<MultiLineTextBox>(DefaultStyles.CreateMultiLineTextBoxStyle);
@@ -65,6 +65,18 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
     // A scroll moved the pixel offset; the row it lands on is read in the next layout pass.
     private bool _scrollAnchorStale;
     private readonly TextViewLayerStack _layers;
+
+    // One visual per anchor group in draw order, so a layer that changed records alone.
+    private readonly TextViewLayerVisual[] _layerVisuals;
+
+    // The scroll offset the layers were last told to draw at.
+    private Point _layersScrollOffset;
+
+    // True while a property that only the box's own frame draws is changing: the layers stay recorded.
+    private bool _frameOnlyChanging;
+
+    // Whether the glyphs were last drawn with a composition in them, which a selection change can end.
+    private bool _glyphsShowComposition;
     private IGraphicsContext? _graphics;
     private double _preferredCaretX = double.NaN;
     private bool _dragSelecting;
@@ -86,6 +98,8 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
     {
         Extensions = new TextViewExtensionPipeline();
         _layers = new TextViewLayerStack(CreateBuiltInLayer);
+        _layers.Changed += InvalidateVisual;
+        _layerVisuals = TextViewLayerVisuals.Create(this);
         _document.Changed += OnDocumentChanged;
         _editor.StateChanged += OnEditorStateChanged;
 
@@ -281,6 +295,15 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
         _contentBounds = GetEditorContentBounds();
         UpdateViewport();
         ArrangeScrollBars();
+        TextViewLayerVisuals.Arrange(_layerVisuals, _contentBounds);
+
+        // A scroll asks for an arrange rather than a repaint, and every layer draws at the scroll offset.
+        var scrollOffset = new Point(_horizontalOffset, _verticalOffset);
+        if (scrollOffset != _layersScrollOffset)
+        {
+            _layersScrollOffset = scrollOffset;
+            TextViewLayerVisuals.InvalidateAll(_layerVisuals);
+        }
     }
 
     protected override void OnRender(IGraphicsContext context)
@@ -288,19 +311,17 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
         var bounds = GetSnappedBorderBounds(Bounds);
         DrawBackgroundAndBorder(context, bounds, Background, BorderBrush, BorderThickness, CornerRadius);
         _contentBounds = GetEditorContentBounds();
+        if (!ShowsPlaceholder)
+        {
+            return;
+        }
 
+        // The document is drawn by the layer visuals; in its place the frame draws the placeholder.
         context.Save();
         try
         {
-            context.SetClip(LayoutRounding.MakeClipRect(_contentBounds, GetDpi() / 96.0));
-            if (_document.TextLength == 0 && !string.IsNullOrEmpty(Placeholder) && !IsFocused)
-            {
-                DrawPlaceholder(context);
-            }
-            else
-            {
-                DrawDocument(context);
-            }
+            context.SetClip(GetTextClip());
+            DrawPlaceholder(context);
         }
         finally
         {
@@ -308,8 +329,13 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
         }
     }
 
+    private bool ShowsPlaceholder => _document.TextLength == 0 && !string.IsNullOrEmpty(Placeholder) && !IsFocused;
+
+    private Rect GetTextClip() => LayoutRounding.MakeClipRect(GetEditorContentBounds(), GetDpi() / 96.0);
+
     protected override void RenderSubtree(IGraphicsContext context)
     {
+        TextViewLayerVisuals.Render(_layerVisuals, context, GetTextClip());
         if (_verticalScrollBar.IsVisible)
         {
             _verticalScrollBar.Render(context);
@@ -323,6 +349,7 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
     internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
     {
         builder.Content(0);
+        TextViewLayerVisuals.WriteComposition(_layerVisuals, builder, GetTextClip());
         if (_verticalScrollBar.IsVisible)
         {
             builder.Child(_verticalScrollBar);
@@ -350,16 +377,17 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
         return Bounds.Contains(point) ? this : null;
     }
 
-    private void DrawDocument(IGraphicsContext context)
+    void ITextViewLayerDrawing.DrawLayerGroup(IGraphicsContext context, TextViewLayerAnchor anchor)
     {
-        if (_view is null)
+        if (_view is null || ShowsPlaceholder)
         {
             return;
         }
         // A layer inserted below an anchor paints under that anchor's content, and the four
         // built-ins are entries like any other, so the order alone decides the result.
+        _contentBounds = GetEditorContentBounds();
         _graphics = context;
-        _layers.Draw(context.Text, _contentBounds);
+        _layers.Draw(context.Text, _contentBounds, anchor);
     }
 
     private ITextViewLayer CreateBuiltInLayer(TextViewLayerAnchor anchor) => anchor switch
@@ -396,6 +424,7 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
 
     private void DrawGlyphs(ITextRenderContext text)
     {
+        _glyphsShowComposition = _editor.IsComposing;
         var selection = _editor.Selection;
         foreach (var line in _view!.MaterializedLines)
         {
@@ -426,6 +455,43 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
 
     /// <inheritdoc/>
     private protected override void InvalidateCaret() => InvalidateLayer(TextViewLayerAnchor.Caret);
+
+    /// <inheritdoc/>
+    private protected override void InvalidateSelection()
+    {
+        // The line backgrounds hold what follows the caret, such as a current-line highlight.
+        InvalidateLayer(TextViewLayerAnchor.Background);
+        InvalidateLayer(TextViewLayerAnchor.Selection);
+        InvalidateLayer(TextViewLayerAnchor.Caret);
+
+        // The glyphs recolor a selection, and underline a composition until it ends.
+        if (SelectionForeground is not null || _editor.IsComposing || _glyphsShowComposition)
+        {
+            InvalidateLayer(TextViewLayerAnchor.Text);
+        }
+    }
+
+    /// <summary>Discards the box's own drawing and every layer's, unless only the frame changed.</summary>
+    public override void InvalidateVisual()
+    {
+        base.InvalidateVisual();
+        if (!_frameOnlyChanging && _layerVisuals is not null)
+        {
+            TextViewLayerVisuals.InvalidateAll(_layerVisuals);        }
+    }
+
+    protected override void OnGotFocus()
+    {
+        base.OnGotFocus();
+        // The caret shows only while focused, and the placeholder only while not.
+        InvalidateVisual();
+    }
+
+    protected override void OnLostFocus()
+    {
+        base.OnLostFocus();
+        InvalidateVisual();
+    }
 
     private void DrawCaret(ITextRenderContext text)
     {
@@ -1085,6 +1151,9 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
         {
             return;
         }
+        double startVertical = _verticalOffset;
+        double startHorizontal = _horizontalOffset;
+
         // Scrolling materializes lines, which replaces estimated metrics with measured ones and so
         // moves both the caret and the scroll limit. A single pass stops short of the document edge
         // whenever the estimate was low, on either axis.
@@ -1114,7 +1183,12 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
                 break;
             }
         }
-        InvalidateVisual();
+
+        // A caret already in view scrolls nothing; the caret move itself repaints through the selection.
+        if (_verticalOffset != startVertical || _horizontalOffset != startHorizontal)
+        {
+            InvalidateVisual();
+        }
     }
 
     /// <summary>
@@ -1155,7 +1229,7 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
         => _layers.Insert(layer, anchor, position);
 
     /// <inheritdoc/>
-    public void InvalidateLayer(TextViewLayerAnchor anchor) => InvalidateVisual();
+    public void InvalidateLayer(TextViewLayerAnchor anchor) => TextViewLayerVisuals.Invalidate(_layerVisuals, anchor);
 
     /// <inheritdoc/>
     public Point ScrollOffset => new(_horizontalOffset, _verticalOffset);
@@ -1268,8 +1342,21 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
         {
             ResetView();
         }
-        base.OnMewPropertyChanged(property);
+
+        // The frame's colours and corners change on hover and focus, often animated, and no layer reads them.
+        _frameOnlyChanging = property.Id == BackgroundProperty.Id ||
+            property.Id == BorderBrushProperty.Id ||
+            property.Id == CornerRadiusProperty.Id;
+        try
+        {
+            base.OnMewPropertyChanged(property);
+        }
+        finally
+        {
+            _frameOnlyChanging = false;
+        }
     }
+
 
     protected override void OnDpiChanged(uint oldDpi, uint newDpi)
     {
@@ -1298,5 +1385,5 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
     }
 
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
-        => visitor(_verticalScrollBar) && visitor(_horizontalScrollBar);
+        => TextViewLayerVisuals.Visit(_layerVisuals, visitor) && visitor(_verticalScrollBar) && visitor(_horizontalScrollBar);
 }
