@@ -24,6 +24,23 @@ public sealed class DispatcherOperationTests
     }
 
     [TestMethod]
+    public void WorkPostedByALowerItem_RunsBeforeLowerItemsAlreadyQueued()
+    {
+        var queue = new DispatcherQueue();
+        var order = new List<string>();
+        queue.Enqueue(DispatcherPriority.Background, () =>
+        {
+            order.Add("background");
+            queue.Enqueue(DispatcherPriority.Layout, () => order.Add("layout"));
+        });
+        queue.Enqueue(DispatcherPriority.Idle, () => order.Add("idle"));
+
+        queue.Process();
+
+        CollectionAssert.AreEqual(new[] { "background", "layout", "idle" }, order);
+    }
+
+    [TestMethod]
     public void AbortAndExecute_CompeteOnOneAtomicTransition()
     {
         for (int iteration = 0; iteration < 500; iteration++)
