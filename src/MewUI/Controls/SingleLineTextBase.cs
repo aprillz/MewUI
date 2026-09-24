@@ -287,11 +287,19 @@ public abstract class SingleLineTextBase : TextBase
     {
         if (property.Id == FontFamilyProperty.Id ||
             property.Id == FontSizeProperty.Id ||
-            property.Id == FontWeightProperty.Id)
+            property.Id == FontWeightProperty.Id ||
+            property.Id == FontStyleProperty.Id)
         {
             ResetView();
         }
         base.OnMewPropertyChanged(property);
+    }
+
+    protected override void OnFontCacheInvalidated(MewProperty property)
+    {
+        base.OnFontCacheInvalidated(property);
+        // A font reached through inheritance: the lines were laid out with the one it replaces.
+        ResetView();
     }
 
     protected override void OnDpiChanged(uint oldDpi, uint newDpi)
