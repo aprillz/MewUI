@@ -377,7 +377,7 @@ public sealed class MenuCommandTargetTests
 
         Assert.HasCount(1, built);
         Assert.AreEqual(new IconTemplateSize(16, 16), sizes[0]);
-        Assert.AreSame(menu, built[0].Parent);
+        Assert.AreSame(menu, built[0].Parent?.Parent, "the icon sits in its row of the menu");
         Assert.AreEqual(16, built[0].Width);
         Assert.AreEqual(16, built[0].Height);
 
@@ -390,7 +390,7 @@ public sealed class MenuCommandTargetTests
 
         Assert.HasCount(2, built);
         Assert.AreNotSame(first, built[1], "each popup lifetime receives an independent visual");
-        Assert.AreSame(menu, built[1].Parent);
+        Assert.AreSame(menu, built[1].Parent?.Parent, "the icon sits in its row of the menu");
     }
 
     [TestMethod]

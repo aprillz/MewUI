@@ -22,9 +22,9 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
     // after the container it came from is recycled to another item.
     private object? _capturedCommandArgument;
 
-    private const double SubMenuGlyphAreaWidth = 14;
-    private const double ShortcutColumnGap = 12;
-    private const double IconTextGap = 8;
+    internal const double SubMenuGlyphAreaWidth = 14;
+    internal const double ShortcutColumnGap = 12;
+    internal const double IconTextGap = 8;
     private readonly ScrollBar _vBar;
     private readonly ScrollController _scroll = new();
     private readonly MenuTextLayouts _textLayouts = new();
@@ -44,8 +44,16 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
     internal double LastCaptionWidth { get; set; } = double.PositiveInfinity;
     private double _maxShortcutWidth;
     private bool _hasAnyShortcut;
-    private readonly Dictionary<MenuItem, FrameworkElement> _materializedIcons = new();
     private bool _hasAnyIcon;
+
+    // Icons are built when their row is first realized and kept across scrolling until the size changes.
+    private readonly Dictionary<MenuItem, FrameworkElement> _icons = new();
+
+    // The rows of the entries in view, by entry index, and the rows released from view for reuse.
+    private readonly SortedDictionary<int, MenuRow> _rows = new();
+    private readonly Stack<MenuRow> _rowPool = new();
+
+    internal MenuTextLayouts TextLayouts => _textLayouts;
 
     /// <summary>
     /// Gets the menu model.
@@ -171,12 +179,17 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
         };
     }
 
-    private void OnMenuChanged(MenuModelChange change)
+    private void OnMenuChanged(MenuItem? item, MenuModelChange change)
     {
-        if ((change & MenuModelChange.Structure) != 0 && FindVisualRoot() is Window structureWindow)
+        if ((change & MenuModelChange.Structure) != 0)
         {
-            CloseDescendants(structureWindow);
+            if (FindVisualRoot() is Window structureWindow)
+            {
+                CloseDescendants(structureWindow);
+            }
+
             _hotIndex = -1;
+            ReleaseRows();
         }
 
         if ((change & (MenuModelChange.Structure | MenuModelChange.Text |
@@ -195,13 +208,29 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
                 UpdateCommandPresentation(window);
             }
 
-            PrepareMaterializedIcons();
+            ResetIcons();
             if (HasCommandItems()) window.RegisterCommandSource(this);
             else window.UnregisterCommandSource(this);
             InvalidateMeasure();
         }
 
-        InvalidateVisual();
+        if (item != null && FindRow(item) is MenuRow row)
+        {
+            row.OnEntryChanged(change);
+        }
+    }
+
+    private MenuRow? FindRow(MenuItem item)
+    {
+        foreach (var row in _rows.Values)
+        {
+            if (ReferenceEquals(row.Entry, item))
+            {
+                return row;
+            }
+        }
+
+        return null;
     }
 
     public void AddItem(Command command)
@@ -335,41 +364,65 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
         return double.IsFinite(size) && size > 0 ? size : 16;
     }
 
-    private void PrepareMaterializedIcons()
+    private bool HasAnyIcon()
     {
-        ClearMaterializedIcons();
-
-        var size = IconTemplate.ResolveSize(ResolveIconSize(), GetDpi() / 96.0);
         foreach (var entry in Items)
         {
-            if (entry is not MenuItem item || item.ResolveIconTemplate() is not IconTemplate template)
+            if (entry is MenuItem item && item.ResolveIconTemplate() != null)
             {
-                continue;
+                return true;
             }
+        }
 
-            var icon = template.Build(size);
+        return false;
+    }
+
+    private FrameworkElement? IconFor(MenuEntry entry)
+    {
+        if (entry is not MenuItem item || item.ResolveIconTemplate() is not IconTemplate template)
+        {
+            return null;
+        }
+
+        if (!_icons.TryGetValue(item, out var icon))
+        {
+            var size = IconTemplate.ResolveSize(ResolveIconSize(), GetDpi() / 96.0);
+            icon = template.Build(size);
             icon.Width = size.Dip;
             icon.Height = size.Dip;
             icon.IsHitTestVisible = false;
-            icon.Parent = this;
-            _materializedIcons.Add(item, icon);
+            _icons.Add(item, icon);
         }
 
-        _hasAnyIcon = _materializedIcons.Count > 0;
+        return icon;
     }
 
-    private void ClearMaterializedIcons()
+    /// <summary>Drops the built icons, for a new size or template, and gives the rows in view new ones.</summary>
+    private void ResetIcons()
     {
-        foreach (var icon in _materializedIcons.Values)
+        _icons.Clear();
+        foreach (var row in _rows.Values)
         {
-            if (ReferenceEquals(icon.Parent, this))
-            {
-                icon.Parent = null;
-            }
+            row.Bind(row.Entry, row.Entry is MenuEntry entry ? IconFor(entry) : null);
+        }
+    }
+
+    private void ReleaseRows()
+    {
+        foreach (var row in _rows.Values)
+        {
+            ReleaseRow(row);
         }
 
-        _materializedIcons.Clear();
-        _hasAnyIcon = false;
+        _rows.Clear();
+    }
+
+    private void ReleaseRow(MenuRow row)
+    {
+        row.Bind(null, null);
+        row.SetIsHighlighted(false);
+        row.Parent = null;
+        _rowPool.Push(row);
     }
 
     /// <summary>
@@ -448,7 +501,7 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
         _capturedCommandArgument = CommandRouter.ResolveArgument(placementTarget);
 
         UpdateCommandPresentation(window);
-        PrepareMaterializedIcons();
+        ResetIcons();
         CloseDescendants(window);
         _parentMenu = null;
 
@@ -596,7 +649,8 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
 
         if (oldRoot != null && newRoot == null)
         {
-            ClearMaterializedIcons();
+            ReleaseRows();
+            _icons.Clear();
         }
     }
 
@@ -607,7 +661,7 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
             return;
         }
 
-        bool changed = false;
+        // A row whose item moved hears of it through the model's change notification.
         foreach (var entry in Menu.Items)
         {
             if (entry is not MenuItem item)
@@ -615,20 +669,15 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
                 continue;
             }
 
-            changed |= item.ReevaluateCanClick();
+            item.ReevaluateCanClick();
 
             if (item.Command is Command command)
             {
                 bool enabled = window.CommandRouter.CanExecute(command, _capturedCommandTarget, ArgumentFor(item));
                 string? shortcutText = InputMapResolver.GetEffectiveGestureText(
                     window, command, _capturedCommandTarget.OriginElement, item.CommandData);
-                changed |= item.ApplyCommandState(enabled, shortcutText);
+                item.ApplyCommandState(enabled, shortcutText);
             }
-        }
-
-        if (changed)
-        {
-            InvalidateVisual();
         }
     }
 
@@ -645,7 +694,7 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
         if (oldTheme.Metrics.CommandIconSize != newTheme.Metrics.CommandIconSize &&
             FindVisualRoot() is Window)
         {
-            PrepareMaterializedIcons();
+            ResetIcons();
             InvalidateMeasure();
         }
     }
@@ -656,7 +705,7 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
         _textLayouts.Invalidate();
         if (FindVisualRoot() is Window)
         {
-            PrepareMaterializedIcons();
+            ResetIcons();
             InvalidateMeasure();
         }
     }
@@ -698,9 +747,8 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
         if (_scroll.SetOffsetDip(1, valueDip))
         {
             _verticalOffset = _scroll.GetOffsetDip(1);
-            ArrangeMaterializedIcons();
+            ArrangeRows();
             CloseSubMenu();
-            InvalidateVisual();
         }
     }
 
@@ -732,6 +780,7 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
         _maxShortcutWidth = 0;
         _hasAnyShortcut = false;
         bool hasAnySubMenu = false;
+        _hasAnyIcon = HasAnyIcon();
 
         foreach (var entry in Items)
         {
@@ -830,7 +879,7 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
             _verticalOffset = 0;
             _vBar.Value = 0;
             _vBar.Arrange(Rect.Empty);
-            ArrangeMaterializedIcons();
+            ArrangeRows();
             return;
         }
 
@@ -853,33 +902,127 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
             contentBounds.Y,
             t,
             contentBounds.Height));
-        ArrangeMaterializedIcons();
+        ArrangeRows();
     }
 
-    private void ArrangeMaterializedIcons()
+    /// <summary>
+    /// Gives each entry in view a row and lays it out, and releases the rows of entries that left the view.
+    /// </summary>
+    private void ArrangeRows()
     {
-        if (!_hasAnyIcon || Bounds.IsEmpty)
+        if (Bounds.IsEmpty)
         {
             return;
         }
 
         var contentBounds = GetItemViewportBounds();
-        double size = ResolveIconSize();
+        double dpiScale = GetDpi() / 96.0;
+        double itemRadius = Math.Max(0, LayoutRounding.RoundToPixel(CornerRadius, dpiScale) - GetBorderVisualInset());
+        var columns = new MenuRowColumns(
+            ResolveIconSize(), _hasAnyIcon, _maxShortcutWidth, _hasAnyShortcut, ItemPadding, itemRadius);
+
+        int first = -1;
+        int last = -2;
         double y = contentBounds.Y - _verticalOffset;
-        foreach (var entry in Items)
+        for (int index = 0; index < Items.Count; index++)
         {
-            double height = GetEntryHeight(entry);
-            if (entry is MenuItem item && _materializedIcons.TryGetValue(item, out var icon))
+            double height = GetEntryHeight(Items[index]);
+            double rowTop = LayoutRounding.RoundToPixel(y, dpiScale);
+            double rowBottom = LayoutRounding.RoundToPixel(y + height, dpiScale);
+            if (rowTop >= contentBounds.Bottom)
             {
-                var paddedRow = new Rect(contentBounds.X, y, contentBounds.Width, height).Deflate(ItemPadding);
-                icon.Arrange(new Rect(
-                    paddedRow.X,
-                    paddedRow.Y + Math.Max(0, (paddedRow.Height - size) / 2),
-                    size,
-                    size));
+                break;
+            }
+
+            if (rowBottom > contentBounds.Y)
+            {
+                if (first < 0)
+                {
+                    first = index;
+                }
+
+                last = index;
             }
 
             y += height;
+        }
+
+        List<int>? leaving = null;
+        foreach (var (index, row) in _rows)
+        {
+            if (index < first || index > last || !ReferenceEquals(row.Entry, Items[index]))
+            {
+                (leaving ??= []).Add(index);
+            }
+        }
+
+        if (leaving != null)
+        {
+            foreach (int index in leaving)
+            {
+                ReleaseRow(_rows[index]);
+                _rows.Remove(index);
+            }
+        }
+
+        y = contentBounds.Y - _verticalOffset;
+        for (int index = 0; index <= last; index++)
+        {
+            var entry = Items[index];
+            double height = GetEntryHeight(entry);
+            if (index >= first)
+            {
+                // Snapped as the menu once snapped the rows it drew itself, so they tile without a seam.
+                double rowTop = LayoutRounding.RoundToPixel(y, dpiScale);
+                double rowBottom = LayoutRounding.RoundToPixel(y + height, dpiScale);
+                if (!_rows.TryGetValue(index, out var row))
+                {
+                    row = _rowPool.Count > 0 ? _rowPool.Pop() : new MenuRow();
+                    row.Parent = this;
+                    row.Bind(entry, IconFor(entry));
+                    _rows.Add(index, row);
+                }
+
+                row.Columns = columns;
+                row.SetIsHighlighted(IsHighlighted(index));
+                var rect = new Rect(contentBounds.X, rowTop, contentBounds.Width, rowBottom - rowTop);
+                row.Measure(rect.Size);
+                row.Arrange(rect);
+            }
+
+            y += height;
+        }
+    }
+
+    private bool IsHighlighted(int index) => index >= 0 && (index == _hotIndex || index == _openSubMenuIndex);
+
+    private void UpdateRowHighlight(int index)
+    {
+        if (index >= 0 && _rows.TryGetValue(index, out var row))
+        {
+            row.SetIsHighlighted(IsHighlighted(index));
+        }
+    }
+
+    private void SetHotIndex(int index)
+    {
+        if (_hotIndex != index)
+        {
+            int previous = _hotIndex;
+            _hotIndex = index;
+            UpdateRowHighlight(previous);
+            UpdateRowHighlight(index);
+        }
+    }
+
+    private void SetOpenSubMenuIndex(int index)
+    {
+        if (_openSubMenuIndex != index)
+        {
+            int previous = _openSubMenuIndex;
+            _openSubMenuIndex = index;
+            UpdateRowHighlight(previous);
+            UpdateRowHighlight(index);
         }
     }
 
@@ -897,11 +1040,7 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
     protected override void OnMouseLeave()
     {
         base.OnMouseLeave();
-        if (_hotIndex != -1)
-        {
-            _hotIndex = -1;
-            InvalidateVisual();
-        }
+        SetHotIndex(-1);
     }
 
     protected override void OnMouseWheel(MouseWheelEventArgs e)
@@ -925,9 +1064,8 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
         {
             _verticalOffset = _scroll.GetOffsetDip(1);
             _vBar.Value = _verticalOffset;
-            ArrangeMaterializedIcons();
+            ArrangeRows();
             CloseSubMenu();
-            InvalidateVisual();
             e.Handled = true;
         }
     }
@@ -941,11 +1079,7 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
         }
 
         int index = HitTestEntryIndex(e.Position);
-        if (_hotIndex != index)
-        {
-            _hotIndex = index;
-            InvalidateVisual();
-        }
+        SetHotIndex(index);
 
         if (index >= 0 && index < Items.Count && Items[index] is MenuItem item && item.SubMenu != null && item.IsEffectivelyEnabled)
         {
@@ -1100,7 +1234,7 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
         if (_openSubMenu != null && popup == _openSubMenu)
         {
             _openSubMenu = null;
-            _openSubMenuIndex = -1;
+            SetOpenSubMenuIndex(-1);
         }
     }
 
@@ -1139,12 +1273,11 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
         subMenuPopup._capturedCommandArgument = _capturedCommandArgument;
         subMenuPopup.SetValue(PlacementTargetPropertyKey, PlacementTarget);
         subMenuPopup.UpdateCommandPresentation(window);
-        subMenuPopup.PrepareMaterializedIcons();
 
         // Deferred for the same reason as ShowAt: an unstyled pre-attach measure loses the border.
         window.ShowPopup(this, subMenuPopup, w => MeasureSubMenuPlacement(w, subMenuPopup, ownerRowBounds));
         _openSubMenu = subMenuPopup;
-        _openSubMenuIndex = index;
+        SetOpenSubMenuIndex(index);
     }
 
     private Rect MeasureSubMenuPlacement(Window window, ContextMenu subMenuPopup, Rect ownerRowBounds)
@@ -1196,7 +1329,7 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
         }
 
         _openSubMenu = null;
-        _openSubMenuIndex = -1;
+        SetOpenSubMenuIndex(-1);
     }
 
     private void CloseDescendants(Window window)
@@ -1209,7 +1342,7 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
         _openSubMenu.CloseDescendants(window);
         window.ClosePopup(_openSubMenu);
         _openSubMenu = null;
-        _openSubMenuIndex = -1;
+        SetOpenSubMenuIndex(-1);
     }
 
     internal void CloseTree(Window window)
@@ -1301,161 +1434,64 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
 
     protected override void OnRender(IGraphicsContext context)
     {
+        // The rows draw the entries; the menu draws only what surrounds them.
         var bounds = GetSnappedBorderBounds(Bounds);
-        var dpiScale = GetDpi() / 96.0;
-        double radius = CornerRadius;
-        var borderInset = GetBorderVisualInset();
-        double itemRadius = Math.Max(0, LayoutRounding.RoundToPixel(radius, dpiScale) - borderInset);
+        DrawBackgroundAndBorder(context, bounds, Background, BorderBrush, BorderThickness, CornerRadius);
+    }
 
-        DrawBackgroundAndBorder(context, bounds, Background, BorderBrush, BorderThickness, radius);
-
-        var innerBounds = bounds.Deflate(new Thickness(borderInset));
+    /// <summary>The clip the rows are drawn under, or null when the viewport has no area.</summary>
+    private Rect? GetRowClip()
+    {
         var contentBounds = GetContentViewportBounds();
         if (contentBounds.Width <= 0 || contentBounds.Height <= 0)
+        {
+            return null;
+        }
+
+        return LayoutRounding.MakeClipRect(contentBounds, GetDpi() / 96.0);
+    }
+
+    protected override void RenderSubtree(IGraphicsContext context)
+    {
+        if (GetRowClip() is not Rect clip)
         {
             return;
         }
 
-        var factory = GetGraphicsFactory();
-        var style = GetTextRunStyle();
-        uint dpi = GetDpi();
-
         context.Save();
-        context.SetClip(LayoutRounding.MakeClipRect(contentBounds, dpiScale));
-
-        double y = contentBounds.Y - _verticalOffset;
-        for (int i = 0; i < Items.Count; i++)
+        context.SetClip(clip);
+        foreach (var row in _rows.Values)
         {
-            var entry = Items[i];
-            double h = GetEntryHeight(entry);
-            // Snap each row to the device pixel grid so highlight, separator and text stay crisp at
-            // fractional scales (e.g. 125%). y keeps the true unsnapped running position, so a row's
-            // snapped bottom equals the next row's snapped top and rows tile without a seam.
-            double rowTop = LayoutRounding.RoundToPixel(y, dpiScale);
-            double rowBottom = LayoutRounding.RoundToPixel(y + h, dpiScale);
-            var row = new Rect(contentBounds.X, rowTop, contentBounds.Width, rowBottom - rowTop);
-            if (row.Bottom < contentBounds.Y)
-            {
-                y += h;
-                continue;
-            }
-
-            if (entry is MenuSeparator)
-            {
-                double onePx = 1.0 / dpiScale;
-                double sepY = LayoutRounding.RoundToPixel(row.Y + (row.Height - onePx) / 2, dpiScale);
-                context.FillRectangle(new Rect(row.X + 4, sepY, row.Width - 8, onePx), Theme.Palette.ControlBorder);
-                y += h;
-                continue;
-            }
-
-            if (entry is MenuItem item)
-            {
-                bool isHot = i == _hotIndex || i == _openSubMenuIndex;
-                var bg = isHot ? Theme.Palette.SelectionBackground.WithAlpha((byte)(0.6 * 255)) : Color.Transparent;
-                if (bg.A > 0)
-                {
-                    if (itemRadius > 0)
-                    {
-                        context.FillRoundedRectangle(row, itemRadius, itemRadius, bg);
-                    }
-                    else
-                    {
-                        context.FillRectangle(row, bg);
-                    }
-                }
-
-                var fg = item.IsEffectivelyEnabled ? Foreground : Theme.Palette.DisabledText;
-                var chevronReserved = item.SubMenu != null ? SubMenuGlyphAreaWidth : 0;
-
-                var paddedRow = row.Deflate(ItemPadding);
-
-                double textLeft = paddedRow.X;
-                if (_hasAnyIcon)
-                {
-                    if (_materializedIcons.TryGetValue(item, out var icon))
-                    {
-                        if (!item.IsEffectivelyEnabled)
-                        {
-                            context.BeginOpacity(0.5);
-                        }
-
-                        icon.Render(context);
-
-                        if (!item.IsEffectivelyEnabled)
-                        {
-                            context.EndOpacity();
-                        }
-                    }
-
-                    textLeft += ResolveIconSize() + IconTextGap;
-                }
-                double textRight = paddedRow.Right - chevronReserved;
-                if (_hasAnyShortcut)
-                {
-                    textRight -= (_maxShortcutWidth + ShortcutColumnGap);
-                }
-
-                var textRect = new Rect(textLeft, paddedRow.Y, Math.Max(0, textRight - textLeft), paddedRow.Height);
-                LastCaptionWidth = Math.Min(LastCaptionWidth, textRect.Width);
-                var showAccessKeys = GetValue(Window.ShowAccessKeysProperty);
-                var parsed = item.GetParsedText();
-                var textLayout = _textLayouts.GetOrCreate(
-                    factory, parsed.displayText, dpi, in style, textRect.Width, textRect.Height);
-                if (textLayout != null)
-                {
-                    MenuTextLayouts.Draw(
-                        context, textLayout, textRect, fg, showAccessKeys, parsed.underlineIndex);
-                }
-
-                var shortcutText = item.GetShortcutDisplayText();
-                if (_hasAnyShortcut && !string.IsNullOrEmpty(shortcutText))
-                {
-                    double shortcutRight = paddedRow.Right - chevronReserved;
-                    double shortcutLeft = shortcutRight - _maxShortcutWidth;
-                    var shortcutRect = new Rect(shortcutLeft, paddedRow.Y, Math.Max(0, shortcutRight - shortcutLeft), paddedRow.Height);
-                    var shortcutLayout = _textLayouts.GetOrCreate(
-                        factory,
-                        shortcutText,
-                        dpi,
-                        in style,
-                        shortcutRect.Width,
-                        shortcutRect.Height,
-                        TextAlignment.Right);
-                    if (shortcutLayout != null)
-                    {
-                        MenuTextLayouts.Draw(context, shortcutLayout, shortcutRect, fg);
-                    }
-                }
-
-                if (item.SubMenu != null)
-                {
-                    // Submenu chevron indicator (matches ComboBox/TreeView chevron style).
-                    var center = new Point(paddedRow.Right - (SubMenuGlyphAreaWidth / 2), paddedRow.Y + paddedRow.Height / 2);
-                    Glyph.Draw(context, center, size: 3, fg, GlyphKind.ChevronRight);
-                }
-            }
-
-            y += h;
-            if (y > contentBounds.Bottom)
-            {
-                break;
-            }
+            row.Render(context);
         }
 
         context.Restore();
+        _vBar.Render(context);
+    }
 
-        if (_vBar.IsVisible)
+    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
+    {
+        builder.Content(0);
+        if (GetRowClip() is not Rect clip)
         {
-            _vBar.Render(context);
+            return;
         }
+
+        builder.PushClipRect(clip);
+        foreach (var row in _rows.Values)
+        {
+            builder.Child(row);
+        }
+
+        builder.Pop();
+        builder.Child(_vBar);
     }
 
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
     {
-        foreach (var icon in _materializedIcons.Values)
+        foreach (var row in _rows.Values)
         {
-            if (!visitor(icon))
+            if (!visitor(row))
             {
                 return false;
             }
@@ -1467,7 +1503,8 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
     protected override void OnDispose()
     {
         Menu.Changed -= OnMenuChanged;
-        ClearMaterializedIcons();
+        ReleaseRows();
+        _icons.Clear();
         base.OnDispose();
     }
 
