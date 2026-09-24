@@ -79,11 +79,12 @@ internal sealed class DispatcherQueue
     {
         bool processedAny = false;
 
-        // Process highest priority first.
-        for (int p = _queues.Length - 1; p >= 0; p--)
+        // Process highest priority first, going back up whenever an item posted higher-priority work:
+        // layout requested by a background item has to run before the idle items queued behind it.
+        for (int priority = _queues.Length - 1; priority >= 0; priority--)
         {
-            var queue = _queues[p];
-            while (queue.TryDequeue(out var item))
+            var queue = _queues[priority];
+            while (!HasWorkAbove(priority) && queue.TryDequeue(out var item))
             {
                 // If the operation's priority was changed while pending,
                 // re-enqueue to the correct queue without running cleanup.
@@ -91,7 +92,7 @@ internal sealed class DispatcherQueue
                 if (op != null && op.Status != DispatcherOperationStatus.Aborted)
                 {
                     int target = (int)op.Priority;
-                    if (target != p && (uint)target < (uint)_queues.Length)
+                    if (target != priority && (uint)target < (uint)_queues.Length)
                     {
                         _queues[target].Enqueue(item);
                         continue;
@@ -161,6 +162,11 @@ internal sealed class DispatcherQueue
                     item.Signal?.Set();
                 }
             }
+
+            if (HasWorkAbove(priority))
+            {
+                priority = _queues.Length;
+            }
         }
 
         // Pure-evaluation command model: after a dispatcher turn that ran work (and so may have
@@ -170,6 +176,19 @@ internal sealed class DispatcherQueue
         {
             NotifyDrainCompleted();
         }
+    }
+
+    private bool HasWorkAbove(int priority)
+    {
+        for (int index = _queues.Length - 1; index > priority; index--)
+        {
+            if (!_queues[index].IsEmpty)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static void NotifyDrainCompleted()
