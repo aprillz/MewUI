@@ -15,6 +15,9 @@ namespace Aprillz.MewUI.MewDock.Extended;
 /// </summary>
 internal sealed class ExtendedDockModel : DockModel
 {
+    // The size of a new pinned dock along its edge.
+    private const double DEFAULT_DOCK_SIZE = 220;
+
     // Borders are auto-hide only, NOT drop targets - the faithful border search is replaced by the dock search:
     // pinned tool docks are edge regions of the main view, so their sub-layout trees are searched instead.
     internal override DropInfo? FindDropTargetNode(string layoutId, Node dragNode, double x, double y)
@@ -82,7 +85,13 @@ internal sealed class ExtendedDockModel : DockModel
                     // Standard nesting: left/right docks are outer (full height), top/bottom are inner (between them).
                     bool outer = fromBorder.Location is DockLocation.Left or DockLocation.Right;
                     var target = FindOrCreateDock(fromBorder.Location, fromBorder.GetSize(), NextDockRank(outer));
+                    bool wasRevealed = ReferenceEquals(fromBorder.GetSelectedNode(), toolTab);
                     fromBorder.Remove(toolTab);
+                    if (wasRevealed)
+                    {
+                        // The revealed tool is now docked; the border does not reveal a neighbour in its place.
+                        fromBorder.SetSelected(-1);
+                    }
                     target.Drop(toolTab, DockLocation.Center, target.Children.Count, select: true);
                 }
                 break;
@@ -110,7 +119,7 @@ internal sealed class ExtendedDockModel : DockModel
                     if (tabs.Count > 0)
                     {
                         // Edge dock always creates a NEW stacked dock (join is the separate "tab" drop band).
-                        var target = CreateDock(a.Edge, 220, NextDockRank(a.Outer));
+                        var target = CreateDock(a.Edge, DEFAULT_DOCK_SIZE, NextDockRank(a.Outer));
                         foreach (var moveTool in tabs)
                         {
                             target.Drop(moveTool, DockLocation.Center, target.Children.Count, select: true);
@@ -121,14 +130,24 @@ internal sealed class ExtendedDockModel : DockModel
                 }
                 break;
             }
+            case AdjustDockSizeAction adjust:
+                if (Layouts.TryGetValue(adjust.LayoutId, out var sized) && sized is DockLayout sizedDock)
+                {
+                    sizedDock.Size = adjust.Size;
+                }
+                break;
             case UnpinToolAction a:
             {
                 // Unpin a pinned tool group: move its tools to the auto-hide border on the dock's edge, collapse it,
                 // and drop the dock sub-layout once it holds no tabsets.
-                if (GetNodeById(a.NodeId) is TabSetNode toolSet
-                    && toolSet.GetLayout() is DockLayout dockLayout
-                    && BorderSet.BorderMap.TryGetValue(dockLayout.Edge, out var border))
+                if (GetNodeById(a.NodeId) is TabSetNode toolSet && toolSet.GetLayout() is DockLayout dockLayout)
                 {
+                    // The edge may have no border yet (a tool edge-docked where none was); the unpinned tools make one.
+                    if (!BorderSet.BorderMap.TryGetValue(dockLayout.Edge, out var border))
+                    {
+                        border = new BorderNode(this, dockLayout.Edge) { EnableAutoHideOverride = true };
+                        BorderSet.Add(border);
+                    }
                     var tools = new List<TabNode>();
                     foreach (var child in toolSet.Children)
                     {
@@ -145,12 +164,37 @@ internal sealed class ExtendedDockModel : DockModel
                     Tidy();
                     if (dockLayout.RootRow is null || dockLayout.RootRow.Children.Count == 0)
                     {
-                        Layouts.Remove(dockLayout.LayoutId);
+                        RemoveLayout(dockLayout.LayoutId);
                     }
                 }
                 break;
             }
         }
+    }
+
+    /// <summary>
+    /// Tools never join the document area: a closing popout sends its tool groups to a pinned dock (the right edge,
+    /// joining one already there), and only its documents go back to the main tree.
+    /// </summary>
+    private protected override void DockBackFromPopout(RowNode popoutRoot)
+    {
+        var toolTabs = new List<TabNode>();
+        popoutRoot.ForEachNode((node, level) =>
+        {
+            if (node is TabNode tab && !tab.IsDocument)
+            {
+                toolTabs.Add(tab);
+            }
+        }, 0);
+        if (toolTabs.Count > 0)
+        {
+            var target = FindOrCreateDock(DockLocation.Right, DEFAULT_DOCK_SIZE, NextDockRank(outer: true));
+            foreach (var tab in toolTabs)
+            {
+                target.Drop(tab, DockLocation.Center, target.Children.Count, select: true);
+            }
+        }
+        base.DockBackFromPopout(popoutRoot);
     }
 
     // First tabset in a node's subtree (depth-first); used to join a tool to an existing dock on an edge.
@@ -196,7 +240,7 @@ internal sealed class ExtendedDockModel : DockModel
         };
         var dockRow = new RowNode(this);
         dockLayout.SetRootRow(dockRow);
-        Layouts[layoutId] = dockLayout;
+        AddLayout(dockLayout);
         var tabSet = new TabSetNode(this);
         dockRow.AddChild(tabSet);
         return tabSet;
@@ -238,7 +282,7 @@ internal sealed class ExtendedDockModel : DockModel
         {
             if (layout is DockLayout && (layout.RootRow is null || layout.RootRow.Children.Count == 0))
             {
-                Layouts.Remove(id);
+                RemoveLayout(id);
             }
         }
     }
@@ -256,7 +300,7 @@ internal sealed class ExtendedDockModel : DockModel
             DockRank = json.DockRank ?? 0,
         };
         layout.SetRootRow(BuildRowNode(json.Layout, layout));
-        Layouts[id] = layout;
+        AddLayout(layout);
     }
 
     private protected override JsonSubLayout SubLayoutToJson(Layout layout, RowNode rootRow)

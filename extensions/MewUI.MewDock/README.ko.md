@@ -54,8 +54,8 @@ Application.Run(window);
 | `SaveLayout() : string` | 현재 레이아웃 직렬화(도킹 서브레이아웃, 분리 창 포함). |
 | `AddDocumentPane(string title, UIElement content, string? component = null) : DockPane` | 가운데에 문서 탭 추가. |
 | `AddToolPane(string title, UIElement content, DockEdge edge = Left, string? component = null) : DockPane` | 에지에 도킹된 툴 패널 추가. |
-| `ContentFactory : Func<DockPane, UIElement?>?` | 레이아웃에서 복원되는 패널의 콘텐츠 생성. |
-| `HeaderFactory : Func<DockPane, UIElement?>?` | 커스텀 탭 헤더 콘텐츠. null이면 기본 헤더. |
+| `ContentFactory : Func<DockPane, UIElement?>?` | 패널의 콘텐츠를 패널당 한 번 만든다. 패널이 레이아웃에 있는 동안(이동, 분할, 최대화, 핀) 도킹이 그 콘텐츠를 유지하고, 패널이 닫히면 돌려준다. |
+| `HeaderFactory : Func<DockPane, UIElement?>?` | 커스텀 탭 헤더 콘텐츠를 패널당 한 번 만든다. null이면 기본 헤더. 이름 변경을 따르려면 패널 속성에 바인딩한다. |
 | `TabMenuOpening : EventHandler<DockTabMenuEventArgs>` | 탭 우클릭 메뉴가 열릴 때마다 발생; `e.Menu`에 항목 추가. |
 | `GroupMenuOpening : EventHandler<DockGroupMenuEventArgs>` | 그룹(탭 스트립) 메뉴가 열릴 때마다 발생. |
 | `CenterContent : UIElement?` | 문서 호스트를 커스텀 가운데 요소로 교체. |
@@ -63,7 +63,8 @@ Application.Run(window);
 | `DocumentPanes` / `Panes : IReadOnlyList<DockPane>` | 문서 패널 / 툴 패널. |
 | `Groups : IReadOnlyList<DockGroup>` | 모든 탭 그룹. |
 | `ActivePaneChanged : EventHandler<DockPane?>` | 포커스가 다른 패널로 이동할 때 발생. |
-| `Changed : EventHandler` | 레이아웃이 바뀐 뒤 발생. |
+| `Changed : EventHandler` | 레이아웃 변경이 끝난 뒤 한 번 발생. 스플리터와 도크 크기 조절이 끝날 때도 발생. |
+| `PaneClosing : EventHandler<DockPaneClosingEventArgs>` | 사용자가 도킹의 컨트롤로 패널을 닫기 전에 발생. `Cancel`을 설정하면 패널이 남는다. `DockPane.Close()`는 발생시키지 않는다. |
 
 ## `DockPane` (핸들)
 
@@ -75,7 +76,7 @@ Application.Run(window);
 | `IsDocument` / `IsActive` | 문서 패널 vs 툴 패널 / 활성 패널 여부. |
 | `Group : DockGroup?` / `Edge : DockEdge?` | 소속 그룹(자동 숨김이면 null)과 붙어 있는 에지. |
 | `Content` | `AddDocumentPane`/`AddToolPane`에 넘긴 요소(팩토리 복원 패널은 null). |
-| `Activate()` / `Close()` | 패널 선택 또는 닫기. |
+| `Activate()` / `Close()` | 패널을 선택하고 콘텐츠에 포커스를 준다(펼쳐진 자동 숨김 도구는 펼친 채 둔다). 패널 닫기. |
 | `Float()` / `FloatGroup()` | 패널, 또는 그 그룹 전체를 창으로 분리. |
 | `SplitOff(DockEdge)` | 이 패널을 자기 그룹에서 해당 에지 방향으로 분리. |
 | `MoveInto(DockGroup)` / `DockInto(DockGroup, DockEdge)` | 다른 그룹에 탭으로 합류 / 그 그룹 기준 분할 도킹. |
@@ -186,8 +187,8 @@ manager.TabMenuOpening += (s, e) =>
 
 1. **명시적 콘텐츠** - `AddDocumentPane` / `AddToolPane` / `DockGroup.AddPane`에 살아있는 요소를 넘기면, 그 패널에
    묶여 그대로 표시됩니다. `ContentFactory`를 거치지 않습니다.
-2. **팩토리 콘텐츠** - JSON에서 로드된 탭은 `component` 키를 갖습니다. 뷰가 본문을 그릴 때 `ContentFactory(pane)`를
-   호출하고, 호스트가 `pane.Component`를 읽어 요소를 만듭니다.
+2. **팩토리 콘텐츠** - JSON에서 로드된 탭은 `component` 키를 갖습니다. 탭이 처음 보일 때 도킹이 `ContentFactory(pane)`를
+   한 번 호출하고, 호스트가 `pane.Component`를 읽어 요소를 만듭니다. 그 뒤로 도킹은 그 요소를 탭의 콘텐츠로 유지합니다.
 
 `component`는 프레임워크가 노드에 실어 직렬화하는 문자열일 뿐, 그 자체로 콘텐츠에 **매핑되지 않습니다.**
 매핑은 `ContentFactory` 안(즉 `pane.Component`에 대한 `switch`나 딕셔너리)에 있습니다:

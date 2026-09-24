@@ -54,8 +54,8 @@ One control that hosts the whole dock space. Add it to a window; it owns the mod
 | `SaveLayout() : string` | Serialize the current layout (including dock sub-layouts and popouts). |
 | `AddDocumentPane(string title, UIElement content, string? component = null) : DockPane` | Add a document tab to the center. |
 | `AddToolPane(string title, UIElement content, DockEdge edge = Left, string? component = null) : DockPane` | Add a tool pane docked to an edge. |
-| `ContentFactory : Func<DockPane, UIElement?>?` | Builds content for panes restored from a layout. |
-| `HeaderFactory : Func<DockPane, UIElement?>?` | Custom tab-header content; null uses the default header. |
+| `ContentFactory : Func<DockPane, UIElement?>?` | Builds a pane's content, once per pane; the dock keeps it while the pane is in the layout (moves, splits, maximize, pin) and gives it back when the pane closes. |
+| `HeaderFactory : Func<DockPane, UIElement?>?` | Custom tab-header content, once per pane; null uses the default header. Bind it to the pane's properties to follow renames. |
 | `TabMenuOpening : EventHandler<DockTabMenuEventArgs>` | Raised each time a tab's right-click menu opens; add items to `e.Menu`. |
 | `GroupMenuOpening : EventHandler<DockGroupMenuEventArgs>` | Raised each time a group's (tab-strip) menu opens. |
 | `CenterContent : UIElement?` | Replace the document host with a custom center element. |
@@ -63,7 +63,8 @@ One control that hosts the whole dock space. Add it to a window; it owns the mod
 | `DocumentPanes` / `Panes : IReadOnlyList<DockPane>` | Document panes / tool panes. |
 | `Groups : IReadOnlyList<DockGroup>` | Every tab group. |
 | `ActivePaneChanged : EventHandler<DockPane?>` | Raised when focus moves to a different pane. |
-| `Changed : EventHandler` | Raised after any layout change. |
+| `Changed : EventHandler` | Raised once after a layout change is complete, including the end of a splitter or dock resize. |
+| `PaneClosing : EventHandler<DockPaneClosingEventArgs>` | Raised before the user closes a pane from the dock's controls; set `Cancel` to keep it. `DockPane.Close()` does not raise it. |
 
 ## `DockPane` (a handle)
 
@@ -76,7 +77,7 @@ the layout itself stays inside the manager.
 | `IsDocument` / `IsActive` | Document pane vs tool pane; whether it is the active pane. |
 | `Group : DockGroup?` / `Edge : DockEdge?` | The group it lives in (null when auto-hidden) and the edge it sits on. |
 | `Content` | The element passed to `AddDocumentPane`/`AddToolPane` (null for factory-restored panes). |
-| `Activate()` / `Close()` | Select or close the pane. |
+| `Activate()` / `Close()` | Select the pane and focus its content (a revealed auto-hide tool stays revealed); close the pane. |
 | `Float()` / `FloatGroup()` | Pop the pane, or its whole group, out into a window. |
 | `SplitOff(DockEdge)` | Split this pane off its own group toward an edge. |
 | `MoveInto(DockGroup)` / `DockInto(DockGroup, DockEdge)` | Join another group as a tab / dock against one of its edges. |
@@ -193,8 +194,9 @@ A pane gets its content one of two ways:
 
 1. **Explicit content** - `AddDocumentPane` / `AddToolPane` / `DockGroup.AddPane` take a live element, stored
    against the pane and shown directly. It does not go through `ContentFactory`.
-2. **Factory content** - a tab loaded from JSON carries a `component` key. When the view needs its body it calls
-   `ContentFactory(pane)`, and the host builds the element by reading `pane.Component`.
+2. **Factory content** - a tab loaded from JSON carries a `component` key. The first time the tab is shown the dock calls
+   `ContentFactory(pane)` once, and the host builds the element by reading `pane.Component`. The dock keeps that element
+   for the tab from then on.
 
 `component` is just a string the framework carries on the node and serializes; it does **not** map to content by
 itself. The mapping lives in your `ContentFactory` (a `switch` or dictionary on `pane.Component`):

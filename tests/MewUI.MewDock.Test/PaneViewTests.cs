@@ -10,7 +10,7 @@ using static MewUI.MewDock.Test.DockTestSupport;
 
 namespace MewUI.MewDock.Test;
 
-/// <summary>Explicit pane content shows as soon as the pane is added, and tab headers draw once.</summary>
+/// <summary>Explicit pane content shows as soon as the pane is added (in the pane layer), and tab headers draw once.</summary>
 [TestClass]
 public sealed class PaneViewTests
 {
@@ -23,7 +23,7 @@ public sealed class PaneViewTests
 
         manager.AddDocumentPane("File.st", view, "document");
 
-        Assert.IsInstanceOfType<FlexTabSetView>(view.Parent, "the new tab's content is hosted without another selection change");
+        Assert.IsTrue(IsInside<PaneLayer>(view), "the new tab's content is shown without another selection change");
     }
 
     [TestMethod]
@@ -36,7 +36,7 @@ public sealed class PaneViewTests
 
         group.AddPane("Extra", view, "extra");
 
-        Assert.IsInstanceOfType<FlexTabSetView>(view.Parent);
+        Assert.IsTrue(IsInside<PaneLayer>(view));
     }
 
     [TestMethod]
@@ -69,6 +69,18 @@ public sealed class PaneViewTests
     {
         headers.Add(header);
         return header;
+    }
+
+    private static bool IsInside<TAncestor>(Element element)
+    {
+        for (Element? current = element.Parent; current is not null; current = current.Parent)
+        {
+            if (current is TAncestor)
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static bool IsHeaderOf(Element button, List<CountingHeader> headers) => headers.Any(header => IsInside(header, button));

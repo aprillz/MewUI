@@ -76,36 +76,38 @@ internal sealed class DockCaption : ContentControl, IToolHeader
     private static TextBlock ToolTipLabel(ObservableValue<string> source) => new TextBlock().BindText(source);
 
     // A pinned/floating tool group: the title bar drags the WHOLE group; pin auto-hides; menu floats/auto-hides/closes.
-    public static DockCaption ForTool(TabSetNode tabSet) => new(
+    public static DockCaption ForTool(TabSetNode tabSet, Action<TabNode> close) => new(
         tabSet.Model,
         () => tabSet.GetSelectedNode()?.Name,
         () => tabSet,
         GlyphKind.Minus, // unpin (auto-hide)
         MewUIDockString.ToolTipAutoHide,
         () => tabSet.Model.DoAction(DockAction.UnpinTool(tabSet.GetId())),
-        () => CloseSelected(tabSet.Model, tabSet.GetSelectedNode()),
+        () => CloseSelected(close, tabSet.GetSelectedNode()),
         (menu, commands) =>
         {
             DockMenuCommands.Add(menu, commands, "floatGroup", MewUIDockString.MenuFloat.Value, () => tabSet.Model.DoAction(DockAction.PopoutTabset(tabSet.GetId())));
             DockMenuCommands.Add(menu, commands, "autoHide", MewUIDockString.MenuAutoHide.Value, () => tabSet.Model.DoAction(DockAction.UnpinTool(tabSet.GetId())));
-            DockMenuCommands.Add(menu, commands, "close", MewUIDockString.MenuClose.Value, () => CloseSelected(tabSet.Model, tabSet.GetSelectedNode()));
+            DockMenuCommands.Add(menu, commands, "close", MewUIDockString.MenuClose.Value, () => CloseSelected(close, tabSet.GetSelectedNode()),
+                tabSet.GetSelectedNode()?.IsEnableClose ?? false);
         },
         pos => tabSet.Model.DoAction(DockAction.PopoutTabset(tabSet.GetId(), position: pos)));
 
     // An auto-hidden tool reveal: the title bar drags the SELECTED tool; pin docks it; menu docks/floats/closes.
-    public static DockCaption ForBorder(BorderNode border) => new(
+    public static DockCaption ForBorder(BorderNode border, Action<TabNode> close) => new(
         border.Model,
         () => border.GetSelectedNode()?.Name,
         () => border.GetSelectedNode(),
         GlyphKind.Plus, // dock (pin)
         MewUIDockString.ToolTipDock,
         () => Pin(border),
-        () => CloseSelected(border.Model, border.GetSelectedNode()),
+        () => CloseSelected(close, border.GetSelectedNode()),
         (menu, commands) =>
         {
             DockMenuCommands.Add(menu, commands, "dock", MewUIDockString.MemuDock.Value, () => Pin(border));
             DockMenuCommands.Add(menu, commands, "float", MewUIDockString.MenuFloat.Value, () => Float(border));
-            DockMenuCommands.Add(menu, commands, "close", MewUIDockString.MenuClose.Value, () => CloseSelected(border.Model, border.GetSelectedNode()));
+            DockMenuCommands.Add(menu, commands, "close", MewUIDockString.MenuClose.Value, () => CloseSelected(close, border.GetSelectedNode()),
+                border.GetSelectedNode()?.IsEnableClose ?? false);
         },
         pos => { if (border.GetSelectedNode() is TabNode sel) border.Model.DoAction(DockAction.PopoutTab(sel.GetId(), position: pos)); });
 
@@ -125,11 +127,12 @@ internal sealed class DockCaption : ContentControl, IToolHeader
         }
     }
 
-    private static void CloseSelected(DockModel model, TabNode? selected)
+    /// <summary>A tool that does not allow closing stays; the host may also keep one it is asked about.</summary>
+    private static void CloseSelected(Action<TabNode> close, TabNode? selected)
     {
-        if (selected is not null)
+        if (selected is not null && selected.IsEnableClose)
         {
-            model.DoAction(DockAction.DeleteTab(selected.GetId()));
+            close(selected);
         }
     }
 

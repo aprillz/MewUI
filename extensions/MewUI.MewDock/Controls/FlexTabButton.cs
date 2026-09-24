@@ -18,6 +18,7 @@ internal sealed class FlexTabButton : Button
     private readonly TextBlock _label;
     private readonly Button? _closeButton;
     private readonly UIElement _normalContent;
+    private readonly UIElement? _hostHeader;
     private TextBox? _renameBox;
 
     public FlexTabButton(TabNode tab, TabSetNode tabSet, FlexViewContext context)
@@ -28,11 +29,19 @@ internal sealed class FlexTabButton : Button
 
         Padding = new Thickness(8, 2);
         MinHeight = 20;
+        // A tab click selects the tab; the keyboard focus goes to the tab's content, not the tab.
+        Focusable = false;
 
         // Foreground is set explicitly (the label sits under the Panel-based header, which does not inherit it).
         _label = new TextBlock { Text = tab.Name ?? MewUIDockString.TitleUnnamedTab.Value };
         _label.WithTheme((theme, label) => label.Foreground = theme.Palette.WindowText);
-        UIElement headerContent = context.Header?.Invoke(tab) ?? _label;
+        // A host header is made once per tab and passes from button to button as the tab moves between groups.
+        _hostHeader = context.HeaderFor(tab);
+        if (_hostHeader is not null)
+        {
+            FlexViewContext.DetachHeader(_hostHeader);
+        }
+        UIElement headerContent = _hostHeader ?? _label;
 
         // Pane tabs carry no per-tab close button - the caption owns close.
         if (tab.IsEnableClose && tabSet.IsDocument)
@@ -72,6 +81,18 @@ internal sealed class FlexTabButton : Button
 
     public TabNode Tab => _tab;
 
+    /// <summary>Shows the tab's current name in the default label; a host header follows the pane title itself.</summary>
+    internal void RefreshName() => _label.Text = _tab.Name ?? MewUIDockString.TitleUnnamedTab.Value;
+
+    /// <summary>Gives the host header back so the tab's next button can show it.</summary>
+    internal void ReleaseHeader()
+    {
+        if (_hostHeader is not null)
+        {
+            FlexViewContext.DetachHeader(_hostHeader);
+        }
+    }
+
     public bool IsActive => ReferenceEquals(FlexTabSetView.EffectiveSelected(_tabSet), _tab);
 
     // The active tab reports Selected; it also reports Focused when its tabset is the active one, which the
@@ -91,7 +112,7 @@ internal sealed class FlexTabButton : Button
         return new VisualState { Flags = flags };
     }
 
-    private void OnCloseClick() => _tabSet.Model.DoAction(DockAction.DeleteTab(_tab.GetId()));
+    private void OnCloseClick() => _context.Close(_tab);
 
     protected override void OnMouseDown(MouseEventArgs e)
     {
@@ -170,7 +191,7 @@ internal sealed class FlexTabButton : Button
         {
             if (child is TabNode other && !ReferenceEquals(other, _tab) && other.IsEnableClose)
             {
-                _tabSet.Model.DoAction(DockAction.DeleteTab(other.GetId()));
+                _context.Close(other);
             }
         }
     }
@@ -181,7 +202,7 @@ internal sealed class FlexTabButton : Button
         {
             if (child is TabNode tab && tab.IsEnableClose)
             {
-                _tabSet.Model.DoAction(DockAction.DeleteTab(tab.GetId()));
+                _context.Close(tab);
             }
         }
     }
@@ -253,7 +274,8 @@ internal sealed class FlexTabButton : Button
         }
         var name = _renameBox.Text;
         _renameBox = null;
-        // RenameTab is structural: it rebuilds the tabset view, recreating this button with the new name.
+        Content = _normalContent;
+        // The rename updates this button in place (RefreshName), so the label must be back before it does.
         _tabSet.Model.DoAction(DockAction.RenameTab(_tab.GetId(), name));
     }
 

@@ -7,9 +7,11 @@ internal sealed class BorderSet
 {
     private readonly List<BorderNode> _borders = new();
     private readonly Dictionary<DockLocation, BorderNode> _borderMap = new();
+    private readonly Model _model;
 
     internal BorderSet(Model model)
     {
+        _model = model;
     }
 
     public IReadOnlyList<BorderNode> Borders => _borders;
@@ -22,6 +24,7 @@ internal sealed class BorderSet
     {
         _borders.Add(border);
         _borderMap[border.Location] = border;
+        _model.OnBorderAdded(border);
     }
 
     internal void ForEachNode(Action<Node, int> fn)

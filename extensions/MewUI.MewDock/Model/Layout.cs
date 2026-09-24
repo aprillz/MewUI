@@ -17,6 +17,8 @@ public enum LayoutType
 internal class Layout
 {
     private readonly string _layoutId;
+    private TabSetNode? _maximizedTabSet;
+    private TabSetNode? _activeTabSet;
 
     internal Layout(string layoutId, LayoutType type, Rect rect)
     {
@@ -33,16 +35,51 @@ internal class Layout
 
     internal RowNode? RootRow { get; private set; }
 
-    internal TabSetNode? MaximizedTabSet { get; set; }
+    /// <summary>Raised after the root row was replaced.</summary>
+    internal event Action<Layout>? RootRowChanged;
 
-    internal TabSetNode? ActiveTabSet { get; set; }
+    /// <summary>Raised after the maximized tabset changed.</summary>
+    internal event Action<Layout>? MaximizedChanged;
+
+    /// <summary>Raised after the active tabset changed.</summary>
+    internal event Action<Layout>? ActiveChanged;
+
+    internal TabSetNode? MaximizedTabSet
+    {
+        get => _maximizedTabSet;
+        set
+        {
+            if (!ReferenceEquals(value, _maximizedTabSet))
+            {
+                _maximizedTabSet = value;
+                MaximizedChanged?.Invoke(this);
+            }
+        }
+    }
+
+    internal TabSetNode? ActiveTabSet
+    {
+        get => _activeTabSet;
+        set
+        {
+            if (!ReferenceEquals(value, _activeTabSet))
+            {
+                _activeTabSet = value;
+                ActiveChanged?.Invoke(this);
+            }
+        }
+    }
 
     internal bool IsMainLayout => _layoutId == Model.MainLayoutId;
 
     internal void SetRootRow(RowNode? rowNode)
     {
         rowNode?.SetLayout(this);
-        RootRow = rowNode;
+        if (!ReferenceEquals(rowNode, RootRow))
+        {
+            RootRow = rowNode;
+            RootRowChanged?.Invoke(this);
+        }
     }
 
     internal void VisitNodes(Action<Node, int> fn) => RootRow?.ForEachNode(fn, 0);

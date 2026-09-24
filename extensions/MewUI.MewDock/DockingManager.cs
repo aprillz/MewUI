@@ -31,16 +31,18 @@ public sealed class DockingManager : Panel
     private readonly Dictionary<string, DockPane> _panes = new();
     private readonly Dictionary<string, DockGroup> _groups = new();
     private readonly Dictionary<string, UIElement> _explicitContent = new();
+    private readonly Dictionary<string, PaneHost> _hosts = new();
     private DockModel? _model;
     private FlexLayoutView? _view;
     private DockPane? _activePane;
     private UIElement? _centerContent;
 
-    /// <summary>Builds pane content when a serialized layout is restored (keyed off <see cref="DockPane.Component"/>).
-    /// Panes added with explicit content (AddDocumentPane/AddPane) bypass it.</summary>
+    /// <summary>Builds a pane's content, once per pane: the dock keeps it for as long as the pane is in the layout and
+    /// gives it back (out of the window) when the pane is closed. Panes added with explicit content bypass it.</summary>
     public Func<DockPane, UIElement?>? ContentFactory { get; set; }
 
-    /// <summary>Builds custom tab-header content; null falls back to the default header (title + close).</summary>
+    /// <summary>Builds custom tab-header content, once per pane; null falls back to the default header (title + close).
+    /// The header is kept while the pane moves between groups, so it should bind to the pane's properties.</summary>
     public Func<DockPane, UIElement?>? HeaderFactory { get; set; }
 
     internal DockModel? Model => _model;
@@ -56,8 +58,13 @@ public sealed class DockingManager : Panel
     /// <summary>Raised each time a group's (tab strip) right-click menu opens, after the default items.</summary>
     public event EventHandler<DockGroupMenuEventArgs>? GroupMenuOpening;
 
-    /// <summary>Raised after any change to the layout (a user gesture or a handle verb).</summary>
+    /// <summary>Raised after any change to the layout (a user gesture or a handle verb), once the change is complete.</summary>
     public event EventHandler? Changed;
+
+    /// <summary>Raised before the user closes a pane from the dock's own controls (a tab's close button or middle click, a
+    /// caption's close button, the Close menu items). Setting <see cref="DockPaneClosingEventArgs.Cancel"/> keeps the pane
+    /// where it is. <see cref="DockPane.Close"/> called from code closes without asking.</summary>
+    public event EventHandler<DockPaneClosingEventArgs>? PaneClosing;
 
     /// <summary>Optional custom centre element replacing the document host (panes still dock around it).</summary>
     public UIElement? CenterContent
@@ -101,17 +108,20 @@ public sealed class DockingManager : Panel
     {
         if (_model is DockModel previous)
         {
-            previous.RemoveChangeListener(OnModelChanged);
+            previous.ChangesCompleted -= OnModelChanged;
         }
 
         var model = ExtendedDockModel.FromJson(json);
         DetachAllHandles();
+        _view?.Release();
         _explicitContent.Clear();
         _model = model;
-        _view = ExtendedDock.CreateView(model, ResolveContent, ResolveHeader, ConfigureTabMenuForNode, ConfigureGroupMenuForNode);
+        // Content of a tab the new layout still has (by id) stays with it; the rest is let go.
+        PruneHosts();
+        _view = ExtendedDock.CreateView(model, ResolveHost, ResolveHeader, ConfigureTabMenuForNode, ConfigureGroupMenuForNode, RequestClose);
 
         _view.Content = _centerContent;
-        _model.AddChangeListener(OnModelChanged);
+        _model.ChangesCompleted += OnModelChanged;
         Clear();
         Add(_view);
         SyncActivePane();
@@ -142,10 +152,14 @@ public sealed class DockingManager : Panel
         var model = RequireModel();
         var border = GetOrCreateBorder(model, ToDockLocation(edge));
         var json = new JsonTabNode { Name = title, IsDocument = false, Component = component };
-        var node = AddTabWithContent(model, json, border.GetId(), DockLocation.Center, select: false, content);
-        // A new pane starts pinned as a docked group; Unpin() sends it back to auto-hide.
-        model.DoAction(DockAction.PinTool(node.GetId()));
-        return GetOrCreatePane(node);
+        // Adding and pinning are one change to the host: it hears about them once, with the pane already docked.
+        using (model.DeferNotifications())
+        {
+            var node = AddTabWithContent(model, json, border.GetId(), DockLocation.Center, select: false, content);
+            // A new pane starts pinned as a docked group; Unpin() sends it back to auto-hide.
+            model.DoAction(DockAction.PinTool(node.GetId()));
+            return GetOrCreatePane(node);
+        }
     }
 
     // Add a tab built from json to an existing target node with explicit (non-factory) content. Used by DockGroup.Add.
@@ -167,16 +181,53 @@ public sealed class DockingManager : Panel
     protected override Size MeasureContent(Size availableSize)
     {
         _view?.Measure(availableSize);
-        return availableSize;
+        // The dock fills whatever it is given; unbounded, it asks for nothing.
+        return new Size(
+            double.IsPositiveInfinity(availableSize.Width) ? 0 : availableSize.Width,
+            double.IsPositiveInfinity(availableSize.Height) ? 0 : availableSize.Height);
     }
 
     protected override void ArrangeContent(Rect bounds) => _view?.Arrange(bounds);
 
-    private void OnModelChanged(DockAction action)
+    private void OnModelChanged()
     {
         PrunePanes();
+        PruneHosts();
+        var previousActive = _activePane;
         SyncActivePane();
+        // A pane that became active, or a tool that was just revealed, takes the keyboard focus into its content.
+        if (_activePane is DockPane active && !ReferenceEquals(active, previousActive))
+        {
+            FocusContent(active.Node);
+        }
+        FocusNewlyRevealed();
         Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    private readonly HashSet<TabNode> _revealed = new();
+
+    private void FocusNewlyRevealed()
+    {
+        var revealed = new List<TabNode>();
+        if (_model is DockModel model)
+        {
+            foreach (var border in model.BorderSet.Borders)
+            {
+                if (border.GetSelectedNode() is TabNode tab)
+                {
+                    revealed.Add(tab);
+                }
+            }
+        }
+        foreach (var tab in revealed)
+        {
+            if (!_revealed.Contains(tab))
+            {
+                FocusContent(tab);
+            }
+        }
+        _revealed.Clear();
+        _revealed.UnionWith(revealed);
     }
 
     private void SyncActivePane()
@@ -272,12 +323,75 @@ public sealed class DockingManager : Panel
 
     internal UIElement? GetExplicitContent(string id) => _explicitContent.TryGetValue(id, out var content) ? content : null;
 
-    private UIElement? ResolveContent(TabNode tab)
+    /// <summary>A tab's content is decided once: the content it was added with, or what ContentFactory makes for it.</summary>
+    private PaneHost? ResolveHost(TabNode tab)
     {
+        string id = tab.GetId();
+        if (_hosts.TryGetValue(id, out var host))
+        {
+            host.Tab = tab;
+            return host;
+        }
         var pane = GetOrCreatePane(tab);
-        return _explicitContent.TryGetValue(pane.Id, out var explicitContent)
+        var content = _explicitContent.TryGetValue(id, out var explicitContent)
             ? explicitContent
             : ContentFactory?.Invoke(pane);
+        host = new PaneHost(tab, content);
+        host.Pressed += OnHostPressed;
+        host.FocusEntered += OnHostFocusEntered;
+        _hosts[id] = host;
+        return host;
+    }
+
+    /// <summary>A click in a pane's content makes its group the active one, as a click on the group's chrome does.</summary>
+    private void OnHostPressed(PaneHost host)
+    {
+        if (_model is DockModel model && host.Tab.Parent is TabSetNode tabSet && !ReferenceEquals(model.FocusedTabSet, tabSet))
+        {
+            model.DoAction(DockAction.SetActiveTabset(tabSet.GetId(), tabSet.LayoutId));
+        }
+    }
+
+    /// <summary>The dock's own close controls come here: the host may keep the pane, otherwise it is closed.</summary>
+    internal void RequestClose(TabNode tab)
+    {
+        if (_model is not DockModel model || !tab.IsEnableClose)
+        {
+            return;
+        }
+        var args = new DockPaneClosingEventArgs(GetOrCreatePane(tab));
+        PaneClosing?.Invoke(this, args);
+        if (!args.Cancel && ReferenceEquals(model.GetNodeById(tab.GetId()), tab))
+        {
+            model.DoAction(DockAction.DeleteTab(tab.GetId()));
+        }
+    }
+
+    /// <summary>Keyboard focus arriving in a pane's content (a click, Tab, or code) makes its group the active one.</summary>
+    private void OnHostFocusEntered(PaneHost host) => OnHostPressed(host);
+
+    /// <summary>Gives the keyboard focus to a tab's content: where it last was inside, or its first focusable element.</summary>
+    internal void FocusContent(TabNode tab)
+    {
+        if (_hosts.TryGetValue(tab.GetId(), out var host))
+        {
+            host.RestoreFocus();
+        }
+    }
+
+    /// <summary>A tab that left the layout gives its content back, so the host application can show it again elsewhere.</summary>
+    private void PruneHosts()
+    {
+        foreach (var (id, host) in _hosts.ToList())
+        {
+            if (_model?.GetNodeById(id) is not TabNode)
+            {
+                _hosts.Remove(id);
+                host.Pressed -= OnHostPressed;
+                host.FocusEntered -= OnHostFocusEntered;
+                host.ReleaseContent();
+            }
+        }
     }
 
     private UIElement? ResolveHeader(TabNode tab) => HeaderFactory?.Invoke(GetOrCreatePane(tab));
@@ -371,6 +485,23 @@ public sealed class DockingManager : Panel
         model.BorderSet.Add(border);
         return border;
     }
+}
+
+/// <summary>
+/// Args for <see cref="DockingManager.PaneClosing"/>: the pane the user is closing, and whether to keep it.
+/// </summary>
+public sealed class DockPaneClosingEventArgs : EventArgs
+{
+    internal DockPaneClosingEventArgs(DockPane pane)
+    {
+        Pane = pane;
+    }
+
+    /// <summary>The pane being closed.</summary>
+    public DockPane Pane { get; }
+
+    /// <summary>Set to keep the pane open.</summary>
+    public bool Cancel { get; set; }
 }
 
 /// <summary>

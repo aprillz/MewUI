@@ -75,12 +75,27 @@ internal sealed class FlexSplitter : Control
         base.OnMouseUp(e);
         if (e.Button == MouseButton.Left && _isDragging)
         {
-            _isDragging = false;
-            InvalidateVisualState();
+            EndDrag();
             (FindVisualRoot() as Window)?.ReleaseMouseCapture();
-            SplitterDragCompleted?.Invoke();
             e.Handled = true;
         }
+    }
+
+    protected override void OnMewPropertyChanged(MewProperty property)
+    {
+        base.OnMewPropertyChanged(property);
+        // The platform can take the capture away mid-drag; the drag ends there too, so later moves do not resize.
+        if (property == IsMouseCapturedProperty && !IsMouseCaptured && _isDragging)
+        {
+            EndDrag();
+        }
+    }
+
+    private void EndDrag()
+    {
+        _isDragging = false;
+        InvalidateVisualState();
+        SplitterDragCompleted?.Invoke();
     }
 
     protected override void OnRender(IGraphicsContext context)

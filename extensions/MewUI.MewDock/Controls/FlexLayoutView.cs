@@ -8,7 +8,9 @@ namespace Aprillz.MewUI.MewDock.Controls;
 /// <summary>
 /// The root control that renders one layout space of a <see cref="DockModel"/> (port of the FlexLayout
 /// <c>Layout</c> component). The main view (default layout id) also hosts popout windows for window-type
-/// sub-layouts. Rebuilds when the model changes and is the drop target for tab/tabset drags.
+/// sub-layouts. It follows the model's changes in place: the node views come from the shared registry and follow their
+/// own nodes, and two <see cref="PaneLayer"/>s show the visible tabs' content over them. It is the drop target for
+/// tab/tabset drags.
 /// </summary>
 internal class FlexLayoutView : Panel
 {
@@ -21,8 +23,13 @@ internal class FlexLayoutView : Panel
     private readonly FlexViewContext _context;
     private readonly string _layoutId;
     private readonly bool _isMain;
-    private readonly List<FlexBorderBar> _borderBars = new();
-    private readonly Dictionary<string, Window> _popoutWindows = new();
+    private readonly Dictionary<BorderNode, FlexBorderBar> _bars = new();
+    private readonly HashSet<BorderNode> _observedBorders = new();
+    private readonly Dictionary<string, (Window Window, FlexLayoutView View)> _popouts = new();
+    // Content of the document tree and the pinned docks, drawn over them and under the border strips.
+    private readonly PaneLayer _dockedLayer = new();
+    // Content of a revealed auto-hide tool, drawn over the border strips.
+    private readonly PaneLayer _revealLayer = new();
     private UIElement? _rootView;
     private UIElement? _content;
     private FlexDropTargetIndicator? _indicator;
@@ -30,13 +37,7 @@ internal class FlexLayoutView : Panel
     private DockLocation? _revealedBorder;
     private DockLocation? _pendingDocumentEdge;
     private Rect _innerArea = Rect.Empty;
-    private FlexBorderBar? _revealBar;
-
-    public FlexLayoutView(DockModel model, Func<TabNode, UIElement?> factory,
-        Func<TabNode, UIElement?>? header = null, string? layoutId = null)
-        : this(model, new FlexViewContext(factory, header), layoutId)
-    {
-    }
+    private bool _released;
 
     internal FlexLayoutView(DockModel model, FlexViewContext context, string? layoutId)
     {
@@ -46,14 +47,36 @@ internal class FlexLayoutView : Panel
         _isMain = _layoutId == DockModel.MainLayoutId;
         StyleSheet = DockStyles.CreateStyleSheet();
         AllowDrop = true;
-        Rebuild();
+
+        Add(_dockedLayer);
+        Add(_revealLayer);
+
+        _model.RootRowChanged += OnLayoutTreeChanged;
+        _model.MaximizedChanged += OnLayoutTreeChanged;
+        _model.BorderAdded += OnBorderAdded;
+        _model.ChangesCompleted += OnChangesCompleted;
+        _model.DraggingChanged += OnDraggingChanged;
+        _model.AttributesChanged += OnAttributesChanged;
+    }
+
+    /// <summary>Builds the view's content once the derived layer is ready; call right after construction.</summary>
+    internal void Initialize()
+    {
+        SyncRoot();
+        if (_isMain)
+        {
+            foreach (var border in _model.BorderSet.Borders)
+            {
+                ObserveBorder(border);
+            }
+            SyncEdgeRegions();
+            SyncBorders();
+        }
+        SyncLayers();
         if (_isMain)
         {
             SyncPopouts();
         }
-        _model.AddChangeListener(OnModelChanged);
-        // Tear-off: hiding/showing the dragged node only reflows (no rebuild), so the drag source view survives.
-        _model.DraggingChanged += OnDraggingChanged;
     }
 
     /// <summary>
@@ -71,41 +94,8 @@ internal class FlexLayoutView : Panel
                 return;
             }
             _content = value;
-            Rebuild();
-        }
-    }
-
-    private Node? _lastDragging;
-
-    // Re-arrange the container that hides/restores the dragged node. Its own rect is unchanged, so invalidating the
-    // root would be skipped - we target the node's parent view (the tabset for a tab, the row for a tabset) directly.
-    private void OnDraggingChanged()
-    {
-        RefreshDragOwner(_lastDragging);
-        _lastDragging = _model.DraggingNode;
-        RefreshDragOwner(_lastDragging);
-        InvalidateArrange(); // re-run the dock reservation so a fully-dragged tool dock collapses / restores
-    }
-
-    private static void RefreshDragOwner(Node? node)
-    {
-        // Walk up every ancestor: the dragged node's tabset reflows its strip (and falls its content/highlight off
-        // the dragged tab), its row reflows away a now-empty tabset, and so on up. Each ancestor view's own rect is
-        // unchanged, so a single root re-arrange would skip it - invalidate them directly.
-        for (var ancestor = node?.Parent; ancestor is not null; ancestor = ancestor.Parent)
-        {
-            if (ancestor.View is not UIElement view)
-            {
-                continue;
-            }
-            if (view is FlexTabSetView tabSetView)
-            {
-                tabSetView.SyncSelection();
-            }
-            else
-            {
-                view.InvalidateArrange();
-            }
+            SyncRoot();
+            SyncLayers();
         }
     }
 
@@ -127,12 +117,16 @@ internal class FlexLayoutView : Panel
     private protected FlexDropTargetIndicator? Indicator => _indicator;
 
     // Edge-region seams: a feature layer that reserves edge regions around the document (the Extended pinned
-    // docks) hooks the rebuild / measure / arrange / drag pipeline here. Faithful: no regions, no-ops.
-    private protected virtual void BuildEdgeRegions() { }
+    // docks) hooks the sync / measure / arrange / drag pipeline here. Faithful: no regions, no-ops.
+    private protected virtual void SyncEdgeRegions() { }
 
-    private protected virtual void MeasureEdgeRegions(Size availableSize) { }
+    private protected virtual void CollectEdgeRegionTabSets(List<TabSetNode> tabSets) { }
+
+    private protected virtual Rect MeasureEdgeRegions(Rect remaining) => remaining;
 
     private protected virtual Rect ArrangeEdgeRegions(Rect remaining) => remaining;
+
+    private protected virtual void ReleaseEdgeRegions() { }
 
     // Returns true when an edge-region drag target is active under the cursor (the override owns its pending
     // state and the drag-event flags); false lets the faithful pipeline continue.
@@ -144,97 +138,285 @@ internal class FlexLayoutView : Panel
 
     private protected virtual void DismissEdgeRegionDragVisuals() { }
 
-    // Selection / active-tabset changes update the existing views in place (so an in-flight drag source is not
-    // destroyed mid-gesture); structural changes rebuild the whole tree and (main view only) re-sync popouts.
-    private void OnModelChanged(DockAction action)
+    /// <summary>Adds a piece of chrome (an edge region, its splitter) under the content layers.</summary>
+    private protected void AddChrome(UIElement element) => Insert(IndexOfChild(_dockedLayer), element);
+
+    private int IndexOfChild(Element child)
     {
-        if (action is SelectTabAction or SetActiveTabsetAction)
+        var children = Children;
+        for (int index = 0; index < children.Count; index++)
         {
-            _model.VisitNodes((node, level) =>
+            if (ReferenceEquals(children[index], child))
             {
-                if (node.View is FlexTabSetView tabSetView)
-                {
-                    tabSetView.SyncSelection();
-                }
-                else if (node.View is FlexBorderBar borderBar)
-                {
-                    borderBar.SyncSelection();
-                }
-            });
-            InvalidateArrange();
-        }
-        else
-        {
-            Rebuild();
-            if (_isMain)
-            {
-                SyncPopouts();
+                return index;
             }
+        }
+        return children.Count;
+    }
+
+    /// <summary>Stops following the model and closes the popout windows; the view is not used again.</summary>
+    internal void Release()
+    {
+        if (_released)
+        {
+            return;
+        }
+        _released = true;
+        _model.RootRowChanged -= OnLayoutTreeChanged;
+        _model.MaximizedChanged -= OnLayoutTreeChanged;
+        _model.BorderAdded -= OnBorderAdded;
+        _model.ChangesCompleted -= OnChangesCompleted;
+        _model.DraggingChanged -= OnDraggingChanged;
+        _model.AttributesChanged -= OnAttributesChanged;
+        foreach (var border in _observedBorders)
+        {
+            border.ChildInserted -= OnBorderTabsChanged;
+            border.ChildRemoved -= OnBorderTabsChanged;
+        }
+        _observedBorders.Clear();
+        foreach (var bar in _bars.Values)
+        {
+            bar.Release();
+        }
+        _bars.Clear();
+        ReleaseEdgeRegions();
+        _dockedLayer.Show(Array.Empty<PaneHost>());
+        _revealLayer.Show(Array.Empty<PaneHost>());
+        foreach (var (window, view) in _popouts.Values.ToList())
+        {
+            view.Release();
+            window.Close();
+        }
+        _popouts.Clear();
+        Clear();
+        if (_isMain)
+        {
+            _context.ReleaseAll();
         }
     }
 
-    private void Rebuild()
+    private void OnLayoutTreeChanged(Layout layout)
     {
-        Clear();
-        _borderBars.Clear();
+        if (layout.LayoutId == _layoutId)
+        {
+            SyncRoot();
+        }
+    }
 
-        // Document area (root) is added FIRST so the pinned tool docks and (overlaying) auto-hide borders render on
-        // top of it.
-        if (!_model.Layouts.ContainsKey(_layoutId))
-        {
-            _rootView = null;
-        }
-        else if (_isMain && _content is not null)
-        {
-            // Host-supplied custom centre: render it instead of the document tabset tree (tools still dock around it).
-            _rootView = _content;
-            Add(_rootView);
-        }
-        else
-        {
-            // Empty document area renders as a blank pane; the host fills it via CenterContent if it wants a start page.
-            var maximized = _model.GetMaximizedTabset(_layoutId);
-            Node rootNode = maximized is not null ? maximized : _model.GetRootRow(_layoutId);
-            _rootView = FlexViewFactory.BuildNodeView(rootNode, _context);
-            Add(_rootView);
-        }
-
-        // Borders + edge regions belong to the main layout only; added after the root so they render above it.
+    private void OnBorderAdded(BorderNode border)
+    {
         if (_isMain)
         {
-            // Feature edge regions (Extended pinned docks) sit between the root and the borders in z-order.
-            BuildEdgeRegions();
+            ObserveBorder(border);
+            SyncBorders();
+        }
+    }
 
-            // Auto-hide borders last (their revealed panel overlays the document content).
-            foreach (var border in _model.BorderSet.Borders)
+    private void ObserveBorder(BorderNode border)
+    {
+        if (_observedBorders.Add(border))
+        {
+            border.ChildInserted += OnBorderTabsChanged;
+            border.ChildRemoved += OnBorderTabsChanged;
+        }
+    }
+
+    /// <summary>An auto-hide border shows its strip only while it holds tabs.</summary>
+    private void OnBorderTabsChanged(Node tab, int index) => SyncBorders();
+
+    /// <summary>
+    /// A whole action (and every action it set off) is done: brings the parts that follow the model as a whole up to
+    /// date, then lets go of the views of nodes that left.
+    /// </summary>
+    private void OnChangesCompleted()
+    {
+        if (_released)
+        {
+            return;
+        }
+        SyncRoot();
+        if (_isMain)
+        {
+            SyncEdgeRegions();
+            SyncBorders();
+            SyncPopouts();
+        }
+        SyncLayers();
+        if (_isMain)
+        {
+            _context.Sweep(_model);
+        }
+    }
+
+    /// <summary>Tear-off: hiding or showing the dragged node reflows the layout and takes its content out of the layer.</summary>
+    private void OnDraggingChanged()
+    {
+        InvalidateMeasure();
+        SyncLayers();
+    }
+
+    private void OnAttributesChanged() => InvalidateMeasure();
+
+    /// <summary>
+    /// Puts the right view at the root: the custom centre, the maximized tabset, or the layout's root row. A tabset
+    /// that stops being maximized goes back into its row.
+    /// </summary>
+    private void SyncRoot()
+    {
+        if (_released)
+        {
+            return;
+        }
+
+        UIElement? desired = null;
+        if (_model.Layouts.TryGetValue(_layoutId, out var layout))
+        {
+            if (_isMain && _content is not null)
             {
-                // Show the strip unless it is an auto-hide border with no tabs (port of BorderContainer's
-                // condition). A revealed location (set during a drag) forces an auto-hide empty border visible.
-                bool show = !border.IsAutoHide || border.Children.Count > 0 || _revealedBorder == border.Location;
-                border.IsShowing = show;
-                if (show)
-                {
-                    var bar = _context.BorderView?.Invoke(border, _context) ?? new FlexBorderBar(border, _context);
-                    _borderBars.Add(bar);
-                    Add(bar);
-                }
+                desired = _content;
+            }
+            else if (layout.MaximizedTabSet is TabSetNode maximized)
+            {
+                desired = _context.ViewFor(maximized);
+            }
+            else if (layout.RootRow is RowNode root)
+            {
+                desired = _context.ViewFor(root);
             }
         }
 
+        if (ReferenceEquals(desired, _rootView) && (desired is null || ReferenceEquals(desired.Parent, this)))
+        {
+            return;
+        }
+
+        var previous = _rootView;
+        _rootView = desired;
+        if (previous is not null && ReferenceEquals(previous.Parent, this))
+        {
+            Remove(previous);
+        }
+        if (desired is not null)
+        {
+            if (desired.Parent is Panel borrowedFrom && !ReferenceEquals(borrowedFrom, this))
+            {
+                // A maximized tabset is borrowed from its row while it fills the layout.
+                borrowedFrom.Remove(desired);
+            }
+            Insert(0, desired);
+        }
+        // A tabset that was maximized returns to the row it belongs to.
+        if (previous is INodeView { Node: TabSetNode formerlyMaximized } && formerlyMaximized.Parent?.View is FlexRowView row)
+        {
+            row.SyncChildren();
+        }
         InvalidateMeasure();
     }
 
+    /// <summary>Shows a strip for each border that should show one (main view only).</summary>
+    private void SyncBorders()
+    {
+        if (!_isMain || _released)
+        {
+            return;
+        }
+
+        foreach (var border in _model.BorderSet.Borders)
+        {
+            ObserveBorder(border);
+            // Show the strip unless it is an auto-hide border with no tabs (port of BorderContainer's condition). A
+            // revealed location (set during a drag) forces an auto-hide empty border visible.
+            bool show = !border.IsAutoHide || border.Children.Count > 0 || _revealedBorder == border.Location;
+            border.IsShowing = show;
+            if (show && !_bars.ContainsKey(border))
+            {
+                var bar = _context.BorderView?.Invoke(border, _context) ?? new FlexBorderBar(border, _context);
+                _bars[border] = bar;
+                // Border strips go over the docked content and under the revealed content.
+                Insert(IndexOfChild(_revealLayer), bar);
+                InvalidateMeasure();
+            }
+            else if (!show && _bars.Remove(border, out var hidden))
+            {
+                hidden.Release();
+                Remove(hidden);
+                InvalidateMeasure();
+            }
+        }
+    }
+
+    /// <summary>Makes the content layers show exactly the tabs that are visible in this layout now.</summary>
+    private void SyncLayers()
+    {
+        if (_released)
+        {
+            return;
+        }
+
+        var dragging = _model.DraggingNode;
+        var tabSets = new List<TabSetNode>();
+        if (!(_isMain && _content is not null) && _model.Layouts.TryGetValue(_layoutId, out var layout))
+        {
+            if (layout.MaximizedTabSet is TabSetNode maximized)
+            {
+                tabSets.Add(maximized);
+            }
+            else
+            {
+                layout.RootRow?.ForEachNode((node, level) =>
+                {
+                    if (node is TabSetNode tabSet)
+                    {
+                        tabSets.Add(tabSet);
+                    }
+                }, 0);
+            }
+        }
+        if (_isMain)
+        {
+            CollectEdgeRegionTabSets(tabSets);
+        }
+
+        var docked = new List<PaneHost>();
+        foreach (var tabSet in tabSets)
+        {
+            // A tabset torn off by a drag (or left with only the dragged tab) shows nothing until the drag ends.
+            if (dragging is not null && !ModelUtils.HasContent(tabSet, dragging))
+            {
+                continue;
+            }
+            if (FlexTabSetView.EffectiveSelected(tabSet) is TabNode tab && _context.Host(tab) is PaneHost host)
+            {
+                docked.Add(host);
+            }
+        }
+
+        var revealed = new List<PaneHost>();
+        foreach (var border in _bars.Keys)
+        {
+            if (border.GetSelectedNode() is TabNode tab && !ReferenceEquals(tab, dragging) && _context.Host(tab) is PaneHost host)
+            {
+                revealed.Add(host);
+            }
+        }
+
+        _dockedLayer.Show(docked);
+        _revealLayer.Show(revealed);
+    }
+
+    /// <summary>Opens a window for each window-type sub-layout and closes the windows whose layout is gone.</summary>
     private void SyncPopouts()
     {
         foreach (var (id, layout) in _model.Layouts)
         {
-            if (id == DockModel.MainLayoutId || layout.Type != LayoutType.Window || _popoutWindows.ContainsKey(id))
+            if (id == DockModel.MainLayoutId || layout.Type != LayoutType.Window || _popouts.ContainsKey(id))
             {
                 continue;
             }
 
             string capturedId = id;
             var childView = new FlexLayoutView(_model, _context, capturedId);
+            childView.Initialize();
             var rect = layout.Rect;
             double width = rect.Width > 0 ? rect.Width : 640;
             double height = rect.Height > 0 ? rect.Height : 440;
@@ -255,32 +437,30 @@ internal class FlexLayoutView : Panel
 
             window.Closed += () =>
             {
-                if (_popoutWindows.Remove(capturedId) && _model.Layouts.ContainsKey(capturedId))
+                // Closed by the user: dock the content back. Closed because the layout went away: nothing to do.
+                if (!_released && _popouts.Remove(capturedId, out var closing))
                 {
-                    _model.DoAction(DockAction.ClosePopout(capturedId));
+                    closing.View.Release();
+                    if (_model.Layouts.ContainsKey(capturedId))
+                    {
+                        _model.DoAction(DockAction.ClosePopout(capturedId));
+                    }
                 }
             };
-            _popoutWindows[capturedId] = window;
+            _popouts[capturedId] = (window, childView);
             window.Show(FindVisualRoot() as Window);
         }
 
         bool closedAny = false;
-        foreach (var id in _popoutWindows.Keys.ToList())
+        foreach (var id in _popouts.Keys.ToList())
         {
-            bool gone = !_model.Layouts.ContainsKey(id);
-            bool empty = !gone && (_model.Layouts[id].RootRow is not RowNode root || root.Children.Count == 0);
-            if (!gone && !empty)
+            if (_model.Layouts.ContainsKey(id))
             {
                 continue;
             }
-
-            var window = _popoutWindows[id];
-            _popoutWindows.Remove(id);
-            if (empty)
-            {
-                // All content was dragged out: drop the now-empty sub-layout so it does not linger.
-                _model.Layouts.Remove(id);
-            }
+            var (window, view) = _popouts[id];
+            _popouts.Remove(id);
+            view.Release();
             window.Close();
             closedAny = true;
         }
@@ -295,16 +475,40 @@ internal class FlexLayoutView : Panel
 
     protected override Size MeasureContent(Size availableSize)
     {
-        foreach (var bar in _borderBars)
-        {
-            bar.Measure(availableSize);
-        }
-        MeasureEdgeRegions(availableSize);
-        _rootView?.Measure(availableSize);
-        return availableSize;
+        var remaining = ReserveBorders(new Rect(0, 0, availableSize.Width, availableSize.Height), arrange: false);
+        remaining = MeasureEdgeRegions(remaining);
+        _rootView?.Measure(remaining.Size);
+
+        // The layers measure each content with the size its group gave it just now, so they measure every time.
+        _dockedLayer.InvalidateMeasure();
+        _dockedLayer.Measure(availableSize);
+        _revealLayer.InvalidateMeasure();
+        _revealLayer.Measure(availableSize);
+        return new Size(
+            double.IsPositiveInfinity(availableSize.Width) ? 0 : availableSize.Width,
+            double.IsPositiveInfinity(availableSize.Height) ? 0 : availableSize.Height);
     }
 
     protected override void ArrangeContent(Rect bounds)
+    {
+        var remaining = ReserveBorders(bounds, arrange: true);
+
+        // Area left for the edge regions + the document, stored so feature previews can reserve against the same rect.
+        _innerArea = remaining;
+
+        remaining = ArrangeEdgeRegions(remaining);
+
+        _rootView?.Arrange(remaining);
+
+        // After the groups: each content goes where its group put its content area in this pass.
+        _dockedLayer.InvalidateArrange();
+        _dockedLayer.Arrange(bounds);
+        _revealLayer.InvalidateArrange();
+        _revealLayer.Arrange(bounds);
+    }
+
+    /// <summary>Carves a strip per border off <paramref name="bounds"/>, measures or arranges each bar in it, and returns the area left.</summary>
+    private Rect ReserveBorders(Rect bounds, bool arrange)
     {
         var remaining = bounds;
 
@@ -312,7 +516,7 @@ internal class FlexLayoutView : Panel
         foreach (var location in BorderOrder)
         {
             FlexBorderBar? bar = null;
-            foreach (var candidate in _borderBars)
+            foreach (var candidate in _bars.Values)
             {
                 if (candidate.Location == location)
                 {
@@ -349,15 +553,16 @@ internal class FlexLayoutView : Panel
                     remaining = new Rect(remaining.X, remaining.Y, Math.Max(0, remaining.Width - footprint), remaining.Height);
                     break;
             }
-            bar.Arrange(region);
+            if (arrange)
+            {
+                bar.Arrange(region);
+            }
+            else
+            {
+                bar.Measure(region.Size);
+            }
         }
-
-        // Area left for the edge regions + the document, stored so feature previews can reserve against the same rect.
-        _innerArea = remaining;
-
-        remaining = ArrangeEdgeRegions(remaining);
-
-        _rootView?.Arrange(remaining);
+        return remaining;
     }
 
     protected override void OnDragEnter(DragEventArgs e)
@@ -387,7 +592,7 @@ internal class FlexLayoutView : Panel
     {
         base.OnDrop(e);
         SetRevealedBorder(null);
-        _model.SetDraggingNode(null); // stop hiding before the move rebuilds, so the node shows at its new spot
+        _model.SetDraggingNode(null); // stop hiding before the move, so the node shows at its new spot
         if (e.Data.TryGetData<Node>(DragFormat, out var dragNode) && dragNode is not null)
         {
             // Match UpdateDragTarget's priority: an active edge-region target wins over the faithful drop (otherwise
@@ -479,13 +684,13 @@ internal class FlexLayoutView : Panel
     // the dock takes a QUARTER of the document area (not half) - the preview shows the real landing size.
     private static Rect EdgePreview(Rect area, DockLocation edge)
     {
-        const double frac = 0.25;
+        const double FRACTION = 0.25;
         return edge switch
         {
-            DockLocation.Left => new Rect(area.X, area.Y, area.Width * frac, area.Height),
-            DockLocation.Right => new Rect(area.Right - area.Width * frac, area.Y, area.Width * frac, area.Height),
-            DockLocation.Top => new Rect(area.X, area.Y, area.Width, area.Height * frac),
-            _ => new Rect(area.X, area.Bottom - area.Height * frac, area.Width, area.Height * frac),
+            DockLocation.Left => new Rect(area.X, area.Y, area.Width * FRACTION, area.Height),
+            DockLocation.Right => new Rect(area.Right - area.Width * FRACTION, area.Y, area.Width * FRACTION, area.Height),
+            DockLocation.Top => new Rect(area.X, area.Y, area.Width, area.Height * FRACTION),
+            _ => new Rect(area.X, area.Bottom - area.Height * FRACTION, area.Width, area.Height * FRACTION),
         };
     }
 
@@ -501,70 +706,53 @@ internal class FlexLayoutView : Panel
 
     private DockLocation? ComputeRevealEdge(Point pos)
     {
-        const double margin = 12;
+        const double MARGIN = 12;
         var bounds = Bounds;
-        if (pos.X <= bounds.X + margin)
+        if (pos.X <= bounds.X + MARGIN)
         {
             return DockLocation.Left;
         }
-        if (pos.X >= bounds.Right - margin)
+        if (pos.X >= bounds.Right - MARGIN)
         {
             return DockLocation.Right;
         }
-        if (pos.Y <= bounds.Y + margin)
+        if (pos.Y <= bounds.Y + MARGIN)
         {
             return DockLocation.Top;
         }
-        if (pos.Y >= bounds.Bottom - margin)
+        if (pos.Y >= bounds.Bottom - MARGIN)
         {
             return DockLocation.Bottom;
         }
         return null;
     }
 
+    // During a drag near an edge, an empty auto-hide border shows its strip so it can take the drop.
     private void SetRevealedBorder(DockLocation? location)
     {
+        if (location is DockLocation edge)
+        {
+            bool revealable = false;
+            foreach (var candidate in _model.BorderSet.Borders)
+            {
+                if (candidate.Location == edge && candidate.IsAutoHide && candidate.Children.Count == 0)
+                {
+                    revealable = true;
+                    break;
+                }
+            }
+            if (!revealable)
+            {
+                location = null;
+            }
+        }
+
         if (location == _revealedBorder)
         {
             return;
         }
-
-        if (_revealBar is not null)
-        {
-            _revealBar.Border.IsShowing = false;
-            _borderBars.Remove(_revealBar);
-            Remove(_revealBar);
-            _revealBar = null;
-        }
-
         _revealedBorder = location;
-
-        if (location is DockLocation loc)
-        {
-            BorderNode? border = null;
-            foreach (var candidate in _model.BorderSet.Borders)
-            {
-                if (candidate.Location == loc && candidate.IsAutoHide && candidate.Children.Count == 0)
-                {
-                    border = candidate;
-                    break;
-                }
-            }
-
-            if (border is not null)
-            {
-                border.IsShowing = true;
-                _revealBar = _context.BorderView?.Invoke(border, _context) ?? new FlexBorderBar(border, _context);
-                _borderBars.Add(_revealBar);
-                Add(_revealBar);
-            }
-            else
-            {
-                _revealedBorder = null;
-            }
-        }
-
-        InvalidateMeasure();
+        SyncBorders();
     }
 
     private void EnsureIndicator()

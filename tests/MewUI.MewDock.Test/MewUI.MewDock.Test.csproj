@@ -11,11 +11,15 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\extensions\MewUI.MewDock\MewUI.MewDock.csproj" />
+    <!-- GDI backend (Windows-only at runtime) so layout tests can measure text. -->
+    <ProjectReference Include="..\..\src\MewUI.Backend.Gdi\MewUI.Backend.Gdi.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <!-- A drawing sink for rendering a control outside a window. -->
     <Compile Include="..\MewUI.Test\Infrastructure\NoOpGraphicsContext.cs" Link="Infrastructure\NoOpGraphicsContext.cs" />
+    <!-- A window backend that lays out and tracks focus without a native window. -->
+    <Compile Include="..\MewUI.Test\Infrastructure\HeadlessWindowBackend.cs" Link="Infrastructure\HeadlessWindowBackend.cs" />
   </ItemGroup>
 
 </Project>

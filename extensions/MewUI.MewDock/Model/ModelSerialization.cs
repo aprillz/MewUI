@@ -216,7 +216,7 @@ internal partial class Model
         var rect = json.Rect is JsonRect r ? new Rect(r.X, r.Y, r.Width, r.Height) : Rect.Empty;
         var layout = new Layout(id, ParseLayoutType(json.Type), rect);
         layout.SetRootRow(BuildRowNode(json.Layout, layout));
-        _layouts[id] = layout;
+        AddLayout(layout);
     }
 
     private static LayoutType ParseLayoutType(string? name) => name switch
@@ -272,7 +272,8 @@ internal partial class Model
         Selected = border.Selected,
         Show = border.IsShowing ? null : false,
         Size = border.Size,
-        EnableAutoHide = border.EnableAutoHideOverride,
+        // Written as it behaves: a missing key reads back as auto-hide, which a border that is not would not survive.
+        EnableAutoHide = border.IsAutoHide,
         Children = border.Children.Select(child => TabToJson((TabNode)child)).ToList(),
     };
 
@@ -285,7 +286,7 @@ internal partial class Model
             global.RootOrientationVertical = true;
             any = true;
         }
-        if (SplitterSize != 8)
+        if (SplitterSize != DEFAULT_SPLITTER_SIZE)
         {
             global.SplitterSize = SplitterSize;
             any = true;

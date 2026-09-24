@@ -106,7 +106,15 @@ internal sealed class TabNode : Node
     public override bool IsAllowedInWindow() => IsEnablePopout;
 
     // Empty normalizes to null so "no name" has one representation: display falls back, serialization omits it.
-    internal void SetName(string? name) => _name = string.IsNullOrEmpty(name) ? null : name;
+    internal void SetName(string? name)
+    {
+        string? normalized = string.IsNullOrEmpty(name) ? null : name;
+        if (normalized != _name)
+        {
+            _name = normalized;
+            RaisePropertyChanged(NodeProperty.Name);
+        }
+    }
 
     internal void SetBorderWidth(double width) => BorderWidth = width;
 
@@ -143,7 +151,7 @@ internal sealed class TabNode : Node
         }
         if (SubLayoutId is not null)
         {
-            Model.Layouts.Remove(SubLayoutId);
+            Model.RemoveLayout(SubLayoutId);
         }
         FireEvent(NodeEventType.Close, null);
     }

@@ -11,6 +11,16 @@ internal enum NodeEventType
     Close,
 }
 
+/// <summary>A node value whose change is reported through <see cref="Node.PropertyChanged"/>.</summary>
+internal enum NodeProperty
+{
+    Name,
+    Weight,
+    Selected,
+    IsShowing,
+    Size,
+}
+
 /// <summary>
 /// Base of the layout node tree (port of FlexLayout model/Node.ts). C#-idiomatic: field-like accessors are
 /// properties, the original generic attribute dictionary is replaced by typed members on the subclasses, and the
@@ -35,6 +45,17 @@ internal abstract class Node
     public Node? Parent { get; internal set; }
 
     public IReadOnlyList<Node> Children => _children;
+
+    /// <summary>Raised after a child is inserted, with the child and its index.</summary>
+    internal event Action<Node, int>? ChildInserted;
+
+    /// <summary>Raised after a child is removed, with the child and the index it had.</summary>
+    internal event Action<Node, int>? ChildRemoved;
+
+    /// <summary>Raised after one of this node's values changed.</summary>
+    internal event Action<Node, NodeProperty>? PropertyChanged;
+
+    private protected void RaisePropertyChanged(NodeProperty property) => PropertyChanged?.Invoke(this, property);
 
     public Rect Rect { get; internal set; } = Rect.Empty;
 
@@ -218,6 +239,12 @@ internal abstract class Node
         if (pos != -1)
         {
             _children.RemoveAt(pos);
+            // A node added to its new parent before it left this one keeps that new parent.
+            if (ReferenceEquals(childNode.Parent, this))
+            {
+                childNode.Parent = null;
+            }
+            ChildRemoved?.Invoke(childNode, pos);
         }
         return pos;
     }
@@ -234,8 +261,15 @@ internal abstract class Node
             pos = _children.Count - 1;
         }
         childNode.Parent = this;
+        ChildInserted?.Invoke(childNode, pos.Value);
         return pos.Value;
     }
 
-    internal void RemoveAll() => _children.Clear();
+    internal void RemoveAll()
+    {
+        for (int index = _children.Count - 1; index >= 0; index--)
+        {
+            RemoveChild(_children[index]);
+        }
+    }
 }

@@ -86,6 +86,9 @@ internal abstract record DockAction
     /// first); inner = between the perpendicular docks.</summary>
     public static DockAction EdgeDockTool(string nodeId, DockLocation edge, bool outer) =>
         new EdgeDockToolAction(nodeId, edge, outer);
+
+    /// <summary>Extended docking: set the size of a pinned dock along its edge.</summary>
+    public static DockAction AdjustDockSize(string layoutId, double size) => new AdjustDockSizeAction(layoutId, size);
 }
 
 internal sealed record AddTabAction(JsonTabNode Json, string ToNodeId, DockLocation Location, int Index, bool? Select = null) : DockAction;
@@ -131,3 +134,6 @@ internal sealed record UnpinToolAction(string NodeId) : DockAction;
 /// <summary>Dock a dragged tool (tab or tool group) to a document-area edge. Outer = full extent (reserved first);
 /// inner = between the perpendicular docks.</summary>
 internal sealed record EdgeDockToolAction(string NodeId, DockLocation Edge, bool Outer) : DockAction;
+
+/// <summary>Set the size of a pinned dock (a Dock sub-layout) along its edge.</summary>
+internal sealed record AdjustDockSizeAction(string LayoutId, double Size) : DockAction;
