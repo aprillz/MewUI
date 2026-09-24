@@ -282,6 +282,24 @@ public sealed class EditorExtensionTests
     }
 
     [TestMethod]
+    public void AnEditThatLeavesTheCaretWhereItWasDoesNotMoveIt()
+    {
+        var editor = new TextEditor { Text = "one\ntwo" };
+        editor.CaretOffset = editor.Document.TextLength;
+        int changes = 0;
+        editor.TextArea.Caret.PositionChanged += (_, _) => changes++;
+
+        editor.Document.Replace(0, 3, "ONE");
+        Assert.AreEqual(0, changes, "A same-length edit on another line announced a caret move.");
+
+        editor.Undo();
+        Assert.AreEqual(0, changes, "Undoing it announced a caret move.");
+
+        editor.Document.Insert(0, "\n");
+        Assert.AreEqual(1, changes, "A line inserted above moved the caret's line without announcing it.");
+    }
+
+    [TestMethod]
     public void TextAreaFacadeTracksCaretSelectionAndDocumentSwitches()
     {
         var editor = new TextEditor { Text = "one\ntwo" };

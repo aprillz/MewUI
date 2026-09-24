@@ -599,6 +599,9 @@ public sealed class Caret(TextArea textArea)
     private bool _isVisible;
     private int _visualColumnOverride = -1;
     private int _visualColumnOverrideOffset = -1;
+    // The position last announced through PositionChanged.
+    private (TextLocation Location, int VisualColumn) _raisedPosition;
+    private bool _hasRaisedPosition;
 
     public int Offset
     {
@@ -722,6 +725,14 @@ public sealed class Caret(TextArea textArea)
         {
             _visualColumnOverride = -1;
         }
+        // Only a move is announced, as in the original; compared by location, since the visual column lays out the line.
+        var position = (Location, _visualColumnOverride);
+        if (_hasRaisedPosition && position == _raisedPosition)
+        {
+            return;
+        }
+        _raisedPosition = position;
+        _hasRaisedPosition = true;
         // The desired x belongs to the walk that set it, as the original's caret offset setter has
         // it. Ordinary caret movement is the editing surface's, so this is where the extension
         // hears about it; a vertical walk assigns the x again after moving, which outlives this.
