@@ -148,6 +148,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITra
         _clipBoundsWorld = null;
         _opaqueBackdropLayers.Clear();
         _opacityLayers.Clear();
+        _opacityTextModes.Clear();
 
         if (_renderTarget != 0)
         {
@@ -336,7 +337,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITra
             }
             // ClearType forces pixel snapping for subpixel RGB alignment.
             // Switch to grayscale so NO_SNAP actually takes effect.
-            if (_clearTypeEnabled)
+            if (_clearTypeEnabled && _opacityTextModes.Count == 0)
             {
                 D2D1VTable.SetTextAntialiasMode((ID2D1RenderTarget*)_renderTarget,
                     value ? D2D1_TEXT_ANTIALIAS_MODE.CLEARTYPE : D2D1_TEXT_ANTIALIAS_MODE.GRAYSCALE);
@@ -1238,7 +1239,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITra
 
         SyncNativeTransform();
 
-        if (snapChanged && _clearTypeEnabled)
+        if (snapChanged && _clearTypeEnabled && _opacityTextModes.Count == 0)
         {
             D2D1VTable.SetTextAntialiasMode((ID2D1RenderTarget*)_renderTarget,
                 _textPixelSnap ? D2D1_TEXT_ANTIALIAS_MODE.CLEARTYPE : D2D1_TEXT_ANTIALIAS_MODE.GRAYSCALE);
@@ -2105,6 +2106,9 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITra
     // pushed and the scope fell back to the base per-primitive multiply.
     private readonly Stack<nint> _opacityLayers = new();
 
+    // Text mode in effect when each pushed opacity layer opened, restored when it closes.
+    private readonly Stack<D2D1_TEXT_ANTIALIAS_MODE> _opacityTextModes = new();
+
     public override void BeginOpacity(double opacity)
     {
         if (_renderTarget == 0 ||
@@ -2155,6 +2159,11 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITra
         }
 
         _opacityLayers.Push(layer);
+
+        // A translucent layer cannot carry subpixel coverage: ClearType text drawn into it makes EndDraw
+        // fail and the whole frame is dropped, so text in the layer is antialiased in grayscale.
+        _opacityTextModes.Push(D2D1VTable.GetTextAntialiasMode((ID2D1RenderTarget*)_renderTarget));
+        D2D1VTable.SetTextAntialiasMode((ID2D1RenderTarget*)_renderTarget, D2D1_TEXT_ANTIALIAS_MODE.GRAYSCALE);
     }
 
     public override void EndOpacity()
@@ -2171,6 +2180,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITra
             return;
         }
 
+        var textMode = _opacityTextModes.Pop();
         if (_renderTarget == 0)
         {
             ComHelpers.Release(layer);
@@ -2179,6 +2189,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITra
 
         D2D1VTable.PopLayer((ID2D1RenderTarget*)_renderTarget);
         ComHelpers.Release(layer);
+        D2D1VTable.SetTextAntialiasMode((ID2D1RenderTarget*)_renderTarget, textMode);
     }
 
     // Pure translation: the only case where a bitmap can be blitted 1:1 against the device grid.
