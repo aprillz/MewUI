@@ -309,7 +309,8 @@ internal sealed class MenuEntryCollection : IList<MenuEntry>
 {
     private readonly List<MenuEntry> _items = [];
 
-    internal event Action<MenuModelChange>? Changed;
+    /// <summary>Raised with the item that changed, or with null when the list itself changed.</summary>
+    internal event Action<MenuItem?, MenuModelChange>? Changed;
 
     public MenuEntry this[int index]
     {
@@ -322,7 +323,7 @@ internal sealed class MenuEntryCollection : IList<MenuEntry>
             Unsubscribe(old);
             _items[index] = value;
             Subscribe(value);
-            Changed?.Invoke(MenuModelChange.All);
+            Changed?.Invoke(null, MenuModelChange.All);
         }
     }
 
@@ -334,7 +335,7 @@ internal sealed class MenuEntryCollection : IList<MenuEntry>
         ArgumentNullException.ThrowIfNull(item);
         _items.Add(item);
         Subscribe(item);
-        Changed?.Invoke(MenuModelChange.Structure);
+        Changed?.Invoke(null, MenuModelChange.Structure);
     }
 
     public void Clear()
@@ -342,7 +343,7 @@ internal sealed class MenuEntryCollection : IList<MenuEntry>
         if (_items.Count == 0) return;
         foreach (var item in _items) Unsubscribe(item);
         _items.Clear();
-        Changed?.Invoke(MenuModelChange.All);
+        Changed?.Invoke(null, MenuModelChange.All);
     }
 
     public bool Contains(MenuEntry item) => _items.Contains(item);
@@ -355,14 +356,14 @@ internal sealed class MenuEntryCollection : IList<MenuEntry>
         ArgumentNullException.ThrowIfNull(item);
         _items.Insert(index, item);
         Subscribe(item);
-        Changed?.Invoke(MenuModelChange.Structure);
+        Changed?.Invoke(null, MenuModelChange.Structure);
     }
 
     public bool Remove(MenuEntry item)
     {
         if (!_items.Remove(item)) return false;
         Unsubscribe(item);
-        Changed?.Invoke(MenuModelChange.All);
+        Changed?.Invoke(null, MenuModelChange.All);
         return true;
     }
 
@@ -371,7 +372,7 @@ internal sealed class MenuEntryCollection : IList<MenuEntry>
         var item = _items[index];
         _items.RemoveAt(index);
         Unsubscribe(item);
-        Changed?.Invoke(MenuModelChange.All);
+        Changed?.Invoke(null, MenuModelChange.All);
     }
 
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
@@ -386,7 +387,7 @@ internal sealed class MenuEntryCollection : IList<MenuEntry>
         if (entry is MenuItem item) item.Changed -= OnItemChanged;
     }
 
-    private void OnItemChanged(MenuItem _, MenuModelChange change) => Changed?.Invoke(change);
+    private void OnItemChanged(MenuItem item, MenuModelChange change) => Changed?.Invoke(item, change);
 }
 
 internal sealed class MenuBarItemCollection : IList<MenuItem>
@@ -469,7 +470,7 @@ public sealed class Menu
 
     public IList<MenuEntry> Items => _items;
 
-    internal event Action<MenuModelChange> Changed
+    internal event Action<MenuItem?, MenuModelChange> Changed
     {
         add => _items.Changed += value;
         remove => _items.Changed -= value;
