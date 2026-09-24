@@ -102,6 +102,7 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
         _layerVisuals = TextViewLayerVisuals.Create(this);
         _document.Changed += OnDocumentChanged;
         _editor.StateChanged += OnEditorStateChanged;
+        _editor.TextCommitted += OnSessionTextCommitted;
 
         _verticalScrollBar = new ScrollBar { Orientation = Orientation.Vertical, IsVisible = false };
         _horizontalScrollBar = new ScrollBar { Orientation = Orientation.Horizontal, IsVisible = false };
@@ -1210,16 +1211,21 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
     /// <summary>Consulted before every edit. Null leaves the document fully editable.</summary>
     public IEditableRegionProvider? EditableRegions
     {
-        get => _editor.EditableRegions;
-        set => _editor.EditableRegions = value;
+        get => _editableRegions;
+        set
+        {
+            _editableRegions = value;
+            _editor.EditableRegions = value;
+        }
     }
 
     /// <summary>Raised after typed or composed text reached the document, once per commit.</summary>
-    public event Action<string>? TextCommitted
-    {
-        add => _editor.TextCommitted += value;
-        remove => _editor.TextCommitted -= value;
-    }
+    public event Action<string>? TextCommitted;
+
+    // The editing session is replaced with the document; what the box was given is handed to each new session.
+    private IEditableRegionProvider? _editableRegions;
+
+    private void OnSessionTextCommitted(string text) => TextCommitted?.Invoke(text);
 
     /// <inheritdoc/>
     public TextViewLayerStack Layers => _layers;
@@ -1300,9 +1306,12 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
         }
         _document.Changed -= OnDocumentChanged;
         _editor.StateChanged -= OnEditorStateChanged;
+        _editor.TextCommitted -= OnSessionTextCommitted;
         ReplaceDocumentCore(document);
         _document.Changed += OnDocumentChanged;
         _editor.StateChanged += OnEditorStateChanged;
+        _editor.TextCommitted += OnSessionTextCommitted;
+        _editor.EditableRegions = _editableRegions;
         _preferredCaretX = double.NaN;
         _verticalOffset = 0;
         _scrollAnchorOffset = 0;
@@ -1379,6 +1388,7 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
         _view?.Dispose();
         _document.Changed -= OnDocumentChanged;
         _editor.StateChanged -= OnEditorStateChanged;
+        _editor.TextCommitted -= OnSessionTextCommitted;
         _verticalScrollBar.Dispose();
         _horizontalScrollBar.Dispose();
         base.OnDispose();
