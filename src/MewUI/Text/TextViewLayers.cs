@@ -90,6 +90,22 @@ public sealed class TextViewLayerStack
         }
     }
 
+    /// <summary>
+    /// Draws the layers of one anchor's group: those inserted below it, its own, those above. An insert
+    /// lands next to its anchor, so the groups follow each other in anchor order and drawing them one
+    /// after another draws the whole stack.
+    /// </summary>
+    internal void Draw(ITextRenderContext context, Rect viewportBounds, TextViewLayerAnchor anchor)
+    {
+        foreach (var entry in _entries)
+        {
+            if (entry.Anchor == anchor)
+            {
+                entry.Layer.Draw(context, viewportBounds);
+            }
+        }
+    }
+
     private int FindAnchor(TextViewLayerAnchor anchor)
     {
         for (int index = 0; index < _entries.Count; index++)
