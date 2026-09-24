@@ -1001,6 +1001,8 @@ public abstract partial class Element : MewObject
             }
         }
 
+        // Nothing above supplies it; the default is what this reader saw, and a later parent chain is compared with it.
+        PropertyStore.MarkInheritedDefault(property.Id);
         return property.GetDefaultForType(PropertyStore.OwnerType);
     }
 
@@ -1023,6 +1025,7 @@ public abstract partial class Element : MewObject
             }
         }
 
+        PropertyStore.MarkInheritedDefault(property.Id);
         return property.GetBoxedDefaultForType(PropertyStore.OwnerType);
     }
 

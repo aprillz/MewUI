@@ -997,7 +997,8 @@ public abstract partial class Control : TextElement
     {
         if (property.Id == FontFamilyProperty.Id ||
             property.Id == FontSizeProperty.Id ||
-            property.Id == FontWeightProperty.Id)
+            property.Id == FontWeightProperty.Id ||
+            property.Id == FontStyleProperty.Id)
         {
             OnFontCacheInvalidated(property);
         }
