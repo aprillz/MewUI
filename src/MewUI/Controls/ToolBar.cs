@@ -70,6 +70,9 @@ public sealed partial class ToolBar : Control, IVisualTreeHost
     // 4 DIPs, the same gesture threshold the drag/drop router uses.
     private const double DRAG_THRESHOLD = 4.0;
 
+    // An entry that cannot run shows its icon faded, as a menu row does; a coloured icon does not follow the text colour.
+    private const double DISABLED_ICON_OPACITY = 0.5;
+
     private readonly List<ToolBarBand> _bands = new();
     private readonly List<BandVisual> _visuals = new();
     private bool _visualsValid;
@@ -334,7 +337,7 @@ public sealed partial class ToolBar : Control, IVisualTreeHost
 
     private Element BuildIconTextContent(IconTemplate? icon, string? text)
     {
-        var panel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
+        var panel = new EntryContent { Orientation = Orientation.Horizontal, Spacing = 4 };
         if (icon is IconTemplate template)
         {
             var size = IconTemplate.ResolveSize(Theme.Metrics.CommandIconSize, GetDpi() / 96.0);
@@ -347,6 +350,7 @@ public sealed partial class ToolBar : Control, IVisualTreeHost
             built.HorizontalAlignment = HorizontalAlignment.Center;
             built.VerticalAlignment = VerticalAlignment.Center;
             panel.Add(built);
+            panel.Icon = built;
         }
 
         if (!string.IsNullOrEmpty(text))
@@ -358,6 +362,34 @@ public sealed partial class ToolBar : Control, IVisualTreeHost
     }
 
     #endregion
+
+    /// <summary>An entry's icon and text. The icon fades while the entry cannot run.</summary>
+    private sealed class EntryContent : StackPanel
+    {
+        internal FrameworkElement? Icon
+        {
+            get => field;
+            set
+            {
+                field = value;
+                UpdateIconOpacity();
+            }
+        }
+
+        protected override void OnEnabledChanged()
+        {
+            base.OnEnabledChanged();
+            UpdateIconOpacity();
+        }
+
+        private void UpdateIconOpacity()
+        {
+            if (Icon != null)
+            {
+                Icon.Opacity = IsEffectivelyEnabled ? 1 : DISABLED_ICON_OPACITY;
+            }
+        }
+    }
 
     #region Layout
 
