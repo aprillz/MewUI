@@ -192,9 +192,22 @@ internal sealed class RenderData : IDisposable
             return true;
         }
 
-        // Drawing code commonly builds its outline anew on every call, so paths are told apart by what they hold.
+        // Drawing code commonly builds its outline and its text spans anew on every call, so those are
+        // told apart by what they hold.
+        if (first is TextDrawOptions firstOptions && second is TextDrawOptions secondOptions)
+        {
+            return HoldSameTextOptions(in firstOptions, in secondOptions);
+        }
+
         return first is PathGeometry firstPath && second is PathGeometry secondPath && HoldSamePath(firstPath, secondPath);
     }
+
+    private static bool HoldSameTextOptions(in TextDrawOptions first, in TextDrawOptions second)
+        => first.Foreground == second.Foreground &&
+            first.Transient == second.Transient &&
+            Equals(first.Owner, second.Owner) &&
+            first.PaintSpans.Span.SequenceEqual(second.PaintSpans.Span) &&
+            first.Overlays.Span.SequenceEqual(second.Overlays.Span);
 
     private static bool HoldSamePath(PathGeometry first, PathGeometry second)
     {
