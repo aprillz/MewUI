@@ -359,6 +359,14 @@ internal static unsafe class D2D1VTable
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static D2D1_TEXT_ANTIALIAS_MODE GetTextAntialiasMode(ID2D1RenderTarget* rt)
+    {
+        // d2d1.h: GetTextAntialiasMode (index 35) follows SetTextAntialiasMode (34).
+        var fn = (delegate* unmanaged[Stdcall]<ID2D1RenderTarget*, D2D1_TEXT_ANTIALIAS_MODE>)(rt->lpVtbl[35]);
+        return fn(rt);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void SetTextRenderingParams(ID2D1RenderTarget* rt, nint textRenderingParams)
     {
         // d2d1.h: SetTextRenderingParams (index 36) follows Set/GetTextAntialiasMode (34/35).
