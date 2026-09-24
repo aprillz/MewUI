@@ -811,7 +811,7 @@ public sealed partial class SyntaxViewer : Control, IVisualTreeHost, ITextViewHo
 
     protected override void OnMewPropertyChanged(MewProperty property)
     {
-        if (property.Id == FontFamilyProperty.Id || property.Id == FontSizeProperty.Id || property.Id == FontWeightProperty.Id)
+        if (property.Id == FontFamilyProperty.Id || property.Id == FontSizeProperty.Id || property.Id == FontWeightProperty.Id || property.Id == FontStyleProperty.Id)
             ResetView();
 
         // The frame's colours and corners change on hover and focus, often animated, and no layer reads them.
@@ -828,6 +828,12 @@ public sealed partial class SyntaxViewer : Control, IVisualTreeHost, ITextViewHo
         }
     }
 
+    protected override void OnFontCacheInvalidated(MewProperty property)
+    {
+        base.OnFontCacheInvalidated(property);
+        // A font reached through inheritance: the lines were laid out with the one it replaces.
+        ResetView();
+    }
 
     protected override void OnDpiChanged(uint oldDpi, uint newDpi)
     {

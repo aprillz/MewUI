@@ -1347,7 +1347,8 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
     {
         if (property.Id == FontFamilyProperty.Id ||
             property.Id == FontSizeProperty.Id ||
-            property.Id == FontWeightProperty.Id)
+            property.Id == FontWeightProperty.Id ||
+            property.Id == FontStyleProperty.Id)
         {
             ResetView();
         }
@@ -1366,6 +1367,12 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
         }
     }
 
+    protected override void OnFontCacheInvalidated(MewProperty property)
+    {
+        base.OnFontCacheInvalidated(property);
+        // A font reached through inheritance: the lines were laid out with the one it replaces.
+        ResetView();
+    }
 
     protected override void OnDpiChanged(uint oldDpi, uint newDpi)
     {
