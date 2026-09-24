@@ -1087,17 +1087,19 @@ public class TextEditor : Control, ITextEditorComponent
             return;
         }
 
-        if (e.Handled || e.Key != Key.Enter || IsReadOnly || !Document.CoreDocument.PreservesLineEndings)
+        if (e.Handled || e.Key != Key.Enter || IsReadOnly)
         {
             return;
         }
-        string newLine = TextUtilities.GetNewLineFromDocument(Document, Document.GetLocation(CaretOffset).Line);
-        if (newLine == "\n")
-        {
-            return;
-        }
+        // Typed text in one undo group: the indentation strategy runs on the commit, so the break and its indentation undo together.
+        string newLine = Document.CoreDocument.PreservesLineEndings
+            ? TextUtilities.GetNewLineFromDocument(Document, Document.GetLocation(CaretOffset).Line)
+            : "\n";
         e.Handled = true;
-        _surface.ReplaceSelection(newLine);
+        using (Document.UndoStack.OpenUndoGroup())
+        {
+            _surface.EnterText(SelectionStart, SelectionLength, newLine);
+        }
     }
 
     private void OnSurfaceKeyUp(KeyEventArgs e)

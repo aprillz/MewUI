@@ -94,6 +94,48 @@ public sealed class EditorExtensionTests
     }
 
     /// <summary>
+    /// Enter and the indentation it brings are one edit, as the original runs the strategy inside the line break's
+    /// update group: one Undo takes both back.
+    /// </summary>
+    [TestMethod]
+    public void EnterAndItsIndentationUndoTogether()
+    {
+        var editor = new TextEditor
+        {
+            Text = "first\n\t  parent",
+            IndentationStrategy = new DefaultIndentationStrategy()
+        };
+        editor.CaretOffset = editor.Document.TextLength;
+        editor.Surface.RaiseKeyDown(new KeyEventArgs(Key.Enter, platformKey: 0, ModifierKeys.None));
+        Assert.AreEqual("first\n\t  parent\n\t  ", editor.Text);
+
+        editor.Undo();
+
+        Assert.AreEqual("first\n\t  parent", editor.Text);
+    }
+
+    /// <summary>
+    /// A document with CRLF line breaks takes the Enter key through the editor's own line-break path (to keep the
+    /// document's line ending); that path must reach the strategy as typed text does.
+    /// </summary>
+    [TestMethod]
+    public void PressingEnterInACrLfDocumentRunsTheIndentationStrategy()
+    {
+        var editor = new TextEditor
+        {
+            Text = "first\r\n\t  parent",
+            IndentationStrategy = new DefaultIndentationStrategy()
+        };
+        editor.CaretOffset = editor.Document.TextLength;
+
+        editor.Surface.RaiseKeyDown(new KeyEventArgs(Key.Enter, platformKey: 0, ModifierKeys.None));
+
+        Assert.AreEqual("first\r\n\t  parent\r\n\t  ", editor.Text);
+        Assert.AreEqual(editor.Document.TextLength, editor.CaretOffset,
+            "The caret ends after the indentation it was given.");
+    }
+
+    /// <summary>
     /// A converted tab fills to the next stop, not a whole indent. Always inserting IndentationSize
     /// spaces overshoots every stop but the first, so columns stop lining up.
     /// </summary>
