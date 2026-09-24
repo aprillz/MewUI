@@ -12,6 +12,33 @@ namespace MewUI.Test.Controls;
 [DoNotParallelize]
 public sealed class ToolBarTests
 {
+    [TestMethod]
+    public void AnEntryWhoseCommandCannotRun_FadesItsIconAndRestoresIt()
+    {
+        if (!OperatingSystem.IsWindows()) { Assert.Inconclusive("GDI backend is Windows-only."); return; }
+
+        var window = HeadlessWindow.Create();
+        var command = new Command("test.pause", "Pause");
+        bool canRun = true;
+        window.Commands.Register(command, static () => { }, () => canRun);
+        FrameworkElement? icon = null;
+        var bar = new ToolBar()
+            .ItemPresentation(CommandPresentationMode.Icon)
+            .Band(new ToolBarGroup().Item(command, "pause", new IconTemplate(_ => icon = new Border())));
+        window.Content = bar;
+        window.PerformLayout();
+        Assert.IsNotNull(icon);
+        Assert.AreEqual(1.0, icon.Opacity);
+
+        canRun = false;
+        window.EvaluateCommandStates();
+        Assert.IsLessThan(1.0, icon.Opacity, "an entry that cannot run shows its icon as if it could");
+
+        canRun = true;
+        window.EvaluateCommandStates();
+        Assert.AreEqual(1.0, icon.Opacity, "an entry that can run again keeps its icon faded");
+    }
+
     private static bool SkipOnNonWindows()
     {
         if (OperatingSystem.IsWindows())
