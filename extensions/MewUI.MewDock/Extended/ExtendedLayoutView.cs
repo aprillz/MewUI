@@ -32,31 +32,79 @@ internal sealed class ExtendedLayoutView : FlexLayoutView
     // Borders are auto-hide only: a drag near an edge never reveals an empty border (panes edge-dock instead).
     private protected override void UpdateBorderReveal(Point pos) { }
 
-    private protected override void BuildEdgeRegions()
+    private protected override void SyncEdgeRegions()
     {
-        _dockViews.Clear();
+        // Drop the regions of docks that went away or emptied; their row views are released with their nodes.
+        for (int index = _dockViews.Count - 1; index >= 0; index--)
+        {
+            var dock = _dockViews[index];
+            if (!IsShownDock(dock.Layout))
+            {
+                _dockViews.RemoveAt(index);
+                dock.Layout.PlacementChanged -= OnDockPlacementChanged;
+                if (ReferenceEquals(dock.View.Parent, this))
+                {
+                    Remove(dock.View);
+                }
+                Remove(dock.Splitter);
+                InvalidateMeasure();
+            }
+        }
+
         foreach (var (_, layout) in Model.Layouts)
         {
-            if (layout is DockLayout dock && dock.RootRow is RowNode dockRoot && dockRoot.Children.Count > 0)
+            if (layout is DockLayout dock && IsShownDock(dock) && !_dockViews.Exists(existing => ReferenceEquals(existing.Layout, dock)))
             {
-                var view = FlexViewFactory.BuildNodeView(dockRoot, Context);
-                Add(view);
+                var view = Context.ViewFor(dock.RootRow!);
+                if (view.Parent is Panel previousParent && !ReferenceEquals(previousParent, this))
+                {
+                    previousParent.Remove(view);
+                }
+                AddChrome(view);
                 var splitter = CreateDockSplitter(dock);
-                Add(splitter);
+                AddChrome(splitter);
+                dock.PlacementChanged += OnDockPlacementChanged;
                 _dockViews.Add(new DockView(dock, view, splitter));
+                InvalidateMeasure();
             }
         }
     }
 
-    private protected override void MeasureEdgeRegions(Size availableSize)
+    private bool IsShownDock(DockLayout dock) =>
+        Model.Layouts.TryGetValue(dock.LayoutId, out var current) && ReferenceEquals(current, dock)
+        && dock.RootRow is RowNode root && root.Children.Count > 0;
+
+    private void OnDockPlacementChanged(DockLayout dock) => InvalidateMeasure();
+
+    private protected override void CollectEdgeRegionTabSets(List<TabSetNode> tabSets)
     {
         foreach (var dock in _dockViews)
         {
-            dock.View.Measure(availableSize);
+            dock.Layout.RootRow?.ForEachNode((node, level) =>
+            {
+                if (node is TabSetNode tabSet)
+                {
+                    tabSets.Add(tabSet);
+                }
+            }, 0);
         }
     }
 
-    private protected override Rect ArrangeEdgeRegions(Rect remaining)
+    private protected override void ReleaseEdgeRegions()
+    {
+        foreach (var dock in _dockViews)
+        {
+            dock.Layout.PlacementChanged -= OnDockPlacementChanged;
+        }
+        _dockViews.Clear();
+    }
+
+    private protected override Rect MeasureEdgeRegions(Rect remaining) => ReserveDocks(remaining, arrange: false);
+
+    private protected override Rect ArrangeEdgeRegions(Rect remaining) => ReserveDocks(remaining, arrange: true);
+
+    /// <summary>Carves each pinned dock and its splitter off <paramref name="remaining"/>, measures or arranges them there, and returns the area left.</summary>
+    private Rect ReserveDocks(Rect remaining, bool arrange)
     {
         // Reserve docks by nesting rank (low = outer, reserved first = full extent; high = inner, between the
         // outer docks). The rank is chosen by where the user dropped, so a preview running the same Carve sequence
@@ -69,20 +117,32 @@ internal sealed class ExtendedLayoutView : FlexLayoutView
             // document area reflows into its space instead of leaving an empty strip.
             if (DockHoldsOnlyDragged(dock))
             {
-                dock.View.Arrange(Rect.Empty);
-                dock.Splitter.Arrange(Rect.Empty);
+                Place(dock.View, Rect.Empty, arrange);
+                Place(dock.Splitter, Rect.Empty, arrange);
                 continue;
             }
             double size = dock.Layout.Size > 0 ? dock.Layout.Size : DefaultDockSize;
             Rect region;
             (region, remaining) = Carve(remaining, dock.Edge, size);
-            dock.View.Arrange(region);
+            Place(dock.View, region, arrange);
             // A resize splitter (also the visual gap) between the dock and the rest.
             Rect splitterRegion;
             (splitterRegion, remaining) = Carve(remaining, dock.Edge, Model.SplitterSize);
-            dock.Splitter.Arrange(splitterRegion);
+            Place(dock.Splitter, splitterRegion, arrange);
         }
         return remaining;
+    }
+
+    private static void Place(UIElement element, Rect rect, bool arrange)
+    {
+        if (arrange)
+        {
+            element.Arrange(rect);
+        }
+        else
+        {
+            element.Measure(rect.Size);
+        }
     }
 
     // A dock collapses during a tear-off when nothing in it survives the drag - whether the dragged node is the
@@ -116,19 +176,20 @@ internal sealed class ExtendedLayoutView : FlexLayoutView
         double startSize = 0;
         splitter.SplitterDragStarted += e =>
         {
-            var p = e.GetPosition(this);
-            dragStart = horizontal ? p.X : p.Y;
+            var position = e.GetPosition(this);
+            dragStart = horizontal ? position.X : position.Y;
             startSize = layout.Size > 0 ? layout.Size : DefaultDockSize;
         };
         splitter.SplitterDragging += e =>
         {
-            var p = e.GetPosition(this);
-            double current = horizontal ? p.X : p.Y;
+            var position = e.GetPosition(this);
+            double current = horizontal ? position.X : position.Y;
             // Left/top docks grow when the splitter moves toward the centre (+); right/bottom grow the other way.
             double sign = edge is DockLocation.Left or DockLocation.Top ? 1 : -1;
+            // Live while dragging (the size change re-lays out the view); committed once when the drag ends.
             layout.Size = Math.Max(80, startSize + sign * (current - dragStart));
-            InvalidateArrange();
         };
+        splitter.SplitterDragCompleted += () => Model.DoAction(DockAction.AdjustDockSize(layout.LayoutId, layout.Size));
         return splitter;
     }
 

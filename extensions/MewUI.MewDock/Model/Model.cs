@@ -22,17 +22,98 @@ internal partial class Model
     private readonly BorderSet _borders;
     private readonly Dictionary<string, Node> _idMap = new();
     private readonly List<Action<DockAction>> _changeListeners = new();
+    private readonly List<DockAction> _completedActions = new();
+    private TabSetNode? _focusedTabSet;
+    private int _actionDepth;
+    private bool _notifying;
 
     public Model()
     {
         _mainLayout = new Layout(MainLayoutId, LayoutType.Window, Rect.Empty);
         _layouts[MainLayoutId] = _mainLayout;
+        Observe(_mainLayout);
         _borders = new BorderSet(this);
     }
 
+    /// <summary>Raised after any layout's root row was replaced.</summary>
+    internal event Action<Layout>? RootRowChanged;
+
+    /// <summary>Raised after any layout's maximized tabset changed.</summary>
+    internal event Action<Layout>? MaximizedChanged;
+
+    /// <summary>Raised after any layout's active tabset changed.</summary>
+    internal event Action<Layout>? ActiveChanged;
+
+    private void Observe(Layout layout)
+    {
+        layout.RootRowChanged += OnRootRowChanged;
+        layout.MaximizedChanged += OnMaximizedChanged;
+        layout.ActiveChanged += OnActiveChanged;
+    }
+
+    private void Unobserve(Layout layout)
+    {
+        layout.RootRowChanged -= OnRootRowChanged;
+        layout.MaximizedChanged -= OnMaximizedChanged;
+        layout.ActiveChanged -= OnActiveChanged;
+    }
+
+    private void OnRootRowChanged(Layout layout) => RootRowChanged?.Invoke(layout);
+
+    private void OnMaximizedChanged(Layout layout) => MaximizedChanged?.Invoke(layout);
+
+    private void OnActiveChanged(Layout layout) => ActiveChanged?.Invoke(layout);
+
     internal Layout MainLayout => _mainLayout;
 
-    internal Dictionary<string, Layout> Layouts => _layouts;
+    /// <summary>Every layout space by id; changed only through <see cref="AddLayout"/> and <see cref="RemoveLayout"/>.</summary>
+    internal IReadOnlyDictionary<string, Layout> Layouts => _layouts;
+
+    /// <summary>Raised after a layout space (a popout window or a pinned dock) was added.</summary>
+    internal event Action<Layout>? LayoutAdded;
+
+    /// <summary>Raised after a layout space was removed.</summary>
+    internal event Action<Layout>? LayoutRemoved;
+
+    /// <summary>Raised after an edge border was added to the border set.</summary>
+    internal event Action<BorderNode>? BorderAdded;
+
+    /// <summary>Raised after the focused tabset changed.</summary>
+    internal event Action? FocusedChanged;
+
+    /// <summary>Raised after global attributes (orientation, splitter size, border size) were applied.</summary>
+    internal event Action? AttributesChanged;
+
+    /// <summary>
+    /// Raised once after every outermost action (and every action dispatched while listeners ran) has been
+    /// reported to the change listeners.
+    /// </summary>
+    internal event Action? ChangesCompleted;
+
+    internal void AddLayout(Layout layout)
+    {
+        if (_layouts.Remove(layout.LayoutId, out var replaced))
+        {
+            Unobserve(replaced);
+            LayoutRemoved?.Invoke(replaced);
+        }
+        _layouts[layout.LayoutId] = layout;
+        Observe(layout);
+        LayoutAdded?.Invoke(layout);
+    }
+
+    internal bool RemoveLayout(string layoutId)
+    {
+        if (layoutId == MainLayoutId || !_layouts.Remove(layoutId, out var layout))
+        {
+            return false;
+        }
+        Unobserve(layout);
+        LayoutRemoved?.Invoke(layout);
+        return true;
+    }
+
+    internal void OnBorderAdded(BorderNode border) => BorderAdded?.Invoke(border);
 
     public BorderSet BorderSet => _borders;
 
@@ -119,7 +200,9 @@ internal partial class Model
     /// <summary>Optional callback to style a newly created tabset (attributes applied in a later step).</summary>
     internal Func<TabNode?, object?>? OnCreateTabSet { get; set; }
 
-    public double SplitterSize { get; set; } = 6;
+    internal const double DEFAULT_SPLITTER_SIZE = 6;
+
+    public double SplitterSize { get; set; } = DEFAULT_SPLITTER_SIZE;
 
     internal string NextUniqueId() => "#" + Guid.NewGuid().ToString();
 
@@ -152,7 +235,18 @@ internal partial class Model
 
     // The single focused tabset across all layouts (tool docks + document); drives the active-frame highlight.
     // Setter is open to the feature layer (ExtendedDockModel adjusts focus in its reducer post-pass).
-    internal TabSetNode? FocusedTabSet { get; private protected set; }
+    internal TabSetNode? FocusedTabSet
+    {
+        get => _focusedTabSet;
+        private protected set
+        {
+            if (!ReferenceEquals(value, _focusedTabSet))
+            {
+                _focusedTabSet = value;
+                FocusedChanged?.Invoke();
+            }
+        }
+    }
 
     public void AddChangeListener(Action<DockAction> listener) => _changeListeners.Add(listener);
 
@@ -219,8 +313,171 @@ internal partial class Model
         return _layouts[layoutId].RootRow?.FindDropTargetNode(layoutId, dragNode, x, y);
     }
 
-    /// <summary>Dispatches an action, mutating the tree, then rebuilds the id map and notifies listeners.</summary>
+    /// <summary>
+    /// Dispatches an action, mutating the tree, then rebuilds the id map. Listeners hear about it once the outermost
+    /// action is done: an action dispatched from inside another one, or from a listener, is reported after it.
+    /// </summary>
     public object? DoAction(DockAction action)
+    {
+        object? result;
+        _actionDepth++;
+        try
+        {
+            result = Apply(action);
+        }
+        finally
+        {
+            _actionDepth--;
+        }
+        if (!ChangesNothing(action))
+        {
+            _completedActions.Add(action);
+        }
+        NotifyWhenIdle();
+        return result;
+    }
+
+    /// <summary>Holds back the change notifications of every action dispatched until the returned scope ends.</summary>
+    internal IDisposable DeferNotifications()
+    {
+        _actionDepth++;
+        return new NotificationScope(this);
+    }
+
+    private sealed class NotificationScope(Model model) : IDisposable
+    {
+        private bool _disposed;
+
+        public void Dispose()
+        {
+            if (_disposed)
+            {
+                return;
+            }
+            _disposed = true;
+            model._actionDepth--;
+            model.NotifyWhenIdle();
+        }
+    }
+
+    private void NotifyWhenIdle()
+    {
+        if (_actionDepth > 0 || _notifying || _completedActions.Count == 0)
+        {
+            return;
+        }
+
+        _notifying = true;
+        List<Exception>? errors = null;
+        try
+        {
+            // A listener may dispatch another action; it runs at once and is reported after the one being reported.
+            do
+            {
+                while (_completedActions.Count > 0)
+                {
+                    var batch = _completedActions.ToArray();
+                    _completedActions.Clear();
+                    foreach (var done in batch)
+                    {
+                        foreach (var listener in _changeListeners.ToArray())
+                        {
+                            try
+                            {
+                                listener(done);
+                            }
+                            catch (Exception exception)
+                            {
+                                (errors ??= new List<Exception>()).Add(exception);
+                            }
+                        }
+                    }
+                }
+                try
+                {
+                    ChangesCompleted?.Invoke();
+                }
+                catch (Exception exception)
+                {
+                    (errors ??= new List<Exception>()).Add(exception);
+                }
+            }
+            while (_completedActions.Count > 0);
+        }
+        finally
+        {
+            _notifying = false;
+        }
+
+        if (errors is not null)
+        {
+            throw errors.Count == 1 ? errors[0] : new AggregateException(errors);
+        }
+    }
+
+    /// <summary>Moves what a closing popout holds back into the main layout: its rows and tabsets join the main root.</summary>
+    private protected virtual void DockBackFromPopout(RowNode popoutRoot)
+    {
+        var mainRoot = GetRootRow(MainLayoutId);
+        foreach (var child in popoutRoot.Children.ToList())
+        {
+            popoutRoot.RemoveChild(child);
+            mainRoot.AddChild(child);
+        }
+        mainRoot.NormalizeWeights();
+    }
+
+    /// <summary>
+    /// Keeps the references into the tree pointing at nodes that are in it, and the selections in range, whatever path
+    /// an action took: a tabset that left the tree is not maximized, active or focused any more.
+    /// </summary>
+    private void EnforceInvariants()
+    {
+        var live = new HashSet<Node>();
+        VisitNodes((node, level) => live.Add(node));
+
+        foreach (var layout in _layouts.Values)
+        {
+            if (layout.MaximizedTabSet is TabSetNode maximized && !(live.Contains(maximized) && ReferenceEquals(maximized.GetLayout(), layout)))
+            {
+                layout.MaximizedTabSet = null;
+            }
+            if (layout.ActiveTabSet is TabSetNode active && !(live.Contains(active) && ReferenceEquals(active.GetLayout(), layout)))
+            {
+                layout.ActiveTabSet = null;
+            }
+        }
+        if (FocusedTabSet is TabSetNode focused && !live.Contains(focused))
+        {
+            FocusedTabSet = null;
+        }
+
+        foreach (var node in live)
+        {
+            if (node is TabSetNode tabSet)
+            {
+                int count = tabSet.Children.Count;
+                if (count == 0 || tabSet.Selected < -1)
+                {
+                    tabSet.Selected = -1;
+                }
+                else if (tabSet.Selected >= count)
+                {
+                    tabSet.Selected = count - 1;
+                }
+            }
+            else if (node is BorderNode border && (border.Selected >= border.Children.Count || border.Selected < -1))
+            {
+                border.Selected = -1;
+            }
+        }
+    }
+
+    /// <summary>Actions that change nothing the listeners could see.</summary>
+    private static bool ChangesNothing(DockAction action) =>
+        action is UpdateNodeAttributesAction or MovePopoutToFrontAction or CreateSubLayoutAction;
+
+    private object? Apply(DockAction action)
     {
         object? returnVal = null;
 
@@ -228,11 +485,13 @@ internal partial class Model
         {
             case AddTabAction a:
             {
-                var node = BuildTabNode(a.Json, addToModel: true);
-                if (GetNodeById(a.ToNodeId) is Node toNode && toNode is TabSetNode or BorderNode or RowNode)
+                // A tab with nowhere to go would be a tab outside the layout; refuse it before making it.
+                if (GetNodeById(a.ToNodeId) is not Node toNode || toNode is not (TabSetNode or BorderNode or RowNode))
                 {
-                    toNode.Drop(node, a.Location, a.Index, a.Select);
+                    throw new InvalidOperationException($"No tabset, border or row with id '{a.ToNodeId}' to add the tab to.");
                 }
+                var node = BuildTabNode(a.Json, addToModel: true);
+                toNode.Drop(node, a.Location, a.Index, a.Select);
                 returnVal = node;
                 break;
             }
@@ -326,7 +585,7 @@ internal partial class Model
                     else
                     {
                         layout.MaximizedTabSet = maxTabSet;
-                        layout.ActiveTabSet = maxTabSet;
+                        SetActiveTabset(maxTabSet, layoutId);
                     }
                 }
                 break;
@@ -354,7 +613,7 @@ internal partial class Model
                     var layout = new Layout(layoutId, a.Type, rect);
                     var popoutRow = new RowNode(this);
                     layout.SetRootRow(popoutRow);
-                    _layouts[layoutId] = layout;
+                    AddLayout(layout);
                     popoutRow.Drop(popoutTabSet, DockLocation.Center, 0);
                 }
                 break;
@@ -370,7 +629,7 @@ internal partial class Model
                     var layout = new Layout(layoutId, a.Type, rect);
                     var popoutRow = new RowNode(this);
                     layout.SetRootRow(popoutRow);
-                    _layouts[layoutId] = layout;
+                    AddLayout(layout);
                     var tabSet = new TabSetNode(this);
                     popoutRow.AddChild(tabSet);
                     tabSet.Drop(popoutTab, DockLocation.Center, 0, select: true);
@@ -378,17 +637,10 @@ internal partial class Model
                 break;
             }
             case ClosePopoutAction a:
-                if (_layouts.TryGetValue(a.LayoutId, out var closing) && closing.RootRow is RowNode closingRoot)
+                if (a.LayoutId != MainLayoutId && _layouts.TryGetValue(a.LayoutId, out var closing) && closing.RootRow is RowNode closingRoot)
                 {
-                    // Dock the popout's content back into the main layout's root, then drop the sub-layout.
-                    var mainRoot = GetRootRow(MainLayoutId);
-                    foreach (var child in closingRoot.Children.ToList())
-                    {
-                        closingRoot.RemoveChild(child);
-                        mainRoot.AddChild(child);
-                    }
-                    mainRoot.NormalizeWeights();
-                    _layouts.Remove(a.LayoutId);
+                    DockBackFromPopout(closingRoot);
+                    RemoveLayout(a.LayoutId);
                     Tidy();
                 }
                 break;
@@ -402,13 +654,8 @@ internal partial class Model
         // before the id-map rebuild and the single change notification below.
         OnActionApplied(action);
 
+        EnforceInvariants();
         UpdateIdMap();
-
-        foreach (var listener in _changeListeners.ToArray())
-        {
-            listener(action);
-        }
-
         return returnVal;
     }
 
@@ -430,5 +677,6 @@ internal partial class Model
         {
             BorderSize = borderSize;
         }
+        AttributesChanged?.Invoke();
     }
 }

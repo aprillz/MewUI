@@ -12,8 +12,21 @@ internal abstract class SizedNode : Node
     {
     }
 
+    private double _weight = 100;
+
     /// <summary>Relative size weight within the parent row (default 100, normalized across siblings).</summary>
-    public double Weight { get; internal set; } = 100;
+    public double Weight
+    {
+        get => _weight;
+        internal set
+        {
+            if (value != _weight)
+            {
+                _weight = value;
+                RaisePropertyChanged(NodeProperty.Weight);
+            }
+        }
+    }
 
     public double MinWidth { get; internal set; } = ModelDefaults.Min;
 

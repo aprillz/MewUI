@@ -6,10 +6,11 @@ namespace Aprillz.MewUI.MewDock.Controls;
 
 /// <summary>
 /// Renders one <see cref="BorderNode"/>: a collapsed button strip along its edge plus, when a tab is selected,
-/// an expanded panel hosting that tab's content, with a draggable splitter at the panel's inner edge to resize
-/// it. <see cref="FlexLayoutView"/> reserves <see cref="Footprint"/> (bar + panel) at the edge.
+/// an expanded panel whose content the <see cref="PaneLayer"/> shows, with a draggable splitter at the panel's inner
+/// edge to resize it. It follows the border's tabs, selection and size in place. <see cref="FlexLayoutView"/>
+/// reserves <see cref="Footprint"/> (bar + panel) at the edge.
 /// </summary>
-internal class FlexBorderBar : Control, IVisualTreeHost
+internal class FlexBorderBar : Control, IVisualTreeHost, IPaneContentOwner
 {
     // protected so the Extended docking layer (ExtendedBorderBar) can subclass and reuse the strip/panel/splitter
     // plumbing while overriding the layout.
@@ -20,15 +21,14 @@ internal class FlexBorderBar : Control, IVisualTreeHost
     protected readonly FlexViewContext _context;
     protected readonly List<FlexBorderButton> _buttons = new();
     protected readonly FlexSplitter _splitter;
-    protected UIElement? _content;
+    private readonly HashSet<TabNode> _observedTabs = new();
+    private bool _released;
 
     public FlexBorderBar(BorderNode border, FlexViewContext context)
     {
         _border = border;
         _context = context;
         border.View = this;
-        BuildButtons();
-        SyncContent();
 
         _splitter = new FlexSplitter
         {
@@ -36,12 +36,28 @@ internal class FlexBorderBar : Control, IVisualTreeHost
             BarThickness = border.Model.SplitterSize,
         };
         _splitter.SplitterDragging += OnSplitterDragging;
+        _splitter.SplitterDragCompleted += OnSplitterDragCompleted;
         AttachChild(_splitter);
+
+        border.ChildInserted += OnTabsChanged;
+        border.ChildRemoved += OnTabsChanged;
+        border.PropertyChanged += OnBorderPropertyChanged;
+        SyncButtons();
     }
 
     internal BorderNode Border => _border;
 
     public DockLocation Location => _border.Location;
+
+    /// <summary>The size the revealed tab's content gets; set when the panel is measured.</summary>
+    protected Size ContentSize { get; set; }
+
+    /// <summary>Where the revealed tab's content goes; set when the panel is arranged.</summary>
+    protected Rect ContentArea { get; set; } = Rect.Empty;
+
+    Size IPaneContentOwner.ContentSize => ContentSize;
+
+    Rect IPaneContentOwner.ContentArea => ContentArea;
 
     protected bool Horizontal => _border.Location is DockLocation.Top or DockLocation.Bottom;
 
@@ -63,75 +79,127 @@ internal class FlexBorderBar : Control, IVisualTreeHost
     // Override point: the Extended layer creates a horizontal (non-rotated) button for the bottom strip.
     protected virtual FlexBorderButton CreateButton(TabNode tab) => new(tab, _border, _context);
 
-    protected void BuildButtons()
+    /// <summary>Stops following the border; the bar is not used again.</summary>
+    internal void Release()
     {
+        if (_released)
+        {
+            return;
+        }
+        _released = true;
+        _border.ChildInserted -= OnTabsChanged;
+        _border.ChildRemoved -= OnTabsChanged;
+        _border.PropertyChanged -= OnBorderPropertyChanged;
+        foreach (var tab in _observedTabs)
+        {
+            tab.PropertyChanged -= OnTabPropertyChanged;
+        }
+        _observedTabs.Clear();
         foreach (var button in _buttons)
         {
+            button.ReleaseHeader();
             DetachChild(button);
         }
         _buttons.Clear();
+        if (ReferenceEquals(_border.View, this))
+        {
+            _border.View = null;
+        }
+    }
+
+    private void OnTabsChanged(Node tab, int index) => SyncButtons();
+
+    private void OnBorderPropertyChanged(Node node, NodeProperty property)
+    {
+        switch (property)
+        {
+            case NodeProperty.Selected:
+                SyncSelection();
+                // Opening or closing the panel changes the space the layout gives everything else.
+                FindLayoutView()?.InvalidateMeasure();
+                break;
+            case NodeProperty.Size:
+                FindLayoutView()?.InvalidateMeasure();
+                break;
+        }
+    }
+
+    private void OnTabPropertyChanged(Node tab, NodeProperty property)
+    {
+        if (property == NodeProperty.Name)
+        {
+            RefreshNames();
+        }
+    }
+
+    /// <summary>Makes the strip hold one button per tab in the border's order, keeping the buttons of tabs that stay.</summary>
+    private void SyncButtons()
+    {
+        if (_released)
+        {
+            return;
+        }
+
+        foreach (var tab in _observedTabs.ToList())
+        {
+            if (!ReferenceEquals(tab.Parent, _border))
+            {
+                tab.PropertyChanged -= OnTabPropertyChanged;
+                _observedTabs.Remove(tab);
+            }
+        }
+
+        var buttons = new List<FlexBorderButton>(_border.Children.Count);
         foreach (var child in _border.Children)
         {
-            var button = CreateButton((TabNode)child);
-            _buttons.Add(button);
-            AttachChild(button);
+            var tab = (TabNode)child;
+            if (_observedTabs.Add(tab))
+            {
+                tab.PropertyChanged += OnTabPropertyChanged;
+            }
+            var button = _buttons.Find(candidate => ReferenceEquals(candidate.Tab, tab));
+            if (button is null)
+            {
+                button = CreateButton(tab);
+                AttachChild(button);
+            }
+            buttons.Add(button);
         }
+        foreach (var button in _buttons)
+        {
+            if (!buttons.Contains(button))
+            {
+                button.ReleaseHeader();
+                DetachChild(button);
+            }
+        }
+        _buttons.Clear();
+        _buttons.AddRange(buttons);
+        SyncSelection();
     }
 
-    protected void SyncContent()
-    {
-        var selected = _border.GetSelectedNode();
-        var newContent = selected is not null ? _context.Content(selected) : null;
-        if (ReferenceEquals(newContent, _content))
-        {
-            return;
-        }
-        if (_content is not null)
-        {
-            DetachChild(_content);
-        }
-        _content = newContent;
-        if (_content is not null && _content.Parent is null)
-        {
-            AttachChild(_content);
-        }
-        InvalidateMeasure();
-    }
-
-    protected override void OnVisualRootChanged(Element? oldRoot, Element? newRoot)
-    {
-        base.OnVisualRootChanged(oldRoot, newRoot);
-
-        if (newRoot is null)
-        {
-            ReleaseContent();
-        }
-    }
-
-    private void ReleaseContent()
-    {
-        if (_content is null)
-        {
-            return;
-        }
-
-        DetachChild(_content);
-        _content = null;
-    }
-
-    /// <summary>Re-syncs the panel + button highlights and re-arranges (panel size may have changed) on selection.</summary>
+    /// <summary>Re-syncs the button highlights and re-lays out (the panel size may have changed) on selection.</summary>
     internal virtual void SyncSelection()
     {
-        SyncContent();
         foreach (var button in _buttons)
         {
             button.InvalidateVisualState();
         }
-        InvalidateArrange();
+        InvalidateMeasure();
     }
 
-    // Live border resize: compute the new size from the splitter position and re-arrange the layout (which
-    // re-carves this border's footprint) without a rebuild, so the splitter keeps its mouse capture.
+    /// <summary>Shows the tabs' current names on the strip and the panel, without recreating controls.</summary>
+    internal virtual void RefreshNames()
+    {
+        foreach (var button in _buttons)
+        {
+            button.RefreshName();
+        }
+        InvalidateMeasure();
+    }
+
+    // Live border resize: the size changes as the splitter moves (each change re-lays out the layout, which re-carves
+    // this border's footprint) and is committed once, when the drag ends.
     protected void OnSplitterDragging(MouseEventArgs e)
     {
         if (FindVisualRoot() is not UIElement root)
@@ -141,8 +209,10 @@ internal class FlexBorderBar : Control, IVisualTreeHost
         var position = e.GetPosition(root);
         double splitterPos = Horizontal ? position.Y : position.X;
         _border.SetSize(_border.CalculateSplit(splitterPos));
-        FindLayoutView()?.InvalidateArrange();
     }
+
+    private void OnSplitterDragCompleted() =>
+        _border.Model.DoAction(DockAction.AdjustBorderSplit(_border.GetId(), _border.GetSize()));
 
     protected FlexLayoutView? FindLayoutView()
     {
@@ -171,21 +241,20 @@ internal class FlexBorderBar : Control, IVisualTreeHost
                 return false;
             }
         }
-        if (!visitor(_splitter))
-        {
-            return false;
-        }
-        return _content is null || visitor(_content);
+        return visitor(_splitter);
     }
 
     protected override Size MeasureContent(Size availableSize)
     {
+        // Buttons are measured with the strip they are arranged in.
+        var strip = Horizontal ? new Size(availableSize.Width, BarThickness) : new Size(BarThickness, availableSize.Height);
         foreach (var button in _buttons)
         {
-            button.Measure(availableSize);
+            button.Measure(strip);
         }
         _splitter.Measure(availableSize);
-        _content?.Measure(availableSize);
+        double panel = PanelSize;
+        MeasurePanel(Horizontal ? new Size(availableSize.Width, panel) : new Size(panel, availableSize.Height));
         return availableSize;
     }
 
@@ -254,27 +323,31 @@ internal class FlexBorderBar : Control, IVisualTreeHost
         {
             ArrangePanel(panelRect);
         }
-
-        if (Expanded)
+        else
         {
-            _splitter.Arrange(splitterRect);
+            ContentArea = Rect.Empty;
         }
+
+        // The splitter only shows while the panel is open; closed, it takes no place.
+        _splitter.Arrange(Expanded ? splitterRect : Rect.Empty);
     }
 
-    // Arranges the expanded panel's contents within panelRect. Default = the hosted content inset inside the frame
-    // border. The Extended layer overrides this to add a caption above the content.
+    /// <summary>Works out the size the revealed content gets, the one <see cref="ArrangePanel"/> places it in.</summary>
+    protected virtual void MeasurePanel(Size panelSize)
+    {
+        double border = Theme.Metrics.ControlBorderThickness;
+        ContentSize = new Size(Math.Max(0, panelSize.Width - 2 * border), Math.Max(0, panelSize.Height - 2 * border));
+    }
+
+    /// <summary>Works out where the revealed content goes: inside the panel's frame border.</summary>
     protected virtual void ArrangePanel(Rect panelRect)
     {
-        if (_content is null)
-        {
-            return;
-        }
         double border = Theme.Metrics.ControlBorderThickness;
-        _content.Arrange(new Rect(
+        ContentArea = new Rect(
             panelRect.X + border,
             panelRect.Y + border,
             Math.Max(0, panelRect.Width - 2 * border),
-            Math.Max(0, panelRect.Height - 2 * border)));
+            Math.Max(0, panelRect.Height - 2 * border));
     }
 
     protected override UIElement? OnHitTest(Point point)
@@ -287,16 +360,12 @@ internal class FlexBorderBar : Control, IVisualTreeHost
         {
             return splitterHit;
         }
-        for (int i = _buttons.Count - 1; i >= 0; i--)
+        for (int index = _buttons.Count - 1; index >= 0; index--)
         {
-            if (_buttons[i].HitTest(point) is UIElement buttonHit)
+            if (_buttons[index].HitTest(point) is UIElement buttonHit)
             {
                 return buttonHit;
             }
-        }
-        if (_content?.HitTest(point) is UIElement contentHit)
-        {
-            return contentHit;
         }
         return Bounds.Contains(point) ? this : null;
     }
@@ -385,7 +454,6 @@ internal class FlexBorderBar : Control, IVisualTreeHost
         }
         if (Expanded)
         {
-            _content?.Render(context);
             _splitter.Render(context);
         }
     }

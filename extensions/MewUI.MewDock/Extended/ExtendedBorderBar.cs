@@ -16,7 +16,7 @@ internal sealed class ExtendedBorderBar : FlexBorderBar
 
     public ExtendedBorderBar(BorderNode border, FlexViewContext context) : base(border, context)
     {
-        _caption = DockCaption.ForBorder(border);
+        _caption = DockCaption.ForBorder(border, context.Close);
         AttachChild(_caption);
     }
 
@@ -31,35 +31,55 @@ internal sealed class ExtendedBorderBar : FlexBorderBar
 
     internal override void SyncSelection()
     {
-        _caption.Refresh();
+        // The base constructor syncs before this class has made its caption.
+        _caption?.Refresh();
         InvalidateVisualState(); // focus/reveal change -> re-evaluate the accent border (with transition)
         base.SyncSelection();
     }
 
-    // The caption participates in the visual tree only while expanded (render and hit test both
-    // gate on Expanded), so a collapsed bar must not yield it.
-    protected override bool VisitChildrenCore(Func<Element, bool> visitor)
-        => (!Expanded || visitor(_caption)) && base.VisitChildrenCore(visitor);
-
-    protected override Size MeasureContent(Size availableSize)
+    internal override void RefreshNames()
     {
-        _caption.Measure(availableSize);
-        return base.MeasureContent(availableSize);
+        _caption?.Refresh();
+        base.RefreshNames();
+    }
+
+    // The caption stays attached (and visited, so it follows the window it is in); a closed bar gives it no place and
+    // does not draw or hit-test it.
+    protected override bool VisitChildrenCore(Func<Element, bool> visitor)
+        => visitor(_caption) && base.VisitChildrenCore(visitor);
+
+    protected override void MeasurePanel(Size panelSize)
+    {
+        var inner = PanelInner(new Rect(0, 0, panelSize.Width, panelSize.Height));
+        _caption.Measure(inner.Size);
+        ContentSize = new Size(inner.Width, Math.Max(0, inner.Height - Math.Min(_caption.DesiredSize.Height, inner.Height)));
     }
 
     // Panel = caption (top) + content (below), inside the floated frame border. Use the SAME pixel-snapped frame as
     // OnRender so the caption edges line up with the border at fractional DPI (e.g. 150%) instead of being 1px off.
     protected override void ArrangePanel(Rect panelRect)
     {
-        var snapped = GetSnappedBorderBounds(FloatPanel(panelRect));
-        double bd = Theme.Metrics.ControlBorderThickness;
-        var inner = new Rect(snapped.X + bd, snapped.Y + bd,
-            Math.Max(0, snapped.Width - 2 * bd), Math.Max(0, snapped.Height - 2 * bd));
+        if (!Expanded)
+        {
+            _caption.Arrange(Rect.Empty);
+            ContentArea = Rect.Empty;
+            return;
+        }
+        var inner = PanelInner(panelRect);
         var captionRect = new Rect(inner.X, inner.Y, inner.Width, Math.Min(_caption.DesiredSize.Height, inner.Height));
         var contentRect = new Rect(inner.X, captionRect.Bottom, inner.Width, Math.Max(0, inner.Bottom - captionRect.Bottom));
 
         _caption.Arrange(captionRect);
-        _content?.Arrange(contentRect);
+        ContentArea = contentRect;
+    }
+
+    /// <summary>The area inside the floated panel's frame border, where the caption and the content go.</summary>
+    private Rect PanelInner(Rect panelRect)
+    {
+        var snapped = GetSnappedBorderBounds(FloatPanel(panelRect));
+        double border = Theme.Metrics.ControlBorderThickness;
+        return new Rect(snapped.X + border, snapped.Y + border,
+            Math.Max(0, snapped.Width - 2 * border), Math.Max(0, snapped.Height - 2 * border));
     }
 
     // The revealed panel floats off the strip by the border gap on the STRIP-facing side only (the other sides reach

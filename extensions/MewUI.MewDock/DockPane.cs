@@ -75,7 +75,21 @@ public sealed class DockPane : MewObject
     /// <summary>The content given to AddDocumentPane/AddPane, if any (factory-restored panes return null).</summary>
     public UIElement? Content => _detached ? null : _manager.GetExplicitContent(Id);
 
-    public void Activate() => Perform(DockAction.SelectTab(Id));
+    /// <summary>Makes this the active pane and gives its content the keyboard focus. A revealed auto-hide tool stays
+    /// revealed.</summary>
+    public void Activate()
+    {
+        if (_detached)
+        {
+            return;
+        }
+        // Selecting a border tab toggles it; one already revealed is only focused.
+        if (!(Node.Parent is BorderNode border && ReferenceEquals(border.GetSelectedNode(), Node)))
+        {
+            Perform(DockAction.SelectTab(Id));
+        }
+        _manager.FocusContent(Node);
+    }
 
     public void Close() => Perform(DockAction.DeleteTab(Id));
 

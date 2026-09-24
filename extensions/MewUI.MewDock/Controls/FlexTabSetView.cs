@@ -3,63 +3,42 @@ using Aprillz.MewUI.MewDock.Model;
 using Aprillz.MewUI.Platform;
 using Aprillz.MewUI.Rendering;
 
+using DockModel = Aprillz.MewUI.MewDock.Model.Model;
+
 namespace Aprillz.MewUI.MewDock.Controls;
 
 /// <summary>
 /// Renders a <see cref="TabSetNode"/> as a tab pane: a tab-button strip on top (with a maximize control and an
-/// overflow dropdown) and the selected tab's content in a framed body below. Sets the node's rects (Rect /
-/// TabStripRect / ContentRect, plus each tab's TabRect) for drop hit-testing.
+/// overflow dropdown) and a framed body below, where the <see cref="PaneLayer"/> shows the selected tab's content. It
+/// follows the tabset's tabs, selection and names in place, and sets the node's rects (Rect / TabStripRect /
+/// ContentRect, plus each tab's TabRect) for drop hit-testing.
 /// </summary>
-internal sealed class FlexTabSetView : Control, IVisualTreeHost
+internal sealed class FlexTabSetView : Control, IVisualTreeHost, INodeView, IPaneContentOwner
 {
     private const double MinHeaderHeight = 26;
     private const double TabSpacing = 2;
 
     private readonly TabSetNode _tabSet;
+    private readonly DockModel _model;
     private readonly FlexViewContext _context;
     private readonly List<FlexTabButton> _tabs = new();
-    private readonly Button? _maximizeButton;
+    private readonly HashSet<TabNode> _observedTabs = new();
     private readonly Button _overflowButton;
     private readonly HashSet<FlexTabButton> _hiddenTabs = new();
+    private Button? _maximizeButton;
+    private UIElement? _toolCaption;
     private bool _overflowActive;
-    private UIElement? _content;
-    private readonly UIElement? _toolCaption;
     private double _headerHeight = MinHeaderHeight;
+    private Size _contentSize;
+    private Rect _contentArea = Rect.Empty;
+    private bool _released;
 
     public FlexTabSetView(TabSetNode tabSet, FlexViewContext context)
     {
         _tabSet = tabSet;
+        _model = tabSet.Model;
         _context = context;
         tabSet.View = this;
-
-        // A pane tabset wears a caption bar (title + pin/close/menu) above its content; the Extended layer supplies it.
-        if (!tabSet.IsDocument && context.ToolHeader?.Invoke(tabSet) is UIElement caption)
-        {
-            _toolCaption = caption;
-            AttachChild(_toolCaption);
-        }
-
-        BuildTabs();
-        SyncContent();
-
-        // The maximize/restore control is a real flat button (captures its own click, so pressing it never
-        // starts the header drag). The glyph reflects the current state; a toggle rebuilds and recreates it.
-        // Pane tabsets have no maximize button.
-        if (tabSet.IsEnableMaximize && tabSet.IsDocument)
-        {
-            _maximizeButton = new Button
-            {
-                Content = new GlyphElement { Kind = tabSet.IsMaximized ? GlyphKind.WindowRestore : GlyphKind.WindowMaximize },
-                StyleName = BuiltInStyles.FlatButton,
-                Padding = new Thickness(0),
-                MinWidth = 18,
-                MinHeight = 18,
-            };
-            _maximizeButton.Click += () => _tabSet.Model.DoAction(DockAction.MaximizeToggle(_tabSet.GetId()));
-            _maximizeButton.ToolTip = new TextBlock().BindText(
-                tabSet.IsMaximized ? MewUIDockString.ToolTipRestore : MewUIDockString.ToolTipMaximize);
-            AttachChild(_maximizeButton);
-        }
 
         // The overflow dropdown: shown only when the tabs do not all fit; clicking it pops a menu of the hidden
         // tabs. Created once and kept; hidden via the render/hit-test overrides (not IsVisible, which thrashes layout).
@@ -77,6 +56,53 @@ internal sealed class FlexTabSetView : Control, IVisualTreeHost
 
         // Dragging the empty header strip (areas not on a tab/button) moves the whole tabset.
         CanDrag = tabSet.IsEnableDrag;
+
+        tabSet.ChildInserted += OnTabsChanged;
+        tabSet.ChildRemoved += OnTabsChanged;
+        tabSet.PropertyChanged += OnTabSetPropertyChanged;
+        _model.FocusedChanged += OnFocusChanged;
+        _model.ActiveChanged += OnLayoutStateChanged;
+        _model.MaximizedChanged += OnLayoutStateChanged;
+        _model.DraggingChanged += OnDraggingChanged;
+
+        SyncTabs();
+    }
+
+    public Node Node => _tabSet;
+
+    Size IPaneContentOwner.ContentSize => _contentSize;
+
+    Rect IPaneContentOwner.ContentArea => _contentArea;
+
+    public void Release()
+    {
+        if (_released)
+        {
+            return;
+        }
+        _released = true;
+        _tabSet.ChildInserted -= OnTabsChanged;
+        _tabSet.ChildRemoved -= OnTabsChanged;
+        _tabSet.PropertyChanged -= OnTabSetPropertyChanged;
+        _model.FocusedChanged -= OnFocusChanged;
+        _model.ActiveChanged -= OnLayoutStateChanged;
+        _model.MaximizedChanged -= OnLayoutStateChanged;
+        _model.DraggingChanged -= OnDraggingChanged;
+        foreach (var tab in _observedTabs)
+        {
+            tab.PropertyChanged -= OnTabPropertyChanged;
+        }
+        _observedTabs.Clear();
+        foreach (var button in _tabs)
+        {
+            button.ReleaseHeader();
+            DetachChild(button);
+        }
+        _tabs.Clear();
+        if (ReferenceEquals(_tabSet.View, this))
+        {
+            _tabSet.View = null;
+        }
     }
 
     // A pane tabset puts its tab strip at the bottom; document tabsets keep it on top.
@@ -88,13 +114,161 @@ internal sealed class FlexTabSetView : Control, IVisualTreeHost
 
     private double CaptionHeight => _toolCaption?.DesiredSize.Height ?? 0;
 
+    private void OnTabsChanged(Node tab, int index) => SyncTabs();
+
+    private void OnTabSetPropertyChanged(Node node, NodeProperty property)
+    {
+        if (property == NodeProperty.Selected)
+        {
+            SyncSelection();
+        }
+    }
+
+    private void OnTabPropertyChanged(Node tab, NodeProperty property)
+    {
+        if (property == NodeProperty.Name)
+        {
+            foreach (var button in _tabs)
+            {
+                if (ReferenceEquals(button.Tab, tab))
+                {
+                    button.RefreshName();
+                }
+            }
+            (_toolCaption as IToolHeader)?.Refresh();
+            InvalidateMeasure();
+        }
+    }
+
+    private void OnFocusChanged()
+    {
+        InvalidateVisualState();
+        foreach (var tab in _tabs)
+        {
+            tab.InvalidateVisualState();
+        }
+    }
+
+    private void OnLayoutStateChanged(Layout layout)
+    {
+        RefreshMaximizeButton();
+        OnFocusChanged();
+    }
+
+    /// <summary>The dragged tab leaves the strip (and its content the layer) until the drag ends.</summary>
+    private void OnDraggingChanged()
+    {
+        SyncSelection();
+        InvalidateMeasure();
+    }
+
+    /// <summary>
+    /// Makes the strip hold one button per tab in the tabset's order. Buttons of tabs that stay are kept; a tab that
+    /// arrives gets a new button, which takes over the tab's header.
+    /// </summary>
+    private void SyncTabs()
+    {
+        if (_released)
+        {
+            return;
+        }
+
+        foreach (var tab in _observedTabs.ToList())
+        {
+            if (!ReferenceEquals(tab.Parent, _tabSet))
+            {
+                tab.PropertyChanged -= OnTabPropertyChanged;
+                _observedTabs.Remove(tab);
+            }
+        }
+
+        var buttons = new List<FlexTabButton>(_tabSet.Children.Count);
+        foreach (var child in _tabSet.Children)
+        {
+            var tab = (TabNode)child;
+            if (_observedTabs.Add(tab))
+            {
+                tab.PropertyChanged += OnTabPropertyChanged;
+            }
+            var button = _tabs.Find(candidate => ReferenceEquals(candidate.Tab, tab));
+            if (button is null)
+            {
+                button = new FlexTabButton(tab, _tabSet, _context);
+                AttachChild(button);
+            }
+            buttons.Add(button);
+        }
+        foreach (var button in _tabs)
+        {
+            if (!buttons.Contains(button))
+            {
+                button.ReleaseHeader();
+                DetachChild(button);
+            }
+        }
+        _tabs.Clear();
+        _tabs.AddRange(buttons);
+
+        EnsureChrome();
+        SyncSelection();
+        InvalidateMeasure();
+    }
+
+    /// <summary>Creates the chrome that depends on whether the group holds documents or tools, which the first tab decides.</summary>
+    private void EnsureChrome()
+    {
+        if (!_tabSet.IsDocument && _toolCaption is null && _context.ToolHeader?.Invoke(_tabSet) is UIElement caption)
+        {
+            // A pane tabset wears a caption bar (title + pin/close/menu) above its content; the Extended layer supplies it.
+            _toolCaption = caption;
+            AttachChild(_toolCaption);
+        }
+        else if (_tabSet.IsDocument && _toolCaption is not null)
+        {
+            DetachChild(_toolCaption);
+            _toolCaption = null;
+        }
+
+        bool wantsMaximize = _tabSet.IsEnableMaximize && _tabSet.IsDocument;
+        if (wantsMaximize && _maximizeButton is null)
+        {
+            // The maximize/restore control is a real flat button (captures its own click, so pressing it never
+            // starts the header drag). Pane tabsets have no maximize button.
+            _maximizeButton = new Button
+            {
+                StyleName = BuiltInStyles.FlatButton,
+                Padding = new Thickness(0),
+                MinWidth = 18,
+                MinHeight = 18,
+            };
+            _maximizeButton.Click += () => _model.DoAction(DockAction.MaximizeToggle(_tabSet.GetId(), _tabSet.LayoutId));
+            AttachChild(_maximizeButton);
+            RefreshMaximizeButton();
+        }
+        else if (!wantsMaximize && _maximizeButton is not null)
+        {
+            DetachChild(_maximizeButton);
+            _maximizeButton = null;
+        }
+    }
+
+    private void RefreshMaximizeButton()
+    {
+        if (_maximizeButton is null)
+        {
+            return;
+        }
+        bool maximized = _tabSet.IsMaximized;
+        _maximizeButton.Content = new GlyphElement { Kind = maximized ? GlyphKind.WindowRestore : GlyphKind.WindowMaximize };
+        _maximizeButton.ToolTip = new TextBlock().BindText(maximized ? MewUIDockString.ToolTipRestore : MewUIDockString.ToolTipMaximize);
+    }
+
     protected override void OnDragStarting(DragStartingEventArgs e)
     {
         base.OnDragStarting(e);
 
-        // Only the empty header strip drags the whole tabset; a drag from the content area (the press bubbled up
-        // here because the content is not itself a drag source) must NOT start a dock drag. The strip is at the
-        // bottom for tool groups, so test its actual location rather than assuming the top.
+        // Only the empty header strip drags the whole tabset. The strip is at the bottom for tool groups, so test its
+        // actual location rather than assuming the top.
         if (!IsInHeaderStrip(e.StartPositionInElement))
         {
             e.Cancel = true;
@@ -122,23 +296,23 @@ internal sealed class FlexTabSetView : Control, IVisualTreeHost
             Opacity = 0.9,
         };
 
-        _tabSet.Model.SetDraggingNode(_tabSet); // tear-off: hide this whole tabset until drop / cancel
+        _model.SetDraggingNode(_tabSet); // tear-off: hide this whole tabset until drop / cancel
     }
 
     // Released over no drop target (empty space / outside all windows): pop the whole tabset out into a new window.
     protected override void OnDragCompleted(DragCompletedEventArgs e)
     {
         base.OnDragCompleted(e);
-        _tabSet.Model.SetDraggingNode(null);
+        _model.SetDraggingNode(null);
         if (!e.WasCanceled && e.FinalEffect != DragDropEffects.Move)
         {
             // Pass the PHYSICAL cursor position; SyncPopouts converts it to DIPs at placement (mixed-DPI safe).
-            _tabSet.Model.DoAction(DockAction.PopoutTabset(_tabSet.GetId(), position: e.ScreenPosition));
+            _model.DoAction(DockAction.PopoutTabset(_tabSet.GetId(), position: e.ScreenPosition));
         }
     }
 
-    // Clicking anywhere in the tabset (header or content) makes it the active tabset (focus highlight). The
-    // mouse-down bubbles up here from the content; selecting a tab already activates it via SelectTab.
+    // Clicking the tabset's chrome makes it the active tabset (focus highlight); the content, shown over it by the
+    // pane layer, activates it through its host. Selecting a tab already activates it via SelectTab.
     protected override void OnMouseDown(MouseEventArgs e)
     {
         if (e.Button == MouseButton.Right && IsInHeaderStrip(e.GetPosition(this)))
@@ -149,9 +323,9 @@ internal sealed class FlexTabSetView : Control, IVisualTreeHost
         }
         base.OnMouseDown(e);
         if (e.Button == MouseButton.Left
-            && !ReferenceEquals(_tabSet.Model.FocusedTabSet, _tabSet))
+            && !ReferenceEquals(_model.FocusedTabSet, _tabSet))
         {
-            _tabSet.Model.DoAction(DockAction.SetActiveTabset(_tabSet.GetId(), _tabSet.LayoutId));
+            _model.DoAction(DockAction.SetActiveTabset(_tabSet.GetId(), _tabSet.LayoutId));
         }
     }
 
@@ -171,23 +345,22 @@ internal sealed class FlexTabSetView : Control, IVisualTreeHost
 
     private void BuildGroupMenu(ContextMenu menu, CommandScope commands)
     {
-        var model = _tabSet.Model;
         string setId = _tabSet.GetId();
-        DockMenuCommands.Add(menu, commands, "floatGroup", MewUIDockString.MenuFloat.Value, () => model.DoAction(DockAction.PopoutTabset(setId)));
+        DockMenuCommands.Add(menu, commands, "floatGroup", MewUIDockString.MenuFloat.Value, () => _model.DoAction(DockAction.PopoutTabset(setId)));
         if (_tabSet.IsDocument)
         {
             if (_tabSet.IsEnableMaximize)
             {
                 var label = _tabSet.IsMaximized ? MewUIDockString.MenuRestore.Value : MewUIDockString.MenuMaximize.Value;
-                DockMenuCommands.Add(menu, commands, "toggleMaximize", label, () => model.DoAction(DockAction.MaximizeToggle(setId)));
+                DockMenuCommands.Add(menu, commands, "toggleMaximize", label, () => _model.DoAction(DockAction.MaximizeToggle(setId, _tabSet.LayoutId)));
             }
         }
         else
         {
-            DockMenuCommands.Add(menu, commands, "autoHide", MewUIDockString.MenuAutoHide.Value, () => model.DoAction(DockAction.UnpinTool(setId)));
+            DockMenuCommands.Add(menu, commands, "autoHide", MewUIDockString.MenuAutoHide.Value, () => _model.DoAction(DockAction.UnpinTool(setId)));
         }
         menu.AddSeparator();
-        bool anyClosable = _tabSet.Children.Any(c => c is TabNode tab && tab.IsEnableClose);
+        bool anyClosable = _tabSet.Children.Any(child => child is TabNode tab && tab.IsEnableClose);
         DockMenuCommands.Add(menu, commands, "closeAll", MewUIDockString.MenuCloseAll.Value, CloseClosableTabs, anyClosable);
     }
 
@@ -198,7 +371,7 @@ internal sealed class FlexTabSetView : Control, IVisualTreeHost
         {
             if (child is TabNode tab && tab.IsEnableClose)
             {
-                _tabSet.Model.DoAction(DockAction.DeleteTab(tab.GetId()));
+                _context.Close(tab);
             }
         }
     }
@@ -208,26 +381,11 @@ internal sealed class FlexTabSetView : Control, IVisualTreeHost
     {
         var state = base.ComputeVisualState();
         var flags = state.Flags & ~VisualStateFlags.Focused;
-        if (ReferenceEquals(_tabSet.Model.FocusedTabSet, _tabSet))
+        if (ReferenceEquals(_model.FocusedTabSet, _tabSet))
         {
             flags |= VisualStateFlags.Focused;
         }
         return new VisualState { Flags = flags };
-    }
-
-    private void BuildTabs()
-    {
-        foreach (var tab in _tabs)
-        {
-            DetachChild(tab);
-        }
-        _tabs.Clear();
-        foreach (var child in _tabSet.Children)
-        {
-            var button = new FlexTabButton((TabNode)child, _tabSet, _context);
-            _tabs.Add(button);
-            AttachChild(button);
-        }
     }
 
     // The tab whose content + highlight the view shows. Normally the model's selected tab, but while that tab is
@@ -251,52 +409,9 @@ internal sealed class FlexTabSetView : Control, IVisualTreeHost
         return null;
     }
 
-    private void SyncContent()
-    {
-        var activeTab = EffectiveSelected(_tabSet);
-        var newContent = activeTab is not null ? _context.Content(activeTab) : null;
-        if (ReferenceEquals(newContent, _content))
-        {
-            return;
-        }
-        if (_content is not null)
-        {
-            DetachChild(_content);
-        }
-        _content = newContent;
-        if (_content is not null && _content.Parent is null)
-        {
-            AttachChild(_content);
-        }
-        InvalidateMeasure();
-    }
-
-    protected override void OnVisualRootChanged(Element? oldRoot, Element? newRoot)
-    {
-        base.OnVisualRootChanged(oldRoot, newRoot);
-
-        if (newRoot is null)
-        {
-            ReleaseContent();
-        }
-    }
-
-    private void ReleaseContent()
-    {
-        if (_content is null)
-        {
-            return;
-        }
-
-        DetachChild(_content);
-        _content = null;
-    }
-
-    /// <summary>Re-syncs the hosted content and tab/frame highlights after a selection or active-tabset change,
-    /// without recreating controls (so an in-flight drag source survives).</summary>
+    /// <summary>Re-syncs the tab and frame highlights and the caption after a selection change, in place.</summary>
     internal void SyncSelection()
     {
-        SyncContent();
         (_toolCaption as IToolHeader)?.Refresh();
         foreach (var tab in _tabs)
         {
@@ -323,11 +438,7 @@ internal sealed class FlexTabSetView : Control, IVisualTreeHost
         {
             return false;
         }
-        if (!visitor(_overflowButton))
-        {
-            return false;
-        }
-        return _content is null || visitor(_content);
+        return visitor(_overflowButton);
     }
 
     protected override Size MeasureContent(Size availableSize)
@@ -351,8 +462,11 @@ internal sealed class FlexTabSetView : Control, IVisualTreeHost
         }
         _headerHeight = headerHeight;
 
-        _toolCaption?.Measure(new Size(availableSize.Width, double.PositiveInfinity));
-        _content?.Measure(new Size(availableSize.Width, Math.Max(0, availableSize.Height - _headerHeight - CaptionHeight)));
+        // The same frame inset ArrangeContent gives the caption and the content.
+        double border = GetBorderVisualInset();
+        double innerWidth = Math.Max(0, availableSize.Width - 2 * border);
+        _toolCaption?.Measure(new Size(innerWidth, double.PositiveInfinity));
+        _contentSize = new Size(innerWidth, Math.Max(0, availableSize.Height - _headerHeight - 2 * border - CaptionHeight));
         return availableSize;
     }
 
@@ -376,6 +490,12 @@ internal sealed class FlexTabSetView : Control, IVisualTreeHost
                 tab.Tab.TabRect = tabRect;
                 offset += width + TabSpacing;
             }
+            // A tab left out of the strip has no place in it: not where it was, for drawing, hit tests or drops.
+            foreach (var hidden in _hiddenTabs)
+            {
+                hidden.Arrange(Rect.Empty);
+                hidden.Tab.TabRect = Rect.Empty;
+            }
 
             // Right-aligned controls: maximize rightmost, overflow dropdown to its left (only when overflow is active).
             double rightEdge = bounds.Right;
@@ -392,10 +512,22 @@ internal sealed class FlexTabSetView : Control, IVisualTreeHost
                 double height = _overflowButton.DesiredSize.Height;
                 _overflowButton.Arrange(new Rect(rightEdge - width - 2, headerY + (_headerHeight - height) / 2, width, height));
             }
+            else
+            {
+                _overflowButton.Arrange(Rect.Empty);
+            }
         }
         else
         {
+            // A lone tool's group shows no strip: its tab and buttons take no place.
             _overflowActive = false;
+            foreach (var tab in _tabs)
+            {
+                tab.Arrange(Rect.Empty);
+                tab.Tab.TabRect = Rect.Empty;
+            }
+            _maximizeButton?.Arrange(Rect.Empty);
+            _overflowButton.Arrange(Rect.Empty);
         }
 
         double contentTop = HeaderAtBottom ? bounds.Y : bounds.Y + _headerHeight;
@@ -416,9 +548,9 @@ internal sealed class FlexTabSetView : Control, IVisualTreeHost
             Math.Max(0, snapped.Height - _headerHeight - 2 * border));
 
         // Tool caption bar sits at the top of the framed area; the content fills below it.
-        double captionH = CaptionHeight;
-        _toolCaption?.Arrange(new Rect(inner.X, inner.Y, inner.Width, Math.Min(captionH, inner.Height)));
-        _content?.Arrange(new Rect(inner.X, inner.Y + captionH, inner.Width, Math.Max(0, inner.Height - captionH)));
+        double captionHeight = CaptionHeight;
+        _toolCaption?.Arrange(new Rect(inner.X, inner.Y, inner.Width, Math.Min(captionHeight, inner.Height)));
+        _contentArea = new Rect(inner.X, inner.Y + captionHeight, inner.Width, Math.Max(0, inner.Height - captionHeight));
     }
 
     // Computes which tabs fit in availableForTabs; the leading run is shown and the active tab is always kept
@@ -432,7 +564,7 @@ internal sealed class FlexTabSetView : Control, IVisualTreeHost
         var active = new List<FlexTabButton>();
         foreach (var tab in _tabs)
         {
-            if (ReferenceEquals(tab.Tab, _tabSet.Model.DraggingNode))
+            if (ReferenceEquals(tab.Tab, _model.DraggingNode))
             {
                 _hiddenTabs.Add(tab);
             }
@@ -443,9 +575,9 @@ internal sealed class FlexTabSetView : Control, IVisualTreeHost
         }
 
         double total = 0;
-        for (int i = 0; i < active.Count; i++)
+        for (int index = 0; index < active.Count; index++)
         {
-            total += active[i].DesiredSize.Width + (i > 0 ? TabSpacing : 0);
+            total += active[index].DesiredSize.Width + (index > 0 ? TabSpacing : 0);
         }
 
         if (active.Count <= 1 || total <= availableForTabs)
@@ -458,9 +590,9 @@ internal sealed class FlexTabSetView : Control, IVisualTreeHost
 
         int fitCount = 0;
         double accumulated = 0;
-        for (int i = 0; i < active.Count; i++)
+        for (int index = 0; index < active.Count; index++)
         {
-            double step = active[i].DesiredSize.Width + (i > 0 ? TabSpacing : 0);
+            double step = active[index].DesiredSize.Width + (index > 0 ? TabSpacing : 0);
             if (accumulated + step > availableForTabs)
             {
                 break;
@@ -470,11 +602,11 @@ internal sealed class FlexTabSetView : Control, IVisualTreeHost
         }
 
         int activeIndex = -1;
-        for (int i = 0; i < active.Count; i++)
+        for (int index = 0; index < active.Count; index++)
         {
-            if (active[i].IsActive)
+            if (active[index].IsActive)
             {
-                activeIndex = i;
+                activeIndex = index;
                 break;
             }
         }
@@ -486,15 +618,15 @@ internal sealed class FlexTabSetView : Control, IVisualTreeHost
         }
 
         var visible = new List<FlexTabButton>();
-        for (int i = 0; i < active.Count; i++)
+        for (int index = 0; index < active.Count; index++)
         {
-            if (i < leadCount || i == activeIndex)
+            if (index < leadCount || index == activeIndex)
             {
-                visible.Add(active[i]);
+                visible.Add(active[index]);
             }
             else
             {
-                _hiddenTabs.Add(active[i]);
+                _hiddenTabs.Add(active[index]);
             }
         }
 
@@ -525,7 +657,7 @@ internal sealed class FlexTabSetView : Control, IVisualTreeHost
             }
             var node = tab.Tab;
             DockMenuCommands.Add(menu, commands, "selectTab", node.Name ?? MewUIDockString.TitleUnnamedTab.Value,
-                () => _tabSet.Model.DoAction(DockAction.SelectTab(node.GetId())));
+                () => _model.DoAction(DockAction.SelectTab(node.GetId())));
         }
         menu.SetCommandTarget(CommandTarget.From(commands));
         menu.Placement = MenuPlacement.Below;
@@ -552,21 +684,17 @@ internal sealed class FlexTabSetView : Control, IVisualTreeHost
             {
                 return overflowHit;
             }
-            for (int i = _tabs.Count - 1; i >= 0; i--)
+            for (int index = _tabs.Count - 1; index >= 0; index--)
             {
-                if (_hiddenTabs.Contains(_tabs[i]))
+                if (_hiddenTabs.Contains(_tabs[index]))
                 {
                     continue;
                 }
-                if (_tabs[i].HitTest(point) is UIElement tabHit)
+                if (_tabs[index].HitTest(point) is UIElement tabHit)
                 {
                     return tabHit;
                 }
             }
-        }
-        if (_content?.HitTest(point) is UIElement contentHit)
-        {
-            return contentHit;
         }
         return Bounds.Contains(point) ? this : null;
     }
@@ -655,22 +783,6 @@ internal sealed class FlexTabSetView : Control, IVisualTreeHost
             if (_overflowActive)
             {
                 _overflowButton.Render(context);
-            }
-        }
-
-        if (_content is not null)
-        {
-            // Clip to the content's own arranged rect (inside the frame border, below the caption) so it never bleeds
-            // over the border or caption.
-            context.Save();
-            context.SetClip(_content.Bounds);
-            try
-            {
-                _content.Render(context);
-            }
-            finally
-            {
-                context.Restore();
             }
         }
     }

@@ -13,18 +13,23 @@ internal static class ExtendedDock
 {
     public static FlexLayoutView CreateView(
         ExtendedDockModel model,
-        Func<TabNode, UIElement?> content,
+        Func<TabNode, PaneHost?> host,
         Func<TabNode, UIElement?>? header = null,
         Action<TabNode, ContextMenu, CommandScope>? configureTabMenu = null,
-        Action<TabSetNode, ContextMenu, CommandScope>? configureGroupMenu = null)
+        Action<TabSetNode, ContextMenu, CommandScope>? configureGroupMenu = null,
+        Action<TabNode>? requestClose = null)
     {
         // No flags anywhere: the model behavior comes from the ExtendedDockModel type, the view behavior from the
         // Extended view types this factory wires (ExtendedLayoutView / ExtendedBorderBar / ExtendedBorderButton).
-        var context = new FlexViewContext(content, header,
+        FlexViewContext? context = null;
+        context = new FlexViewContext(host, header,
             (border, ctx) => new ExtendedBorderBar(border, ctx),
-            tabSet => DockCaption.ForTool(tabSet),
+            tabSet => DockCaption.ForTool(tabSet, context!.Close),
             configureTabMenu,
-            configureGroupMenu);
-        return new ExtendedLayoutView(model, context);
+            configureGroupMenu,
+            requestClose);
+        var view = new ExtendedLayoutView(model, context);
+        view.Initialize();
+        return view;
     }
 }

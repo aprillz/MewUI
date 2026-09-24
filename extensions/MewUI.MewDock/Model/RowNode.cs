@@ -131,6 +131,21 @@ internal sealed class RowNode : SizedNode
         var sn = (SizedNode)c[index];
         double smax = h ? sn.MaxWidth : sn.MaxHeight;
 
+        if (sum <= 0)
+        {
+            // Nothing laid out yet: keep the weights as they are.
+            var unchanged = new double[c.Count];
+            for (int child = 0; child < c.Count; child++)
+            {
+                unchanged[child] = ((SizedNode)c[child]).Weight;
+            }
+            return unchanged;
+        }
+
+        // The splitter stops where a neighbour would go under its minimum (or a child over its maximum).
+        var (low, high) = GetSplitterBounds(index);
+        splitterPos = Math.Clamp(splitterPos, Math.Min(low, high), Math.Max(low, high));
+
         var sizes = (double[])initialSizes.Clone();
 
         if (splitterPos < startPosition) // moved toward the start
@@ -466,7 +481,7 @@ internal sealed class RowNode : SizedNode
             var layout = GetLayout();
             if (layout.Type != LayoutType.Tab && LayoutId != Model.MainLayoutId)
             {
-                Model.Layouts.Remove(LayoutId);
+                Model.RemoveLayout(LayoutId);
             }
             else
             {

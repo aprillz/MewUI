@@ -19,6 +19,8 @@ internal class FlexBorderButton : Button
     protected readonly BorderNode _border;
     protected readonly FlexViewContext _context;
     protected readonly bool _rotated;
+    private readonly TextBlock? _defaultLabel;
+    private readonly UIElement? _hostHeader;
 
     // rotated == null derives from the border side (left/right rotate); the Extended bottom strip passes false to
     // render horizontally on every side.
@@ -29,7 +31,17 @@ internal class FlexBorderButton : Button
         _context = context;
         _rotated = rotated ?? border.Location is DockLocation.Left or DockLocation.Right;
 
-        var headerContent = context.Header?.Invoke(tab) ?? CreateDefaultLabel(tab);
+        // A host header is made once per tab and passes from button to button as the tab moves.
+        _hostHeader = context.HeaderFor(tab);
+        if (_hostHeader is null)
+        {
+            _defaultLabel = CreateDefaultLabel(tab);
+        }
+        else
+        {
+            FlexViewContext.DetachHeader(_hostHeader);
+        }
+        UIElement headerContent = _hostHeader ?? _defaultLabel!;
         // Left border reads bottom-to-top, right border top-to-bottom; the wrapper handles measure/render/hit-test.
         UIElement headerHost = _rotated
             ? new RotationDecorator
@@ -57,7 +69,7 @@ internal class FlexBorderButton : Button
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
             };
-            close.Click += () => _border.Model.DoAction(DockAction.DeleteTab(_tab.GetId()));
+            close.Click += () => _context.Close(_tab);
             close.ToolTip = new TextBlock().BindText(MewUIDockString.ToolTipClose);
             panel.Add(_rotated ? close.DockBottom() : close.DockRight());
         }
@@ -87,6 +99,23 @@ internal class FlexBorderButton : Button
 
     public bool IsSelected => ReferenceEquals(_border.GetSelectedNode(), _tab);
 
+    /// <summary>Shows the tab's current name in the default label; a host header follows the pane title itself.</summary>
+    internal void RefreshName()
+    {
+        if (_defaultLabel is not null)
+        {
+            _defaultLabel.Text = _tab.Name ?? MewUIDockString.TitleUnnamedTab.Value;
+        }
+    }
+
+    /// <summary>Gives the host header back so the tab's next button can show it.</summary>
+    internal void ReleaseHeader()
+    {
+        if (_hostHeader is not null)
+        {
+            FlexViewContext.DetachHeader(_hostHeader);
+        }
+    }
 
     private static TextBlock CreateDefaultLabel(TabNode tab)
     {
@@ -115,7 +144,7 @@ internal class FlexBorderButton : Button
     {
         if (e.Button == MouseButton.Middle && _tab.IsEnableClose)
         {
-            _border.Model.DoAction(DockAction.DeleteTab(_tab.GetId()));
+            _context.Close(_tab);
             e.Handled = true;
             return;
         }
@@ -137,7 +166,7 @@ internal class FlexBorderButton : Button
         var commands = new CommandScope();
         DockMenuCommands.Add(menu, commands, "dock", MewUIDockString.MemuDock.Value, () => model.DoAction(DockAction.PinTool(tabId)));
         DockMenuCommands.Add(menu, commands, "float", MewUIDockString.MenuFloat.Value, () => model.DoAction(DockAction.PopoutTab(tabId)));
-        DockMenuCommands.Add(menu, commands, "close", MewUIDockString.MenuClose.Value, () => model.DoAction(DockAction.DeleteTab(tabId)), _tab.IsEnableClose);
+        DockMenuCommands.Add(menu, commands, "close", MewUIDockString.MenuClose.Value, () => _context.Close(_tab), _tab.IsEnableClose);
         _context.ConfigureTabMenu?.Invoke(_tab, menu, commands); // host appends app commands
         menu.SetCommandTarget(CommandTarget.From(commands));
         menu.Show(this, new Point(Bounds.X + localPosition.X, Bounds.Y + localPosition.Y));

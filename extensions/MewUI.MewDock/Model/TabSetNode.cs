@@ -18,8 +18,21 @@ internal sealed class TabSetNode : SizedNode
     /// tabs (homogeneous - the drop rules never mix the two), so the distinction travels with the tabs.</summary>
     public bool IsDocument => Children.Count == 0 || ((TabNode)Children[0]).IsDocument;
 
+    private int _selected;
+
     /// <summary>Index of the selected tab, or -1 when none is selected.</summary>
-    public int Selected { get; internal set; }
+    public int Selected
+    {
+        get => _selected;
+        internal set
+        {
+            if (value != _selected)
+            {
+                _selected = value;
+                RaisePropertyChanged(NodeProperty.Selected);
+            }
+        }
+    }
 
     public Rect ContentRect { get; internal set; } = Rect.Empty;
 
@@ -177,8 +190,9 @@ internal sealed class TabSetNode : SizedNode
                 {
                     // Tear-off: the dragged tab is hidden from the strip (its TabRect is stale), so skip it - the
                     // insert position is computed against the reflowed (visible) tabs only.
-                    if (ReferenceEquals(Children[i], Model.DraggingNode))
+                    if (ReferenceEquals(Children[i], Model.DraggingNode) || ((TabNode)Children[i]).TabRect.Width <= 0)
                     {
+                        // A tab left out of the strip (overflow) has no place to insert against either.
                         continue;
                     }
                     r = ((TabNode)Children[i]).TabRect;

@@ -19,15 +19,52 @@ internal sealed class BorderNode : Node
 
     public DockLocation Location { get; }
 
+    private int _selected;
+    private bool _isShowing = true;
+    private double? _size;
+
     /// <summary>Index of the visible tab, or -1 when the border is collapsed.</summary>
-    public int Selected { get; internal set; }
+    public int Selected
+    {
+        get => _selected;
+        internal set
+        {
+            if (value != _selected)
+            {
+                _selected = value;
+                RaisePropertyChanged(NodeProperty.Selected);
+            }
+        }
+    }
 
     /// <summary>Whether this border is shown at all.</summary>
-    public bool IsShowing { get; internal set; } = true;
+    public bool IsShowing
+    {
+        get => _isShowing;
+        internal set
+        {
+            if (value != _isShowing)
+            {
+                _isShowing = value;
+                RaisePropertyChanged(NodeProperty.IsShowing);
+            }
+        }
+    }
 
     /// <summary>This border's own panel size (port of the per-border <c>size</c> attribute); null falls back to
     /// the global <see cref="Model.BorderSize"/>. Kept per-border so resizing one border does not affect others.</summary>
-    internal double? Size { get; set; }
+    internal double? Size
+    {
+        get => _size;
+        set
+        {
+            if (value != _size)
+            {
+                _size = value;
+                RaisePropertyChanged(NodeProperty.Size);
+            }
+        }
+    }
 
     /// <summary>Per-border <c>enableAutoHide</c> override (null inherits the global <see cref="Model.BorderEnableAutoHide"/>).</summary>
     internal bool? EnableAutoHideOverride { get; set; }
@@ -108,13 +145,18 @@ internal sealed class BorderNode : Node
         {
             Size = pos;
         }
-        else if (IsHorizontal())
-        {
-            tabNode.SetBorderWidth(pos);
-        }
         else
         {
-            tabNode.SetBorderHeight(pos);
+            if (IsHorizontal())
+            {
+                tabNode.SetBorderWidth(pos);
+            }
+            else
+            {
+                tabNode.SetBorderHeight(pos);
+            }
+            // The panel size is the selected tab's own here, which the border reports as its size.
+            RaisePropertyChanged(NodeProperty.Size);
         }
     }
 
