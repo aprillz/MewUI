@@ -15,6 +15,9 @@ public class TextEditor : Control, ITextEditorComponent
 {
     private const string PART_MARGIN_HOST = "PART_MarginHost";
     private const string PART_OVERLAY_HOST = "PART_OverlayHost";
+    // The text inset of a text input, which the surface keeps when it draws no frame of its own.
+    private const double TEXT_PADDING_X = 4;
+    private const double TEXT_PADDING_Y = 2;
 
     static TextEditor()
     {
@@ -68,6 +71,7 @@ public class TextEditor : Control, ITextEditorComponent
             BorderThickness = 0,
             CornerRadius = 0
         };
+        _surface.WithTheme((theme, surface) => surface.Padding = GetTextPadding(theme));
         _surface.KeyDown += OnSurfaceKeyDown;
         _surface.KeyUp += OnSurfaceKeyUp;
         _surface.GotFocus += () => TextArea!.Caret.Show();
@@ -416,6 +420,31 @@ public class TextEditor : Control, ITextEditorComponent
         get => GetValue(WordWrapProperty);
         set => SetValue(WordWrapProperty, value);
     }
+
+    public static readonly MewProperty<ScrollBarVisibility> VerticalScrollBarVisibilityProperty =
+        MewProperty<ScrollBarVisibility>.Register<TextEditor>(nameof(VerticalScrollBarVisibility), ScrollBarVisibility.Auto,
+            MewPropertyOptions.None,
+            static (self, _, newValue) =>
+            {
+                self._surface.VerticalScrollBarVisibility = newValue;
+                self._surface.Padding = self.GetTextPadding(self.Theme);
+            });
+
+    /// <summary>When the vertical scroll bar is shown; the text scrolls either way.</summary>
+    public ScrollBarVisibility VerticalScrollBarVisibility
+    {
+        get => GetValue(VerticalScrollBarVisibilityProperty);
+        set => SetValue(VerticalScrollBarVisibilityProperty, value);
+    }
+
+    /// <summary>
+    /// The space around the text inside the surface. A scroll bar that is always shown gets its own room on the right,
+    /// so the text and what hosts draw over it (overlays, adorners) are not under the bar.
+    /// </summary>
+    private Thickness GetTextPadding(Theme theme) =>
+        VerticalScrollBarVisibility == ScrollBarVisibility.Visible
+            ? new Thickness(TEXT_PADDING_X, TEXT_PADDING_Y, TEXT_PADDING_X + theme.Metrics.ScrollBarHitThickness, TEXT_PADDING_Y)
+            : new Thickness(TEXT_PADDING_X, TEXT_PADDING_Y, TEXT_PADDING_X, TEXT_PADDING_Y);
 
     public static readonly MewProperty<bool> IsReadOnlyProperty =
         MewProperty<bool>.Register<TextEditor>(nameof(IsReadOnly), false,
