@@ -46,7 +46,7 @@ public readonly struct PathCommand
 /// A path consisting of move, line, bezier, and close commands.
 /// Coordinates are in device-independent pixels (DIPs) in the local coordinate space.
 /// </summary>
-public sealed class PathGeometry : IFreezable
+public sealed class PathGeometry : Geometry
 {
     // Cubic Bézier approximation constant for a 90° arc: κ ≈ 4*(√2-1)/3
     private const double ArcK = 0.5522847498;
@@ -60,14 +60,6 @@ public sealed class PathGeometry : IFreezable
     // Sub-path start point (Close restores current point here per SVG spec).
     private double _startX;
     private double _startY;
-
-    private bool _isFrozen;
-
-    /// <inheritdoc/>
-    public bool IsFrozen => _isFrozen;
-
-    /// <inheritdoc/>
-    public void Freeze() => _isFrozen = true;
 
     /// <summary>
     /// Gets or sets the fill rule used when this path is filled without an explicit rule.
@@ -92,6 +84,9 @@ public sealed class PathGeometry : IFreezable
 
     /// <summary>Returns <see langword="true"/> when the path contains no commands.</summary>
     public bool IsEmpty => _commands.Count == 0;
+
+    /// <inheritdoc/>
+    public override PathGeometry GetPathGeometry() => this;
 
     /// <summary>
     /// Clears all commands, resetting the path for reuse without reallocating.
