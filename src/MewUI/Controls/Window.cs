@@ -2393,7 +2393,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             var adorned = _adorners[i].Adorned;
             var adorner = _adorners[i].Element;
 
-            if (!adorned.IsVisible || !adorner.IsVisible)
+            if (!adorner.IsVisible || !IsShownHere(adorned))
             {
                 continue;
             }
@@ -2407,6 +2407,25 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             adorner.Measure(new Size(bounds.Width, bounds.Height));
             adorner.Arrange(bounds);
         }
+    }
+
+    /// <summary>Whether an adorned element is in this window and shown; its adorners are shown only with it.</summary>
+    private bool IsShownHere(UIElement adorned)
+    {
+        for (Element? current = adorned; current != null; current = current.Parent)
+        {
+            if (ReferenceEquals(current, this))
+            {
+                return true;
+            }
+
+            if (current is UIElement element && !element.IsVisible)
+            {
+                return false;
+            }
+        }
+
+        return false;
     }
 
     private void LayoutPopups()
@@ -3199,7 +3218,10 @@ public partial class Window : ContentControl, ILayoutRoundingHost
                                 continue;
                             }
 
-                            adorner.Render(context);
+                            if (IsShownHere(_adorners[i].Adorned))
+                            {
+                                adorner.Render(context);
+                            }
                         }
                     }
                     if (profiling)
@@ -3758,6 +3780,11 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
         for (int i = _adorners.Count - 1; i >= 0; i--)
         {
+            if (!IsShownHere(_adorners[i].Adorned))
+            {
+                continue;
+            }
+
             var hit = _adorners[i].Element.HitTest(point);
             if (hit != null)
             {

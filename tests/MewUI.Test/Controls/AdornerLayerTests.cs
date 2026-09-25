@@ -1,5 +1,6 @@
 using Aprillz.MewUI;
 using Aprillz.MewUI.Controls;
+using Aprillz.MewUI.Rendering;
 using MewUI.Test.Infrastructure;
 
 namespace MewUI.Test.Controls;
@@ -11,6 +12,10 @@ namespace MewUI.Test.Controls;
 [DoNotParallelize]
 public sealed class AdornerLayerTests
 {
+    private const int WIDTH = 400;
+    private const int HEIGHT = 200;
+    private static readonly Color _badgeColor = Color.FromRgb(200, 30, 40);
+
     [TestMethod]
     public void TheSpaceAroundAnAdornerFallsThroughToTheContent()
     {
@@ -90,5 +95,92 @@ public sealed class AdornerLayerTests
 
         Assert.AreEqual(ink, label.Foreground,
             "an inherited value stopped at the window instead of coming from the adorned element");
+    }
+
+    [TestMethod]
+    public void AnAdornerIsNotShownWhileItsElementIsOutOfTheWindow()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("The GDI backend is Windows-only.");
+            return;
+        }
+
+        var factory = Application.DefaultGraphicsFactory;
+        var target = new Border { Width = 200, Height = 100, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
+        var holder = new ContentControl { Content = target };
+        var window = HeadlessWindow.Create(WIDTH, HEIGHT);
+        window.Content = holder;
+        window.PerformLayout();
+        var badge = new Border { Background = _badgeColor, Width = 40, Height = 20, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
+        AdornerLayer.GetAdornerLayer(target)!.Add(new Adorner(target, badge));
+        using var surface = factory.CreateSurface(RenderSurfaceDescriptor.Offscreen(WIDTH, HEIGHT, 1.0, hasAlpha: false));
+        var onBadge = RenderAndFindBadge(window, surface, badge);
+
+        // As a tab switch does: the element leaves the tree and its adorner stays registered.
+        holder.Content = null;
+        window.PerformLayout();
+        window.RenderFrameToSurface(surface);
+
+        Assert.AreNotEqual(_badgeColor, PixelAt(surface, onBadge), "the adorner is still drawn after its element left the window");
+        Assert.AreNotSame(badge, window.HitTest(onBadge), "the adorner still takes the pointer after its element left the window");
+
+        holder.Content = target;
+        window.PerformLayout();
+        window.RenderFrameToSurface(surface);
+
+        Assert.AreEqual(_badgeColor, PixelAt(surface, onBadge), "the adorner did not come back with its element");
+        Assert.AreSame(badge, window.HitTest(onBadge));
+    }
+
+    [TestMethod]
+    public void AnAdornerIsNotShownWhileAnAncestorOfItsElementIsHidden()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("The GDI backend is Windows-only.");
+            return;
+        }
+
+        var factory = Application.DefaultGraphicsFactory;
+        var target = new Border { Width = 200, Height = 100, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
+        var holder = new ContentControl { Content = target };
+        var window = HeadlessWindow.Create(WIDTH, HEIGHT);
+        window.Content = holder;
+        window.PerformLayout();
+        var badge = new Border { Background = _badgeColor, Width = 40, Height = 20, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
+        AdornerLayer.GetAdornerLayer(target)!.Add(new Adorner(target, badge));
+        using var surface = factory.CreateSurface(RenderSurfaceDescriptor.Offscreen(WIDTH, HEIGHT, 1.0, hasAlpha: false));
+        var onBadge = RenderAndFindBadge(window, surface, badge);
+
+        holder.IsVisible = false;
+        window.PerformLayout();
+        window.RenderFrameToSurface(surface);
+
+        Assert.AreNotEqual(_badgeColor, PixelAt(surface, onBadge), "the adorner is still drawn while an ancestor of its element is hidden");
+        Assert.AreNotSame(badge, window.HitTest(onBadge), "the adorner still takes the pointer while an ancestor of its element is hidden");
+
+        holder.IsVisible = true;
+        window.PerformLayout();
+        window.RenderFrameToSurface(surface);
+
+        Assert.AreEqual(_badgeColor, PixelAt(surface, onBadge), "the adorner did not come back when the ancestor was shown");
+    }
+
+    private static Point RenderAndFindBadge(Window window, IRenderSurface surface, Border badge)
+    {
+        window.PerformLayout();
+        window.RenderFrameToSurface(surface);
+        var onBadge = new Point(badge.Bounds.X + badge.Bounds.Width / 2, badge.Bounds.Y + badge.Bounds.Height / 2);
+        Assert.AreEqual(_badgeColor, PixelAt(surface, onBadge), "the adorner was not drawn to begin with");
+        Assert.AreSame(badge, window.HitTest(onBadge));
+        return onBadge;
+    }
+
+    private static Color PixelAt(IRenderSurface surface, Point point)
+    {
+        ReadOnlySpan<byte> pixels = ((ICpuPixelSurface)surface).GetReadOnlyPixelSpan();
+        int offset = ((int)point.Y * WIDTH + (int)point.X) * 4;
+        return Color.FromRgb(pixels[offset + 2], pixels[offset + 1], pixels[offset]);
     }
 }

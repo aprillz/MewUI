@@ -415,9 +415,9 @@ public partial class Window
     private readonly List<UIElement> _layerRoots = [];
 
     /// <summary>
-    /// Lists what this surface draws over its body, in drawing order: adorners, the popups shown inside
-    /// the surface, overlays, and the performance monitor last. They go into the scene as roots, so they
-    /// share its update and its dirty region with the body.
+    /// Lists what this surface draws over its body, in drawing order: the adorners of shown elements, the
+    /// popups shown inside the surface, overlays, and the performance monitor last. They go into the scene
+    /// as roots, so they share its update and its dirty region with the body.
     /// </summary>
     private List<UIElement> CollectLayerRoots()
     {
@@ -427,7 +427,7 @@ public partial class Window
         for (int index = 0; index < _adorners.Count; index++)
         {
             var adorner = _adorners[index].Element;
-            if (!ReferenceEquals(adorner, performanceAdorner))
+            if (!ReferenceEquals(adorner, performanceAdorner) && IsShownHere(_adorners[index].Adorned))
             {
                 _layerRoots.Add(adorner);
             }
