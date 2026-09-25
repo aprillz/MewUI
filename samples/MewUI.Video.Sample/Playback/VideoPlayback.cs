@@ -286,7 +286,7 @@ public sealed class VideoPlayback : IDisposable
             bool hasCpuPixels;
             lock (_decoderGate)
             {
-                decoded = _decoder.TryDecodeNext(frame.BgraData, out pts, out gpuResource, out hasCpuPixels);
+                decoded = _decoder.TryDecodeNext(ref frame.BgraData, out pts, out gpuResource, out hasCpuPixels);
                 decodedWidth = _decoder.Width;
                 decodedHeight = _decoder.Height;
             }
@@ -359,32 +359,14 @@ public sealed class VideoPlayback : IDisposable
 
     private VideoFrame RentFrame()
     {
-        int requiredBytes;
-        int width;
-        int height;
-        lock (_decoderGate)
-        {
-            width = _decoder.Width;
-            height = _decoder.Height;
-            requiredBytes = checked(width * height * 4);
-        }
         if (_framePool.TryTake(out var frame))
         {
             frame.ResetGpuState();
-            if (frame.BgraData.Length < requiredBytes)
-            {
-                frame.BgraData = new byte[requiredBytes];
-            }
-
             return frame;
         }
 
-        return new VideoFrame
-        {
-            BgraData = new byte[requiredBytes],
-            Width = width,
-            Height = height
-        };
+        // The decoder allocates BgraData only when a frame takes the CPU path; zero-copy frames never touch it.
+        return new VideoFrame { BgraData = [] };
     }
 
     private void ThrowIfDisposed()
