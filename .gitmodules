@@ -1,6 +1,10 @@
 [submodule "extensions/MewUI.MewCharts/ThirdParty/LiveCharts2"]
 	path = extensions/MewUI.MewCharts/ThirdParty/LiveCharts2
 	url = https://github.com/beto-rodriguez/LiveCharts2
+[submodule "extensions/MewUI.Geometry/ThirdParty/Clipper2"]
+	path = extensions/MewUI.Geometry/ThirdParty/Clipper2
+	url = https://github.com/AngusJohnson/Clipper2
+	shallow = true
 [submodule "extensions/MewUI.Svg/ThirdParty/SvgNet"]
 	path = extensions/MewUI.Svg/ThirdParty/SvgNet
 	url = https://github.com/svg-net/SVG

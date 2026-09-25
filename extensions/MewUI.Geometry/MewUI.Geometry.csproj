@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="..\..\build\MewUI.Common.props" />
+
+  <PropertyGroup>
+    <RootNamespace>Aprillz.MewUI.Geometry</RootNamespace>
+    <AssemblyName>$(MewUITitle).Geometry</AssemblyName>
+    <PackageId>$(MewUITitle).Geometry</PackageId>
+    <Description>Geometry operations for MewUI shapes.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="ThirdParty\**" />
+    <EmbeddedResource Remove="ThirdParty\**" />
+    <None Remove="ThirdParty\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="ThirdParty\Clipper2\CSharp\Clipper2Lib\*.cs" />
+    <ProjectReference Include="..\..\src\MewUI\MewUI.csproj" />
+  </ItemGroup>
+
+</Project>
