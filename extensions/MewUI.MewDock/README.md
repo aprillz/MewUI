@@ -1,10 +1,3 @@
-
-**Handle lifetime.** A handle stays the same instance while its pane or group exists - moving, pinning / unpinning
-and floating keep it. Closing the pane (or removing the group) and `LoadLayout` detach it: a detached handle keeps
-its last values, its verbs and setters do nothing, and bindings on it must be re-attached to the new handle.
-
-Bindable properties: `TitleProperty` (two-way by default; a non-null new title renames the tab), and the read-only
-`IsActiveProperty`, `GroupProperty`, `EdgeProperty`. They follow every layout change, including user gestures.
 # MewDock
 
 A docking framework for MewUI: dockable document tabs and tool panes, drag-and-drop rearranging, splits,
