@@ -99,6 +99,16 @@ public abstract class Shape : FrameworkElement
     /// </summary>
     protected abstract PathGeometry? GetDefiningGeometry();
 
+    /// <summary>Gets a copy of the geometry after applying the shape's layout and stretch.</summary>
+    public PathGeometry? RenderedGeometry
+    {
+        get
+        {
+            PathGeometry? geometry = GetRenderedGeometry();
+            return geometry == null ? null : CopyGeometry(geometry);
+        }
+    }
+
     /// <inheritdoc/>
     protected override Size MeasureContent(Size availableSize)
     {
@@ -119,41 +129,9 @@ public abstract class Shape : FrameworkElement
     /// <inheritdoc/>
     protected override void OnRender(IGraphicsContext context)
     {
-        var geometry = GetDefiningGeometry();
-        if (geometry == null || geometry.IsEmpty) return;
+        PathGeometry? renderGeometry = GetRenderedGeometry();
+        if (renderGeometry == null) return;
         if (Fill == null && (Stroke == null || StrokeThickness <= 0)) return;
-
-        var bounds = Bounds;
-        if (bounds.Width <= 0 && bounds.Height <= 0) return;
-
-        // The declared grid wins over the ink: two icons drawn on the same grid then scale by the same
-        // factor whatever margin each one leaves.
-        var geoBounds = ViewBox ?? geometry.GetBounds();
-
-        // Match WPF's Path/Shape semantics: Stretch operates on the geometry (so its baked
-        // path coordinates fit the element bounds), while Stroke is applied at the Path
-        // level on top of that - meaning StrokeThickness stays in element-DIP regardless
-        // of the stretch factor. We achieve this by baking the stretch into a transformed
-        // geometry instead of pushing a Scale transform onto the context (which, under the
-        // Model D scale-with-transform stroke contract, would also scale the stroke).
-        PathGeometry renderGeometry;
-        if (Stretch != Stretch.None && geoBounds.Width > 0 && geoBounds.Height > 0)
-        {
-            ComputeStretchTransform(geoBounds, bounds, Stretch,
-                out double scaleX, out double scaleY, out double offsetX, out double offsetY);
-            // [Translate(offset)] × [Scale] × [Translate(-geoOrigin)]
-            var bake =
-                Matrix3x2.CreateTranslation((float)-geoBounds.X, (float)-geoBounds.Y) *
-                Matrix3x2.CreateScale((float)scaleX, (float)scaleY) *
-                Matrix3x2.CreateTranslation((float)offsetX, (float)offsetY);
-            renderGeometry = geometry.Transform(bake);
-        }
-        else
-        {
-            var bake = Matrix3x2.CreateTranslation(
-                (float)(bounds.X - geoBounds.X), (float)(bounds.Y - geoBounds.Y));
-            renderGeometry = geometry.Transform(bake);
-        }
 
         if (Fill != null)
             context.FillPath(renderGeometry, Fill);
@@ -177,6 +155,91 @@ public abstract class Shape : FrameworkElement
 
             context.DrawPath(renderGeometry, _cachedPen);
         }
+    }
+
+    /// <inheritdoc/>
+    protected override UIElement? OnHitTest(Point point)
+    {
+        UIElement? hit = base.OnHitTest(point);
+        if (!ReferenceEquals(hit, this))
+        {
+            return hit;
+        }
+
+        PathGeometry? renderGeometry = GetRenderedGeometry();
+        ShapeHitTestResult result = ShapeHitTesting.HitTest(this, renderGeometry, point);
+        if (result == ShapeHitTestResult.Miss)
+        {
+            return null;
+        }
+
+        return this;
+    }
+
+    private PathGeometry? GetRenderedGeometry()
+    {
+        PathGeometry? geometry = GetDefiningGeometry();
+        if (geometry == null || geometry.IsEmpty)
+        {
+            return null;
+        }
+
+        Rect bounds = Bounds;
+        if (bounds.Width <= 0 && bounds.Height <= 0)
+        {
+            return null;
+        }
+
+        // The declared grid wins over the ink: two icons drawn on the same grid then scale by the same
+        // factor whatever margin each one leaves.
+        Rect geoBounds = ViewBox ?? geometry.GetBounds();
+
+        // Match WPF's Path/Shape semantics: Stretch operates on the geometry (so its baked
+        // path coordinates fit the element bounds), while Stroke is applied at the Path
+        // level on top of that - meaning StrokeThickness stays in element-DIP regardless
+        // of the stretch factor. We achieve this by baking the stretch into a transformed
+        // geometry instead of pushing a Scale transform onto the context (which, under the
+        // Model D scale-with-transform stroke contract, would also scale the stroke).
+        if (Stretch != Stretch.None && geoBounds.Width > 0 && geoBounds.Height > 0)
+        {
+            ComputeStretchTransform(geoBounds, bounds, Stretch,
+                out double scaleX, out double scaleY, out double offsetX, out double offsetY);
+            // [Translate(offset)] × [Scale] × [Translate(-geoOrigin)]
+            var bake =
+                Matrix3x2.CreateTranslation((float)-geoBounds.X, (float)-geoBounds.Y) *
+                Matrix3x2.CreateScale((float)scaleX, (float)scaleY) *
+                Matrix3x2.CreateTranslation((float)offsetX, (float)offsetY);
+            return geometry.Transform(bake);
+        }
+
+        var translation = Matrix3x2.CreateTranslation(
+            (float)(bounds.X - geoBounds.X), (float)(bounds.Y - geoBounds.Y));
+        return geometry.Transform(translation);
+    }
+
+    private static PathGeometry CopyGeometry(PathGeometry geometry)
+    {
+        var copy = new PathGeometry { FillRule = geometry.FillRule };
+        foreach (PathCommand command in geometry.Commands)
+        {
+            switch (command.Type)
+            {
+                case PathCommandType.MoveTo:
+                    copy.MoveTo(command.X0, command.Y0);
+                    break;
+                case PathCommandType.LineTo:
+                    copy.LineTo(command.X0, command.Y0);
+                    break;
+                case PathCommandType.BezierTo:
+                    copy.BezierTo(command.X0, command.Y0, command.X1, command.Y1, command.X2, command.Y2);
+                    break;
+                case PathCommandType.Close:
+                    copy.Close();
+                    break;
+            }
+        }
+
+        return copy;
     }
 
     private static void ComputeStretchTransform(
