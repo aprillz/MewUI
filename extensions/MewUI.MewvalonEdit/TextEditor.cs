@@ -27,7 +27,8 @@ public class TextEditor : Control, ITextEditorComponent
     private readonly System.Collections.ObjectModel.ObservableCollection<AbstractMargin> _leftMargins = [];
     private Grid? _marginHost;
     private Grid? _overlayHost;
-    private FrameworkElement? _pendingOverlay;
+    // Overlays in the order they were shown, which is their drawing order.
+    private readonly List<FrameworkElement> _overlays = new();
     private Adorner? _pendingAdorner;
     private HighlightingColorizer? _colorizer;
     private readonly LineTransformerAdapter _lineTransformers;
@@ -205,37 +206,48 @@ public class TextEditor : Control, ITextEditorComponent
     protected override void OnApplyTemplate()
     {
         base.OnApplyTemplate();
+        foreach (var element in _overlays)
+        {
+            _overlayHost?.Remove(element);
+        }
         _marginHost = GetTemplateChild<Grid>(PART_MARGIN_HOST);
         _overlayHost = GetTemplateChild<Grid>(PART_OVERLAY_HOST);
         OnLeftMarginsChanged();
-        if (_pendingOverlay is FrameworkElement pending)
+        foreach (var element in _overlays)
         {
-            _pendingOverlay = null;
-            ShowOverlay(pending);
+            AttachOverlay(element);
         }
     }
 
     /// <summary>
-    /// Puts an element over the text, such as the search panel. Held until the template is applied
-    /// when it arrives before that.
+    /// Puts an element over the margins and the text, above the overlays shown before it, such as
+    /// the search panel. It is drawn inside the editor's border and kept until
+    /// <see cref="HideOverlay"/>, also when it arrives before the template is applied.
     /// </summary>
-    internal void ShowOverlay(FrameworkElement element)
+    public void ShowOverlay(FrameworkElement element)
     {
-        if (_overlayHost is not Grid overlay)
+        ArgumentNullException.ThrowIfNull(element);
+        if (!_overlays.Contains(element))
         {
-            _pendingOverlay = element;
-            return;
+            _overlays.Add(element);
         }
-        if (!overlay.Children.Contains(element))
+        AttachOverlay(element);
+    }
+
+    /// <summary>Takes away an element <see cref="ShowOverlay"/> put over the editor.</summary>
+    public void HideOverlay(FrameworkElement element)
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        _overlays.Remove(element);
+        _overlayHost?.Remove(element);
+    }
+
+    private void AttachOverlay(FrameworkElement element)
+    {
+        if (_overlayHost is Grid overlay && !overlay.Children.Contains(element))
         {
             overlay.Add(element);
         }
-    }
-
-    internal void HideOverlay(FrameworkElement element)
-    {
-        _pendingOverlay = null;
-        _overlayHost?.Remove(element);
     }
 
     /// <summary>
