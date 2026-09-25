@@ -541,6 +541,12 @@ public sealed class VideoPlayerWindow : Window
 
         UpdateRenderLoopLog();
 
+        if (playback.IsPlaying)
+        {
+            // The view picks the due frame from the playback clock when it draws, and it draws only when invalidated.
+            _videoView.InvalidateVisual();
+        }
+
         if (playback.IsEnded)
         {
             _statusText.Text = $"Finished: {Path.GetFileName(playback.SourcePath)}";
