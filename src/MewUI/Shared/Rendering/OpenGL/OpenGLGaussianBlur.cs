@@ -27,16 +27,21 @@ internal static unsafe class OpenGLGaussianBlur
     private static int _uRadius;
     private static int _uWeights;
 
-    // Full-screen quad VAO/VBO.
-    private static uint _vao;
+    // Full-screen quad vertex buffer, shared by every context in the share group.
     private static uint _vbo;
 
-    // Scratch FBO for the intermediate (horizontal-pass output) buffer. Sized to
-    // the largest target seen; texture is recreated on demand if a bigger one comes.
-    private static uint _scratchFbo;
-    private static uint _scratchTex;
-    private static int _scratchW;
-    private static int _scratchH;
+    // Per-context objects: the quad's vertex array and the scratch FBO for the intermediate
+    // (horizontal-pass output) buffer, which is recreated when the target size changes.
+    private static readonly Dictionary<nint, ContextState> _contextStates = new();
+
+    private sealed class ContextState
+    {
+        public uint Vao;
+        public uint ScratchFbo;
+        public uint ScratchTex;
+        public int ScratchW;
+        public int ScratchH;
+    }
 
     // GLSL 1.40 (OpenGL 3.1): the lowest version that has in/out, texture() and user-defined fragment
     // outputs, so the same shader compiles on a 3.1 GLX context (e.g. Mesa/d3d12 under WSL, which caps at
@@ -151,55 +156,101 @@ void main() {{
         // Two-triangle strip covering NDC.
         Span<float> verts = stackalloc float[8] { -1, -1, 1, -1, -1, 1, 1, 1 };
 
-        uint vao = 0, vbo = 0;
-        OpenGLExt.GenVertexArrays(1, &vao);
+        uint vbo = 0;
         OpenGLExt.GenBuffers(1, &vbo);
-        if (vao == 0 || vbo == 0)
+        if (vbo == 0)
         {
-            if (vao != 0) OpenGLExt.DeleteVertexArrays(1, &vao);
-            if (vbo != 0) OpenGLExt.DeleteBuffers(1, &vbo);
             return false;
         }
 
-        OpenGLExt.BindVertexArray(vao);
         OpenGLExt.BindBuffer(OpenGLExt.GL_ARRAY_BUFFER, vbo);
         fixed (float* p = verts)
         {
             OpenGLExt.BufferData(OpenGLExt.GL_ARRAY_BUFFER, sizeof(float) * 8, p, OpenGLExt.GL_STATIC_DRAW);
         }
-        OpenGLExt.EnableVertexAttribArray(0);
-        OpenGLExt.VertexAttribPointer(0, 2, OpenGLExt.GL_FLOAT, normalized: false, stride: sizeof(float) * 2, pointer: null);
-        OpenGLExt.BindVertexArray(0);
         OpenGLExt.BindBuffer(OpenGLExt.GL_ARRAY_BUFFER, 0);
 
-        _vao = vao;
         _vbo = vbo;
         return true;
     }
 
-    private static bool EnsureScratch(int width, int height)
+    private static ContextState CurrentState()
+    {
+        nint key = CurrentContextKey();
+        lock (_lock)
+        {
+            if (!_contextStates.TryGetValue(key, out var state))
+            {
+                state = new ContextState();
+                _contextStates.Add(key, state);
+            }
+
+            return state;
+        }
+    }
+
+    private static bool EnsureVertexArray(ContextState state)
+    {
+        if (state.Vao != 0)
+        {
+            return true;
+        }
+
+        uint vao = 0;
+        OpenGLExt.GenVertexArrays(1, &vao);
+        if (vao == 0)
+        {
+            return false;
+        }
+
+        OpenGLExt.BindVertexArray(vao);
+        OpenGLExt.BindBuffer(OpenGLExt.GL_ARRAY_BUFFER, _vbo);
+        OpenGLExt.EnableVertexAttribArray(0);
+        OpenGLExt.VertexAttribPointer(0, 2, OpenGLExt.GL_FLOAT, normalized: false, stride: sizeof(float) * 2, pointer: null);
+        OpenGLExt.BindVertexArray(0);
+        OpenGLExt.BindBuffer(OpenGLExt.GL_ARRAY_BUFFER, 0);
+        state.Vao = vao;
+        return true;
+    }
+
+    /// <summary>
+    /// Identifies the GL context current on this thread. Vertex arrays and framebuffers are not shared between
+    /// contexts, so they are kept per context while programs, buffers and textures stay shared.
+    /// </summary>
+    private static nint CurrentContextKey()
+    {
+#if MEWUI_OPENGL_WIN32
+        return OpenGL32.wglGetCurrentContext();
+#elif MEWUI_OPENGL_X11
+        return X11GLBackendRegistry.Current?.GetCurrentContext() ?? 0;
+#else
+        return 0;
+#endif
+    }
+
+    private static bool EnsureScratch(ContextState state, int width, int height)
     {
         // Exact match required - the blur shader uses v_uv ∈ [0,1] to sample the entire
         // scratch texture in pass 2. If we reused an oversized scratch (e.g. previous frame
         // was zoomed in) the stale border outside the current write region would alias into
         // pass 2's samples, producing visible "ghost" copies of older zoom levels.
-        if (_scratchTex != 0 && _scratchFbo != 0 && _scratchW == width && _scratchH == height)
+        if (state.ScratchTex != 0 && state.ScratchFbo != 0 && state.ScratchW == width && state.ScratchH == height)
         {
             return true;
         }
 
         // (Re)allocate to fit the requested extent.
-        if (_scratchTex != 0)
+        if (state.ScratchTex != 0)
         {
-            uint t = _scratchTex;
+            uint t = state.ScratchTex;
             GL.DeleteTextures(1, ref t);
-            _scratchTex = 0;
+            state.ScratchTex = 0;
         }
-        if (_scratchFbo != 0)
+        if (state.ScratchFbo != 0)
         {
-            uint f = _scratchFbo;
+            uint f = state.ScratchFbo;
             OpenGLExt.DeleteFramebuffers(1, &f);
-            _scratchFbo = 0;
+            state.ScratchFbo = 0;
         }
 
         GL.GenTextures(1, out uint tex);
@@ -233,10 +284,10 @@ void main() {{
             return false;
         }
 
-        _scratchTex = tex;
-        _scratchFbo = fbo;
-        _scratchW = width;
-        _scratchH = height;
+        state.ScratchTex = tex;
+        state.ScratchFbo = fbo;
+        state.ScratchW = width;
+        state.ScratchH = height;
         return true;
     }
 
@@ -278,9 +329,11 @@ void main() {{
             if (!ReferenceEquals(source, dest))
             {
                 if (!EnsureInitialized()) return false;
+                var copyState = CurrentState();
+                if (!EnsureVertexArray(copyState)) return false;
                 int prevCopyFbo = GL.GetInteger(OpenGLExt.GL_FRAMEBUFFER_BINDING);
                 OpenGLExt.UseProgram(_program);
-                OpenGLExt.BindVertexArray(_vao);
+                OpenGLExt.BindVertexArray(copyState.Vao);
                 OpenGLExt.ActiveTexture(OpenGLExt.GL_TEXTURE0);
                 OpenGLExt.Uniform1i(_uTex, 0);
                 BlurPass(source.Texture, dest.Fbo, dest.PixelWidth, dest.PixelHeight, 0, 0, new[] { 1f }, 0);
@@ -299,7 +352,8 @@ void main() {{
 
         int w = Math.Min(source.PixelWidth, dest.PixelWidth);
         int h = Math.Min(source.PixelHeight, dest.PixelHeight);
-        if (!EnsureScratch(w, h)) return false;
+        var state = CurrentState();
+        if (!EnsureVertexArray(state) || !EnsureScratch(state, w, h)) return false;
 
         // Snapshot only the active FBO. NVG re-sets viewport at the next BeginFrame, so
         // letting it drift here is harmless - but a stale FBO binding could cause an
@@ -310,7 +364,7 @@ void main() {{
         var (wyArr, ry) = BuildKernel(sigmaY);
 
         OpenGLExt.UseProgram(_program);
-        OpenGLExt.BindVertexArray(_vao);
+        OpenGLExt.BindVertexArray(state.Vao);
         OpenGLExt.ActiveTexture(OpenGLExt.GL_TEXTURE0);
         OpenGLExt.Uniform1i(_uTex, 0);
 
@@ -320,21 +374,21 @@ void main() {{
         if (needHorizontal && needVertical)
         {
             // Pass 1: horizontal source.tex → scratch.fbo
-            BlurPass(source.Texture, _scratchFbo, w, h, dirX: 1f / w, dirY: 0f, wxArr, rx);
+            BlurPass(source.Texture, state.ScratchFbo, w, h, dirX: 1f / w, dirY: 0f, wxArr, rx);
             // Pass 2: vertical scratch.tex → dest.fbo
-            BlurPass(_scratchTex, dest.Fbo, w, h, dirX: 0f, dirY: 1f / h, wyArr, ry);
+            BlurPass(state.ScratchTex, dest.Fbo, w, h, dirX: 0f, dirY: 1f / h, wyArr, ry);
         }
         else if (needHorizontal)
         {
             // Horizontal only: source.tex → scratch.fbo, then identity copy → dest.fbo.
-            BlurPass(source.Texture, _scratchFbo, w, h, dirX: 1f / w, dirY: 0f, wxArr, rx);
-            BlurPass(_scratchTex, dest.Fbo, w, h, dirX: 0f, dirY: 0f, new[] { 1f }, 0);
+            BlurPass(source.Texture, state.ScratchFbo, w, h, dirX: 1f / w, dirY: 0f, wxArr, rx);
+            BlurPass(state.ScratchTex, dest.Fbo, w, h, dirX: 0f, dirY: 0f, new[] { 1f }, 0);
         }
         else
         {
             // Vertical only.
-            BlurPass(source.Texture, _scratchFbo, w, h, dirX: 0f, dirY: 1f / h, wyArr, ry);
-            BlurPass(_scratchTex, dest.Fbo, w, h, dirX: 0f, dirY: 0f, new[] { 1f }, 0);
+            BlurPass(source.Texture, state.ScratchFbo, w, h, dirX: 0f, dirY: 1f / h, wyArr, ry);
+            BlurPass(state.ScratchTex, dest.Fbo, w, h, dirX: 0f, dirY: 0f, new[] { 1f }, 0);
         }
 
         OpenGLExt.BindVertexArray(0);
