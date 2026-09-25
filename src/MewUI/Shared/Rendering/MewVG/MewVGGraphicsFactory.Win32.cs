@@ -459,15 +459,55 @@ public sealed partial class MewVGWin32GraphicsFactory : IPersistentFrameGraphics
             return PersistentFrameRenderScope.Instance;
         }
 
+        if (currentContext == 0)
+        {
+            return AcquireBackgroundRenderScopeCore();
+        }
+
         // The worker scope declines when a context is already current, so the window context is
         // released first to let the worker context take over this thread.
-        if (currentContext != 0 && !OpenGL32.wglMakeCurrent(0, 0))
+        nint currentDc = OpenGL32.wglGetCurrentDC();
+        if (!OpenGL32.wglMakeCurrent(0, 0))
         {
             throw new InvalidOperationException(
                 $"wglMakeCurrent (release before persistent frame render) failed: {Marshal.GetLastWin32Error()}");
         }
 
-        return AcquireBackgroundRenderScopeCore();
+        IDisposable workerScope;
+        try
+        {
+            workerScope = AcquireBackgroundRenderScopeCore();
+        }
+        catch
+        {
+            OpenGL32.wglMakeCurrent(currentDc, currentContext);
+            throw;
+        }
+
+        return new RestoreContextScope(workerScope, currentDc, currentContext);
+    }
+
+    /// <summary>
+    /// Ends a persistent frame render by releasing the worker context and making the released window context
+    /// current again, so work that runs between frames still finds the context it had before the frame.
+    /// </summary>
+    private sealed class RestoreContextScope(IDisposable workerScope, nint hdc, nint hglrc) : IDisposable
+    {
+        private bool _disposed;
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            try
+            {
+                workerScope.Dispose();
+            }
+            finally
+            {
+                OpenGL32.wglMakeCurrent(hdc, hglrc);
+            }
+        }
     }
 
     private sealed class Win32WorkerContextScope : IDisposable
