@@ -19,8 +19,10 @@ internal static unsafe class OpenGLFilterPasses
     private static int _uUseMatrix;
     private static int _uMatrix;
 
-    private static uint _vao;
+    // The quad's vertex buffer is shared by the share group; vertex arrays are not shared between
+    // contexts, so each context gets its own.
     private static uint _vbo;
+    private static readonly Dictionary<nint, uint> _vertexArrays = new();
 
     // GLSL 1.40 for the same reason as the blur shader: it is the lowest version with in/out
     // and user-defined fragment outputs, so one source compiles on 3.1 and 3.3+ contexts.
@@ -146,12 +148,18 @@ void main() {
             return false;
         }
 
+        uint vertexArray = CurrentVertexArray();
+        if (vertexArray == 0)
+        {
+            return false;
+        }
+
         // Snapshot only the active FBO, as the blur pass does: the next BeginFrame resets the
         // viewport anyway, but a stale FBO binding would send an outer pass to the wrong target.
         int prevFbo = GL.GetInteger(OpenGLExt.GL_FRAMEBUFFER_BINDING);
 
         OpenGLExt.UseProgram(_program);
-        OpenGLExt.BindVertexArray(_vao);
+        OpenGLExt.BindVertexArray(vertexArray);
         OpenGLExt.ActiveTexture(OpenGLExt.GL_TEXTURE0);
         OpenGLExt.Uniform1i(_uTex, 0);
         OpenGLExt.BindFramebuffer(OpenGLExt.GL_FRAMEBUFFER, dest.Fbo);
@@ -271,30 +279,69 @@ void main() {
     {
         Span<float> verts = stackalloc float[8] { -1, -1, 1, -1, -1, 1, 1, 1 };
 
-        uint vao = 0, vbo = 0;
-        OpenGLExt.GenVertexArrays(1, &vao);
+        uint vbo = 0;
         OpenGLExt.GenBuffers(1, &vbo);
-        if (vao == 0 || vbo == 0)
+        if (vbo == 0)
         {
-            if (vao != 0) OpenGLExt.DeleteVertexArrays(1, &vao);
-            if (vbo != 0) OpenGLExt.DeleteBuffers(1, &vbo);
             return false;
         }
 
-        OpenGLExt.BindVertexArray(vao);
         OpenGLExt.BindBuffer(OpenGLExt.GL_ARRAY_BUFFER, vbo);
         fixed (float* p = verts)
         {
             OpenGLExt.BufferData(OpenGLExt.GL_ARRAY_BUFFER, sizeof(float) * 8, p, OpenGLExt.GL_STATIC_DRAW);
         }
+        OpenGLExt.BindBuffer(OpenGLExt.GL_ARRAY_BUFFER, 0);
+
+        _vbo = vbo;
+        return true;
+    }
+
+    private static uint CurrentVertexArray()
+    {
+        nint key = CurrentContextKey();
+        lock (_lock)
+        {
+            if (_vertexArrays.TryGetValue(key, out uint existing))
+            {
+                return existing;
+            }
+        }
+
+        uint vao = 0;
+        OpenGLExt.GenVertexArrays(1, &vao);
+        if (vao == 0)
+        {
+            return 0;
+        }
+
+        OpenGLExt.BindVertexArray(vao);
+        OpenGLExt.BindBuffer(OpenGLExt.GL_ARRAY_BUFFER, _vbo);
         // GLSL 1.40 has no layout(location=) qualifier; the single attribute lands on 0.
         OpenGLExt.EnableVertexAttribArray(0);
         OpenGLExt.VertexAttribPointer(0, 2, OpenGLExt.GL_FLOAT, normalized: false, stride: sizeof(float) * 2, pointer: null);
         OpenGLExt.BindVertexArray(0);
         OpenGLExt.BindBuffer(OpenGLExt.GL_ARRAY_BUFFER, 0);
 
-        _vao = vao;
-        _vbo = vbo;
-        return true;
+        lock (_lock)
+        {
+            _vertexArrays[key] = vao;
+        }
+
+        return vao;
+    }
+
+    /// <summary>
+    /// Identifies the GL context current on this thread; vertex arrays are kept per context.
+    /// </summary>
+    private static nint CurrentContextKey()
+    {
+#if MEWUI_OPENGL_WIN32
+        return OpenGL32.wglGetCurrentContext();
+#elif MEWUI_OPENGL_X11
+        return X11GLBackendRegistry.Current?.GetCurrentContext() ?? 0;
+#else
+        return 0;
+#endif
     }
 }
