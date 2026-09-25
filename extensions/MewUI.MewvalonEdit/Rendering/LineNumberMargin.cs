@@ -47,13 +47,21 @@ public sealed class LineNumberMargin : AbstractMargin
         double scrollY = view.Host.ScrollOffset.Y;
         foreach (var line in view.Host.VisibleTextLines)
         {
-            string number = (line.LogicalLine.LineNumber + 1).ToString(CultureInfo.InvariantCulture);
-            var layout = GetNumberLayout(number);
-            double y = textViewport.Y + line.DocumentY - scrollY;
-            double x = Math.Max(Bounds.X + LEFT_INSET, Bounds.Right - layout.MeasuredSize.Width - RIGHT_INSET);
-            var options = new TextDrawOptions(Foreground);
-            context.Text.Draw(layout, new Point(x, y), in options);
+            DrawLineNumber(context, line.LogicalLine.LineNumber + 1, textViewport.Y + line.DocumentY - scrollY);
         }
+    }
+
+    /// <summary>
+    /// Draws a one-based line number the way this margin draws it beside its line, with its top at
+    /// <paramref name="top"/>, for places that show a line away from its own row.
+    /// </summary>
+    public void DrawLineNumber(IGraphicsContext context, int lineNumber, double top)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        var layout = GetNumberLayout(lineNumber.ToString(CultureInfo.InvariantCulture));
+        double x = Math.Max(Bounds.X + LEFT_INSET, Bounds.Right - layout.MeasuredSize.Width - RIGHT_INSET);
+        var options = new TextDrawOptions(Foreground);
+        context.Text.Draw(layout, new Point(x, top), in options);
     }
 
     private int GetDigitCount()
