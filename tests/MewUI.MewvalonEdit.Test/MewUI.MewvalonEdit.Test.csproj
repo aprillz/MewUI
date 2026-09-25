@@ -19,6 +19,9 @@
          second copy of it that drifts as IWindowBackend grows. -->
     <Compile Include="..\MewUI.Test\Infrastructure\HeadlessWindowBackend.cs"
              Link="Infrastructure\HeadlessWindowBackend.cs" />
+    <!-- A drawing sink a test records a margin's drawing through. -->
+    <Compile Include="..\MewUI.Test\Infrastructure\NoOpGraphicsContext.cs"
+             Link="Infrastructure\NoOpGraphicsContext.cs" />
   </ItemGroup>
 
 </Project>
