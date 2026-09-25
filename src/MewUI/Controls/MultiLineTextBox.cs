@@ -26,6 +26,10 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
             MewPropertyOptions.AffectsLayout | MewPropertyOptions.AffectsRender,
             static (self, _, value) => self.OnWrapChanged(value));
 
+    public static readonly MewProperty<ScrollBarVisibility> VerticalScrollBarVisibilityProperty =
+        MewProperty<ScrollBarVisibility>.Register<MultiLineTextBox>(nameof(VerticalScrollBarVisibility), ScrollBarVisibility.Auto,
+            MewPropertyOptions.AffectsLayout);
+
     public static readonly MewProperty<bool> SizeToDocumentProperty =
         MewProperty<bool>.Register<MultiLineTextBox>(nameof(SizeToDocument), false,
             MewPropertyOptions.AffectsLayout);
@@ -136,6 +140,13 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
     {
         get => GetValue(WrapProperty);
         set => SetValue(WrapProperty, value);
+    }
+
+    /// <summary>When the vertical scroll bar is shown; the text scrolls either way.</summary>
+    public ScrollBarVisibility VerticalScrollBarVisibility
+    {
+        get => GetValue(VerticalScrollBarVisibilityProperty);
+        set => SetValue(VerticalScrollBarVisibilityProperty, value);
     }
 
     /// <summary>
@@ -799,9 +810,11 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
         double thickness = Theme.Metrics.ScrollBarHitThickness;
         double extentHeight = _view.ExtentHeight;
         double extentWidth = _view.ExtentWidth;
-        bool vertical = extentHeight > _contentBounds.Height + 0.5;
+        bool canScrollVertically = extentHeight > _contentBounds.Height + 0.5;
+        bool vertical = canScrollVertically || VerticalScrollBarVisibility == ScrollBarVisibility.Visible;
         bool horizontal = !Wrap && extentWidth > _contentBounds.Width + 0.5;
         _verticalScrollBar.IsVisible = vertical;
+        _verticalScrollBar.IsEnabled = canScrollVertically;
         _horizontalScrollBar.IsVisible = horizontal;
 
         UpdateScrollBarRanges();
@@ -1098,7 +1111,7 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
 
         // A box sized to its text has nowhere to scroll, and consuming the wheel there would stop
         // whatever scrolls around it.
-        if (!e.Handled && e.Delta.Y != 0 && _verticalScrollBar.IsVisible)
+        if (!e.Handled && e.Delta.Y != 0 && _verticalScrollBar.IsVisible && _verticalScrollBar.IsEnabled)
         {
             SetVerticalOffset(_verticalOffset - e.Delta.Y * Theme.Metrics.ScrollWheelStep);
             e.Handled = true;
