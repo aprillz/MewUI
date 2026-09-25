@@ -193,17 +193,15 @@ public sealed unsafe class VideoDecoder : IDisposable
         }
     }
 
-    public bool TryDecodeNext(Span<byte> bgraBuffer, out TimeSpan pts, out IGpuFrameResource? gpuResource, out bool hasCpuPixels)
+    /// <summary>
+    /// Decodes the next frame. <paramref name="bgraBuffer"/> is grown only when the frame takes the CPU
+    /// conversion path; zero-copy frames leave it untouched.
+    /// </summary>
+    public bool TryDecodeNext(ref byte[] bgraBuffer, out TimeSpan pts, out IGpuFrameResource? gpuResource, out bool hasCpuPixels)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         gpuResource = null;
         hasCpuPixels = false;
-
-        int requiredLength = checked(Width * Height * 4);
-        if (bgraBuffer.Length < requiredLength)
-        {
-            throw new ArgumentException($"Buffer length must be at least {requiredLength} bytes.", nameof(bgraBuffer));
-        }
 
         while (true)
         {
@@ -284,6 +282,12 @@ public sealed unsafe class VideoDecoder : IDisposable
                             gpuResource = new D3D11GpuResource(rawHandle, rawSubresource, D3D11Device, static handle => Marshal.Release(handle));
                             ((D3D11GpuResource)gpuResource).SetRasterSize(Width, Height);
                         }
+                    }
+
+                    int requiredLength = checked(Width * Height * 4);
+                    if (bgraBuffer.Length < requiredLength)
+                    {
+                        bgraBuffer = new byte[requiredLength];
                     }
 
                     AVFrame* convertedFrame = GetFrameForColorConversion(_frame);
