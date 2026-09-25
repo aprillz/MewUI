@@ -45,6 +45,7 @@
     <Project Path="src/MewUI/MewUI.csproj" />
   </Folder>
   <Folder Name="/extensions/">
+    <Project Path="extensions/MewUI.Geometry/MewUI.Geometry.csproj" />
     <Project Path="extensions/MewUI.Markdown/MewUI.Markdown.csproj" />
     <Project Path="extensions/MewUI.MewCharts/MewUI.MewCharts.csproj" />
     <Project Path="extensions/MewUI.MewDock/MewUI.MewDock.csproj" />
@@ -79,6 +80,7 @@
     <Project Path="tests/MewUI.Test/MewUI.Test.csproj" />
     <Project Path="tests/MewUI.Analyzers.Test/MewUI.Analyzers.Test.csproj" />
     <Project Path="tests/MewUI.Generators.Test/MewUI.Generators.Test.csproj" />
+    <Project Path="tests/MewUI.Geometry.Test/MewUI.Geometry.Test.csproj" />
     <Project Path="tests/MewUI.GraphicsBackendTest/MewUI.GraphicsBackendTest.csproj" />
     <Project Path="tests/MewUI.GridLayoutTest/MewUI.GridLayoutTest.csproj" />
     <Project Path="tests/MewUI.MewDock.Test/MewUI.MewDock.Test.csproj" />

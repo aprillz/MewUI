@@ -60,6 +60,7 @@ set PROJECTS=%PROJECTS%^
 
 REM --- Extensions (extensions) ---
 set PROJECTS=%PROJECTS%^
+  extensions\MewUI.Geometry\MewUI.Geometry.csproj^
   extensions\MewUI.MewDock\MewUI.MewDock.csproj^
   extensions\MewUI.Svg\MewUI.Svg.csproj^
   extensions\MewUI.MewCharts\MewUI.MewCharts.csproj^
