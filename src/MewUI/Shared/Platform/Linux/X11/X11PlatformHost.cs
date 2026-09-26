@@ -140,7 +140,7 @@ public sealed class X11PlatformHost : IPlatformHost
             if (_gsettingsThemeMonitor == null)
             {
                 _gsettingsThemeMonitor = new LinuxGSettingsMonitor("org.gnome.desktop.interface");
-                _gsettingsThemeMonitor.Start(() =>
+                LinuxThemeDetector.GnomeChangesMonitored = _gsettingsThemeMonitor.Start(() =>
                 {
                     Interlocked.Exchange(ref _systemThemeDirty, 1);
                     SignalWake();
@@ -179,6 +179,7 @@ public sealed class X11PlatformHost : IPlatformHost
             CloseWakePipe();
             _gsettingsThemeMonitor?.Dispose();
             _gsettingsThemeMonitor = null;
+            LinuxThemeDetector.GnomeChangesMonitored = false;
             _dispatcher = null;
             _app = null;
             app.Dispatcher = null;
@@ -363,7 +364,10 @@ public sealed class X11PlatformHost : IPlatformHost
 
         PollDpiChanges();
         if (Interlocked.Exchange(ref _systemThemeDirty, 0) != 0)
+        {
+            LinuxThemeDetector.InvalidateGnomeThemeVariant();
             TryUpdateSystemTheme(force: true);
+        }
         else
             TryUpdateSystemTheme();
 
