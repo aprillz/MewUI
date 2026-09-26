@@ -787,7 +787,7 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
     /// </summary>
     private bool ApplyImageBrushPaint(ImageBrush imageBrush)
     {
-        if (imageBrush.Image is not MewVGImage mewImage)
+        if (ImageResource.ResolveBackendImage(imageBrush.Image) is not MewVGImage mewImage)
         {
             return false;
         }

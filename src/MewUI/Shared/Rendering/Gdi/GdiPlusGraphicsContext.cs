@@ -2677,7 +2677,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
     /// </summary>
     private nint CreateGdipTextureBrush(ImageBrush imageBrush)
     {
-        if (imageBrush.Image is not GdiImage gdiImage) return 0;
+        if (ImageResource.ResolveBackendImage(imageBrush.Image) is not GdiImage gdiImage) return 0;
         gdiImage.EnsureUpToDate();
 
         nint gpBitmap = gdiImage.GetGdiPlusBitmap();
