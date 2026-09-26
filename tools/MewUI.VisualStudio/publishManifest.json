@@ -1,0 +1,13 @@
+{
+  "$schema": "http://json.schemastore.org/vsix-publish",
+  "categories": [ "coding", "tools" ],
+  "identity": {
+    "internalName": "mewui-preview"
+  },
+  "overview": "marketplace-overview.md",
+  "priceCategory": "free",
+  "publisher": "aprillz",
+  "private": false,
+  "qna": true,
+  "repo": "https://github.com/aprillz/MewUI"
+}

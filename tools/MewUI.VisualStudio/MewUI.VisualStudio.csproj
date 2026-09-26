@@ -63,6 +63,11 @@
     <Content Include="icon.png">
       <IncludeInVSIX>true</IncludeInVSIX>
     </Content>
+    <Content Include="LICENSE.txt">
+      <IncludeInVSIX>true</IncludeInVSIX>
+    </Content>
+    <None Include="publishManifest.json" />
+    <None Include="marketplace-overview.md" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="System" />

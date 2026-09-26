@@ -1,21 +1,32 @@
 {
-  "name": "mewui-preview",
-  "displayName": "MewUI Preview",
+  "name": "mewui-preview-vscode",
+  "displayName": "MewUI Preview for VS Code",
   "description": "Live preview for Aprillz.MewUI components and windows",
   "version": "0.1.0",
   "icon": "images/icon.png",
   "publisher": "aprillz",
   "license": "MIT",
+  "homepage": "https://mewui.aprillz.net",
   "repository": {
     "type": "git",
     "url": "https://github.com/aprillz/MewUI"
   },
-  "private": true,
+  "bugs": {
+    "url": "https://github.com/aprillz/MewUI/issues"
+  },
+  "keywords": [
+    "mewui",
+    "csharp",
+    "dotnet",
+    "preview",
+    "hot reload"
+  ],
   "engines": {
     "vscode": "^1.90.0"
   },
   "categories": [
-    "Other"
+    "Other",
+    "Visualization"
   ],
   "activationEvents": [],
   "main": "./out/extension.js",
@@ -26,15 +37,6 @@
     }
   },
   "contributes": {
-    "menus": {
-      "editor/context": [
-        {
-          "command": "mewui.preview.start",
-          "when": "resourceLangId == csharp",
-          "group": "navigation@9"
-        }
-      ]
-    },
     "commands": [
       {
         "command": "mewui.preview.start",
@@ -56,6 +58,13 @@
       }
     ],
     "menus": {
+      "editor/context": [
+        {
+          "command": "mewui.preview.start",
+          "when": "resourceLangId == csharp",
+          "group": "navigation@9"
+        }
+      ],
       "editor/title": [
         {
           "command": "mewui.preview.start",

@@ -4,6 +4,10 @@
     <Identity Id="MewUI.VisualStudio.6b4084d0-1b60-49a8-9255-07401588f550" Version="0.1.0" Language="en-US" Publisher="Aprillz" />
     <DisplayName>MewUI Preview</DisplayName>
     <Description xml:space="preserve">Live editor preview for MewUI windows and user controls: build once, then every save updates the preview through .NET Hot Reload.</Description>
+    <MoreInfo>https://mewui.aprillz.net</MoreInfo>
+    <License>LICENSE.txt</License>
+    <GettingStartedGuide>https://github.com/aprillz/MewUI/blob/main/docs/Preview.md</GettingStartedGuide>
+    <ReleaseNotes>https://github.com/aprillz/MewUI/releases</ReleaseNotes>
     <Icon>icon.png</Icon>
     <Tags>mewui;preview;hot reload;ui</Tags>
   </Metadata>
