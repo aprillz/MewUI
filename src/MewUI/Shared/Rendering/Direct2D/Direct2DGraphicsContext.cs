@@ -2424,7 +2424,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITra
     /// </summary>
     private nint CreateImageBrushHandle(ImageBrush imageBrush)
     {
-        nint bitmap = imageBrush.Image switch
+        nint bitmap = ImageResource.ResolveBackendImage(imageBrush.Image) switch
         {
             Direct2DImage d2dImage => d2dImage.GetOrCreateBitmap(_renderTarget, _renderTargetGeneration),
             Direct2DNativeBitmapImage nativeBitmapImage => nativeBitmapImage.GetOrCreateBitmap(_renderTarget, _renderTargetGeneration),
