@@ -369,12 +369,8 @@ MewUI는 크로스플랫폼 관리형 파일 및 폴더 대화상자를 제공�
 
 **플랫폼**
 - [ ] Linux/Wayland
-- [ ] Linux 프레임버퍼
-
-**툴링**
-- [x] Hot Reload
-- [x] DevTools (요소 인스펙터, 비주얼 트리, 프레임 통계, 프로파일러)
-- [x] 에디터 프리뷰: [VS Code](https://marketplace.visualstudio.com/items?itemName=aprillz.mewui-preview-vscode), [Visual Studio](https://marketplace.visualstudio.com/items?itemName=aprillz.mewui-preview), [Rider](https://plugins.jetbrains.com/plugin/34155-mewui-preview)
+- [ ] Linux 프레임버퍼 (DRM/KMS)
+- [ ] 터치 지원 (데스크톱 백엔드; 브라우저는 이미 지원)
 
 ---
 ## 라이선스

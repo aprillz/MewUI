@@ -391,12 +391,8 @@ Set `PreferNative` to `false` to use the managed dialog directly.
 
 **Platforms**
 - [ ] Linux/Wayland
-- [ ] Linux framebuffer
-
-**Tooling**
-- [x] Hot Reload
-- [x] DevTools (element inspector, visual tree, frame statistics, profiler)
-- [x] Editor preview for [VS Code](https://marketplace.visualstudio.com/items?itemName=aprillz.mewui-preview-vscode), [Visual Studio](https://marketplace.visualstudio.com/items?itemName=aprillz.mewui-preview) and [Rider](https://plugins.jetbrains.com/plugin/34155-mewui-preview)
+- [ ] Linux framebuffer (DRM/KMS)
+- [ ] Touch support (desktop backends; already supported in the browser)
 
 ---
 ## License
