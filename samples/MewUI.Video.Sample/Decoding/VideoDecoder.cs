@@ -193,6 +193,9 @@ public sealed unsafe class VideoDecoder : IDisposable
         }
     }
 
+    // Bytes past the picture that sws_scale may write when converting the last row (covers AVX-512 stores).
+    private const int SWS_OVERSHOOT_PADDING = 256;
+
     /// <summary>
     /// Decodes the next frame. <paramref name="bgraBuffer"/> is grown only when the frame takes the CPU
     /// conversion path; zero-copy frames leave it untouched.
@@ -284,7 +287,9 @@ public sealed unsafe class VideoDecoder : IDisposable
                         }
                     }
 
-                    int requiredLength = checked(Width * Height * 4);
+                    // sws_scale stores the last row in whole SIMD vectors, a few bytes past Width*Height*4;
+                    // without the padding they overwrite the next managed object and the process crashes later.
+                    int requiredLength = checked(Width * Height * 4 + SWS_OVERSHOOT_PADDING);
                     if (bgraBuffer.Length < requiredLength)
                     {
                         bgraBuffer = new byte[requiredLength];
