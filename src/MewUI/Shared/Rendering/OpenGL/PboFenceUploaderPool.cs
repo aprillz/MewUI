@@ -24,9 +24,20 @@ internal sealed class PboFenceUploaderPool : IDisposable
 {
     private const long MAX_RETAINED_STAGING_BYTES = 32L * 1024 * 1024;
     private readonly Dictionary<(int Width, int Height), Stack<PboFenceUploader>> _buckets = new();
+    // Uploaders dropped while no GL context was current. Their texture and buffers can only be deleted with a
+    // context current, and an image is often released between frames (X11 releases its context after each
+    // frame), so they wait here for the next rent or return that runs inside a frame.
+    private readonly List<PboFenceUploader> _pendingDispose = new();
+    private readonly Func<nint> _getCurrentContext;
     private readonly object _lock = new();
     private long _retainedStagingBytes;
     private bool _disposed;
+
+    /// <param name="getCurrentContext">Returns the GL context current on the calling thread, or 0 when none is.</param>
+    public PboFenceUploaderPool(Func<nint> getCurrentContext)
+    {
+        _getCurrentContext = getCurrentContext ?? throw new ArgumentNullException(nameof(getCurrentContext));
+    }
 
     /// <summary>Maximum retained uploaders per (width, height) bucket.</summary>
     public int MaxPerBucket { get; init; } = 4;
@@ -40,6 +51,7 @@ internal sealed class PboFenceUploaderPool : IDisposable
     {
         if (_disposed) throw new ObjectDisposedException(nameof(PboFenceUploaderPool));
 
+        ReleasePendingUnderCurrentContext();
         var key = (source.PixelWidth, source.PixelHeight);
         lock (_lock)
         {
@@ -69,6 +81,7 @@ internal sealed class PboFenceUploaderPool : IDisposable
             return;
         }
 
+        ReleasePendingUnderCurrentContext();
         var key = (uploader.PixelWidth, uploader.PixelHeight);
         lock (_lock)
         {
@@ -78,21 +91,41 @@ internal sealed class PboFenceUploaderPool : IDisposable
                 _buckets[key] = stack;
             }
 
-            if (stack.Count >= MaxPerBucket)
-            {
-                uploader.Dispose();
-                return;
-            }
-
             long stagingBytes = uploader.StagingBytes;
-            if (_retainedStagingBytes + stagingBytes > MAX_RETAINED_STAGING_BYTES)
+            if (stack.Count < MaxPerBucket && _retainedStagingBytes + stagingBytes <= MAX_RETAINED_STAGING_BYTES)
             {
-                uploader.Dispose();
+                stack.Push(uploader);
+                _retainedStagingBytes += stagingBytes;
                 return;
             }
 
-            stack.Push(uploader);
-            _retainedStagingBytes += stagingBytes;
+            if (_getCurrentContext() == 0)
+            {
+                _pendingDispose.Add(uploader);
+                return;
+            }
+        }
+
+        uploader.Dispose();
+    }
+
+    private void ReleasePendingUnderCurrentContext()
+    {
+        PboFenceUploader[] pending;
+        lock (_lock)
+        {
+            if (_pendingDispose.Count == 0 || _getCurrentContext() == 0)
+            {
+                return;
+            }
+
+            pending = _pendingDispose.ToArray();
+            _pendingDispose.Clear();
+        }
+
+        foreach (var uploader in pending)
+        {
+            uploader.Dispose();
         }
     }
 
@@ -112,6 +145,12 @@ internal sealed class PboFenceUploaderPool : IDisposable
             }
             _buckets.Clear();
             _retainedStagingBytes = 0;
+
+            foreach (var uploader in _pendingDispose)
+            {
+                uploader.Dispose();
+            }
+            _pendingDispose.Clear();
         }
     }
 }
