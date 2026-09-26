@@ -448,7 +448,7 @@ public sealed unsafe class VideoDecoder : IDisposable
 
         _videoToolboxBridge?.Dispose();
         _videoToolboxBridge = null;
-        _hardwareTextureConverter?.Dispose();
+        // The converter is shared by every decoder on the device (see D3D11VideoProcessorConverter.TryGetShared).
         _hardwareTextureConverter = null;
 
         if (_codec is not null)
@@ -623,7 +623,7 @@ public sealed unsafe class VideoDecoder : IDisposable
         if (!_hardwareTextureConverterInitTried)
         {
             _hardwareTextureConverterInitTried = true;
-            _hardwareTextureConverterAvailable = D3D11VideoProcessorConverter.TryCreate(D3D11Device, out _hardwareTextureConverter, _sharedTextureOutput);
+            _hardwareTextureConverterAvailable = D3D11VideoProcessorConverter.TryGetShared(D3D11Device, out _hardwareTextureConverter, _sharedTextureOutput);
             SampleLog.Write(_hardwareTextureConverterAvailable
                 ? "D3D11 video processor interop converter initialised."
                 : "D3D11 video processor interop converter unavailable; exposing decoder surface directly.");
@@ -1122,6 +1122,46 @@ public sealed unsafe class VideoDecoder : IDisposable
             SampleLog.Write("Factory-owned D3D11 device was not accepted by FFmpeg. Falling back to sample-owned device creation.");
         }
 
+        AVBufferRef* sharedDevice = AcquireSharedInteropDevice();
+        if (sharedDevice is null)
+        {
+            return false;
+        }
+
+        // The codec gets its own reference; the process-wide context keeps the device (and FFmpeg's device lock) alive.
+        _codec->hw_device_ctx = sharedDevice;
+        return true;
+    }
+
+    // One BGRA+VIDEO device for every file, so the shared converter and its imported output textures
+    // (see D3D11VideoProcessorConverter.TryGetShared) are reused instead of being recreated per file.
+    private static AVBufferRef* _sharedInteropDevice;
+    private static readonly object _sharedInteropDeviceGate = new();
+
+    private static AVBufferRef* AcquireSharedInteropDevice()
+    {
+        lock (_sharedInteropDeviceGate)
+        {
+            if (_sharedInteropDevice is not null && IsDeviceRemoved(_sharedInteropDevice))
+            {
+                SampleLog.Write("Shared D3D11 decode device was removed; creating a new one.");
+                fixed (AVBufferRef** shared = &_sharedInteropDevice)
+                {
+                    ffmpeg.av_buffer_unref(shared);
+                }
+            }
+
+            if (_sharedInteropDevice is null)
+            {
+                _sharedInteropDevice = CreateInteropDevice();
+            }
+
+            return _sharedInteropDevice is null ? null : ffmpeg.av_buffer_ref(_sharedInteropDevice);
+        }
+    }
+
+    private static AVBufferRef* CreateInteropDevice()
+    {
         SampleLog.Write("TryCreateBgraD3D11Device: calling D3D11CreateDevice with BGRA+VIDEO ...");
         nint d3dDevice;
         nint d3dCtx;
@@ -1140,7 +1180,7 @@ public sealed unsafe class VideoDecoder : IDisposable
         {
             SampleLog.Write($"D3D11CreateDevice (BGRA+VIDEO) failed: 0x{hr:X8}.");
             if (d3dCtx != 0) Marshal.Release(d3dCtx);
-            return false;
+            return null;
         }
         if (d3dCtx != 0 && D3D11Native.TryEnableMultithreadProtection(d3dCtx))
         {
@@ -1154,10 +1194,29 @@ public sealed unsafe class VideoDecoder : IDisposable
         if (deviceRef is null)
         {
             Marshal.Release(d3dDevice);
-            return false;
+            return null;
         }
 
-        return TryInitializeHwDeviceContext(deviceRef, d3dDevice, ownsDeviceReference: true);
+        // FFmpeg's free callback releases the device, so our single reference is handed over.
+        var hwDeviceCtx = (AVHWDeviceContext*)deviceRef->data;
+        *(nint*)hwDeviceCtx->hwctx = d3dDevice;
+        int initResult = ffmpeg.av_hwdevice_ctx_init(deviceRef);
+        if (initResult < 0)
+        {
+            SampleLog.Write($"av_hwdevice_ctx_init failed: {FormatError(initResult)}.");
+            ffmpeg.av_buffer_unref(&deviceRef);
+            return null;
+        }
+
+        SampleLog.Write($"Shared D3D11 decode device created: 0x{d3dDevice:X}");
+        return deviceRef;
+    }
+
+    private static bool IsDeviceRemoved(AVBufferRef* deviceRef)
+    {
+        var hwDeviceCtx = (AVHWDeviceContext*)deviceRef->data;
+        nint device = *(nint*)hwDeviceCtx->hwctx;
+        return device == 0 || D3D11Native.GetDeviceRemovedReason(device) < 0;
     }
 
     private bool TryCreateHwDeviceContextFromExistingD3D11Device(nint d3dDevice)

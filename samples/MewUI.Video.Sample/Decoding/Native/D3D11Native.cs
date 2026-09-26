@@ -44,6 +44,7 @@ internal static unsafe class D3D11Native
     private const int VTBL_GETDEVICE_INDEX = 3;
     private const int VTBL_GETDESC_INDEX = 10;
     private const int ContextFlushIndex = 111;
+    private const int DeviceGetDeviceRemovedReasonIndex = 39;
 
     private static readonly Guid IID_ID3D11Multithread = new("9B7E4E00-342C-4106-A19F-4F2704F689F0");
     private static readonly Guid IID_IDXGIDevice = new("54EC77FA-1377-44E6-8C32-88FD5F44C84C");
@@ -155,6 +156,14 @@ internal static unsafe class D3D11Native
         {
             Marshal.Release(multithread);
         }
+    }
+
+    /// <summary>Returns the device's removed reason: S_OK while the device is usable, a failure HRESULT after removal.</summary>
+    public static int GetDeviceRemovedReason(nint device)
+    {
+        var vtbl = *(nint**)device;
+        var getDeviceRemovedReason = (delegate* unmanaged[Stdcall]<nint, int>)vtbl[DeviceGetDeviceRemovedReasonIndex];
+        return getDeviceRemovedReason(device);
     }
 
     public static void FlushDeviceContext(nint deviceContext)
