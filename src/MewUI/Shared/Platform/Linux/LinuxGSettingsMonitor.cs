@@ -15,12 +15,13 @@ internal sealed class LinuxGSettingsMonitor : IDisposable
         _schema = schema;
     }
 
-    public void Start(Action onChange)
+    /// <summary>Starts watching the schema; returns false when the monitor process could not be started.</summary>
+    public bool Start(Action onChange)
     {
         ArgumentNullException.ThrowIfNull(onChange);
         if (_process != null)
         {
-            return;
+            return true;
         }
 
         _onChange = onChange;
@@ -30,31 +31,38 @@ internal sealed class LinuxGSettingsMonitor : IDisposable
         {
             var psi = new ProcessStartInfo
             {
-                FileName = "gsettings",
+                FileName = "sh",
+                RedirectStandardInput = true,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
 
-            // Monitor all keys in schema (includes color-scheme and gtk-theme).
-            psi.ArgumentList.Add("monitor");
+            // gsettings monitor exits only when a write fails, so it outlived every app that was killed
+            // before a setting changed. The shell ends it once its stdin (our pipe) closes, which the
+            // kernel also does when this process dies. Monitors all keys (color-scheme and gtk-theme).
+            psi.ArgumentList.Add("-c");
+            psi.ArgumentList.Add("gsettings monitor \"$1\" & child=$!; read -r _; kill \"$child\" 2>/dev/null");
+            psi.ArgumentList.Add("gsettings-monitor");
             psi.ArgumentList.Add(_schema);
 
             var p = Process.Start(psi);
             if (p == null)
             {
-                return;
+                return false;
             }
 
             _process = p;
 
             // Read loop on a background thread (avoid blocking UI thread).
             _ = Task.Run(() => ReadLoop(p, _cts.Token));
+            return true;
         }
         catch
         {
             Dispose();
+            return false;
         }
     }
 
@@ -94,6 +102,7 @@ internal sealed class LinuxGSettingsMonitor : IDisposable
         _process = null;
         if (p != null)
         {
+            try { p.StandardInput.Close(); } catch { }
             try
             {
                 if (!p.HasExited)

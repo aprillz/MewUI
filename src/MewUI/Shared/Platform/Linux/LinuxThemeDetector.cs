@@ -6,8 +6,20 @@ namespace Aprillz.MewUI.Platform.Linux;
 internal static class LinuxThemeDetector
 {
     private const int GnomePollIntervalMs = 2000;
+    // Exit code timeout(1) returns when the command it runs is not found.
+    private const int COMMAND_NOT_FOUND_EXIT_CODE = 127;
     private static long _lastGnomePollTick;
     private static ThemeVariant? _lastGnomeVariant;
+    private static bool _gsettingsUnavailable;
+
+    /// <summary>
+    /// Set while a gsettings monitor reports changes: the queried value then stays cached until
+    /// <see cref="InvalidateGnomeThemeVariant"/> instead of being queried again every poll interval.
+    /// </summary>
+    internal static bool GnomeChangesMonitored { get; set; }
+
+    /// <summary>Drops the cached GNOME theme value so the next detection queries gsettings again.</summary>
+    internal static void InvalidateGnomeThemeVariant() => _lastGnomeVariant = null;
 
     public static ThemeVariant DetectSystemThemeVariant()
     {
@@ -56,9 +68,15 @@ internal static class LinuxThemeDetector
     {
         variant = ThemeVariant.Light;
 
-        // Avoid spawning gsettings too often; X11PlatformHost polls frequently.
+        if (_gsettingsUnavailable)
+        {
+            return false;
+        }
+
+        // Avoid spawning gsettings too often; X11PlatformHost polls frequently. Each spawn forks this
+        // process, so with a monitor running the value is queried only after it reports a change.
         long now = Environment.TickCount64;
-        if (now - _lastGnomePollTick < GnomePollIntervalMs && _lastGnomeVariant.HasValue)
+        if (_lastGnomeVariant.HasValue && (GnomeChangesMonitored || now - _lastGnomePollTick < GnomePollIntervalMs))
         {
             variant = _lastGnomeVariant.Value;
             return true;
@@ -111,10 +129,12 @@ internal static class LinuxThemeDetector
         value = string.Empty;
         try
         {
+            // timeout bounds the child even when this process dies before killing it: gsettings started
+            // by an app that was killed mid-query kept running at full CPU with the app's inherited handles.
             var psi = new ProcessStartInfo
             {
-                FileName = "gsettings",
-                ArgumentList = { "get", schema, key },
+                FileName = "timeout",
+                ArgumentList = { "-k", "1", "2", "gsettings", "get", schema, key },
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
@@ -131,6 +151,12 @@ internal static class LinuxThemeDetector
             if (!p.WaitForExit(150))
             {
                 try { p.Kill(entireProcessTree: true); } catch { }
+                return false;
+            }
+
+            if (p.ExitCode == COMMAND_NOT_FOUND_EXIT_CODE)
+            {
+                _gsettingsUnavailable = true;
                 return false;
             }
 
