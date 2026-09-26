@@ -27,8 +27,13 @@
   <ItemGroup>
     <Compile Remove="samples\**" />
     <EmbeddedResource Remove="samples\**" />
-    <None Remove="samples\**" />
     <None Include="samples\**">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\FBASample\fba_gallery.cs" Link="samples\fba_gallery.cs" >
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
