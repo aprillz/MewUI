@@ -48,5 +48,5 @@ internal static partial class Samples
         new UniformGrid().Column(1).Spacing(4).Children(charts);
 
     private static FrameworkElement ConfigureContent(FrameworkElement content) =>
-        content.Width(300).Height(200).Cached().Center();
+        content.Width(300).Height(200).Center();
 }
