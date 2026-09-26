@@ -7,7 +7,6 @@ namespace Aprillz.MewUI.Video.Sample.Decoding;
 
 internal sealed unsafe class D3D11VideoProcessorConverter : IDisposable
 {
-    private const int OutputTexturePoolSize = 6;
     private const int QueryInterfaceIndex = 0;
     private const int AddRefIndex = 1;
     private const int ReleaseIndex = 2;
@@ -52,7 +51,14 @@ internal sealed unsafe class D3D11VideoProcessorConverter : IDisposable
     private readonly nint _deviceContext;
     private readonly nint _videoDevice;
     private readonly nint _videoContext;
-    private readonly Queue<nint> _availableOutputTextures = new();
+    // Output textures by size. In shared-output mode they are never released while the converter lives: a
+    // texture imported into OpenGL kept its VRAM after release (NVIDIA), so releasing per video grew VRAM on every
+    // file. Otherwise the pool is capped and dropped when the processor is rebuilt for another size.
+    private const int UNSHARED_POOL_CAPACITY = 6;
+    private readonly Dictionary<(uint Width, uint Height), Queue<nint>> _availableOutputTextures = new();
+    // Serializes conversions: the converter is shared by every decoder on its device, and the playback being
+    // replaced still decodes while the next one starts.
+    private readonly object _convertGate = new();
     // Diagnostic keys already written, so a failure that repeats every frame is logged once.
     private readonly HashSet<string> _loggedDiagnostics = new();
     private readonly object _outputTextureGate = new();
@@ -112,6 +118,31 @@ internal sealed unsafe class D3D11VideoProcessorConverter : IDisposable
         lock (_outputTextureGate)
         {
             return _sharedHandles.TryGetValue(outputTexture, out nint handle) ? handle : 0;
+        }
+    }
+
+    private static readonly Dictionary<(nint Device, bool SharedOutput), D3D11VideoProcessorConverter> _sharedConverters = new();
+
+    /// <summary>
+    /// Returns the process-wide converter for <paramref name="device"/>, creating it on first use. The converter,
+    /// its output textures and its fences outlive every decoder, so a new file reuses what the last one imported.
+    /// </summary>
+    public static bool TryGetShared(nint device, out D3D11VideoProcessorConverter? converter, bool sharedOutput = false)
+    {
+        lock (_sharedConverters)
+        {
+            if (_sharedConverters.TryGetValue((device, sharedOutput), out converter))
+            {
+                return true;
+            }
+
+            if (!TryCreate(device, out converter, sharedOutput))
+            {
+                return false;
+            }
+
+            _sharedConverters[(device, sharedOutput)] = converter!;
+            return true;
         }
     }
 
@@ -175,6 +206,14 @@ internal sealed unsafe class D3D11VideoProcessorConverter : IDisposable
     }
 
     public bool TryConvert(nint inputTexture, int arraySlice, int outputWidth, int outputHeight, out nint outputTexture)
+    {
+        lock (_convertGate)
+        {
+            return TryConvertCore(inputTexture, arraySlice, outputWidth, outputHeight, out outputTexture);
+        }
+    }
+
+    private bool TryConvertCore(nint inputTexture, int arraySlice, int outputWidth, int outputHeight, out nint outputTexture)
     {
         outputTexture = 0;
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -283,13 +322,25 @@ internal sealed unsafe class D3D11VideoProcessorConverter : IDisposable
                 return;
             }
 
-            if (_availableOutputTextures.Count >= OutputTexturePoolSize)
+            if (!D3D11Native.TryGetTexture2DDesc(outputTexture, out var desc))
             {
                 ReleaseOutputTextureLocked(outputTexture);
                 return;
             }
 
-            _availableOutputTextures.Enqueue(outputTexture);
+            if (!_availableOutputTextures.TryGetValue((desc.Width, desc.Height), out var pool))
+            {
+                pool = new Queue<nint>();
+                _availableOutputTextures[(desc.Width, desc.Height)] = pool;
+            }
+
+            if (!_sharedOutput && pool.Count >= UNSHARED_POOL_CAPACITY)
+            {
+                ReleaseOutputTextureLocked(outputTexture);
+                return;
+            }
+
+            pool.Enqueue(outputTexture);
         }
     }
 
@@ -302,6 +353,7 @@ internal sealed unsafe class D3D11VideoProcessorConverter : IDisposable
 
         _disposed = true;
         ReleaseProcessorResources();
+        ClearOutputTexturePool();
         ReleaseIfNeeded(_completionQuery);
         _completionQuery = 0;
         _fences?.Dispose();
@@ -370,15 +422,9 @@ internal sealed unsafe class D3D11VideoProcessorConverter : IDisposable
     {
         lock (_outputTextureGate)
         {
-            while (_availableOutputTextures.Count > 0)
+            if (_availableOutputTextures.TryGetValue((width, height), out var pool) && pool.Count > 0)
             {
-                nint pooledTexture = _availableOutputTextures.Dequeue();
-                if (pooledTexture == 0)
-                {
-                    continue;
-                }
-
-                outputTexture = pooledTexture;
+                outputTexture = pool.Dequeue();
                 return true;
             }
         }
@@ -572,7 +618,11 @@ internal sealed unsafe class D3D11VideoProcessorConverter : IDisposable
 
     private void ReleaseProcessorResources()
     {
-        ClearOutputTexturePool();
+        if (!_sharedOutput)
+        {
+            ClearOutputTexturePool();
+        }
+
         ReleaseIfNeeded(_videoProcessor);
         ReleaseIfNeeded(_processorEnumerator);
         _videoProcessor = 0;
@@ -588,10 +638,15 @@ internal sealed unsafe class D3D11VideoProcessorConverter : IDisposable
     {
         lock (_outputTextureGate)
         {
-            while (_availableOutputTextures.Count > 0)
+            foreach (var pool in _availableOutputTextures.Values)
             {
-                ReleaseOutputTextureLocked(_availableOutputTextures.Dequeue());
+                while (pool.Count > 0)
+                {
+                    ReleaseOutputTextureLocked(pool.Dequeue());
+                }
             }
+
+            _availableOutputTextures.Clear();
         }
     }
 

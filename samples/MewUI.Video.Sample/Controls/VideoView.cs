@@ -132,6 +132,7 @@ public sealed class VideoView : FrameworkElement
     {
         UnsubscribeGpuInteropInvalidation();
         ReleaseLastFrame();
+        ReleaseGlImports();
         if (_playback is not null)
         {
             _playback.FrameReady -= OnPlaybackFrameReady;
@@ -196,6 +197,7 @@ public sealed class VideoView : FrameworkElement
 
         _interopProbeFailed = false;
         ReleaseLastFrame();
+        ReleaseGlImports();
         UpdatePresentationPath("gpu interop invalidated");
 
         GpuInteropInvalidated?.Invoke(this, e);
@@ -507,11 +509,6 @@ public sealed class VideoView : FrameworkElement
             WaitForGlReads(_lastUploadedFrame);
         }
 
-        DisposeGlInteropCache();
-        _glSemaphores?.Dispose();
-        _glSemaphores = null;
-        _glSemaphoreFences = null;
-
         if (_lastUploadedFrame is null)
         {
             return;
@@ -544,6 +541,18 @@ public sealed class VideoView : FrameworkElement
         cached = new CachedGlInteropEntry(interopTexture, image);
         _glInteropCache.Add(d3d11.TextureHandle, cached);
         return cached;
+    }
+
+    /// <summary>
+    /// Releases the GL imports of the converter output. They are kept across files on purpose: the shared converter
+    /// reuses its textures, and an imported texture released and imported again left its VRAM allocated.
+    /// </summary>
+    private void ReleaseGlImports()
+    {
+        DisposeGlInteropCache();
+        _glSemaphores?.Dispose();
+        _glSemaphores = null;
+        _glSemaphoreFences = null;
     }
 
     private void DisposeGlInteropCache()
