@@ -412,7 +412,7 @@ public sealed partial class MewVGX11GraphicsFactory : IPersistentFrameGraphicsFa
         }
     }
 
-    private readonly PboFenceUploaderPool _pboPool = new();
+    private readonly PboFenceUploaderPool _pboPool = new(GetCurrentGLContextStatic);
 
     partial void TryCreateAsyncUploadImage(IPixelBufferSource source, ref IImage? image)
     {

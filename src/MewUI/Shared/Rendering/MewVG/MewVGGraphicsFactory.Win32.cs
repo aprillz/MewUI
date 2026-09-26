@@ -549,7 +549,7 @@ public sealed partial class MewVGWin32GraphicsFactory : IPersistentFrameGraphics
     /// scope (<c>_workerActivationLock</c> in <c>AcquireBackgroundRenderScopeCore</c>).</summary>
     public IDisposable AcquireConcurrentRenderUnit() => MewVGNoOpRenderScope.Instance;
 
-    private readonly PboFenceUploaderPool _pboPool = new();
+    private readonly PboFenceUploaderPool _pboPool = new(OpenGL32.wglGetCurrentContext);
 
     partial void TryCreateAsyncUploadImage(IPixelBufferSource source, ref IImage? image)
     {
