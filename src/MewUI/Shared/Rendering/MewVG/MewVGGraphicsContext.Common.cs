@@ -558,12 +558,23 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
 
     protected override void FillRectangleCore(Rect rect, Color color)
     {
-        _vg.ShapeAntiAlias(false);
+        // Edges on the pixel grid fill crisply without antialiasing; a turned rectangle's edges are
+        // slanted and would come out jagged.
+        var xform = _vg.GetTransformMatrix();
+        bool gridAligned = (xform.M12 == 0 && xform.M21 == 0) || (xform.M11 == 0 && xform.M22 == 0);
+        if (gridAligned)
+        {
+            _vg.ShapeAntiAlias(false);
+        }
+
         _vg.BeginPath();
         _vg.Rect((float)rect.X, (float)rect.Y, (float)rect.Width, (float)rect.Height);
         _vg.FillColor(ToNvgColor(color));
         _vg.Fill();
-        _vg.ShapeAntiAlias(true);
+        if (gridAligned)
+        {
+            _vg.ShapeAntiAlias(true);
+        }
     }
 
     protected override void DrawRoundedRectangleCore(Rect rect, double radiusX, double radiusY, Color color, double thickness = 1)
