@@ -2292,8 +2292,9 @@ internal sealed class MacOSWindowBackend : IWindowBackend
         try
         {
             UpdateDpiIfNeeded();
-            // Force layout to align with live-resize updates, but do not schedule another render.
-            UpdateClientSizeIfNeeded(forceLayout: true, requestRender: false);
+            // Force layout to align with live-resize updates, but do not schedule another render. Outside
+            // a live resize an unchanged size needs no layout, which would otherwise run every frame.
+            UpdateClientSizeIfNeeded(forceLayout: MacOSWindowInterop.IsViewInLiveResize(_nsView), requestRender: false);
             _window.RenderFrame(CreateMetalSurface());
         }
         finally
