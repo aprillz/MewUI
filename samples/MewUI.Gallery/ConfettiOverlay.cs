@@ -14,7 +14,7 @@ namespace Aprillz.MewUI.Gallery;
 /// </summary>
 public sealed class ConfettiOverlay : FrameworkElement
 {
-    private enum ParticleShape { Rectangle, Ellipse, Triangle }
+    private enum ParticleShape { Rectangle, Triangle }
 
     // 128 bytes - doubles first, small fields packed at end. No IsDead (swap-remove instead).
     private struct Particle
@@ -67,6 +67,9 @@ public sealed class ConfettiOverlay : FrameworkElement
     private Color[]? _rainColors;
 
     private static readonly Random Rng = new();
+
+    // How far past the area a particle may drift before it is dropped: beyond its size and wobble.
+    private const double OFFSCREEN_MARGIN = 50;
         
     public ConfettiOverlay()
     {
@@ -138,7 +141,9 @@ public sealed class ConfettiOverlay : FrameworkElement
         RenderParticles(context);
     }
 
-    private readonly PathGeometry _reusablePath = new();
+    // A triangle of size 1 around the origin, scaled and turned into place for each particle. It never
+    // changes, so a backend can keep what it builds from it instead of building it again per particle.
+    private static readonly PathGeometry UnitTriangle = CreateUnitTriangle();
 
     private void RenderParticles(IGraphicsContext ctx)
     {
@@ -151,25 +156,25 @@ public sealed class ConfettiOverlay : FrameworkElement
             double h = p.IsWide ? p.Size / 2 : p.Size * 2;
             double cx = p.X + w / 2;
             double cy = p.Y + h / 2;
-            double rad = p.Rotation * Math.PI / 180.0;
-            double cos = Math.Cos(rad);
-            double sin = Math.Sin(rad);
 
             switch (p.Shape)
             {
                 case ParticleShape.Rectangle:
-                    _reusablePath.Clear();
-                    AppendRotatedRect(_reusablePath, cx, cy, w, h, cos, sin);
-                    ctx.FillPath(_reusablePath, p.Color);
-                    break;
-                case ParticleShape.Ellipse:
-                    double r = p.Size / 2;
-                    ctx.FillEllipse(new Rect(cx - r, cy - r, r * 2, r * 2), p.Color);
-                    break;
+                    // A turned rectangle is a primitive every backend fills directly, where an outline
+                    // would be built and tessellated again for every particle.
+                    ctx.Save();
+                    ctx.Translate(cx, cy);
+                    ctx.Rotate(p.Rotation * Math.PI / 180.0);
+                    ctx.FillRectangle(new Rect(-w / 2, -h / 2, w, h), p.Color);
+                    ctx.Restore();
+                    break; 
                 case ParticleShape.Triangle:
-                    _reusablePath.Clear();
-                    AppendRotatedTriangle(_reusablePath, cx, cy, p.Size, cos, sin);
-                    ctx.FillPath(_reusablePath, p.Color);
+                    ctx.Save();
+                    ctx.Translate(cx, cy);
+                    ctx.Rotate(p.Rotation * Math.PI / 180.0);
+                    ctx.Scale(p.Size, p.Size);
+                    ctx.FillPath(UnitTriangle, p.Color);
+                    ctx.Restore();
                     break;
             }
         }
@@ -238,7 +243,7 @@ public sealed class ConfettiOverlay : FrameworkElement
             }
         }
 
-        UpdateParticles(dt, h);
+        UpdateParticles(dt, w, h);
 
         if (_particles.Count == 0 && !_isRaining && _cannonQueue.Count == 0)
             StopTimer();
@@ -246,10 +251,12 @@ public sealed class ConfettiOverlay : FrameworkElement
         InvalidateVisual();
     }
 
-    private void UpdateParticles(double dt, double areaHeight)
+    private void UpdateParticles(double dt, double areaWidth, double areaHeight)
     {
         var span = CollectionsMarshal.AsSpan(_particles);
-        double killY = areaHeight + 50;
+        double killLeft = -OFFSCREEN_MARGIN;
+        double killRight = areaWidth + OFFSCREEN_MARGIN;
+        double killY = areaHeight + OFFSCREEN_MARGIN;
         int alive = span.Length;
 
         for (int i = 0; i < alive; i++)
@@ -270,8 +277,10 @@ public sealed class ConfettiOverlay : FrameworkElement
             p.Y = p.BaseY;
             p.Rotation += p.RotationSpeed * dt;
 
+            // Gravity brings back a particle above the top, but drag only slows one that left through
+            // a side, so it never returns and would be drawn off screen until it fell past the bottom.
             // Swap-remove: move last alive particle here, recheck this index
-            if (p.Y > killY)
+            if (p.Y > killY || p.BaseX < killLeft || p.BaseX > killRight)
             {
                 alive--;
                 if (i < alive)
@@ -323,7 +332,6 @@ public sealed class ConfettiOverlay : FrameworkElement
             Size = minSize + Rng.NextDouble() * (maxSize - minSize),
             Color = colorList[Rng.Next(colorList.Length)],
             Shape = shapeRoll < 0.7 ? ParticleShape.Rectangle
-                  : shapeRoll < 0.95 ? ParticleShape.Ellipse
                   : ParticleShape.Triangle,
             Drag = 0.65 + Rng.NextDouble() * 0.3,
             IsWide = Rng.Next(2) == 0,
@@ -336,37 +344,14 @@ public sealed class ConfettiOverlay : FrameworkElement
         });
     }
 
-    private static void AppendRotatedRect(PathGeometry path, double cx, double cy,
-        double w, double h, double cos, double sin)
+    private static PathGeometry CreateUnitTriangle()
     {
-        double hw = w / 2, hh = h / 2;
-        Span<double> lx = stackalloc double[] { -hw, hw, hw, -hw };
-        Span<double> ly = stackalloc double[] { -hh, -hh, hh, hh };
-
-        for (int i = 0; i < 4; i++)
-        {
-            double rx = lx[i] * cos - ly[i] * sin + cx;
-            double ry = lx[i] * sin + ly[i] * cos + cy;
-            if (i == 0) path.MoveTo(rx, ry);
-            else path.LineTo(rx, ry);
-        }
+        var path = new PathGeometry();
+        path.MoveTo(0, -1);
+        path.LineTo(1, 1);
+        path.LineTo(-1, 1);
         path.Close();
+        path.Freeze();
+        return path;
     }
-
-    private static void AppendRotatedTriangle(PathGeometry path, double cx, double cy,
-        double size, double cos, double sin)
-    {
-        Span<double> lx = stackalloc double[] { 0, size, -size };
-        Span<double> ly = stackalloc double[] { -size, size, size };
-
-        for (int i = 0; i < 3; i++)
-        {
-            double rx = lx[i] * cos - ly[i] * sin + cx;
-            double ry = lx[i] * sin + ly[i] * cos + cy;
-            if (i == 0) path.MoveTo(rx, ry);
-            else path.LineTo(rx, ry);
-        }
-        path.Close();
-    }
-
 }
