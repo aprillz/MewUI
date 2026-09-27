@@ -103,6 +103,18 @@ public sealed partial class MewVGMacOSGraphicsFactory : IPersistentFrameGraphics
         handled = true;
     }
 
+    partial void ConfigureDescribedSurface(IRenderSurface surface, RenderSurfaceDescriptor descriptor)
+    {
+        // Only filter intermediates are written by compute (blur) passes, and only surfaces asked to
+        // be CPU readable are read back often enough to keep in shared memory.
+        if (surface is MewVGMetalPixelRenderSurface metalSurface)
+        {
+            metalSurface.ConfigureGpuUsage(
+                gpuOnly: !descriptor.RequiredCapabilities.HasFlag(SurfaceCapabilities.CpuReadable),
+                shaderWritable: descriptor.Usage.HasFlag(SurfaceUsage.FilterIntermediate));
+        }
+    }
+
     partial void TryGetImageDisposeHandler(ref Action<MewVGImage>? handler)
         => handler ??= _offscreenProvider.QueueImageDisposal;
 

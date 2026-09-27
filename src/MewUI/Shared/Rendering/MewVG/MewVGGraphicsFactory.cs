@@ -207,11 +207,18 @@ public sealed partial class MewVGWin32GraphicsFactory
     public IRenderEffectDevice? Effects => null;
 
     public IRenderSurface CreateSurface(RenderSurfaceDescriptor descriptor)
-        => CreatePixelSurface(
+    {
+        var surface = CreatePixelSurface(
             descriptor.PixelWidth,
             descriptor.PixelHeight,
             descriptor.DpiScale,
             descriptor.RequiredCapabilities.HasFlag(SurfaceCapabilities.Alpha));
+        ConfigureDescribedSurface(surface, descriptor);
+        return surface;
+    }
+
+    /// <summary>Lets a platform tune a surface to what its descriptor says it is for.</summary>
+    partial void ConfigureDescribedSurface(IRenderSurface surface, RenderSurfaceDescriptor descriptor);
 
     public IGraphicsContext CreateContext(IRenderSurface surface)
     {

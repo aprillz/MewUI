@@ -6,8 +6,8 @@ using Aprillz.MewVG.Interop;
 namespace Aprillz.MewUI.Rendering.MewVG;
 
 /// <summary>
-/// GPU-backed pixel render surface for the Metal backend. Holds a
-/// shared-storage MTLTexture so an offscreen <see cref="MewVGMacOSGraphicsContext"/>
+/// GPU-backed pixel render surface for the Metal backend. Holds an MTLTexture
+/// (see <see cref="ConfigureGpuUsage"/> for its storage) so an offscreen <see cref="MewVGMacOSGraphicsContext"/>
 /// can render into it directly, then exposes the rendered pixels through the
 /// CPU-readable pixel surface (used by filter /
 /// pattern uploads, WriteableBitmap-backed controls, etc.).
@@ -38,6 +38,11 @@ internal sealed unsafe partial class MewVGMetalPixelRenderSurface : IPixelBuffer
 
     // MTLStorageMode: Shared = 0 (CPU & GPU both addressable; works on Apple Silicon and Intel iGPU).
     private const ulong MTLStorageModeShared = 0;
+
+    // MTLStorageMode: Private = 2 (GPU only).
+    private const ulong MTLStorageModePrivate = 2;
+
+    private const ulong MTLTextureUsageRenderTargetRead = (1ul << 2) | (1ul << 0);
 
     private static readonly nint ClsMTLTextureDescriptor = ObjCRuntime.GetClass("MTLTextureDescriptor");
     private static readonly nint SelTexture2DDescriptorWithPixelFormat = ObjCRuntime.RegisterSelector("texture2DDescriptorWithPixelFormat:width:height:mipmapped:");
@@ -211,8 +216,107 @@ internal sealed unsafe partial class MewVGMetalPixelRenderSurface : IPixelBuffer
 
         if (ColorTexture != 0) return;
 
-        ColorTexture = CreateTexture(device, MTLPixelFormat.BGRA8Unorm, MTLStorageModeShared);
+        CreateColorTexture(device);
     }
+
+    /// <summary>
+    /// Sets what the color texture is used for. A texture only the GPU touches and no compute pass
+    /// writes can be compressed by the GPU, which cuts what every pass loading, storing or sampling
+    /// it moves; a CPU consumer then reads it back through a blit. Call before anything uses the texture.
+    /// </summary>
+    internal void ConfigureGpuUsage(bool gpuOnly, bool shaderWritable)
+    {
+        if (_gpuOnly == gpuOnly && _shaderWritable == shaderWritable)
+        {
+            return;
+        }
+
+        _gpuOnly = gpuOnly;
+        _shaderWritable = shaderWritable;
+        if (ColorTexture != 0 && _device != 0)
+        {
+            ObjCRuntime.SendMessageNoReturn(ColorTexture, SelRelease);
+            ColorTexture = 0;
+            CreateColorTexture(_device);
+        }
+    }
+
+    private void CreateColorTexture(nint device)
+    {
+        ColorTexture = CreateTexture(
+            device,
+            MTLPixelFormat.BGRA8Unorm,
+            _gpuOnly ? MTLStorageModePrivate : MTLStorageModeShared,
+            _shaderWritable ? MTLTextureUsageRenderTargetShaderRead : MTLTextureUsageRenderTargetRead);
+        _colorTextureIsPrivate = _gpuOnly;
+    }
+
+    private bool _gpuOnly;
+    private bool _shaderWritable = true;
+    private bool _colorTextureIsPrivate;
+
+    /// <summary>Copies the private color texture into the CPU mirror through a shared staging buffer, waiting for the copy.</summary>
+    private void CopyPrivateTextureToPixels()
+    {
+        nint queue = _commandQueue;
+        if (queue == 0 || _device == 0)
+        {
+            return;
+        }
+
+        using var pool = new AutoreleasePool();
+        nuint length = (nuint)(StrideBytes * PixelHeight);
+        nint staging = ObjCRuntime.SendMessage(_device, Metal.Sel.NewBufferWithLength, length, (ulong)MTLStorageModeShared);
+        if (staging == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            nint commandBuffer = ObjCRuntime.SendMessage(queue, Metal.Sel.CommandBuffer);
+            nint blit = commandBuffer != 0 ? ObjCRuntime.SendMessage(commandBuffer, Metal.Sel.BlitCommandEncoder) : 0;
+            if (blit == 0)
+            {
+                return;
+            }
+
+            // Structs over 16 bytes go by address in the Apple ABIs, as with getBytes above.
+            var origin = MTLOrigin.Make(0, 0, 0);
+            var size = MTLSize.Make((nuint)PixelWidth, (nuint)PixelHeight, 1);
+            CopyTextureToBufferMsgSend(
+                blit, Metal.Sel.CopyFromTextureToBuffer,
+                ColorTexture, 0, 0,
+                &origin,
+                &size,
+                staging, 0, (nuint)StrideBytes, length);
+            ObjCRuntime.SendMessageNoReturn(blit, Metal.Sel.EndEncoding);
+            ObjCRuntime.SendMessageNoReturn(commandBuffer, Metal.Sel.Commit);
+            ObjCRuntime.SendMessageNoReturn(commandBuffer, _selWaitUntilCompleted);
+
+            nint contents = ObjCRuntime.SendMessage(staging, _selContents);
+            var pixels = EnsurePixelBuffer();
+            fixed (byte* destination = pixels)
+            {
+                Buffer.MemoryCopy((void*)contents, destination, pixels.Length, pixels.Length);
+            }
+
+            IncrementVersion();
+        }
+        finally
+        {
+            ObjCRuntime.SendMessageNoReturn(staging, SelRelease);
+        }
+    }
+
+    [LibraryImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")]
+    private static unsafe partial void CopyTextureToBufferMsgSend(
+        nint receiver, nint selector,
+        nint sourceTexture, nuint sourceSlice, nuint sourceLevel,
+        MTLOrigin* sourceOrigin, MTLSize* sourceSize,
+        nint destinationBuffer, nuint destinationOffset, nuint destinationBytesPerRow, nuint destinationBytesPerImage);
+
+    private static readonly nint _selContents = ObjCRuntime.RegisterSelector("contents");
 
     // IMetalTextureSource - exposes the color MTLTexture for zero-copy NoDelete wrapping.
     nint IMetalTextureSource.MtlTexture => _disposed ? 0 : ColorTexture;
@@ -223,7 +327,7 @@ internal sealed unsafe partial class MewVGMetalPixelRenderSurface : IPixelBuffer
         ? null
         : new GpuResourceAffinity(Display: null, new GpuDeviceIdentity((ulong)_device, 0, _device));
 
-    private nint CreateTexture(nint device, MTLPixelFormat format, ulong storageMode)
+    private nint CreateTexture(nint device, MTLPixelFormat format, ulong storageMode, ulong usage)
     {
         if (ClsMTLTextureDescriptor == 0 || SelTexture2DDescriptorWithPixelFormat == 0) return 0;
 
@@ -238,7 +342,7 @@ internal sealed unsafe partial class MewVGMetalPixelRenderSurface : IPixelBuffer
 
         if (SelSetUsage != 0)
         {
-            ObjCRuntime.SendMessageNoReturn(desc, SelSetUsage, (UInt64)MTLTextureUsageRenderTargetShaderRead);
+            ObjCRuntime.SendMessageNoReturn(desc, SelSetUsage, usage);
         }
         if (SelSetStorageMode != 0)
         {
@@ -276,6 +380,12 @@ internal sealed unsafe partial class MewVGMetalPixelRenderSurface : IPixelBuffer
 
     private void CopyTextureToPixelsCore(nint texture)
     {
+        if (texture == ColorTexture && _colorTextureIsPrivate)
+        {
+            CopyPrivateTextureToPixels();
+            return;
+        }
+
         // MTLRegion = { origin{x,y,z}, size{w,h,d} } - 6 nint slots on 64-bit.
         Span<nint> region = stackalloc nint[6]
         {
