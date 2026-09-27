@@ -61,6 +61,9 @@ public sealed class PathGeometry : Geometry
     private double _startX;
     private double _startY;
 
+    // Scene pass that first replayed a retained recording's copy of this path; 0 until then.
+    internal int FirstReplayPass { get; set; }
+
     /// <summary>
     /// Gets or sets the fill rule used when this path is filled without an explicit rule.
     /// Defaults to <see cref="FillRule.NonZero"/>.

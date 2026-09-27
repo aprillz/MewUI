@@ -21,6 +21,7 @@ internal static class RenderResourceSnapshot
         if (_pathPool != null && _pathPool.TryPop(out var pooled))
         {
             pooled.Reset();
+            pooled.FirstReplayPass = 0;
             snapshot = pooled;
         }
         else
@@ -48,8 +49,32 @@ internal static class RenderResourceSnapshot
             }
         }
 
-        // Left unfrozen: a backend keeps a cache entry per frozen geometry, and this copy lives for one recording.
+        // Left unfrozen: a backend keeps a cache entry per frozen geometry, and most copies live for one recording.
+        // The replay freezes one whose recording outlives its pass (see NoteReplayed).
         return snapshot;
+    }
+
+    /// <summary>
+    /// Notes that <paramref name="path"/> was replayed in scene pass <paramref name="pass"/>, and freezes a
+    /// copy made by <see cref="SnapshotPath"/> once a later pass replays it again: a backend then caches its
+    /// geometry instead of rebuilding it every repaint, while a copy replaced every pass is never frozen
+    /// and leaves no cache entry behind. A pass of 0 is unknown and notes nothing.
+    /// </summary>
+    internal static void NoteReplayed(PathGeometry path, int pass)
+    {
+        if (path.IsFrozen || pass == 0)
+        {
+            return;
+        }
+
+        if (path.FirstReplayPass == 0)
+        {
+            path.FirstReplayPass = pass;
+        }
+        else if (path.FirstReplayPass != pass)
+        {
+            path.Freeze();
+        }
     }
 
     /// <summary>Takes back a copy made by <see cref="SnapshotPath"/> once the recording that held it is gone.</summary>

@@ -271,16 +271,16 @@ internal static class RenderDataReplayer
                 context.FillEllipse(command.Bounds, (Brush)paint!);
                 break;
             case RenderCommandKind.DrawPath:
-                context.DrawPath(Require<PathGeometry>(in command, resources), (Pen)paint!);
+                context.DrawPath(RequirePath(in command, resources), (Pen)paint!);
                 break;
             default:
                 if (command.UsesFillRule)
                 {
-                    context.FillPath(Require<PathGeometry>(in command, resources), (Brush)paint!, command.FillRule);
+                    context.FillPath(RequirePath(in command, resources), (Brush)paint!, command.FillRule);
                 }
                 else
                 {
-                    context.FillPath(Require<PathGeometry>(in command, resources), (Brush)paint!);
+                    context.FillPath(RequirePath(in command, resources), (Brush)paint!);
                 }
 
                 break;
@@ -321,7 +321,7 @@ internal static class RenderDataReplayer
 
     private static void ReplayAnyPath(IGraphicsContext context, in RenderCommand command, double[] values, object?[] resources, double placedOffsetX, double placedOffsetY)
     {
-        var path = Require<PathGeometry>(in command, resources);
+        var path = RequirePath(in command, resources);
         if (command.Kind == RenderCommandKind.SetClipPath)
         {
             context.SetClipPath(path);
@@ -402,6 +402,24 @@ internal static class RenderDataReplayer
         {
             context.Restore();
         }
+    }
+
+    [ThreadStatic]
+    private static int _replayPass;
+
+    /// <summary>The scene pass being replayed on this thread, set by <see cref="FrameRenderer"/>.</summary>
+    internal static int ReplayPass
+    {
+        get => _replayPass;
+        set => _replayPass = value;
+    }
+
+    /// <summary>Returns the recorded path, noting the replay on a copy the recording took.</summary>
+    private static PathGeometry RequirePath(in RenderCommand command, object?[] resources)
+    {
+        var path = Require<PathGeometry>(in command, resources);
+        RenderResourceSnapshot.NoteReplayed(path, ReplayPass);
+        return path;
     }
 
     private static T Require<T>(in RenderCommand command, object?[] resources) where T : class

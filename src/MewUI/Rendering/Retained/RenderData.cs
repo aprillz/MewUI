@@ -275,7 +275,8 @@ internal sealed class RenderData : IDisposable
 
         for (int resourceIndex = 0; resourceIndex < _resources.Length; resourceIndex++)
         {
-            // A frozen path is the visual's own; an unfrozen one is the copy this recording took.
+            // An unfrozen path is a copy this recording took; a frozen one is the visual's own or a copy the
+            // replay froze, which a backend may have cached and so cannot be refilled for another recording.
             if (_resources[resourceIndex] is PathGeometry copy && !copy.IsFrozen)
             {
                 _resources[resourceIndex] = null;

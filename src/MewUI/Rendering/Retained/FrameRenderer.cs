@@ -31,6 +31,8 @@ internal static class FrameRenderer
             return;
         }
 
+        RenderDataReplayer.ReplayPass = scene.PassId;
+
         if (dirtyRect == null)
         {
             ReplayRoots(scene, root, context, null);

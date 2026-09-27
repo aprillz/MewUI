@@ -253,4 +253,54 @@ public sealed class RetainedSceneResourceTests
         Assert.AreEqual(4, copy.Commands.Length, "the copy followed the path it was taken from");
         Assert.AreEqual(new Rect(1, 2, 29, 38), copy.GetBounds());
     }
+
+    [TestMethod]
+    public void ACopyReplayedAgainInALaterPass_IsFrozen()
+    {
+        // A recording that outlives its pass is repainted from the same copy, so a backend should cache it.
+        var copy = Aprillz.MewUI.Rendering.Retained.RenderResourceSnapshot.SnapshotPath(TrianglePath());
+
+        Aprillz.MewUI.Rendering.Retained.RenderResourceSnapshot.NoteReplayed(copy, pass: 5);
+        Assert.IsFalse(copy.IsFrozen, "one pass does not show that the recording outlives it");
+
+        Aprillz.MewUI.Rendering.Retained.RenderResourceSnapshot.NoteReplayed(copy, pass: 6);
+        Assert.IsTrue(copy.IsFrozen, "the copy is rebuilt as geometry on every repaint of a lasting recording");
+    }
+
+    [TestMethod]
+    public void ACopyReplayedTwiceInOnePass_StaysUnfrozen()
+    {
+        // One pass can repaint several areas that each replay the same command; that says nothing about
+        // whether the recording outlives the pass.
+        var copy = Aprillz.MewUI.Rendering.Retained.RenderResourceSnapshot.SnapshotPath(TrianglePath());
+
+        Aprillz.MewUI.Rendering.Retained.RenderResourceSnapshot.NoteReplayed(copy, pass: 5);
+        Aprillz.MewUI.Rendering.Retained.RenderResourceSnapshot.NoteReplayed(copy, pass: 5);
+
+        Assert.IsFalse(copy.IsFrozen);
+    }
+
+    [TestMethod]
+    public void AReusedCopy_StartsWithoutReplays()
+    {
+        var copy = Aprillz.MewUI.Rendering.Retained.RenderResourceSnapshot.SnapshotPath(TrianglePath());
+        Aprillz.MewUI.Rendering.Retained.RenderResourceSnapshot.NoteReplayed(copy, pass: 5);
+        Aprillz.MewUI.Rendering.Retained.RenderResourceSnapshot.ReturnPath(copy);
+
+        var reused = Aprillz.MewUI.Rendering.Retained.RenderResourceSnapshot.SnapshotPath(TrianglePath());
+        Assert.AreSame(copy, reused, "the pool did not hand the copy back");
+        Aprillz.MewUI.Rendering.Retained.RenderResourceSnapshot.NoteReplayed(reused, pass: 6);
+
+        Assert.IsFalse(reused.IsFrozen, "the reused copy kept the replay of the recording it belonged to before");
+    }
+
+    private static PathGeometry TrianglePath()
+    {
+        var path = new PathGeometry();
+        path.MoveTo(1, 2);
+        path.LineTo(30, 4);
+        path.LineTo(12, 40);
+        path.Close();
+        return path;
+    }
 }
