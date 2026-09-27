@@ -36,6 +36,43 @@ internal sealed class MewVGMetalOffscreenSurface
     internal nint CommandQueue { get; }
     internal NanoVGMetal Vg { get; }
     internal MewVGMetalTextCache TextCache { get; }
+
+    // Command buffers this instance's renderer submitted that may still run on the GPU, oldest first.
+    private readonly Queue<nint> _framesInFlight = new();
+
+    // Below the renderer's buffer count, so a frame never refills a vertex buffer the GPU still reads.
+    private const int MAX_FRAMES_IN_FLIGHT = MNVGcontext.MNVG_INIT_BUFFER_COUNT - 1;
+
+    private static readonly nint _selRetain = ObjCRuntime.RegisterSelector("retain");
+    private static readonly nint _selRelease = ObjCRuntime.RegisterSelector("release");
+    private static readonly nint _selWaitUntilCompleted = ObjCRuntime.RegisterSelector("waitUntilCompleted");
+
+    /// <summary>Records a frame submitted by <see cref="Vg"/>, first waiting for the oldest ones beyond what its buffers allow.</summary>
+    internal void TrackFrame(nint commandBuffer)
+    {
+        ObjCRuntime.SendMessageNoReturn(commandBuffer, _selRetain);
+        _framesInFlight.Enqueue(commandBuffer);
+        while (_framesInFlight.Count > MAX_FRAMES_IN_FLIGHT)
+        {
+            WaitForOldestFrame();
+        }
+    }
+
+    /// <summary>Waits until every frame submitted by <see cref="Vg"/> has finished on the GPU.</summary>
+    internal void WaitForFrames()
+    {
+        while (_framesInFlight.Count > 0)
+        {
+            WaitForOldestFrame();
+        }
+    }
+
+    private void WaitForOldestFrame()
+    {
+        nint oldest = _framesInFlight.Dequeue();
+        ObjCRuntime.SendMessageNoReturn(oldest, _selWaitUntilCompleted);
+        ObjCRuntime.SendMessageNoReturn(oldest, _selRelease);
+    }
 }
 
 internal sealed class MewVGMetalOffscreenSurfaceProvider : IDisposable
@@ -360,6 +397,7 @@ internal sealed class MewVGMetalOffscreenSurfaceProvider : IDisposable
 
     private static void DisposeSurface(MewVGMetalOffscreenSurface surface)
     {
+        surface.WaitForFrames();
         surface.TextCache.Dispose();
         if (surface.Vg is IDisposable disposable)
         {

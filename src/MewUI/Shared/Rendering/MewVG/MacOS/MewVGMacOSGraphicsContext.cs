@@ -32,7 +32,6 @@ internal sealed partial class MewVGMacOSGraphicsContext
     private static readonly nint SelSetStoreAction = ObjCRuntime.RegisterSelector("setStoreAction:");
     private static readonly nint SelSetClearColor = ObjCRuntime.RegisterSelector("setClearColor:");
     private static readonly nint ClsNSAutoreleasePool = ObjCRuntime.GetClass("NSAutoreleasePool");
-    private static readonly nint SelWaitUntilCompleted = ObjCRuntime.RegisterSelector("waitUntilCompleted");
 
     private readonly IMetalFrameSession _frameSession;
     private readonly MewVGMetalTextCache _textCache;
@@ -265,10 +264,13 @@ internal sealed partial class MewVGMacOSGraphicsContext
                 return false;
             }
 
+            // Window frames go on the device's shared queue, the one offscreen surfaces draw on, so a
+            // surface drawn earlier in the frame is finished on the GPU before this frame reads it.
+            nint queue = _offscreenProvider.TryGetSharedCommandQueue(_resources.Device);
             frame = new MetalFrame(
                 _resources.Device,
                 colorTexture,
-                _resources.CommandQueue,
+                queue != 0 ? queue : _resources.CommandQueue,
                 drawable,
                 PreserveColorContents: false);
             return true;
@@ -329,16 +331,11 @@ internal sealed partial class MewVGMacOSGraphicsContext
 
         public void AfterCommit(nint commandBuffer, nint drawable)
         {
-            // waitUntilCompleted is required: the rendered ColorTexture is consumed by the
-            // filter executor's MPS on a DIFFERENT command queue (filter queue vs offscreen
-            // surface queue). Cross-queue MTLTexture access without explicit sync races -
-            // MPS reads pre-render content. NVG's outer DrawImage consumer is also a fresh
-            // commandBuffer (typically window queue) - same cross-queue issue.
-            //
-            // What we DO defer is the much heavier MTLTexture → CPU getBytes (32 MB per
-            // 4096 × 2000 RT). CPU consumers (Lock / CopyPixels / GetPixelSpan) trigger it
-            // via FlushPendingReadbackIfNeeded; the pure-GPU consumer chain skips it.
-            ObjCRuntime.SendMessageNoReturn(commandBuffer, SelWaitUntilCompleted);
+            // No completion wait: every consumer of the rendered texture draws on this same shared
+            // queue (window frames, other offscreen passes, filter passes), and a queue runs its command
+            // buffers in commit order. CPU consumers (Lock / CopyPixels / GetPixelSpan) wait for this
+            // command buffer through the deferred readback before copying the texture.
+            _offscreen.TrackFrame(commandBuffer);
             _target.RequestDeferredReadback(commandBuffer);
         }
 
