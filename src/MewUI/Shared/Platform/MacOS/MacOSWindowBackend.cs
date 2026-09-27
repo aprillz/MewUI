@@ -25,6 +25,9 @@ internal sealed class MacOSWindowBackend : IWindowBackend
 
     private readonly MacOSPlatformHost _host;
     private readonly Window _window;
+
+    // True while RenderNow displays the layer itself, as opposed to AppKit asking for a display.
+    private bool _displayingOwnRender;
     private nint _nsWindow;
     private nint _nsView;
     private nint _metalLayer;
@@ -132,6 +135,7 @@ internal sealed class MacOSWindowBackend : IWindowBackend
     {
         _host = host;
         _window = window;
+        window.PlatformReportsLostFrames = true;
     }
 
     public nint Handle => _nsView;
@@ -2241,7 +2245,15 @@ internal sealed class MacOSWindowBackend : IWindowBackend
                 // IMPORTANT: Force a synchronous layer display so input-driven invalidations are visible
                 // immediately (mouse over/scroll/animations). Displaying the NSView does not reliably
                 // invoke the CAMetalLayer delegate.
-                MacOSWindowInterop.DisplayLayerIfNeeded(_metalLayer);
+                _displayingOwnRender = true;
+                try
+                {
+                    MacOSWindowInterop.DisplayLayerIfNeeded(_metalLayer);
+                }
+                finally
+                {
+                    _displayingOwnRender = false;
+                }
             }
         }
     }
@@ -2264,6 +2276,12 @@ internal sealed class MacOSWindowBackend : IWindowBackend
 
         UpdateMetalLayerDisplaySyncIfNeeded();
         UpdateMetalLayerPresentsWithTransactionIfNeeded();
+
+        // AppKit asks for a display of its own accord when what the layer showed may be gone.
+        if (!_displayingOwnRender)
+        {
+            _window.NotePresentedFrameLost();
+        }
 
         // Avoid re-entrant displayLayer-triggered renders.
         if (Interlocked.Exchange(ref _reshapeRendering, 1) != 0)
