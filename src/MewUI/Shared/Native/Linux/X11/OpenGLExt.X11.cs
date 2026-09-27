@@ -14,6 +14,7 @@ internal static unsafe partial class OpenGLExt
         _glRenderbufferStorage = (delegate* unmanaged<uint, uint, int, int, void>)LibGL.glXGetProcAddress("glRenderbufferStorage");
         _glFramebufferRenderbuffer = (delegate* unmanaged<uint, uint, uint, uint, void>)LibGL.glXGetProcAddress("glFramebufferRenderbuffer");
         _glCheckFramebufferStatus = (delegate* unmanaged<uint, uint>)LibGL.glXGetProcAddress("glCheckFramebufferStatus");
+        _glBlitFramebuffer = (delegate* unmanaged<int, int, int, int, int, int, int, int, uint, uint, void>)LibGL.glXGetProcAddress("glBlitFramebuffer");
 
         // Shader / program / VAO / buffer entrypoints (GL 2.0+ / 3.0+) - required by
         // OpenGLGaussianBlur and any other GPU effect pass. Without these, IsShaderPipelineSupported

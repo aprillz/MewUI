@@ -694,6 +694,7 @@ public partial class Window
                 }
 
                 var whole = new Rect(0, 0, clientSize.Width, clientSize.Height);
+                var copier = context as ISurfaceCopyContext;
                 if (copiesChangedAreasOnly)
                 {
                     // A context that ends its frame by copying a buffer of its own to the window copies
@@ -703,16 +704,24 @@ public partial class Window
                     for (int index = 0; index < _frameDirtyRects.Count; index++)
                     {
                         var area = _frameDirtyRects[index];
-                        context.Save();
-                        context.SetClip(area);
-                        context.DrawImage(view, whole);
-                        context.Restore();
+                        if (copier == null || !copier.TryCopySurface(frameSurface, area))
+                        {
+                            context.Save();
+                            context.SetClip(area);
+                            context.DrawImage(view, whole);
+                            context.Restore();
+                        }
+
                         _presentedArea += area.Width * area.Height;
                     }
                 }
                 else
                 {
-                    context.DrawImage(view, whole);
+                    if (copier == null || !copier.TryCopySurface(frameSurface, whole))
+                    {
+                        context.DrawImage(view, whole);
+                    }
+
                     _presentedArea = whole.Width * whole.Height;
                 }
 

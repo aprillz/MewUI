@@ -43,6 +43,21 @@ internal interface IPartialPresentContext
 }
 
 /// <summary>
+/// A context that can copy part of a surface onto its target unchanged. Presenting a kept frame is
+/// such a copy, and doing it as one skips the per-pixel paint work of drawing the surface as an image.
+/// </summary>
+internal interface ISurfaceCopyContext
+{
+    /// <summary>
+    /// Replaces <paramref name="area"/> of the target with the same area of <paramref name="source"/>
+    /// and returns true, or draws nothing and returns false when this context cannot copy from that
+    /// source. The area is in the target's own coordinates, the caller invokes this with no transform
+    /// in effect, and source and target share one pixel grid.
+    /// </summary>
+    bool TryCopySurface(IRenderSurface source, Rect area);
+}
+
+/// <summary>
 /// A context that can confine an opaque backdrop scope to the box its owner fills. A scope that does
 /// not know its box has to answer for the whole target, and a backend that realizes the scope as a
 /// layer then blends everything translucent on the target once more when the scope closes. Told the

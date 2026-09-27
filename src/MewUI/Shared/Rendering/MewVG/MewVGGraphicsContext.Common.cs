@@ -9,9 +9,9 @@ namespace Aprillz.MewUI.Rendering.MewVG;
 #if MEWUI_MEWVG_MACOS
 internal sealed partial class MewVGMacOSGraphicsContext : GraphicsContextBase, ITransparentDirtyRectContext, IOpaqueDirtyRectContext
 #elif MEWUI_MEWVG_X11
-internal sealed partial class MewVGX11GraphicsContext : GraphicsContextBase, ITransparentDirtyRectContext, IOpaqueDirtyRectContext
+internal sealed partial class MewVGX11GraphicsContext : GraphicsContextBase, ITransparentDirtyRectContext, IOpaqueDirtyRectContext, ISurfaceCopyContext
 #else
-internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, ITransparentDirtyRectContext, IOpaqueDirtyRectContext
+internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, ITransparentDirtyRectContext, IOpaqueDirtyRectContext, ISurfaceCopyContext
 #endif
 {
 #if MEWUI_MEWVG_MACOS
@@ -427,6 +427,72 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
         Native.GL.Disable(Native.GL.GL_SCISSOR_TEST);
     }
 
+    bool ISurfaceCopyContext.TryCopySurface(IRenderSurface source, Rect area)
+    {
+        if (RenderSurfaceResource.ResolveBackendSurface(source) is not OpenGL.OpenGLPixelRenderSurface surface ||
+            !surface.IsFboInitialized ||
+            !Native.OpenGLExt.IsBlitFramebufferSupported)
+        {
+            return false;
+        }
+
+        if (!TryGetTargetPixels(area, out int left, out int top, out int right, out int bottom))
+        {
+            return true;
+        }
+
+        int sourceHeight = surface.ContentHeightPx;
+        if (right > surface.ContentWidthPx || bottom > sourceHeight)
+        {
+            return false;
+        }
+
+        if (CoversTarget(left, top, right, bottom))
+        {
+            DiscardPendingFrameClear();
+        }
+
+        FlushQueuedDraws();
+        uint target = (uint)Native.GL.GetInteger(Native.OpenGLExt.GL_FRAMEBUFFER_BINDING);
+
+        // Framebuffer objects belong to the context that made them, so a surface made under another
+        // context is read through a framebuffer made here around its (shared) texture.
+        uint readFramebuffer = surface.Fbo;
+        uint temporaryFramebuffer = 0;
+        if (surface.CreationContext == 0 || surface.CreationContext != GetCurrentGLContext())
+        {
+            unsafe
+            {
+                Native.OpenGLExt.GenFramebuffers(1, &temporaryFramebuffer);
+            }
+
+            Native.OpenGLExt.BindFramebuffer(Native.OpenGLExt.GL_READ_FRAMEBUFFER, temporaryFramebuffer);
+            Native.OpenGLExt.FramebufferTexture2D(Native.OpenGLExt.GL_READ_FRAMEBUFFER, Native.OpenGLExt.GL_COLOR_ATTACHMENT0,
+                Native.GL.GL_TEXTURE_2D, surface.Texture, 0);
+            readFramebuffer = temporaryFramebuffer;
+        }
+
+        Native.OpenGLExt.BindFramebuffer(Native.OpenGLExt.GL_READ_FRAMEBUFFER, readFramebuffer);
+        Native.OpenGLExt.BindFramebuffer(Native.OpenGLExt.GL_DRAW_FRAMEBUFFER, target);
+        Native.GL.Disable(Native.GL.GL_SCISSOR_TEST);
+        // Both are drawn bottom-up, so rows are measured from the bottom of each one's content.
+        Native.OpenGLExt.BlitFramebuffer(
+            left, sourceHeight - bottom, right, sourceHeight - top,
+            left, _viewportHeightPx - bottom, right, _viewportHeightPx - top,
+            Native.GL.GL_COLOR_BUFFER_BIT, Native.OpenGLExt.GL_NEAREST);
+        Native.OpenGLExt.BindFramebuffer(Native.OpenGLExt.GL_FRAMEBUFFER, target);
+
+        if (temporaryFramebuffer != 0)
+        {
+            unsafe
+            {
+                Native.OpenGLExt.DeleteFramebuffers(1, &temporaryFramebuffer);
+            }
+        }
+
+        return true;
+    }
+
     /// <summary>Sends the draws queued so far to the frame target, so direct target writes land after them.</summary>
     private void FlushQueuedDraws()
     {
@@ -460,6 +526,11 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
     /// <summary>Drops a deferred frame clear because the first write replaces the whole target anyway.</summary>
     partial void DiscardPendingFrameClear();
 
+#if MEWUI_MEWVG_X11
+    private static nint GetCurrentGLContext() => MewVGX11GraphicsFactory.GetCurrentGLContextStatic();
+#else
+    private static nint GetCurrentGLContext() => Native.OpenGL32.wglGetCurrentContext();
+#endif
 #endif
 
     protected override void DrawLineCore(Point start, Point end, Color color, double thickness = 1)

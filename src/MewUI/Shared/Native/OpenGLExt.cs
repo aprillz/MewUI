@@ -13,6 +13,7 @@ internal static unsafe partial class OpenGLExt
     public const uint GL_FRAMEBUFFER_COMPLETE = 0x8CD5;
     public const uint GL_DRAW_FRAMEBUFFER = 0x8CA9;
     public const uint GL_READ_FRAMEBUFFER = 0x8CA8;
+    public const uint GL_NEAREST = 0x2600;
 
     // Shader / program / VAO / VBO constants (GL 2.0+ / 3.0+)
     public const uint GL_VERTEX_SHADER = 0x8B31;
@@ -44,6 +45,7 @@ internal static unsafe partial class OpenGLExt
     private static delegate* unmanaged<uint, uint, int, int, void> _glRenderbufferStorage;
     private static delegate* unmanaged<uint, uint, uint, uint, void> _glFramebufferRenderbuffer;
     private static delegate* unmanaged<uint, uint> _glCheckFramebufferStatus;
+    private static delegate* unmanaged<int, int, int, int, int, int, int, int, uint, uint, void> _glBlitFramebuffer;
 
     // Shader / program function pointers
     private static delegate* unmanaged<uint, uint> _glCreateShader;
@@ -247,6 +249,26 @@ internal static unsafe partial class OpenGLExt
             return _glCheckFramebufferStatus(target);
         }
         return 0;
+    }
+
+
+    /// <summary>True when framebuffer-to-framebuffer copies are available (GL 3.0 / GLES 3.0).</summary>
+    public static bool IsBlitFramebufferSupported
+    {
+        get
+        {
+            EnsureInitialized();
+            return _supported && _glBlitFramebuffer != null;
+        }
+    }
+
+    public static void BlitFramebuffer(int srcX0, int srcY0, int srcX1, int srcY1, int dstX0, int dstY0, int dstX1, int dstY1, uint mask, uint filter)
+    {
+        EnsureInitialized();
+        if (_glBlitFramebuffer != null)
+        {
+            _glBlitFramebuffer(srcX0, srcY0, srcX1, srcY1, dstX0, dstY0, dstX1, dstY1, mask, filter);
+        }
     }
 
 

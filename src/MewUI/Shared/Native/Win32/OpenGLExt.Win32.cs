@@ -14,6 +14,7 @@ internal static unsafe partial class OpenGLExt
         _glRenderbufferStorage = (delegate* unmanaged<uint, uint, int, int, void>)OpenGL32.wglGetProcAddress("glRenderbufferStorage");
         _glFramebufferRenderbuffer = (delegate* unmanaged<uint, uint, uint, uint, void>)OpenGL32.wglGetProcAddress("glFramebufferRenderbuffer");
         _glCheckFramebufferStatus = (delegate* unmanaged<uint, uint>)OpenGL32.wglGetProcAddress("glCheckFramebufferStatus");
+        _glBlitFramebuffer = (delegate* unmanaged<int, int, int, int, int, int, int, int, uint, uint, void>)OpenGL32.wglGetProcAddress("glBlitFramebuffer");
 
         // Shader / program / VAO / buffer entrypoints (GL 2.0+ / 3.0+).
         _glCreateShader = (delegate* unmanaged<uint, uint>)OpenGL32.wglGetProcAddress("glCreateShader");
