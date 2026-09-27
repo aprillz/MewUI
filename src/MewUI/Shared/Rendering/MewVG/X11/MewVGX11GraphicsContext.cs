@@ -43,6 +43,26 @@ internal sealed partial class MewVGX11GraphicsContext
         }
     }
 
+    // Set at the start of a window frame and consumed by the first write to its target.
+    private bool _frameClearPending;
+
+    partial void ApplyPendingFrameClear()
+    {
+        if (!_frameClearPending)
+        {
+            return;
+        }
+
+        _frameClearPending = false;
+        // A flush can leave colour writes masked, and a masked clear leaves the alpha behind.
+        GL.Disable(GL.GL_SCISSOR_TEST);
+        GL.ColorMask(true, true, true, true);
+        GL.ClearColor(0f, 0f, 0f, 0f);
+        GL.Clear(GL.GL_COLOR_BUFFER_BIT);
+    }
+
+    partial void DiscardPendingFrameClear() => _frameClearPending = false;
+
     partial void BeginFramePlatform()
     {
         try
@@ -52,15 +72,11 @@ internal sealed partial class MewVGX11GraphicsContext
             _frameSession.PixelSurfaceTarget?.SetContentSize(_viewportWidthPx, _viewportHeightPx);
             GL.Viewport(0, 0, _viewportWidthPx, _viewportHeightPx);
 
-            // Clear the window framebuffer for real. The public Clear(Color) is a NanoVG fill, which no-ops when
-            // clearing to a transparent colour (alpha-blend with alpha=0) - so on a transparent window the GLX
-            // back buffer (preserved across swaps on some drivers) accumulates previous frames and the alpha
-            // builds up. glClear zeroes the buffer incl. alpha; ColorMask is forced on first because a flush
-            // can leave colormask=(F,F,F,F) (same fix as the offscreen PreparePixelSurface).
-            OpenGLExt.BindFramebuffer(OpenGLExt.GL_FRAMEBUFFER, 0);
-            GL.ColorMask(true, true, true, true);
-            GL.ClearColor(0f, 0f, 0f, 0f);
-            GL.Clear(GL.GL_COLOR_BUFFER_BIT);
+            // The window back buffer is zeroed (alpha included) before anything lands on it: on a transparent
+            // window a buffer that some drivers preserve across swaps would otherwise build up the alpha of
+            // every earlier frame. The clear waits for the first write so a frame that starts by copying over
+            // the whole target skips it. An offscreen target is prepared by its session instead.
+            _frameClearPending = _frameSession is X11WindowFrameSession;
 
             _vg.BeginFrame((float)_viewportWidthDip, (float)_viewportHeightDip, (float)DpiScale);
             _vg.ResetTransform();
@@ -81,6 +97,7 @@ internal sealed partial class MewVGX11GraphicsContext
         {
             _frameSession.BindFrameTarget();
             GL.Viewport(0, 0, _viewportWidthPx, _viewportHeightPx);
+            ApplyPendingFrameClear();
 
             _vg.EndFrame();
             _frameSession.EndFrame();

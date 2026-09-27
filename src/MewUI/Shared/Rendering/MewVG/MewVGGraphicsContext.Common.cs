@@ -357,6 +357,9 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
 
     public override void Clear(Color color)
     {
+#if !MEWUI_MEWVG_MACOS
+        ClearTargetPixels(new Rect(0, 0, _viewportWidthDip, _viewportHeightDip), ToNvgColor(color));
+#else
         _vg.Save();
         _vg.ResetTransform();
         _vg.ResetScissor();
@@ -369,6 +372,7 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
         _vg.FillColor(ToNvgColor(color));
         _vg.Fill();
         _vg.Restore();
+#endif
     }
 
     void ITransparentDirtyRectContext.ClearRectangleToTransparent(Rect rect)
@@ -379,6 +383,9 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
 
     private void ClearRectangleCore(Rect rect, NVGcolor color)
     {
+#if !MEWUI_MEWVG_MACOS
+        ClearTargetPixels(rect, color);
+#else
         _vg.Save();
         _vg.ResetTransform();
         _vg.ResetScissor();
@@ -391,7 +398,69 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
         _vg.FillColor(color);
         _vg.Fill();
         _vg.Restore();
+#endif
     }
+
+#if !MEWUI_MEWVG_MACOS
+    /// <summary>Overwrites the pixels of <paramref name="rect"/> (target coordinates) with <paramref name="color"/>.</summary>
+    private void ClearTargetPixels(Rect rect, NVGcolor color)
+    {
+        // A GL clear instead of a queued fill: the fill runs the full paint shader on every pixel, which on a
+        // tile-based GPU costs several times a plain clear.
+        if (!TryGetTargetPixels(rect, out int left, out int top, out int right, out int bottom))
+        {
+            return;
+        }
+
+        if (CoversTarget(left, top, right, bottom))
+        {
+            DiscardPendingFrameClear();
+        }
+
+        FlushQueuedDraws();
+        Native.GL.Enable(Native.GL.GL_SCISSOR_TEST);
+        Native.GL.Scissor(left, _viewportHeightPx - bottom, right - left, bottom - top);
+        Native.GL.ColorMask(true, true, true, true);
+        // The target holds premultiplied colour, as the fill it replaces would have written.
+        Native.GL.ClearColor(color.R * color.A, color.G * color.A, color.B * color.A, color.A);
+        Native.GL.Clear(Native.GL.GL_COLOR_BUFFER_BIT);
+        Native.GL.Disable(Native.GL.GL_SCISSOR_TEST);
+    }
+
+    /// <summary>Sends the draws queued so far to the frame target, so direct target writes land after them.</summary>
+    private void FlushQueuedDraws()
+    {
+        _frameSession.BindFrameTarget();
+        Native.GL.Viewport(0, 0, _viewportWidthPx, _viewportHeightPx);
+        ApplyPendingFrameClear();
+        _vg.EndFrame();
+    }
+
+    /// <summary>
+    /// Converts a rectangle in target coordinates to the pixels a non-antialiased fill of it covers
+    /// (those whose centres lie inside), clipped to the viewport. False when none are.
+    /// </summary>
+    private bool TryGetTargetPixels(Rect rect, out int left, out int top, out int right, out int bottom)
+    {
+        double scale = DpiScale;
+        left = Math.Max(0, (int)Math.Ceiling(rect.X * scale - 0.5));
+        top = Math.Max(0, (int)Math.Ceiling(rect.Y * scale - 0.5));
+        right = Math.Min(_viewportWidthPx, (int)Math.Ceiling(rect.Right * scale - 0.5));
+        bottom = Math.Min(_viewportHeightPx, (int)Math.Ceiling(rect.Bottom * scale - 0.5));
+        return right > left && bottom > top;
+    }
+
+
+    private bool CoversTarget(int left, int top, int right, int bottom)
+        => left == 0 && top == 0 && right == _viewportWidthPx && bottom == _viewportHeightPx;
+
+    /// <summary>Performs the clear a platform defers from the start of a frame to its first write, if one is pending.</summary>
+    partial void ApplyPendingFrameClear();
+
+    /// <summary>Drops a deferred frame clear because the first write replaces the whole target anyway.</summary>
+    partial void DiscardPendingFrameClear();
+
+#endif
 
     protected override void DrawLineCore(Point start, Point end, Color color, double thickness = 1)
     {
