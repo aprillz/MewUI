@@ -4,7 +4,7 @@ using Aprillz.MewVG.Interop;
 namespace Aprillz.MewUI.Rendering.MewVG;
 
 /// <summary>
-/// Provides a pool of <see cref="NanoVGMetal"/> instances bound to a shared
+/// Provides a pool of <see cref="MewVGMetal"/> instances bound to a shared
 /// <c>MTLDevice</c>, so offscreen passes (filter / pattern tile / cached view
 /// bitmap cache) can render into a pixel surface's MTLTexture without
 /// disturbing the window's own NVG state.
@@ -24,7 +24,7 @@ namespace Aprillz.MewUI.Rendering.MewVG;
 /// </remarks>
 internal sealed class MewVGMetalOffscreenSurface
 {
-    internal MewVGMetalOffscreenSurface(nint device, nint commandQueue, NanoVGMetal vg, MewVGMetalTextCache textCache)
+    internal MewVGMetalOffscreenSurface(nint device, nint commandQueue, MewVGMetal vg, MewVGMetalTextCache textCache)
     {
         Device = device;
         CommandQueue = commandQueue;
@@ -34,14 +34,14 @@ internal sealed class MewVGMetalOffscreenSurface
 
     internal nint Device { get; }
     internal nint CommandQueue { get; }
-    internal NanoVGMetal Vg { get; }
+    internal MewVGMetal Vg { get; }
     internal MewVGMetalTextCache TextCache { get; }
 
     // Command buffers this instance's renderer submitted that may still run on the GPU, oldest first.
     private readonly Queue<nint> _framesInFlight = new();
 
     // Below the renderer's buffer count, so a frame never refills a vertex buffer the GPU still reads.
-    private const int MAX_FRAMES_IN_FLIGHT = MNVGcontext.MNVG_INIT_BUFFER_COUNT - 1;
+    private const int MAX_FRAMES_IN_FLIGHT = MewVGMetal.BufferCount - 1;
 
     private static readonly nint _selRetain = ObjCRuntime.RegisterSelector("retain");
     private static readonly nint _selRelease = ObjCRuntime.RegisterSelector("release");
@@ -82,7 +82,7 @@ internal sealed class MewVGMetalOffscreenSurfaceProvider : IDisposable
     // Per-NVG queue: see GL provider for the rationale. NVG instance state isn't
     // thread-safe - calling vg.DeleteImage from a thread that doesn't own the NVG
     // (or while the NVG is mid-frame elsewhere) corrupts the image table.
-    private readonly Dictionary<NanoVG, Queue<(MewVGImage Image, NVGimageFlags Flags)>> _pendingImageDisposal = new();
+    private readonly Dictionary<MewVGContext, Queue<(MewVGImage Image, MewVGImageFlags Flags)>> _pendingImageDisposal = new();
     private nint _defaultDevice;
     // One queue per device, shared by every offscreen NVG instance and by the filter passes.
     // Same-queue command buffers execute in commit order, so a pass that samples what the
@@ -126,7 +126,7 @@ internal sealed class MewVGMetalOffscreenSurfaceProvider : IDisposable
             }
         }
 
-        // Create outside the lock - NanoVGMetal ctor compiles shaders and is
+        // Create outside the lock - MewVGMetal ctor compiles shaders and is
         // expensive; serialising it across all threads is unnecessary. The
         // race only causes a tiny amount of over-allocation: two callers may
         // both find the pool empty and each create a fresh instance, with the
@@ -137,7 +137,7 @@ internal sealed class MewVGMetalOffscreenSurfaceProvider : IDisposable
             throw new InvalidOperationException("Failed to create offscreen MTLCommandQueue.");
         }
 
-        var vg = new NanoVGMetal(key)
+        var vg = new MewVGMetal(key)
         {
             PixelFormat = MTLPixelFormat.BGRA8Unorm
         };
@@ -274,7 +274,7 @@ internal sealed class MewVGMetalOffscreenSurfaceProvider : IDisposable
             {
                 if (!_pendingImageDisposal.TryGetValue(vg, out var queue))
                 {
-                    queue = new Queue<(MewVGImage, NVGimageFlags)>();
+                    queue = new Queue<(MewVGImage, MewVGImageFlags)>();
                     _pendingImageDisposal[vg] = queue;
                 }
                 queue.Enqueue((image, flags));
@@ -287,14 +287,14 @@ internal sealed class MewVGMetalOffscreenSurfaceProvider : IDisposable
     /// from that NVG's <c>EndFrame</c> on the thread that owns it. Per-NVG drain is
     /// the safe entry point; <see cref="ReleasePendingImages"/> is for shutdown only.
     /// </summary>
-    internal int ReleasePendingImagesForVg(NanoVG vg)
+    internal int ReleasePendingImagesForVg(MewVGContext vg)
     {
         if (vg is null) return 0;
 
         int count = 0;
         while (true)
         {
-            (MewVGImage Image, NVGimageFlags Flags) entry;
+            (MewVGImage Image, MewVGImageFlags Flags) entry;
             lock (_lock)
             {
                 if (!_pendingImageDisposal.TryGetValue(vg, out var queue) || queue.Count == 0)
@@ -312,7 +312,7 @@ internal sealed class MewVGMetalOffscreenSurfaceProvider : IDisposable
     internal int ReleasePendingImages()
     {
         int count = 0;
-        List<(MewVGImage Image, NanoVG Vg, NVGimageFlags Flags)> all = new();
+        List<(MewVGImage Image, MewVGContext Vg, MewVGImageFlags Flags)> all = new();
         lock (_lock)
         {
             foreach (var (vg, queue) in _pendingImageDisposal)
@@ -336,7 +336,7 @@ internal sealed class MewVGMetalOffscreenSurfaceProvider : IDisposable
     public void Dispose()
     {
         List<MewVGMetalOffscreenSurface> surfaces = new();
-        List<(MewVGImage Image, NanoVG Vg, NVGimageFlags Flags)> imageEntries = new();
+        List<(MewVGImage Image, MewVGContext Vg, MewVGImageFlags Flags)> imageEntries = new();
         List<nint> sharedQueues = new();
         nint defaultDevice;
 

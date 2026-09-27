@@ -17,7 +17,7 @@ internal static class MewVGGLBootstrapX11
             return;
         }
 
-        NanoVGGL.Initialize(GetProcAddress);
+        MewVGGL.Initialize(GetProcAddress);
     }
 
     private static nint GetProcAddress(string name)

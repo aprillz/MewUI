@@ -49,7 +49,7 @@ internal sealed class MewVGImage : IImage
     }
 
     private readonly record struct ImageEntry(int ImageId, int Version);
-    private readonly record struct ImageKey(NanoVG Vg, NVGimageFlags Flags);
+    private readonly record struct ImageKey(MewVGContext Vg, MewVGImageFlags Flags);
 
     public MewVGImage(int widthPx, int heightPx, byte[] bgra, Action<MewVGImage>? disposeRequested = null)
     {
@@ -74,10 +74,10 @@ internal sealed class MewVGImage : IImage
         _sourceIsPremultiplied = source.IsPremultiplied;
     }
 
-    public int GetOrCreateImageId(NanoVG vg)
-        => GetOrCreateImageId(vg, NVGimageFlags.None);
+    public int GetOrCreateImageId(MewVGContext vg)
+        => GetOrCreateImageId(vg, MewVGImageFlags.None);
 
-    public int GetOrCreateImageId(NanoVG vg, NVGimageFlags flags)
+    public int GetOrCreateImageId(MewVGContext vg, MewVGImageFlags flags)
     {
         if (_disposed)
         {
@@ -89,7 +89,7 @@ internal sealed class MewVGImage : IImage
         // pixel (visible as a black halo on alpha-blended edges).
         if (_sourceIsPremultiplied)
         {
-            flags |= NVGimageFlags.Premultiplied;
+            flags |= MewVGImageFlags.Premultiplied;
         }
 
         int version = _source?.Version ?? 0;
@@ -168,7 +168,7 @@ internal sealed class MewVGImage : IImage
             // store rendered content bottom-up in texture memory; Metal stores top-down,
             // so sampling lines up directly.
             int handleId = vg.CreateImageFromNativeHandle(mtlTex, PixelWidth, PixelHeight,
-                flags | NVGimageFlags.NoDelete);
+                flags | MewVGImageFlags.NoDelete);
             if (handleId != 0)
             {
                 _images[imageKey] = new ImageEntry(handleId, version);
@@ -208,12 +208,12 @@ internal sealed class MewVGImage : IImage
             // GL_TEXTURE_WRAP_S/T. Backends whose RT texture defaults to CLAMP_TO_EDGE need
             // to upgrade the wrap mode based on the requested flags here - the source
             // exposes this via ConfigureGpuTextureWrap (no-op on backends that don't need it).
-            bool repeatX = (flags & NVGimageFlags.RepeatX) != 0;
-            bool repeatY = (flags & NVGimageFlags.RepeatY) != 0;
+            bool repeatX = (flags & MewVGImageFlags.RepeatX) != 0;
+            bool repeatY = (flags & MewVGImageFlags.RepeatY) != 0;
             _gpuSource!.ConfigureGpuTextureWrap(glHandle, repeatX, repeatY);
 
             int handleId = vg.CreateImageFromHandle((int)glHandle, PixelWidth, PixelHeight,
-                flags | NVGimageFlags.FlipY | NVGimageFlags.NoDelete);
+                flags | MewVGImageFlags.FlipY | MewVGImageFlags.NoDelete);
             if (handleId != 0)
             {
                 _images[imageKey] = new ImageEntry(handleId, version);
@@ -264,10 +264,10 @@ internal sealed class MewVGImage : IImage
     /// state mutation that corrupts NanoVG's image-id table when an unrelated thread
     /// calls <c>vg.DeleteImage</c> while the NVG is mid-frame elsewhere.
     /// </summary>
-    internal IReadOnlyList<(NanoVG Vg, NVGimageFlags Flags)> SnapshotPendingEntries()
+    internal IReadOnlyList<(MewVGContext Vg, MewVGImageFlags Flags)> SnapshotPendingEntries()
     {
-        if (_images.Count == 0) return Array.Empty<(NanoVG, NVGimageFlags)>();
-        var result = new List<(NanoVG, NVGimageFlags)>(_images.Count);
+        if (_images.Count == 0) return Array.Empty<(MewVGContext, MewVGImageFlags)>();
+        var result = new List<(MewVGContext, MewVGImageFlags)>(_images.Count);
         foreach (var key in _images.Keys)
         {
             result.Add((key.Vg, key.Flags));
@@ -281,7 +281,7 @@ internal sealed class MewVGImage : IImage
     /// every entry has been released the image's GPU retain (if any) is dropped and the
     /// post-release callback fires.
     /// </summary>
-    internal void ReleasePendingEntry(NanoVG vg, NVGimageFlags flags)
+    internal void ReleasePendingEntry(MewVGContext vg, MewVGImageFlags flags)
     {
         if (_disposed) return;
 

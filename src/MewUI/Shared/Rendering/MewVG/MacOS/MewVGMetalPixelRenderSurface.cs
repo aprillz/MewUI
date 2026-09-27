@@ -438,7 +438,7 @@ internal sealed unsafe partial class MewVGMetalPixelRenderSurface : IPixelBuffer
 
     /// <summary>Exposes the GPU MTLTexture so MewVG-Metal consumers can wrap it
     /// directly (zero-copy filter result reuse) without round-tripping through CPU.
-    /// Caller must use <c>NVGimageFlags.NoDelete</c> - the texture is owned here.</summary>
+    /// Caller must use <c>MewVGImageFlags.NoDelete</c> - the texture is owned here.</summary>
     public nint GetTextureHandle() => _disposed ? 0 : ColorTexture;
 
     /// <inheritdoc cref="IGpuTextureSource.RetainGpuHandle"/>

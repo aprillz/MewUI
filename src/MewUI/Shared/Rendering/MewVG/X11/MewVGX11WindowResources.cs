@@ -10,7 +10,7 @@ internal sealed class MewVGX11WindowResources : IDisposable, IMewVGWindowCacheMa
     private readonly IOpenGLWindowResources _gl;
     private bool _disposed;
 
-    public NanoVGGL Vg { get; }
+    public MewVGGL Vg { get; }
 
     public MewVGTextCache TextCache { get; }
 
@@ -33,7 +33,7 @@ internal sealed class MewVGX11WindowResources : IDisposable, IMewVGWindowCacheMa
         }
     }
 
-    private MewVGX11WindowResources(nint display, IOpenGLWindowResources gl, NanoVGGL vg, nint shareContext)
+    private MewVGX11WindowResources(nint display, IOpenGLWindowResources gl, MewVGGL vg, nint shareContext)
     {
         _display = display;
         _gl = gl;
@@ -55,7 +55,7 @@ internal sealed class MewVGX11WindowResources : IDisposable, IMewVGWindowCacheMa
         try
         {
             MewVGGLBootstrapX11.EnsureInitialized();
-            var vg = new NanoVGGL();
+            var vg = new MewVGGL();
             return new MewVGX11WindowResources(display, gl, vg, shareContext);
         }
         finally

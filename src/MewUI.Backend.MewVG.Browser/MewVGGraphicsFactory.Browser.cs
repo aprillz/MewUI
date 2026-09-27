@@ -124,20 +124,20 @@ public sealed partial class MewVGWin32GraphicsFactory : IPersistentFrameGraphics
 internal sealed class BrowserWindowResources : IDisposable, IMewVGWindowCacheMaintenance
 {
     private static bool _initialized;
-    private static NanoVGGL? _sharedVg;
+    private static MewVGGL? _sharedVg;
     private static readonly object _gate = new();
     private MewVGWin32GraphicsContext? _context;
     private bool _disposed;
 
     private BrowserTextCache? _textCache;
 
-    private BrowserWindowResources(NanoVGGL vg, IMewVGOffscreenSurfaceProvider offscreenProvider)
+    private BrowserWindowResources(MewVGGL vg, IMewVGOffscreenSurfaceProvider offscreenProvider)
     {
         Vg = vg;
         OffscreenProvider = offscreenProvider;
     }
 
-    internal NanoVGGL Vg { get; }
+    internal MewVGGL Vg { get; }
 
     // The window's frames release what offscreen passes queued for this renderer, as the desktop windows do.
     internal IMewVGOffscreenSurfaceProvider OffscreenProvider { get; }
@@ -154,7 +154,7 @@ internal sealed class BrowserWindowResources : IDisposable, IMewVGWindowCacheMai
     /// instance by rebinding the framebuffer; a second instance would duplicate every shader,
     /// buffer and mask target on the shared GL context.
     /// </summary>
-    internal static NanoVGGL SharedVg
+    internal static MewVGGL SharedVg
     {
         get
         {
@@ -169,7 +169,7 @@ internal sealed class BrowserWindowResources : IDisposable, IMewVGWindowCacheMai
                         throw new InvalidOperationException($"WebGL2 context creation failed (EMSCRIPTEN_RESULT {result}).");
                     }
 
-                    NanoVGGL.Initialize(BrowserNative.GetProcAddress, NanoVGGLProfile.Gles3);
+                    MewVGGL.Initialize(BrowserNative.GetProcAddress, MewVGGLProfile.Gles3);
                     Native.OpenGLExt.EnsureInitialized();
                     // WebGL2 guarantees an RGBA8 color attachment is complete, and the status query
                     // is a blocking round trip to the GPU process on every new offscreen surface.
@@ -178,7 +178,7 @@ internal sealed class BrowserWindowResources : IDisposable, IMewVGWindowCacheMai
                     Console.WriteLine("MewUI MewVG WebGL2 initialized.");
                 }
 
-                return _sharedVg ??= new NanoVGGL();
+                return _sharedVg ??= new MewVGGL();
             }
         }
     }

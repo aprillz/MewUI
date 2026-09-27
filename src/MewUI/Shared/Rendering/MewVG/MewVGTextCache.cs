@@ -19,7 +19,7 @@ internal sealed class MewVGTextCache : IDisposable
 {
     private const long DefaultMaxBytes = 16L * 1024 * 1024;
 
-    private readonly NanoVG _vg;
+    private readonly MewVGContext _vg;
     private readonly Dictionary<MewVGTextCacheKey, LinkedListNode<CacheEntry>> _map = new();
     private readonly LinkedList<CacheEntry> _lru = new();
     private readonly Queue<int> _pendingDeletes = new();
@@ -38,7 +38,7 @@ internal sealed class MewVGTextCache : IDisposable
         set => field = Math.Max(0, value);
     } = DefaultMaxBytes;
 
-    public MewVGTextCache(NanoVG vg)
+    public MewVGTextCache(MewVGContext vg)
     {
         _vg = vg;
     }
@@ -78,10 +78,10 @@ internal sealed class MewVGTextCache : IDisposable
 
         // Source bitmap is BGRA - feed straight to NVG; GL backend uses GL_BGRA upload, no
         // CPU swap. Backends without native BGRA fall back to a one-time conversion in
-        // NanoVG.CreateImageBGRA's default implementation.
+        // MewVGContext.CreateImageBGRA's default implementation.
         // Nearest keeps pixel-snapped axis-aligned text crisp; rotated text asks for linear so it interpolates
         // smoothly instead of breaking up into jaggies.
-        var flags = key.Linear ? NVGimageFlags.None : NVGimageFlags.Nearest;
+        var flags = key.Linear ? MewVGImageFlags.None : MewVGImageFlags.Nearest;
         int imageId = _vg.CreateImageBGRA(bmp.WidthPx, bmp.HeightPx, flags, bmp.Data);
         if (imageId == 0)
         {
@@ -151,7 +151,7 @@ internal sealed class MewVGTextCache : IDisposable
         else
         {
             ReleaseSlot(slot);
-            var flags = linear ? NVGimageFlags.None : NVGimageFlags.Nearest;
+            var flags = linear ? MewVGImageFlags.None : MewVGImageFlags.Nearest;
             slot.ImageId = _vg.CreateImageBGRA(widthPx, heightPx, flags, pixels);
             if (slot.ImageId == 0)
             {

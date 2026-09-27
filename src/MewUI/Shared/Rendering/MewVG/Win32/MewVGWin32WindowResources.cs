@@ -10,7 +10,7 @@ internal sealed class MewVGWin32WindowResources : IDisposable, IMewVGWindowCache
     private readonly WglOpenGLWindowResources _gl;
     private bool _disposed;
 
-    public NanoVGGL Vg { get; }
+    public MewVGGL Vg { get; }
 
     public MewVGTextCache TextCache { get; }
 
@@ -48,7 +48,7 @@ internal sealed class MewVGWin32WindowResources : IDisposable, IMewVGWindowCache
         }
     }
 
-    private MewVGWin32WindowResources(nint hwnd, WglOpenGLWindowResources gl, NanoVGGL vg, nint shareContext)
+    private MewVGWin32WindowResources(nint hwnd, WglOpenGLWindowResources gl, MewVGGL vg, nint shareContext)
     {
         _hwnd = hwnd;
         _gl = gl;
@@ -71,7 +71,7 @@ internal sealed class MewVGWin32WindowResources : IDisposable, IMewVGWindowCache
         {
             MewVGGLBootstrap.EnsureInitialized();
 
-            var vg = new NanoVGGL();
+            var vg = new MewVGGL();
             return new MewVGWin32WindowResources(hwnd, gl, vg, shareContext);
         }
         finally

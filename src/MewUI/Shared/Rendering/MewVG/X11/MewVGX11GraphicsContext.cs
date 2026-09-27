@@ -505,7 +505,7 @@ internal sealed partial class MewVGX11GraphicsContext
 
     private interface IX11FrameSession
     {
-        NanoVGGL Vg { get; }
+        MewVGGL Vg { get; }
         MewVGTextCache TextCache { get; }
         nint OpenGLShareGroup { get; }
         OpenGLPixelRenderSurface? PixelSurfaceTarget { get; }
@@ -530,7 +530,7 @@ internal sealed partial class MewVGX11GraphicsContext
             _offscreenProvider = offscreenProvider;
         }
 
-        public NanoVGGL Vg => _resources.Vg;
+        public MewVGGL Vg => _resources.Vg;
 
         public MewVGTextCache TextCache => _resources.TextCache;
 
@@ -599,7 +599,7 @@ internal sealed partial class MewVGX11GraphicsContext
             _pixelSurface = pixelSurface;
         }
 
-        public NanoVGGL Vg => _offscreen.Vg;
+        public MewVGGL Vg => _offscreen.Vg;
 
         public MewVGTextCache TextCache => _offscreen.TextCache;
 

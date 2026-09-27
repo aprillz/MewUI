@@ -213,7 +213,7 @@ internal sealed partial class MewVGMacOSGraphicsContext
 
     private interface IMetalFrameSession
     {
-        NanoVGMetal Vg { get; }
+        MewVGMetal Vg { get; }
 
         MewVGMetalTextCache TextCache { get; }
 
@@ -239,7 +239,7 @@ internal sealed partial class MewVGMacOSGraphicsContext
             _offscreenProvider = offscreenProvider;
         }
 
-        public NanoVGMetal Vg => _resources.Vg;
+        public MewVGMetal Vg => _resources.Vg;
 
         public MewVGMetalTextCache TextCache => _resources.TextCache;
 
@@ -311,7 +311,7 @@ internal sealed partial class MewVGMacOSGraphicsContext
             _offscreenProvider = offscreenProvider;
         }
 
-        public NanoVGMetal Vg => _offscreen.Vg;
+        public MewVGMetal Vg => _offscreen.Vg;
 
         public MewVGMetalTextCache TextCache => _offscreen.TextCache;
 

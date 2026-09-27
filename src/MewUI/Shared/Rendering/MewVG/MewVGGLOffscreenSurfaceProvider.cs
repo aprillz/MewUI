@@ -21,7 +21,7 @@ internal interface IMewVGOffscreenSurfaceProvider : IDisposable
     /// safe-drain entry point - preferred over <see cref="ReleasePendingImages"/>, which
     /// fans out to every NVG and is therefore unsafe when other threads are mid-frame.
     /// </summary>
-    int ReleasePendingImagesForVg(NanoVG vg);
+    int ReleasePendingImagesForVg(MewVGContext vg);
 
     /// <summary>
     /// Drains every NVG's pending bucket regardless of owning thread. Use only at shutdown
@@ -41,7 +41,7 @@ internal interface IMewVGOffscreenSurfaceProvider : IDisposable
 
 internal sealed class MewVGGLOffscreenSurface
 {
-    internal MewVGGLOffscreenSurface(nint nativeContext, NanoVGGL vg, MewVGTextCache textCache)
+    internal MewVGGLOffscreenSurface(nint nativeContext, MewVGGL vg, MewVGTextCache textCache)
     {
         NativeContext = nativeContext;
         Vg = vg;
@@ -50,7 +50,7 @@ internal sealed class MewVGGLOffscreenSurface
 
     internal nint NativeContext { get; }
 
-    internal NanoVGGL Vg { get; }
+    internal MewVGGL Vg { get; }
 
     internal MewVGTextCache TextCache { get; }
 }
@@ -74,7 +74,7 @@ internal sealed class MewVGGLOffscreenSurfaceProvider : IMewVGOffscreenSurfacePr
     // corrupts the image table and surfaces as wrong-texture binding on the next flush.
     // The previous flat queue let UI's EndFrame drain images whose NVG was the worker's,
     // racing the worker mid-frame.
-    private readonly Dictionary<NanoVG, Queue<(MewVGImage Image, NVGimageFlags Flags)>> _pendingImageDisposal = new();
+    private readonly Dictionary<MewVGContext, Queue<(MewVGImage Image, MewVGImageFlags Flags)>> _pendingImageDisposal = new();
 
     private int _sessionDepth;
     private bool _disposed;
@@ -134,7 +134,7 @@ internal sealed class MewVGGLOffscreenSurfaceProvider : IMewVGOffscreenSurfacePr
             }
         }
 
-        var vg = new NanoVGGL();
+        var vg = new MewVGGL();
         var textCache = new MewVGTextCache(vg);
         return new MewVGGLOffscreenSurface(nativeContext, vg, textCache);
     }
@@ -253,7 +253,7 @@ internal sealed class MewVGGLOffscreenSurfaceProvider : IMewVGOffscreenSurfacePr
             {
                 if (!_pendingImageDisposal.TryGetValue(vg, out var queue))
                 {
-                    queue = new Queue<(MewVGImage, NVGimageFlags)>();
+                    queue = new Queue<(MewVGImage, MewVGImageFlags)>();
                     _pendingImageDisposal[vg] = queue;
                 }
                 queue.Enqueue((image, flags));
@@ -261,14 +261,14 @@ internal sealed class MewVGGLOffscreenSurfaceProvider : IMewVGOffscreenSurfacePr
         }
     }
 
-    public int ReleasePendingImagesForVg(NanoVG vg)
+    public int ReleasePendingImagesForVg(MewVGContext vg)
     {
         if (vg is null) return 0;
 
         int count = 0;
         while (true)
         {
-            (MewVGImage Image, NVGimageFlags Flags) entry;
+            (MewVGImage Image, MewVGImageFlags Flags) entry;
             lock (_lock)
             {
                 if (!_pendingImageDisposal.TryGetValue(vg, out var queue) || queue.Count == 0)
@@ -292,7 +292,7 @@ internal sealed class MewVGGLOffscreenSurfaceProvider : IMewVGOffscreenSurfacePr
         // Shutdown / fallback path - drain every NVG's bucket. Caller must guarantee no
         // NVG is mid-frame (e.g. provider Dispose at process teardown).
         int count = 0;
-        List<(MewVGImage Image, NanoVG Vg, NVGimageFlags Flags)> all = new();
+        List<(MewVGImage Image, MewVGContext Vg, MewVGImageFlags Flags)> all = new();
         lock (_lock)
         {
             foreach (var (vg, queue) in _pendingImageDisposal)
@@ -316,7 +316,7 @@ internal sealed class MewVGGLOffscreenSurfaceProvider : IMewVGOffscreenSurfacePr
     public void Dispose()
     {
         List<MewVGGLOffscreenSurface> surfaces = new();
-        List<(MewVGImage Image, NanoVG Vg, NVGimageFlags Flags)> imageEntries = new();
+        List<(MewVGImage Image, MewVGContext Vg, MewVGImageFlags Flags)> imageEntries = new();
         List<OpenGLPixelRenderSurface> targets = new();
 
         lock (_lock)

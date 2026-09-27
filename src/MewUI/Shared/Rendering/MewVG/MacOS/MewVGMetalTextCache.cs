@@ -7,7 +7,7 @@ namespace Aprillz.MewUI.Rendering.MewVG;
 
 internal sealed class MewVGMetalTextCache : IDisposable
 {
-    private readonly NanoVGMetal _vg;
+    private readonly MewVGMetal _vg;
     private readonly Dictionary<TextCacheKey, CacheEntry> _cache = new();
     private readonly LinkedList<TextCacheKey> _lru = new();
     private readonly Dictionary<TextCacheKey, LinkedListNode<TextCacheKey>> _lruNodes = new();
@@ -113,7 +113,7 @@ internal sealed class MewVGMetalTextCache : IDisposable
         }
     }
 
-    public MewVGMetalTextCache(NanoVGMetal vg)
+    public MewVGMetalTextCache(MewVGMetal vg)
     {
         _vg = vg;
     }
@@ -186,7 +186,7 @@ internal sealed class MewVGMetalTextCache : IDisposable
         // CoreText produces BGRA premultiplied. Hand it straight to NVG via the BGRA upload
         // path - Metal's BGRA8Unorm texture takes the bytes as-is. Premultiplied flag stays
         // so the shader doesn't double-multiply at sample.
-        imageId = _vg.CreateImageBGRA(bmp.WidthPx, bmp.HeightPx, NVGimageFlags.Premultiplied, bmp.Data);
+        imageId = _vg.CreateImageBGRA(bmp.WidthPx, bmp.HeightPx, MewVGImageFlags.Premultiplied, bmp.Data);
         if (imageId == 0)
         {
             return false;
@@ -305,7 +305,7 @@ internal sealed class MewVGMetalTextCache : IDisposable
     /// Owner-keyed text rasterization: caches one (buffer, MTLTexture) pair per logical
     /// owner (typically the TextBlock instance) and reuses both even when the text content
     /// mutates. When the rasterized bitmap dimensions match the existing texture, the
-    /// pixels are uploaded via <see cref="NanoVG.UpdateImageBGRA"/> - no new GPU allocation
+    /// pixels are uploaded via <see cref="MewVGContext.UpdateImageBGRA"/> - no new GPU allocation
     /// and no managed-heap byte[] allocation. When dimensions change, the old texture is
     /// queued for deferred deletion (same path as content-cache eviction) and a new one is
     /// created from the same (possibly grown) buffer.
@@ -525,7 +525,7 @@ internal sealed class MewVGMetalTextCache : IDisposable
                 Account(-TextureBytes(entry.TextureWidthPx, entry.TextureHeightPx));
             }
 
-            int newId = _vg.CreateImageBGRA(actualW, actualH, NVGimageFlags.Premultiplied, pixels);
+            int newId = _vg.CreateImageBGRA(actualW, actualH, MewVGImageFlags.Premultiplied, pixels);
             if (newId == 0)
             {
                 return false;

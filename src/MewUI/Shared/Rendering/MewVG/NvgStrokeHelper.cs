@@ -15,9 +15,9 @@ internal static class NvgStrokeHelper
     private const int GRADIENT_LUT_SIZE = 512;
     private const int MAX_GRADIENT_LUT_ENTRIES = 128;
 
-    private static readonly ConditionalWeakTable<NanoVG, GradientLutCache> GradientLutCaches = new();
+    private static readonly ConditionalWeakTable<MewVGContext, GradientLutCache> GradientLutCaches = new();
 
-    public static void ApplyPenStyle(NanoVG vg, Pen pen)
+    public static void ApplyPenStyle(MewVGContext vg, Pen pen)
     {
         vg.StrokeWidth((float)pen.Thickness);
 
@@ -25,16 +25,16 @@ internal static class NvgStrokeHelper
 
         vg.LineCap(style.LineCap switch
         {
-            StrokeLineCap.Round => NVGlineCap.Round,
-            StrokeLineCap.Square => NVGlineCap.Square,
-            _ => NVGlineCap.Butt,
+            StrokeLineCap.Round => MewVGLineCap.Round,
+            StrokeLineCap.Square => MewVGLineCap.Square,
+            _ => MewVGLineCap.Butt,
         });
 
         vg.LineJoin(style.LineJoin switch
         {
-            StrokeLineJoin.Round => NVGlineJoin.Round,
-            StrokeLineJoin.Bevel => NVGlineJoin.Bevel,
-            _ => NVGlineJoin.Miter,
+            StrokeLineJoin.Round => MewVGLineJoin.Round,
+            StrokeLineJoin.Bevel => MewVGLineJoin.Bevel,
+            _ => MewVGLineJoin.Miter,
         });
 
         if (style.MiterLimit > 0)
@@ -45,11 +45,11 @@ internal static class NvgStrokeHelper
     /// Applies stroke color or gradient paint to the current NanoVG state.
     /// For gradient brushes, uses StrokePaint with a real gradient instead of a representative color.
     /// </summary>
-    public static void ApplyStrokeBrush(NanoVG vg, Pen pen, Rect strokeBounds)
+    public static void ApplyStrokeBrush(MewVGContext vg, Pen pen, Rect strokeBounds)
     {
         if (pen.Brush is SolidColorBrush solid)
         {
-            vg.StrokeColor(NVGcolor.RGBA(solid.Color.R, solid.Color.G, solid.Color.B, solid.Color.A));
+            vg.StrokeColor(MewVGColor.RGBA(solid.Color.R, solid.Color.G, solid.Color.B, solid.Color.A));
         }
         else if (pen.Brush is GradientBrush gradient)
         {
@@ -59,15 +59,15 @@ internal static class NvgStrokeHelper
             else
             {
                 var c = gradient.GetRepresentativeColor();
-                vg.StrokeColor(NVGcolor.RGBA(c.R, c.G, c.B, c.A));
+                vg.StrokeColor(MewVGColor.RGBA(c.R, c.G, c.B, c.A));
             }
         }
     }
 
     /// <summary>
-    /// Creates an NVGpaint for a gradient brush. Used for both fill and stroke.
+    /// Creates a MewVGPaint for a gradient brush. Used for both fill and stroke.
     /// </summary>
-    private static NVGpaint? CreateGradientPaint(NanoVG vg, GradientBrush gradient, Rect objectBounds)
+    private static MewVGPaint? CreateGradientPaint(MewVGContext vg, GradientBrush gradient, Rect objectBounds)
     {
         var stops = gradient.Stops;
         var startColor = ToNvgColor(GradientBrushHelper.Sample(stops, 0));
@@ -127,7 +127,7 @@ internal static class NvgStrokeHelper
         return null;
     }
 
-    public static void ApplyGradientPaint(NanoVG vg, GradientBrush gradient, Rect objectBounds)
+    public static void ApplyGradientPaint(MewVGContext vg, GradientBrush gradient, Rect objectBounds)
     {
         var paint = CreateGradientPaint(vg, gradient, objectBounds);
         if (paint.HasValue)
@@ -140,7 +140,7 @@ internal static class NvgStrokeHelper
     /// Draws a stroke with software dashing. NanoVG has no native dash support,
     /// so we flatten the path to line segments and draw each dash individually.
     /// </summary>
-    public static void DrawDashedStroke(NanoVG vg, PathGeometry path, Pen pen, Rect strokeBounds)
+    public static void DrawDashedStroke(MewVGContext vg, PathGeometry path, Pen pen, Rect strokeBounds)
     {
         var style = pen.StrokeStyle;
         if (style.DashArray is not { Count: > 0 } dashes)
@@ -290,7 +290,7 @@ internal static class NvgStrokeHelper
     /// <summary>
     /// Draws a dashed stroke for simple line segments (no PathGeometry).
     /// </summary>
-    public static void DrawDashedLine(NanoVG vg, float x0, float y0, float x1, float y1, Pen pen, Rect strokeBounds)
+    public static void DrawDashedLine(MewVGContext vg, float x0, float y0, float x1, float y1, Pen pen, Rect strokeBounds)
     {
         var path = new PathGeometry();
         path.MoveTo(x0, y0);
@@ -301,7 +301,7 @@ internal static class NvgStrokeHelper
     /// <summary>
     /// Draws a dashed stroke for a rectangle.
     /// </summary>
-    public static void DrawDashedRect(NanoVG vg, float x, float y, float w, float h, Pen pen, Rect strokeBounds)
+    public static void DrawDashedRect(MewVGContext vg, float x, float y, float w, float h, Pen pen, Rect strokeBounds)
     {
         var path = new PathGeometry();
         path.MoveTo(x, y);
@@ -315,7 +315,7 @@ internal static class NvgStrokeHelper
     /// <summary>
     /// Draws a dashed stroke for a rounded rectangle.
     /// </summary>
-    public static void DrawDashedRoundedRect(NanoVG vg, float x, float y, float w, float h, float r, Pen pen, Rect strokeBounds)
+    public static void DrawDashedRoundedRect(MewVGContext vg, float x, float y, float w, float h, float r, Pen pen, Rect strokeBounds)
     {
         var path = PathGeometry.FromRoundedRect(new Rect(x, y, w, h), r);
         DrawDashedStroke(vg, path, pen, strokeBounds);
@@ -324,7 +324,7 @@ internal static class NvgStrokeHelper
     /// <summary>
     /// Draws a dashed stroke for an ellipse.
     /// </summary>
-    public static void DrawDashedEllipse(NanoVG vg, float cx, float cy, float rx, float ry, Pen pen, Rect strokeBounds)
+    public static void DrawDashedEllipse(MewVGContext vg, float cx, float cy, float rx, float ry, Pen pen, Rect strokeBounds)
     {
         var path = new PathGeometry();
         // Approximate ellipse with 4 bezier curves (standard approach)
@@ -460,9 +460,9 @@ internal static class NvgStrokeHelper
         }
     }
 
-    private static NVGcolor ToNvgColor(Color c) => NVGcolor.RGBA(c.R, c.G, c.B, c.A);
+    private static MewVGColor ToNvgColor(Color c) => MewVGColor.RGBA(c.R, c.G, c.B, c.A);
 
-    private static int GetOrCreateGradientLut(NanoVG vg, IReadOnlyList<GradientStop> stops)
+    private static int GetOrCreateGradientLut(MewVGContext vg, IReadOnlyList<GradientStop> stops)
     {
         var cache = GradientLutCaches.GetOrCreateValue(vg);
         var key = new GradientLutKey(stops);
@@ -472,7 +472,7 @@ internal static class NvgStrokeHelper
         }
 
         var pixels = BuildGradientLutPixels(stops, GRADIENT_LUT_SIZE);
-        int imageId = vg.CreateOwnedImageRGBA(GRADIENT_LUT_SIZE, 1, NVGimageFlags.Premultiplied, pixels);
+        int imageId = vg.CreateOwnedImageRGBA(GRADIENT_LUT_SIZE, 1, MewVGImageFlags.Premultiplied, pixels);
         if (imageId != 0)
         {
             cache.Add(key, imageId);
@@ -612,7 +612,7 @@ internal static class NvgStrokeHelper
         /// Called via <see cref="ReleasePendingGradientLutDeletes"/> from each frame session's
         /// post-Flush drain point (alongside its text cache's <c>ReleasePendingDeletes</c>).
         /// </summary>
-        public void DrainPendingDeletes(NanoVG vg)
+        public void DrainPendingDeletes(MewVGContext vg)
         {
             while (true)
             {
@@ -642,7 +642,7 @@ internal static class NvgStrokeHelper
     /// called from a NanoVG instance's post-Flush drain point, mirroring
     /// <c>MewVGTextCache.ReleasePendingDeletes</c>.
     /// </summary>
-    internal static void ReleasePendingGradientLutDeletes(NanoVG vg)
+    internal static void ReleasePendingGradientLutDeletes(MewVGContext vg)
     {
         if (GradientLutCaches.TryGetValue(vg, out var cache))
         {

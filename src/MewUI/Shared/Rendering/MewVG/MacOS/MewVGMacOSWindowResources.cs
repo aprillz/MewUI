@@ -26,7 +26,7 @@ internal sealed class MewVGMetalWindowResources : IDisposable, IMewVGWindowCache
 
     public nint CommandQueue { get; }
 
-    public NanoVGMetal Vg { get; }
+    public MewVGMetal Vg { get; }
 
     public MewVGMetalTextCache TextCache { get; }
 
@@ -54,7 +54,7 @@ internal sealed class MewVGMetalWindowResources : IDisposable, IMewVGWindowCache
         }
     }
 
-    private MewVGMetalWindowResources(nint hwnd, nint layer, nint device, nint commandQueue, NanoVGMetal vg)
+    private MewVGMetalWindowResources(nint hwnd, nint layer, nint device, nint commandQueue, MewVGMetal vg)
     {
         Hwnd = hwnd;
         Layer = layer;
@@ -78,7 +78,7 @@ internal sealed class MewVGMetalWindowResources : IDisposable, IMewVGWindowCache
 
         using var pool = new AutoReleasePool();
 
-        var vg = new NanoVGMetal(device)
+        var vg = new MewVGMetal(device)
         {
             PixelFormat = MTLPixelFormat.BGRA8Unorm
         };

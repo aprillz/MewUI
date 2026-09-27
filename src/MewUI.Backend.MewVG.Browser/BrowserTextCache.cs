@@ -11,11 +11,11 @@ internal sealed class BrowserTextCache : IDisposable
 {
     private const int MAX_ENTRIES = 512;
 
-    private readonly NanoVG _vg;
+    private readonly MewVGContext _vg;
     private readonly BoundedCache<Key, Entry> _images;
     private bool _disposed;
 
-    internal BrowserTextCache(NanoVG vg)
+    internal BrowserTextCache(MewVGContext vg)
     {
         _vg = vg;
         _images = new BoundedCache<Key, Entry>(MAX_ENTRIES, entry => _vg.DeleteImage(entry.ImageId));
@@ -63,7 +63,7 @@ internal sealed class BrowserTextCache : IDisposable
         // Storage only: the run is drawn straight into the texture on the JS side, so the pixels
         // never visit a managed buffer. Canvas2D content stays straight alpha across that upload,
         // so the flag stays off and the shader premultiplies, as it did for the readback path.
-        var imageId = _vg.CreateImageRGBA(widthPx, heightPx, NVGimageFlags.None, ReadOnlySpan<byte>.Empty);
+        var imageId = _vg.CreateImageRGBA(widthPx, heightPx, MewVGImageFlags.None, ReadOnlySpan<byte>.Empty);
         if (imageId == 0)
         {
             return 0;

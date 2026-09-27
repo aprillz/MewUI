@@ -181,7 +181,7 @@ public sealed partial class MewVGWin32GraphicsFactory : IPersistentFrameGraphics
 
         var resources = LayeredPresenter.GetOrCreateWindowResources(hwnd, hdc);
         // Layered pixel-surface rendering creates a fresh context per Present call so the caller
-        // can Dispose() it as a one-shot. Heavy resources (NanoVGGL,
+        // can Dispose() it as a one-shot. Heavy resources (MewVGGL,
         // text cache) live on MewVGWindowResources and are reused.
         context = MewVGWin32GraphicsContext.CreateForLayeredWindow(
             resources,

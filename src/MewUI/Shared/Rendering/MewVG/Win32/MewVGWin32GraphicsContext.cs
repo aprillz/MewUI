@@ -104,7 +104,7 @@ internal sealed partial class MewVGWin32GraphicsContext
         _measureContext?.Dispose();
         _measureContext = null;
 
-        // NanoVG.Flush rebinds program / VAO / textures unconditionally, but
+        // MewVGContext.Flush rebinds program / VAO / textures unconditionally, but
         // does NOT touch glViewport or the framebuffer binding. Restore both
         // to OUR target before flushing so nested offscreen passes (which
         // bind their own FBO and unbind to 0 on EndFrame) cannot leave us
@@ -560,7 +560,7 @@ internal sealed partial class MewVGWin32GraphicsContext
 
     private interface IWin32FrameSession
     {
-        NanoVGGL Vg { get; }
+        MewVGGL Vg { get; }
         MewVGTextCache TextCache { get; }
         nint Hdc { get; }
         nint OpenGLShareGroup { get; }
@@ -587,7 +587,7 @@ internal sealed partial class MewVGWin32GraphicsContext
             _hdc = hdc;
         }
 
-        public NanoVGGL Vg => _resources.Vg;
+        public MewVGGL Vg => _resources.Vg;
         public MewVGTextCache TextCache => _resources.TextCache;
         public nint Hdc => _hdc;
         public nint OpenGLShareGroup => _resources.OpenGLShareGroup;
@@ -643,7 +643,7 @@ internal sealed partial class MewVGWin32GraphicsContext
             _pixelSurface = pixelSurface;
         }
 
-        public NanoVGGL Vg => _resources.Vg;
+        public MewVGGL Vg => _resources.Vg;
         public MewVGTextCache TextCache => _resources.TextCache;
         public nint Hdc => _hdc;
         public nint OpenGLShareGroup => _resources.OpenGLShareGroup;
@@ -711,7 +711,7 @@ internal sealed partial class MewVGWin32GraphicsContext
             Hdc = hdc;
         }
 
-        public NanoVGGL Vg => _offscreen.Vg;
+        public MewVGGL Vg => _offscreen.Vg;
         public MewVGTextCache TextCache => _offscreen.TextCache;
         public nint Hdc { get; }
         public nint OpenGLShareGroup => _pixelSurface.CreationContext;

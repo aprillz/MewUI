@@ -2,7 +2,6 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 
 using Aprillz.MewVG;
-using Aprillz.MewVG.Tess;
 
 namespace Aprillz.MewUI.Rendering.MewVG;
 
@@ -15,9 +14,9 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
 #endif
 {
 #if MEWUI_MEWVG_MACOS
-    private NanoVGMetal _vg;
+    private MewVGMetal _vg;
 #else
-    private NanoVGGL _vg;
+    private MewVGGL _vg;
 #endif
 
     private readonly Stack<(Rect? clipBoundsWorld, float globalAlpha, Matrix3x2 transform, bool textPixelSnap)> _saveStack =
@@ -376,12 +375,12 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
     }
 
     void ITransparentDirtyRectContext.ClearRectangleToTransparent(Rect rect)
-        => ClearRectangleCore(rect, new NVGcolor(0, 0, 0, 0));
+        => ClearRectangleCore(rect, new MewVGColor(0, 0, 0, 0));
 
     void IOpaqueDirtyRectContext.ClearRectangle(Rect rect, Color color)
         => ClearRectangleCore(rect, ToNvgColor(color));
 
-    private void ClearRectangleCore(Rect rect, NVGcolor color)
+    private void ClearRectangleCore(Rect rect, MewVGColor color)
     {
 #if !MEWUI_MEWVG_MACOS
         ClearTargetPixels(rect, color);
@@ -392,7 +391,7 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
         _vg.ShapeAntiAlias(false);
         // Copy replaces the destination channels instead of blending over them, which is what makes
         // this an erase; source-over would leave the old alpha behind.
-        _vg.GlobalCompositeOperation(NVGcompositeOperation.Copy);
+        _vg.GlobalCompositeOperation(MewVGCompositeOperation.Copy);
         _vg.BeginPath();
         _vg.Rect((float)rect.X, (float)rect.Y, (float)rect.Width, (float)rect.Height);
         _vg.FillColor(color);
@@ -403,7 +402,7 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
 
 #if !MEWUI_MEWVG_MACOS
     /// <summary>Overwrites the pixels of <paramref name="rect"/> (target coordinates) with <paramref name="color"/>.</summary>
-    private void ClearTargetPixels(Rect rect, NVGcolor color)
+    private void ClearTargetPixels(Rect rect, MewVGColor color)
     {
         // A GL clear instead of a queued fill: the fill runs the full paint shader on every pixel, which on a
         // tile-based GPU costs several times a plain clear.
@@ -652,11 +651,11 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
             return;
         }
 
-        if (TryGetFrozenFill(path, fillRule, out var cached, out var windingRule))
+        if (TryGetFrozenFill(path, fillRule, out var cached, out var vgFillRule))
         {
             // Every frame: render from cache with current transform
             _vg.FillColor(ToNvgColor(color));
-            _vg.FillFromCache(cached, windingRule);
+            _vg.FillFromCache(cached, vgFillRule);
             return;
         }
 
@@ -668,9 +667,9 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
     /// <summary>Tessellation of frozen geometry, built once in object space and reused across
     /// draws. False when the geometry is not frozen and the caller has to replay it per draw.</summary>
     private bool TryGetFrozenFill(PathGeometry path, FillRule fillRule,
-        out FrozenFillCache cached, out TessWindingRule windingRule)
+        out FrozenFillCache cached, out MewVGFillRule vgFillRule)
     {
-        windingRule = fillRule == FillRule.EvenOdd ? TessWindingRule.Odd : TessWindingRule.NonZero;
+        vgFillRule = fillRule == FillRule.EvenOdd ? MewVGFillRule.EvenOdd : MewVGFillRule.NonZero;
         cached = null!;
         if (!path.IsFrozen)
         {
@@ -688,11 +687,11 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
         var scaleY = MathF.Sqrt(xform.M21 * xform.M21 + xform.M22 * xform.M22);
         var currentScale = MathF.Max(scaleX, scaleY);
 
-        if (existing == null || existing.IsStale(_vg.TessTol, windingRule, currentScale))
+        if (existing == null || existing.IsStale(_vg.TessTol, vgFillRule, currentScale))
         {
             // First use or DPI changed: build object-space cache (identity transform)
             ReplayNvgPathCommands(path, fillRule, identityTransform: true);
-            existing = _vg.BuildFillCache(windingRule);
+            existing = _vg.BuildFillCache(vgFillRule);
 
             // Store back into entry
             if (fillRule == FillRule.EvenOdd)
@@ -890,7 +889,7 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
         if (brush is SolidColorBrush solid) { FillPath(path, solid.Color, fillRule); return; }
         // Frozen geometry takes the same tessellation cache as a solid fill: the cache holds
         // geometry only, and FillFromCache draws it with whatever paint the state carries.
-        bool frozen = TryGetFrozenFill(path, fillRule, out var cached, out var windingRule);
+        bool frozen = TryGetFrozenFill(path, fillRule, out var cached, out var vgFillRule);
 
         if (brush is ImageBrush imageBrush)
         {
@@ -904,7 +903,7 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
             }
             if (frozen)
             {
-                _vg.FillFromCache(cached, windingRule);
+                _vg.FillFromCache(cached, vgFillRule);
             }
             else
             {
@@ -921,7 +920,7 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
         NvgStrokeHelper.ApplyGradientPaint(_vg, gradient, NvgStrokeHelper.ComputePathBounds(path));
         if (frozen)
         {
-            _vg.FillFromCache(cached, windingRule);
+            _vg.FillFromCache(cached, vgFillRule);
         }
         else
         {
@@ -932,7 +931,7 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
     /// <summary>
     /// Applies an <see cref="ImageBrush"/> as the current NanoVG fill paint. Returns false
     /// when the brush cannot be rendered by this backend (e.g. image is not a <see cref="MewVGImage"/>).
-    /// The tile is realized via <see cref="NanoVG.ImagePattern"/>, which takes a pre-flag'd
+    /// The tile is realized via <see cref="MewVGContext.ImagePattern"/>, which takes a pre-flag'd
     /// NVG texture (RepeatX/RepeatY set at texture creation) and a paint transform that
     /// positions one tile and sets its size; NanoVG then wraps UVs via GL_REPEAT.
     /// </summary>
@@ -943,14 +942,14 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
             return false;
         }
 
-        var flags = GetImageFlags() | NVGimageFlags.Premultiplied;
+        var flags = GetImageFlags() | MewVGImageFlags.Premultiplied;
         if (imageBrush.TileMode is TileMode.Tile or TileMode.TileX)
         {
-            flags |= NVGimageFlags.RepeatX;
+            flags |= MewVGImageFlags.RepeatX;
         }
         if (imageBrush.TileMode is TileMode.Tile or TileMode.TileY)
         {
-            flags |= NVGimageFlags.RepeatY;
+            flags |= MewVGImageFlags.RepeatY;
         }
 
         int imageId = mewImage.GetOrCreateImageId(_vg, flags);
@@ -1021,7 +1020,7 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
         }
 
         _vg.BeginPath();
-        _vg.FillRule(fillRule == FillRule.EvenOdd ? NVGfillRule.EvenOdd : NVGfillRule.NonZero);
+        _vg.FillRule(fillRule == FillRule.EvenOdd ? MewVGFillRule.EvenOdd : MewVGFillRule.NonZero);
 
         foreach (var cmd in path.Commands)
         {
@@ -1060,7 +1059,7 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
             return;
         }
 
-        NVGpaint paint;
+        MewVGPaint paint;
         var fillRect = destRect;
 
         if (sourceRect is null)
@@ -1123,13 +1122,13 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
         if (isAxisAligned) _vg.ShapeAntiAlias(true);
     }
 
-    private NVGimageFlags GetImageFlags()
+    private MewVGImageFlags GetImageFlags()
     {
         return ImageScaleQuality switch
         {
-            ImageScaleQuality.Fast => NVGimageFlags.Nearest,
-            ImageScaleQuality.HighQuality => NVGimageFlags.GenerateMipmaps,
-            _ => NVGimageFlags.None,
+            ImageScaleQuality.Fast => MewVGImageFlags.Nearest,
+            ImageScaleQuality.HighQuality => MewVGImageFlags.GenerateMipmaps,
+            _ => MewVGImageFlags.None,
         };
     }
 
@@ -1177,7 +1176,7 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
             : new Rect(left, top, 0, 0);
     }
 
-    private static NVGcolor ToNvgColor(Color color) => NVGcolor.RGBA(color.R, color.G, color.B, color.A);
+    private static MewVGColor ToNvgColor(Color color) => MewVGColor.RGBA(color.R, color.G, color.B, color.A);
 
 
     /// <summary>

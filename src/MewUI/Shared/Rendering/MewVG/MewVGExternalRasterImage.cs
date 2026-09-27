@@ -25,7 +25,7 @@ internal sealed class MewVGExternalRasterImage : IImage
 {
     private readonly IExternalRasterSource _source;
     private readonly bool _ownsSource;
-    private readonly Dictionary<(NanoVG vg, nint handle), int> _images = new();
+    private readonly Dictionary<(MewVGContext vg, nint handle), int> _images = new();
     private bool _disposed;
 
     public IExternalRasterSource Source => _source;
@@ -51,7 +51,7 @@ internal sealed class MewVGExternalRasterImage : IImage
     /// Returns an NVG image id for this texture lease on the given <paramref name="vg"/>.
     /// The caller owns the lease lifetime for the current frame.
     /// </summary>
-    public int GetOrCreateImageId(NanoVG vg, IExternalRasterLease lease, NVGimageFlags flags)
+    public int GetOrCreateImageId(MewVGContext vg, IExternalRasterLease lease, MewVGImageFlags flags)
     {
         if (_disposed) return 0;
 
@@ -60,13 +60,13 @@ internal sealed class MewVGExternalRasterImage : IImage
 
         if (_source.AlphaMode == BitmapAlphaMode.Premultiplied)
         {
-            flags |= NVGimageFlags.Premultiplied;
+            flags |= MewVGImageFlags.Premultiplied;
         }
         if (lease.YFlipped)
         {
-            flags |= NVGimageFlags.FlipY;
+            flags |= MewVGImageFlags.FlipY;
         }
-        flags |= NVGimageFlags.NoDelete;
+        flags |= MewVGImageFlags.NoDelete;
 
         var key = (vg, handle);
         if (_images.TryGetValue(key, out var cached) && cached != 0)
