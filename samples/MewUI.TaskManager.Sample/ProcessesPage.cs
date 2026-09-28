@@ -8,7 +8,8 @@ namespace Aprillz.MewUI.TaskManager.Sample;
 internal sealed class ProcessesPage : UserControl
 {
     private readonly ObservableCollection<ProcessNode> _roots = [];
-    private readonly ObservableCollection<ProcessNode> _flat = [];
+    // A plain list the view takes a snapshot of: clearing a live collection would empty it and lose the selection.
+    private readonly List<ProcessNode> _flat = [];
     private readonly Dictionary<ProcessKey, ProcessNode> _nodes = [];
     private readonly TreeItemsView<ProcessNode> _tree;
     private readonly ItemsView<ProcessNode> _flatView;
@@ -282,6 +283,7 @@ internal sealed class ProcessesPage : UserControl
                 _flat.Add(node);
             }
         }
+        _flatView.Invalidate();
 
         if (!string.IsNullOrEmpty(_query))
         {
