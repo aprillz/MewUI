@@ -29,7 +29,7 @@ internal sealed class TaskManagerView : UserControl
         var pages = new[]
         {
             new NavigationEntry("Processes", FluentIcons.Create("apps_regular"), _processes),
-            new NavigationEntry("Performance", FluentIcons.Create("data_line_regular"), _performance),
+            new NavigationEntry("Performance", FluentIcons.Create("data_trending_regular"), _performance),
         };
         navigation.Items(pages, x => x.Title, icon: x => x.Icon, content: x => x.Content);
 
