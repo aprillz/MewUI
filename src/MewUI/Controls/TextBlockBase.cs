@@ -44,12 +44,10 @@ public abstract partial class TextBlockBase : TextElement, IDisposable
     private readonly List<TextPaintSpan> _paintSpans = [];
     private readonly List<GeometryStyleRun> _geometryRuns = [];
 
-    private ITextLayout? _layout;
-    private double _layoutMaxWidth;
-    private double _layoutMaxHeight;
-    private TextRunStyle _layoutStyle;
-    private TextWrapping _layoutWrapping;
-    private uint _layoutDpi;
+    // Measure asks without the arranged box and render asks with it, so each keeps its own layout;
+    // one shared slot would be built again for each whenever the element is measured.
+    private readonly LayoutSlot _measureLayout = new();
+    private readonly LayoutSlot _renderLayout = new();
     private long _textRevision;
     private long _breaksRevision = -1;
     private bool _hasExplicitLineBreaks;
@@ -121,7 +119,8 @@ public abstract partial class TextBlockBase : TextElement, IDisposable
     protected void InvalidateTextLayout()
     {
         _lastWrapMeasureWidth = null;
-        _layout = null;
+        _measureLayout.Layout = null;
+        _renderLayout.Layout = null;
         _textRevision++;
     }
 
@@ -158,7 +157,7 @@ public abstract partial class TextBlockBase : TextElement, IDisposable
     private TextWrapping ResolveWrapping()
         => TextWrapping == TextWrapping.NoWrap && HasExplicitLineBreaks ? TextWrapping.Wrap : TextWrapping;
 
-    private ITextLayout GetOrCreateTextLayout(TextWrapping wrapping, double maxWidth, double maxHeight)
+    private ITextLayout GetOrCreateTextLayout(LayoutSlot slot, TextWrapping wrapping, double maxWidth, double maxHeight)
     {
         // Render runs every frame; rebuilding the request would copy the text and rebuild a cache
         // key each time, so the resolved layout is held until an input actually changes. The inputs
@@ -167,24 +166,26 @@ public abstract partial class TextBlockBase : TextElement, IDisposable
         // Built here rather than through Control's helper: a text block is a TextElement, not a Control.
         var style = new TextRunStyle(FontFamily, FontSize, FontWeight, FontStyle == FontStyle.Italic);
         uint dpi = GetDpi();
-        if (_layout is not null &&
-            _layoutMaxWidth.Equals(maxWidth) &&
-            _layoutMaxHeight.Equals(maxHeight) &&
-            _layoutWrapping == wrapping &&
-            _layoutDpi == dpi &&
-            _layoutStyle == style)
+        if (slot.Layout is not null &&
+            slot.MaxWidth.Equals(maxWidth) &&
+            slot.MaxHeight.Equals(maxHeight) &&
+            slot.Wrapping == wrapping &&
+            slot.Dpi == dpi &&
+            slot.Style == style)
         {
-            return _layout;
+            return slot.Layout;
         }
 
-        _layoutMaxWidth = maxWidth;
-        _layoutMaxHeight = maxHeight;
-        _layoutWrapping = wrapping;
-        _layoutDpi = dpi;
-        _layoutStyle = style;
+        slot.MaxWidth = maxWidth;
+        slot.MaxHeight = maxHeight;
+        slot.Wrapping = wrapping;
+        slot.Dpi = dpi;
+        slot.Style = style;
         _geometryRuns.Clear();
         OnGetTextGeometryRuns(style, _geometryRuns);
-        _layout = GetGraphicsFactory().TextEngine.GetOrCreateLayout(
+        // The engine keeps one layout per owner, so the measure slot owns its own and the two do not
+        // push each other out.
+        slot.Layout = GetGraphicsFactory().TextEngine.GetOrCreateLayout(
             new TextLayoutRequest
             {
                 Text = DisplayText.AsMemory(),
@@ -205,8 +206,8 @@ public abstract partial class TextBlockBase : TextElement, IDisposable
                 Revision = _textRevision
             },
             TextLayoutCachePolicy.Owner,
-            this);
-        return _layout;
+            ReferenceEquals(slot, _renderLayout) ? this : slot);
+        return slot.Layout;
     }
 
     protected override Size MeasureContent(Size availableSize)
@@ -230,7 +231,7 @@ public abstract partial class TextBlockBase : TextElement, IDisposable
 
         // Measuring against an unbounded height keeps trimming out of the desired size; it applies
         // at render time, where the arranged bounds are known.
-        var measured = GetOrCreateTextLayout(wrapping, maxWidth, double.PositiveInfinity).MeasuredSize;
+        var measured = GetOrCreateTextLayout(_measureLayout, wrapping, maxWidth, double.PositiveInfinity).MeasuredSize;
 
         // The desired width ceils to a device pixel, and wrapped text buys one more. Arrange snaps
         // the left and right edges independently and can land the box a device pixel under the
@@ -283,7 +284,7 @@ public abstract partial class TextBlockBase : TextElement, IDisposable
         }
 
         var bounds = Bounds;
-        var layout = GetOrCreateTextLayout(ResolveWrapping(), bounds.Width, bounds.Height);
+        var layout = GetOrCreateTextLayout(_renderLayout, ResolveWrapping(), bounds.Width, bounds.Height);
         return (layout.Lines.Count, layout.ContentHeight);
     }
 
@@ -298,7 +299,7 @@ public abstract partial class TextBlockBase : TextElement, IDisposable
         ITextLayout layout;
         using (DevToolsGate.IsSupported ? ProfilerMarkers.TextLayout.Auto() : default)
         {
-            layout = GetOrCreateTextLayout(ResolveWrapping(), bounds.Width, bounds.Height);
+            layout = GetOrCreateTextLayout(_renderLayout, ResolveWrapping(), bounds.Width, bounds.Height);
         }
 
         double y = VerticalTextAlignment switch
@@ -367,6 +368,18 @@ public abstract partial class TextBlockBase : TextElement, IDisposable
     protected override void OnDispose()
     {
         base.OnDispose();
-        _layout = null;
+        _measureLayout.Layout = null;
+        _renderLayout.Layout = null;
+    }
+
+    /// <summary>A layout and the inputs it was built for.</summary>
+    private sealed class LayoutSlot
+    {
+        public ITextLayout? Layout;
+        public double MaxWidth;
+        public double MaxHeight;
+        public TextRunStyle Style;
+        public TextWrapping Wrapping;
+        public uint Dpi;
     }
 }

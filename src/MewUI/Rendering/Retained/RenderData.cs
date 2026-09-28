@@ -199,6 +199,12 @@ internal sealed class RenderData : IDisposable
             return HoldSameTextOptions(in firstOptions, in secondOptions);
         }
 
+        // Text measured again gets a new layout for the same request, and the same request lays out the same.
+        if (first is ManagedTextLayout firstLayout && second is ManagedTextLayout secondLayout)
+        {
+            return firstLayout.Snapshot.ContentEquals(secondLayout.Snapshot);
+        }
+
         return first is PathGeometry firstPath && second is PathGeometry secondPath && HoldSamePath(firstPath, secondPath);
     }
 
