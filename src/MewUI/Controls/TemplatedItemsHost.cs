@@ -87,6 +87,9 @@ internal sealed class TemplatedItemsHost : IDisposable
 
     public bool VisitRealized(Func<Element, bool> visitor) => _presenter.VisitRealized(visitor);
 
+    /// <inheritdoc cref="VirtualizedItemsPresenter.VisitChildren"/>
+    public bool VisitChildren(Func<Element, bool> visitor) => _presenter.VisitChildren(visitor);
+
     public void VisitRealized(Action<int, FrameworkElement> visitor) => _presenter.VisitRealized(visitor);
 
     public void Render(IGraphicsContext context)

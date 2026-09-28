@@ -290,7 +290,9 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
                 return false;
             }
         }
-        return true;
+
+        // A Reset holds containers still attached until the next layout; tree-wide changes must reach them too.
+        return _resetHeld.Visit(visitor);
     }
 
     protected override Size MeasureContent(Size availableSize)

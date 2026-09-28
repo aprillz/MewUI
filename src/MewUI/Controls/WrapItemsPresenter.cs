@@ -133,7 +133,7 @@ internal sealed class WrapItemsPresenter : Control, IItemsPresenter
 
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
     {
-        return _itemsHost.VisitRealized(visitor);
+        return _itemsHost.VisitChildren(visitor);
     }
 
     protected override Size MeasureContent(Size availableSize)

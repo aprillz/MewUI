@@ -159,6 +159,12 @@ internal sealed class VirtualizedItemsPresenter
     }
 
     /// <summary>
+    /// Visits every container attached to the owner: the realized ones and those a Reset holds until the next
+    /// layout, which tree-wide changes such as inherited values must still reach. False when the visitor stopped.
+    /// </summary>
+    public bool VisitChildren(Func<Element, bool> visitor) => VisitRealized(visitor) && _resetHeld.Visit(visitor);
+
+    /// <summary>
     /// Visits realized containers with short-circuit support. Returns false if the visitor stopped early.
     /// </summary>
     public bool VisitRealized(Func<Element, bool> visitor)

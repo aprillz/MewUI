@@ -61,6 +61,20 @@ internal sealed class ResetHeldContainers
         return false;
     }
 
+    /// <summary>Visits the held containers, which are still the presenter's children; false when the visitor stopped.</summary>
+    public bool Visit(Func<Element, bool> visitor)
+    {
+        foreach (var container in _held.Values)
+        {
+            if (!visitor(container))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     /// <summary>Hands every container still held to <paramref name="release"/> and empties the hold.</summary>
     public void Release(Action<FrameworkElement> release)
     {

@@ -153,6 +153,63 @@ public sealed class ItemsResetReuseTests
         }
     }
 
+    [TestMethod]
+    public void AResetWhileTheListIsOutOfTheWindow_RowsTakeTheInheritedValuesOfWhereItReturns()
+    {
+        var previousFactory = Application.DefaultGraphicsFactory;
+        using var factory = new GdiGraphicsFactory();
+        Application.DefaultGraphicsFactory = factory;
+        try
+        {
+            var nodes = new ObservableCollection<Node>();
+            for (int index = 0; index < ROWS; index++)
+            {
+                nodes.Add(new Node("process " + index.ToString("00"), index));
+            }
+
+            // An icon painted in the text color, as a list shows a fallback icon: it follows the color by binding.
+            var icons = new List<PathShape>();
+            var grid = new GridView { ItemsSource = ItemsView.Create(nodes), ZebraStriping = false, ShowGridLines = false };
+            grid.Columns(
+                new GridViewColumn<Node>().Header("Name").Width(200).Bind(
+                    _ =>
+                    {
+                        var icon = new PathShape { Data = PathGeometry.Parse("M0,0 L10,0 L10,10 Z"), Stretch = Stretch.Uniform, Width = 16, Height = 16 };
+                        icon.Bind(Shape.FillProperty, icon, TextElement.ForegroundProperty, static (Color color) => (Brush)new SolidColorBrush(color));
+                        icons.Add(icon);
+                        return icon;
+                    },
+                    (_, _) => { }));
+            var host = new ContentControl { Content = grid };
+            var window = HeadlessWindow.Create(WIDTH, HEIGHT);
+            window.Content = host;
+            using var surface = factory.CreateSurface(RenderSurfaceDescriptor.Offscreen(WIDTH, HEIGHT, 1.0, hasAlpha: false));
+            Render(window, surface);
+            Render(window, surface);
+
+            host.Content = null;
+            var copy = nodes.ToArray();
+            nodes.Clear();
+            foreach (var node in copy)
+            {
+                nodes.Add(node);
+            }
+
+            var returnedTo = Color.FromRgb(0xE0, 0x10, 0x10);
+            host.Foreground = returnedTo;
+            host.Content = grid;
+            Render(window, surface);
+
+            var stale = icons.Where(icon => icon.Parent != null && (icon.Fill as SolidColorBrush)?.Color != returnedTo).ToList();
+            Assert.IsNotEmpty(icons, "no rows were realized");
+            Assert.IsEmpty(stale, $"{stale.Count} of {icons.Count} row icons kept the color from before the list left the window");
+        }
+        finally
+        {
+            Application.DefaultGraphicsFactory = previousFactory;
+        }
+    }
+
     private static void AssertNoneRedrawn(Dictionary<TextBlock, int> before, Dictionary<TextBlock, int> after)
     {
         var redrawn = before.Where(pair => after.TryGetValue(pair.Key, out int version) && version != pair.Value).Select(pair => pair.Key.Text).ToList();
