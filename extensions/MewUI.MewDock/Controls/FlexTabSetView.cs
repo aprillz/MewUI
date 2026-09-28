@@ -550,7 +550,8 @@ internal sealed class FlexTabSetView : Control, IVisualTreeHost, INodeView, IPan
         // Tool caption bar sits at the top of the framed area; the content fills below it.
         double captionHeight = CaptionHeight;
         _toolCaption?.Arrange(new Rect(inner.X, inner.Y, inner.Width, Math.Min(captionHeight, inner.Height)));
-        _contentArea = new Rect(inner.X, inner.Y + captionHeight, inner.Width, Math.Max(0, inner.Height - captionHeight));
+        _contentArea = DockPixels.SnapInward(
+            new Rect(inner.X, inner.Y + captionHeight, inner.Width, Math.Max(0, inner.Height - captionHeight)), GetDpi() / 96.0);
     }
 
     // Computes which tabs fit in availableForTabs; the leading run is shown and the active tab is always kept

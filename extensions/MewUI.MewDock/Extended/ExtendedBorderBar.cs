@@ -75,12 +75,7 @@ internal sealed class ExtendedBorderBar : FlexBorderBar
 
     /// <summary>The area inside the floated panel's frame border, where the caption and the content go.</summary>
     private Rect PanelInner(Rect panelRect)
-    {
-        var snapped = GetSnappedBorderBounds(FloatPanel(panelRect));
-        double border = Theme.Metrics.ControlBorderThickness;
-        return new Rect(snapped.X + border, snapped.Y + border,
-            Math.Max(0, snapped.Width - 2 * border), Math.Max(0, snapped.Height - 2 * border));
-    }
+        => DockPixels.Inside(GetSnappedBorderBounds(FloatPanel(panelRect)), Theme.Metrics.ControlBorderThickness, GetDpi() / 96.0);
 
     // The revealed panel floats off the strip by the border gap on the STRIP-facing side only (the other sides reach
     // the dock-area edges).

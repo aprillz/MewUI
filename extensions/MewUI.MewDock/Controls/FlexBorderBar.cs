@@ -342,12 +342,7 @@ internal class FlexBorderBar : Control, IVisualTreeHost, IPaneContentOwner
     /// <summary>Works out where the revealed content goes: inside the panel's frame border.</summary>
     protected virtual void ArrangePanel(Rect panelRect)
     {
-        double border = Theme.Metrics.ControlBorderThickness;
-        ContentArea = new Rect(
-            panelRect.X + border,
-            panelRect.Y + border,
-            Math.Max(0, panelRect.Width - 2 * border),
-            Math.Max(0, panelRect.Height - 2 * border));
+        ContentArea = DockPixels.Inside(GetSnappedBorderBounds(panelRect), Theme.Metrics.ControlBorderThickness, GetDpi() / 96.0);
     }
 
     protected override UIElement? OnHitTest(Point point)
