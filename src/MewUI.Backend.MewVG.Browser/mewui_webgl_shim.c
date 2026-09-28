@@ -239,3 +239,9 @@ EM_JS(int, mewui_text_draw_to_texture, (const char* utf8_text, const char* utf8_
     GLctx.bindTexture(GLctx.TEXTURE_2D, null);
     return 1;
 });
+
+// The .NET WebAssembly runtime has no native call thunk for ten arguments, so the blit takes them packed.
+void mewui_webgl_blit_framebuffer(const int* args)
+{
+    glBlitFramebuffer(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], (GLbitfield)args[8], (GLenum)args[9]);
+}

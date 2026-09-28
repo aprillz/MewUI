@@ -2,6 +2,8 @@ namespace Aprillz.MewUI.Native;
 
 internal static unsafe partial class OpenGLExt
 {
+    static partial void BlitFramebufferPacked(int* args) => BrowserGL.BlitFramebufferPacked(args);
+
     private static partial void LoadFunctionPointers()
     {
         _glGenFramebuffers = (delegate* unmanaged<int, uint*, void>)BrowserGL.GetProcAddress("glGenFramebuffers");
@@ -14,6 +16,7 @@ internal static unsafe partial class OpenGLExt
         _glRenderbufferStorage = (delegate* unmanaged<uint, uint, int, int, void>)BrowserGL.GetProcAddress("glRenderbufferStorage");
         _glFramebufferRenderbuffer = (delegate* unmanaged<uint, uint, uint, uint, void>)BrowserGL.GetProcAddress("glFramebufferRenderbuffer");
         _glCheckFramebufferStatus = (delegate* unmanaged<uint, uint>)BrowserGL.GetProcAddress("glCheckFramebufferStatus");
+        _hasPackedBlitFramebuffer = true;
 
         // Shader / program / VAO / buffer entrypoints (GL 2.0+ / 3.0+) - required by
         // OpenGLGaussianBlur and any other GPU effect pass. Without these, IsShaderPipelineSupported

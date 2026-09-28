@@ -18,6 +18,10 @@ internal static unsafe partial class BrowserGL
 
     internal static nint GetProcAddress(string name) => GetProcCore(name);
 
+    /// <summary>glBlitFramebuffer with its ten arguments packed in order, which the runtime cannot pass to a native entry point one by one.</summary>
+    [LibraryImport(LibraryName, EntryPoint = "mewui_webgl_blit_framebuffer")]
+    internal static partial void BlitFramebufferPacked(int* args);
+
     private static delegate* unmanaged<int, int, int, int, void> _glViewport;
     private static delegate* unmanaged<int, int, int, int, void> _glScissor;
     private static delegate* unmanaged<uint, void> _glEnable;

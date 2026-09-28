@@ -47,6 +47,11 @@ internal static unsafe partial class OpenGLExt
     private static delegate* unmanaged<uint, uint> _glCheckFramebufferStatus;
     private static delegate* unmanaged<int, int, int, int, int, int, int, int, uint, uint, void> _glBlitFramebuffer;
 
+    // Set in place of _glBlitFramebuffer where a ten-argument native call is not possible (the browser).
+    private static bool _hasPackedBlitFramebuffer;
+
+    static partial void BlitFramebufferPacked(int* args);
+
     // Shader / program function pointers
     private static delegate* unmanaged<uint, uint> _glCreateShader;
     private static delegate* unmanaged<uint, void> _glDeleteShader;
@@ -258,7 +263,7 @@ internal static unsafe partial class OpenGLExt
         get
         {
             EnsureInitialized();
-            return _supported && _glBlitFramebuffer != null;
+            return _supported && (_glBlitFramebuffer != null || _hasPackedBlitFramebuffer);
         }
     }
 
@@ -268,6 +273,11 @@ internal static unsafe partial class OpenGLExt
         if (_glBlitFramebuffer != null)
         {
             _glBlitFramebuffer(srcX0, srcY0, srcX1, srcY1, dstX0, dstY0, dstX1, dstY1, mask, filter);
+        }
+        else if (_hasPackedBlitFramebuffer)
+        {
+            int* args = stackalloc int[10] { srcX0, srcY0, srcX1, srcY1, dstX0, dstY0, dstX1, dstY1, (int)mask, (int)filter };
+            BlitFramebufferPacked(args);
         }
     }
 
