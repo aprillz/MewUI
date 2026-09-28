@@ -570,7 +570,9 @@ function frame(frameTimeMs) {
         // (layout settling, a late resource) still gets its follow-up frame.
         idleFrames = drew ? 0 : idleFrames + 1;
 
-        if (!pixelConfirmed) {
+        // Only once the app drew: before that, getContext would create the context itself with the default
+        // attributes (antialiased, with alpha and depth), which the app then gets instead of its own.
+        if (!pixelConfirmed && drew) {
             const gl = canvas.getContext('webgl2');
             if (gl) {
                 const pixel = new Uint8Array(4);
