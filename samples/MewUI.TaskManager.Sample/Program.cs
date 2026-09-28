@@ -3,6 +3,8 @@ using Aprillz.MewUI.Controls;
 
 using Aprillz.MewUI.TaskManager.Sample;
 
+// The probe serializes anonymous types by reflection, which a native AOT build does not have.
+#if !MEWUI_TASKMANAGER_AOT
 if (args.Contains("--resource-probe", StringComparer.Ordinal))
 {
     var sampler = new SystemSampler();
@@ -43,6 +45,7 @@ if (args.Contains("--resource-probe", StringComparer.Ordinal))
     sampler.Dispose();
     return;
 }
+#endif
 
 RegisterPlatformAndBackend(args);
 
@@ -60,6 +63,18 @@ Application.Run(window);
 
 static void RegisterPlatformAndBackend(string[] args)
 {
+#if MEWUI_TASKMANAGER_WIN
+#pragma warning disable CA1416
+    Win32Platform.Register();
+    MewVGWin32Backend.Register();
+#pragma warning restore CA1416
+#elif MEWUI_TASKMANAGER_LINUX
+    X11Platform.Register();
+    MewVGX11Backend.Register();
+#elif MEWUI_TASKMANAGER_OSX
+    MacOSPlatform.Register();
+    MewVGMacOSBackend.Register();
+#else
     if (OperatingSystem.IsWindows())
     {
         Win32Platform.Register();
@@ -86,4 +101,5 @@ static void RegisterPlatformAndBackend(string[] args)
     {
         throw new PlatformNotSupportedException();
     }
+#endif
 }

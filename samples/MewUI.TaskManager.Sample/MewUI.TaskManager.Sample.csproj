@@ -13,6 +13,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\MewUI\MewUI.csproj" />
+    <ProjectReference Include="..\..\extensions\MewUI.MewCharts\MewUI.MewCharts.csproj" />
+  </ItemGroup>
+
+  <!-- Without a runtime identifier every platform is in, and Windows picks its backend at startup. -->
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == ''">
     <ProjectReference Include="..\..\src\MewUI.Platform.Win32\MewUI.Platform.Win32.csproj" />
     <ProjectReference Include="..\..\src\MewUI.Platform.X11\MewUI.Platform.X11.csproj" />
     <ProjectReference Include="..\..\src\MewUI.Platform.MacOS\MewUI.Platform.MacOS.csproj" />
@@ -20,12 +25,37 @@
     <ProjectReference Include="..\..\src\MewUI.Backend.MewVG.Win32\MewUI.Backend.MewVG.Win32.csproj" />
     <ProjectReference Include="..\..\src\MewUI.Backend.MewVG.X11\MewUI.Backend.MewVG.X11.csproj" />
     <ProjectReference Include="..\..\src\MewUI.Backend.MewVG.MacOS\MewUI.Backend.MewVG.MacOS.csproj" />
-    <ProjectReference Include="..\..\extensions\MewUI.MewCharts\MewUI.MewCharts.csproj" />
+  </ItemGroup>
+
+  <!-- A published build carries only its own platform, drawn with MewVG. -->
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'win-x64' Or '$(RuntimeIdentifier)' == 'win-arm64'">
+    <ProjectReference Include="..\..\src\MewUI.Platform.Win32\MewUI.Platform.Win32.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Backend.MewVG.Win32\MewUI.Backend.MewVG.Win32.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'linux-x64' Or '$(RuntimeIdentifier)' == 'linux-arm64'">
+    <ProjectReference Include="..\..\src\MewUI.Platform.X11\MewUI.Platform.X11.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Backend.MewVG.X11\MewUI.Backend.MewVG.X11.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'osx-x64' Or '$(RuntimeIdentifier)' == 'osx-arm64'">
+    <ProjectReference Include="..\..\src\MewUI.Platform.MacOS\MewUI.Platform.MacOS.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Backend.MewVG.MacOS\MewUI.Backend.MewVG.MacOS.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <Content Include="..\MewUI.Gallery\Resources\Icons.xaml" Link="Resources\Icons.xaml" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+
+  <!-- A publish profile sets the runtime identifier and AOT after this file's properties are read, so these constants are set when compiling. -->
+  <Target Name="_TaskManagerPlatformConstants" BeforeTargets="CoreCompile" Condition="'$(RuntimeIdentifier)' != ''">
+    <PropertyGroup>
+      <DefineConstants Condition="$(RuntimeIdentifier.StartsWith('win'))">$(DefineConstants);MEWUI_TASKMANAGER_WIN</DefineConstants>
+      <DefineConstants Condition="$(RuntimeIdentifier.StartsWith('linux'))">$(DefineConstants);MEWUI_TASKMANAGER_LINUX</DefineConstants>
+      <DefineConstants Condition="$(RuntimeIdentifier.StartsWith('osx'))">$(DefineConstants);MEWUI_TASKMANAGER_OSX</DefineConstants>
+      <DefineConstants Condition="'$(PublishAot)' == 'true'">$(DefineConstants);MEWUI_TASKMANAGER_AOT</DefineConstants>
+    </PropertyGroup>
+  </Target>
 
   <Import Project="..\..\build\Aprillz.MewUI.targets" />
 
