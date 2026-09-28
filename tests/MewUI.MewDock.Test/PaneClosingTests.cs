@@ -43,7 +43,7 @@ public sealed class PaneClosingTests
         Assert.AreSame(pane, Pane(manager, "C"), "the same pane is still there");
         Assert.AreSame(group, pane.Group, "in the same group");
         Assert.AreEqual(0, group.Panes.ToList().IndexOf(pane), "at the same place in it");
-        Assert.AreEqual(groups, manager.Groups.Count, "no group was added or removed");
+        Assert.HasCount(groups, manager.Groups, "no group was added or removed");
     }
 
     [TestMethod]
@@ -73,7 +73,7 @@ public sealed class PaneClosingTests
     [TestMethod]
     public void APaneThatCannotCloseIsNotAskedAbout()
     {
-        var manager = new DockingManager { ContentFactory = pane => new TextBlock { Text = pane.Title } };
+        var manager = new DockingManager { ContentFactory = pane => new TextBlock { Text = pane.Title ?? string.Empty } };
         manager.LoadLayout(DockedTools(Tool("Locked", "\"enableClose\": false")));
         int asked = 0;
         manager.PaneClosing += (_, _) => asked++;
@@ -86,7 +86,7 @@ public sealed class PaneClosingTests
 
     private static DockingManager Load()
     {
-        var manager = new DockingManager { ContentFactory = pane => new TextBlock { Text = pane.Title } };
+        var manager = new DockingManager { ContentFactory = pane => new TextBlock { Text = pane.Title ?? string.Empty } };
         manager.LoadLayout(TWO_GROUPS);
         return manager;
     }

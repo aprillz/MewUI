@@ -36,7 +36,7 @@ public sealed class RetainedViewTests
     public void FocusedContentKeepsItsParentAndFocusWhileTheLayoutChanges()
     {
         var editor = new TextBox();
-        var manager = new DockingManager { ContentFactory = pane => pane.Title == "A" ? editor : new TextBlock { Text = pane.Title } };
+        var manager = new DockingManager { ContentFactory = pane => pane.Title == "A" ? editor : new TextBlock { Text = pane.Title ?? string.Empty } };
         manager.LoadLayout(TWO_GROUPS);
         var window = DockWindow.Create(manager);
         Assert.IsTrue(editor.Focus(), "the editor takes the keyboard focus");
@@ -73,7 +73,7 @@ public sealed class RetainedViewTests
             ContentFactory = pane =>
             {
                 made[pane.Title!] = made.GetValueOrDefault(pane.Title!) + 1;
-                return new TextBlock { Text = pane.Title };
+                return new TextBlock { Text = pane.Title ?? string.Empty };
             },
         };
         manager.LoadLayout(TWO_GROUPS);
@@ -105,11 +105,11 @@ public sealed class RetainedViewTests
         var headers = new Dictionary<string, int>();
         var manager = new DockingManager
         {
-            ContentFactory = pane => new TextBlock { Text = pane.Title },
+            ContentFactory = pane => new TextBlock { Text = pane.Title ?? string.Empty },
             HeaderFactory = pane =>
             {
                 headers[pane.Title!] = headers.GetValueOrDefault(pane.Title!) + 1;
-                return new TextBlock { Text = pane.Title };
+                return new TextBlock { Text = pane.Title ?? string.Empty };
             },
         };
         manager.LoadLayout(TWO_GROUPS);
@@ -143,7 +143,7 @@ public sealed class RetainedViewTests
     [TestMethod]
     public void ReloadingLetsGoOfTheOldLayout()
     {
-        var manager = new DockingManager { ContentFactory = pane => new TextBlock { Text = pane.Title } };
+        var manager = new DockingManager { ContentFactory = pane => new TextBlock { Text = pane.Title ?? string.Empty } };
         manager.LoadLayout(TWO_GROUPS);
         DockWindow.Create(manager);
         var previous = manager.Model!;

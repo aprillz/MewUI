@@ -27,7 +27,7 @@ public sealed class ModelInvariantTests
     [TestMethod]
     public void ADocumentAddedAfterTheFocusedGroupClosedIsInTheLayout()
     {
-        var manager = new DockingManager { ContentFactory = pane => new TextBlock { Text = pane.Title } };
+        var manager = new DockingManager { ContentFactory = pane => new TextBlock { Text = pane.Title ?? string.Empty } };
         manager.LoadLayout(TWO_GROUPS);
         Pane(manager, "C").Activate();
 
@@ -110,7 +110,7 @@ public sealed class ModelInvariantTests
     [TestMethod]
     public void AddingAToolIsOneChange()
     {
-        var manager = new DockingManager { ContentFactory = pane => new TextBlock { Text = pane.Title } };
+        var manager = new DockingManager { ContentFactory = pane => new TextBlock { Text = pane.Title ?? string.Empty } };
         manager.LoadLayout(TWO_GROUPS);
         int changes = 0;
         manager.Changed += (_, _) => changes++;
@@ -123,7 +123,7 @@ public sealed class ModelInvariantTests
     [TestMethod]
     public void SavedLayoutReadsBackTheSame()
     {
-        var manager = new DockingManager { ContentFactory = pane => new TextBlock { Text = pane.Title } };
+        var manager = new DockingManager { ContentFactory = pane => new TextBlock { Text = pane.Title ?? string.Empty } };
         manager.LoadLayout(TWO_GROUPS);
         var tool = manager.AddToolPane("Tool", new TextBlock { Text = "tool" }, DockEdge.Bottom);
         manager.AddToolPane("Other", new TextBlock { Text = "other" }, DockEdge.Right).Unpin();

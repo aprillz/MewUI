@@ -124,7 +124,7 @@ public sealed class RetainedContextMenuRowTests
         Render(window, surface);
 
         var inViewBefore = RowsInView(menu, 20);
-        window.RetainedStatistics.Reset();
+        window.RetainedStatistics!.Reset();
         window.SendMouseWheel(point, -120);
         Render(window, surface);
         var broughtIntoView = RowsInView(menu, 20).Except(inViewBefore).ToList();
