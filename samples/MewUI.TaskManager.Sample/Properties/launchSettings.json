@@ -1,0 +1,15 @@
+{
+  "profiles": {
+    "D2D": {
+      "commandName": "Project"
+    },
+    "MewVG": {
+      "commandName": "Project",
+      "commandLineArgs": "--vg"
+    },
+    "WSL": {
+      "commandName": "WSL2",
+      "distributionName": ""
+    }
+  }
+}
