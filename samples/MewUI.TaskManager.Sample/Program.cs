@@ -20,18 +20,31 @@ if (args.Contains("--resource-probe", StringComparer.Ordinal))
         accessibleProcesses = processes.Count(process => process.IsAccessible),
         cpuPercent = performance.CpuPercent,
         logicalProcessorCount = performance.LogicalProcessorPercents.Count,
-        logicalProcessorPercents = performance.LogicalProcessorPercents,
         kernelPercent = performance.KernelPercent,
-        logicalProcessorKernelPercents = performance.LogicalProcessorKernelPercents,
-        usedMemoryBytes = performance.UsedMemoryBytes,
-        totalMemoryBytes = performance.TotalMemoryBytes,
         threadCount = performance.ThreadCount,
+        handleCount = performance.HandleCount,
         uptimeSeconds = performance.Uptime.TotalSeconds,
-    }));
+        topMemory = processes.OrderByDescending(process => process.MemoryBytes).Take(8)
+            .Select(process => new { process.Name, process.ProcessId, process.MemoryBytes, process.CpuPercent, process.DiskBytesPerSecond }),
+        resources = performance.Resources.Select(resource => new
+        {
+            resource.Id,
+            resource.Title,
+            resource.Subtitle,
+            resource.Summary,
+            resource.Heading,
+            chart = resource.Chart,
+            secondChart = resource.SecondChart,
+            metrics = resource.Metrics.Select(metric => $"{metric.Label}: {metric.Value}"),
+            properties = resource.Properties.Select(metric => $"{metric.Label}: {metric.Value}"),
+            composition = resource.Composition?.Select(part => $"{part.Label}: {part.Bytes}"),
+        }),
+    }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+    sampler.Dispose();
     return;
 }
 
-RegisterPlatformAndBackend();
+RegisterPlatformAndBackend(args);
 
 var view = new TaskManagerView();
 var window = new Window()
@@ -45,12 +58,19 @@ window.Title = "Task Manager";
 
 Application.Run(window);
 
-static void RegisterPlatformAndBackend()
+static void RegisterPlatformAndBackend(string[] args)
 {
     if (OperatingSystem.IsWindows())
     {
         Win32Platform.Register();
-        Direct2DBackend.Register();
+        if (args.Any(x => x.Equals("--vg", StringComparison.OrdinalIgnoreCase)))
+        {
+            MewVGWin32Backend.Register();
+        }
+        else
+        {
+            Direct2DBackend.Register();
+        }
     }
     else if (OperatingSystem.IsLinux())
     {

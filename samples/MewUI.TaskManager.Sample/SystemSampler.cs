@@ -5,6 +5,11 @@ using System.Text;
 
 namespace Aprillz.MewUI.TaskManager.Sample;
 
+/// <summary>
+/// One process at one sample. <paramref name="MemoryBytes"/> is the memory each platform's own monitor
+/// shows for a process: the private working set on Windows (Task Manager), anonymous resident memory on
+/// Linux (GNOME System Monitor), and the physical footprint on macOS (Activity Monitor).
+/// </summary>
 internal sealed record ProcessSample(
     int ProcessId,
     int ParentProcessId,
@@ -12,7 +17,8 @@ internal sealed record ProcessSample(
     string Name,
     string? ExecutablePath,
     double CpuPercent,
-    long WorkingSetBytes,
+    long MemoryBytes,
+    double DiskBytesPerSecond,
     bool IsAccessible);
 
 internal sealed record PerformanceSample(
@@ -20,26 +26,240 @@ internal sealed record PerformanceSample(
     IReadOnlyList<double> LogicalProcessorPercents,
     double KernelPercent,
     IReadOnlyList<double> LogicalProcessorKernelPercents,
-    double MemoryPercent,
-    long UsedMemoryBytes,
-    long TotalMemoryBytes,
     int ProcessCount,
     int ThreadCount,
-    TimeSpan Uptime);
+    long? HandleCount,
+    TimeSpan Uptime,
+    IReadOnlyList<ResourceSample> Resources);
 
-internal sealed class SystemSampler
+internal sealed class SystemSampler : IDisposable
 {
-    private readonly Dictionary<(int Id, long Start), (TimeSpan Cpu, long Timestamp)> _previous = [];
+    private readonly Dictionary<(int Id, long Start), (TimeSpan Cpu, long? Disk, long Timestamp)> _previous = [];
+    private readonly Dictionary<(int Id, long Start), string?> _paths = [];
     private readonly int _processorCount = Math.Max(1, Environment.ProcessorCount);
     private readonly PlatformCpuReader _cpuReader = new();
+    private readonly CpuInfoReader _cpuInfo = new();
+    private readonly MemoryReader _memory = new();
+    private readonly DiskReader _disks = new();
+    private readonly NetworkReader _networks = new();
+    private readonly GpuReader _gpus = new();
+    private int _threadCount;
+    private long? _handleCount;
 
     public IReadOnlyList<ProcessSample> CaptureProcesses()
     {
-        var parentIds = ParentProcessReader.Read();
+        var raw = OperatingSystem.IsWindows() && Environment.Is64BitProcess
+            ? WindowsProcessList.Read()
+            : UnixProcessList.Read();
         var now = Stopwatch.GetTimestamp();
         var nextKeys = new HashSet<(int Id, long Start)>();
-        var result = new List<ProcessSample>();
+        var result = new List<ProcessSample>(raw.Count);
+        int threads = 0;
+        long handles = 0;
+        bool handlesKnown = false;
 
+        foreach (var process in raw)
+        {
+            threads += process.Threads;
+            if (process.Handles is int count)
+            {
+                handles += count;
+                handlesKnown = true;
+            }
+
+            var key = (process.Id, process.StartTicks);
+            if (!_paths.TryGetValue(key, out var path))
+            {
+                path = ExecutablePathReader.Read(process.Id);
+                _paths[key] = path;
+            }
+
+            double percent = 0;
+            double diskRate = 0;
+            if (process.Accessible && _previous.TryGetValue(key, out var previous))
+            {
+                double elapsed = (now - previous.Timestamp) / (double)Stopwatch.Frequency;
+                if (elapsed > 0)
+                {
+                    percent = Math.Clamp((process.Cpu - previous.Cpu).TotalSeconds / elapsed / _processorCount * 100, 0, 100);
+                    if (process.DiskBytes is long disk && previous.Disk is long diskBefore) diskRate = Math.Max(0, disk - diskBefore) / elapsed;
+                }
+            }
+            if (process.Accessible) _previous[key] = (process.Cpu, process.DiskBytes, now);
+            nextKeys.Add(key);
+            result.Add(new ProcessSample(process.Id, process.ParentId, process.StartTicks, process.Name, path, percent, process.MemoryBytes, diskRate, process.Accessible));
+        }
+
+        foreach (var key in _previous.Keys.Where(key => !nextKeys.Contains(key)).ToArray()) _previous.Remove(key);
+        foreach (var key in _paths.Keys.Where(key => !nextKeys.Contains(key)).ToArray()) _paths.Remove(key);
+        _threadCount = threads;
+        _handleCount = handlesKnown ? handles : UnixProcessList.ReadOpenFiles();
+        return result;
+    }
+
+    public PerformanceSample CapturePerformance(IReadOnlyList<ProcessSample> processes)
+    {
+        var cpu = _cpuReader.Read();
+        var uptime = TimeSpan.FromMilliseconds(Environment.TickCount64);
+        double? speed = _cpuInfo.ReadSpeedMhz();
+        var metrics = new List<Metric>
+        {
+            new("Utilization", Format.Percent(cpu.TotalPercent)),
+            new("Speed", speed is double mhz ? Format.Megahertz(mhz) : "Not available"),
+            new("Processes", Format.Count(processes.Count)),
+            new("Threads", Format.Count(_threadCount)),
+        };
+        if (_handleCount is long handles) metrics.Add(new Metric(OperatingSystem.IsWindows() ? "Handles" : "Open files", Format.Count(handles)));
+        metrics.Add(new Metric("Up time", Format.Uptime(uptime)));
+
+        var resources = new List<ResourceSample>
+        {
+            new(
+                "cpu",
+                ResourceKind.Cpu,
+                "CPU",
+                string.Empty,
+                speed is double current ? $"{cpu.TotalPercent:0}% {Format.Megahertz(current)}" : Format.Percent(cpu.TotalPercent),
+                _cpuInfo.Name,
+                new ChartSample("% Utilization", cpu.TotalPercent),
+                null,
+                metrics,
+                _cpuInfo.Properties),
+            _memory.Read(),
+        };
+        resources.AddRange(_disks.Read());
+        resources.AddRange(_networks.Read());
+        resources.AddRange(_gpus.Read());
+
+        return new PerformanceSample(
+            cpu.TotalPercent,
+            cpu.LogicalProcessorPercents,
+            cpu.KernelPercent,
+            cpu.LogicalProcessorKernelPercents,
+            processes.Count,
+            _threadCount,
+            _handleCount,
+            uptime,
+            resources);
+    }
+
+    public void Dispose()
+    {
+        _cpuInfo.Dispose();
+        _gpus.Dispose();
+    }
+}
+
+/// <summary>A process as the platform lists it, before rates are worked out.</summary>
+internal readonly record struct RawProcess(
+    int Id,
+    int ParentId,
+    long StartTicks,
+    string Name,
+    TimeSpan Cpu,
+    long MemoryBytes,
+    int Threads,
+    int? Handles,
+    // Bytes read and written since the process started, where the platform tells.
+    long? DiskBytes,
+    bool Accessible);
+
+/// <summary>
+/// Every process in one system call (SystemProcessInformation), which is how Task Manager reads them.
+/// It needs no handle to the process, so protected and other users' processes report their memory,
+/// CPU time, threads and handles too. The layout read here is the 64-bit one.
+/// </summary>
+internal static class WindowsProcessList
+{
+    private const int SYSTEM_PROCESS_INFORMATION = 5;
+    private const int STATUS_INFO_LENGTH_MISMATCH = unchecked((int)0xC0000004);
+
+    // SYSTEM_PROCESS_INFORMATION field offsets (64-bit).
+    private const int NEXT_ENTRY_OFFSET = 0;
+    private const int NUMBER_OF_THREADS = 4;
+    private const int WORKING_SET_PRIVATE_SIZE = 8;
+    private const int CREATE_TIME = 32;
+    private const int USER_TIME = 40;
+    private const int KERNEL_TIME = 48;
+    private const int IMAGE_NAME_LENGTH = 56;
+    private const int IMAGE_NAME_BUFFER = 64;
+    private const int UNIQUE_PROCESS_ID = 80;
+    private const int INHERITED_FROM_PROCESS_ID = 88;
+    private const int HANDLE_COUNT = 96;
+    private const int READ_TRANSFER_COUNT = 232;
+    private const int WRITE_TRANSFER_COUNT = 240;
+
+    private static int _bufferSize = 1 << 20;
+
+    public static List<RawProcess> Read()
+    {
+        var result = new List<RawProcess>();
+        nint buffer = 0;
+        try
+        {
+            while (true)
+            {
+                buffer = Marshal.AllocHGlobal(_bufferSize);
+                int status = NtQuerySystemInformation(SYSTEM_PROCESS_INFORMATION, buffer, _bufferSize, out int needed);
+                if (status == STATUS_INFO_LENGTH_MISMATCH)
+                {
+                    Marshal.FreeHGlobal(buffer);
+                    buffer = 0;
+                    _bufferSize = Math.Max(_bufferSize * 2, needed + (64 << 10));
+                    continue;
+                }
+                if (status != 0) return result;
+                break;
+            }
+
+            int offset = 0;
+            while (true)
+            {
+                nint entry = buffer + offset;
+                int id = (int)Marshal.ReadInt64(entry, UNIQUE_PROCESS_ID);
+                int nameLength = (ushort)Marshal.ReadInt16(entry, IMAGE_NAME_LENGTH);
+                nint nameBuffer = Marshal.ReadIntPtr(entry, IMAGE_NAME_BUFFER);
+                string name = id == 0 ? "System Idle Process"
+                    : nameBuffer != 0 && nameLength > 0 ? Marshal.PtrToStringUni(nameBuffer, nameLength / 2)
+                    : $"Process {id.ToString(CultureInfo.InvariantCulture)}";
+                // The process list names images with their extension; the rest of the page names them without.
+                if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) name = name[..^4];
+
+                result.Add(new RawProcess(
+                    id,
+                    (int)Marshal.ReadInt64(entry, INHERITED_FROM_PROCESS_ID),
+                    Marshal.ReadInt64(entry, CREATE_TIME),
+                    name,
+                    TimeSpan.FromTicks(Marshal.ReadInt64(entry, USER_TIME) + Marshal.ReadInt64(entry, KERNEL_TIME)),
+                    Marshal.ReadInt64(entry, WORKING_SET_PRIVATE_SIZE),
+                    Marshal.ReadInt32(entry, NUMBER_OF_THREADS),
+                    Marshal.ReadInt32(entry, HANDLE_COUNT),
+                    Marshal.ReadInt64(entry, READ_TRANSFER_COUNT) + Marshal.ReadInt64(entry, WRITE_TRANSFER_COUNT),
+                    true));
+
+                int next = Marshal.ReadInt32(entry, NEXT_ENTRY_OFFSET);
+                if (next == 0) break;
+                offset += next;
+            }
+        }
+        finally
+        {
+            if (buffer != 0) Marshal.FreeHGlobal(buffer);
+        }
+        return result;
+    }
+
+    [DllImport("ntdll")]
+    private static extern int NtQuerySystemInformation(int informationClass, nint information, int informationLength, out int returnLength);
+}
+
+/// <summary>Processes on Linux and macOS, and on Windows when not running as a 64-bit process.</summary>
+internal static class UnixProcessList
+{
+    public static List<RawProcess> Read()
+    {
+        var parents = ParentProcessReader.Read();
+        var result = new List<RawProcess>();
         foreach (var process in Process.GetProcesses())
         {
             using (process)
@@ -52,173 +272,104 @@ internal sealed class SystemSampler
                 try { name = process.ProcessName; }
                 catch { name = $"Process {id.ToString(CultureInfo.InvariantCulture)}"; }
 
-                if (ProcessMetricsReader.TryRead(
-                    process,
-                    out long start,
-                    out var cpu,
-                    out long workingSet,
-                    out string? executablePath))
+                try
                 {
-                    var key = (id, start);
-                    double percent = 0;
-
-                    if (_previous.TryGetValue(key, out var previous))
-                    {
-                        double elapsed = (now - previous.Timestamp) / (double)Stopwatch.Frequency;
-                        if (elapsed > 0)
-                        {
-                            percent = Math.Clamp(
-                                (cpu - previous.Cpu).TotalSeconds / elapsed / _processorCount * 100,
-                                0,
-                                100);
-                        }
-                    }
-
-                    _previous[key] = (cpu, now);
-                    nextKeys.Add(key);
-                    result.Add(new ProcessSample(
-                        id,
-                        parentIds.GetValueOrDefault(id),
-                        start,
-                        name,
-                        executablePath,
-                        percent,
-                        workingSet,
-                        true));
+                    long start = process.StartTime.ToUniversalTime().Ticks;
+                    var cpu = process.TotalProcessorTime;
+                    var (memory, threads, disk) = ReadMemoryThreadsAndDisk(process, id);
+                    result.Add(new RawProcess(id, parents.GetValueOrDefault(id), start, name, cpu, memory, threads, null, disk, true));
                 }
-                else
+                catch
                 {
-                    result.Add(new ProcessSample(
-                        id,
-                        parentIds.GetValueOrDefault(id),
-                        0,
-                        name,
-                        executablePath,
-                        0,
-                        0,
-                        false));
+                    result.Add(new RawProcess(id, parents.GetValueOrDefault(id), 0, name, TimeSpan.Zero, 0, 0, null, null, false));
                 }
             }
         }
-
-        foreach (var key in _previous.Keys.Where(key => !nextKeys.Contains(key)).ToArray())
-        {
-            _previous.Remove(key);
-        }
-
         return result;
     }
 
-    public PerformanceSample CapturePerformance(IReadOnlyList<ProcessSample> processes)
+    private static (long Memory, int Threads, long? Disk) ReadMemoryThreadsAndDisk(Process process, int id)
     {
-        var cpu = _cpuReader.Read();
-        var (used, total) = PlatformMemoryReader.Read();
-        int threads = 0;
-
-        foreach (var process in Process.GetProcesses())
+        if (OperatingSystem.IsLinux())
         {
-            using (process)
+            // GNOME System Monitor's "Memory" is resident memory not shared with files: RssAnon.
+            long anonymous = 0;
+            int threads = 0;
+            foreach (var line in File.ReadLines($"/proc/{id}/status"))
             {
-                try { threads += process.Threads.Count; }
-                catch { }
+                if (line.StartsWith("RssAnon:", StringComparison.Ordinal))
+                    anonymous = long.Parse(line["RssAnon:".Length..].Trim().Split(' ')[0], CultureInfo.InvariantCulture) * 1024;
+                else if (line.StartsWith("Threads:", StringComparison.Ordinal))
+                    threads = int.Parse(line["Threads:".Length..].Trim(), CultureInfo.InvariantCulture);
             }
+            return (anonymous, threads, LinuxDiskBytes(id));
         }
 
-        return new PerformanceSample(
-            cpu.TotalPercent,
-            cpu.LogicalProcessorPercents,
-            cpu.KernelPercent,
-            cpu.LogicalProcessorKernelPercents,
-            Math.Clamp(used * 100.0 / total, 0, 100),
-            used,
-            total,
-            processes.Count,
-            threads,
-            TimeSpan.FromMilliseconds(Environment.TickCount64));
+        if (OperatingSystem.IsMacOS())
+        {
+            // Activity Monitor's "Memory" is the physical footprint (rusage_info_v2.ri_phys_footprint).
+            const int RUSAGE_INFO_V2 = 2;
+            const int PHYS_FOOTPRINT = 72;
+            const int DISKIO_BYTES_READ = 144;
+            const int DISKIO_BYTES_WRITTEN = 152;
+            var buffer = new byte[512];
+            bool read = proc_pid_rusage(id, RUSAGE_INFO_V2, buffer) == 0;
+            long footprint = read ? BitConverter.ToInt64(buffer, PHYS_FOOTPRINT) : process.WorkingSet64;
+            long? disk = read ? BitConverter.ToInt64(buffer, DISKIO_BYTES_READ) + BitConverter.ToInt64(buffer, DISKIO_BYTES_WRITTEN) : null;
+            int threads;
+            try { threads = process.Threads.Count; }
+            catch { threads = 0; }
+            return (footprint, threads, disk);
+        }
+
+        return (process.PrivateMemorySize64, process.Threads.Count, null);
     }
-}
 
-internal static class ProcessMetricsReader
-{
-    public static bool TryRead(
-        Process process,
-        out long start,
-        out TimeSpan cpu,
-        out long workingSet,
-        out string? executablePath)
+    /// <summary>Bytes the process made the storage layer fetch or send, from /proc/[pid]/io; unreadable for other users' processes.</summary>
+    private static long? LinuxDiskBytes(int id)
     {
-        if (OperatingSystem.IsWindows())
-            return TryReadWindows(process.Id, out start, out cpu, out workingSet, out executablePath);
-
-        executablePath = TryReadUnixExecutablePath(process.Id);
-
         try
         {
-            start = process.StartTime.ToUniversalTime().Ticks;
-            cpu = process.TotalProcessorTime;
-            workingSet = process.WorkingSet64;
-            return true;
+            long total = 0;
+            foreach (var line in File.ReadLines($"/proc/{id}/io"))
+            {
+                if (line.StartsWith("read_bytes:", StringComparison.Ordinal) || line.StartsWith("write_bytes:", StringComparison.Ordinal))
+                    total += long.Parse(line[(line.IndexOf(':') + 1)..].Trim(), CultureInfo.InvariantCulture);
+            }
+            return total;
         }
         catch
         {
-            start = 0;
-            cpu = TimeSpan.Zero;
-            workingSet = 0;
-            return false;
+            return null;
         }
     }
 
-    private static bool TryReadWindows(
-        int processId,
-        out long start,
-        out TimeSpan cpu,
-        out long workingSet,
-        out string? executablePath)
-    {
-        const uint QueryLimitedInformation = 0x1000;
-        const uint VirtualMemoryRead = 0x0010;
-        nint handle = OpenProcess(QueryLimitedInformation | VirtualMemoryRead, false, processId);
-        if (handle == 0) handle = OpenProcess(QueryLimitedInformation, false, processId);
-
-        try
-        {
-            executablePath = TryReadWindowsExecutablePath(handle);
-            if (handle == 0 || !GetProcessTimes(handle, out var created, out _, out var kernel, out var user))
-            {
-                start = 0;
-                cpu = TimeSpan.Zero;
-                workingSet = 0;
-                return false;
-            }
-
-            start = unchecked((long)created.ToUInt64());
-            cpu = TimeSpan.FromTicks(unchecked((long)(kernel.ToUInt64() + user.ToUInt64())));
-            var counters = new ProcessMemoryCounters { Size = (uint)Marshal.SizeOf<ProcessMemoryCounters>() };
-            bool memoryAvailable = K32GetProcessMemoryInfo(handle, ref counters, counters.Size);
-            workingSet = memoryAvailable ? (long)counters.WorkingSetSize : 0;
-            return memoryAvailable;
-        }
-        finally
-        {
-            if (handle != 0) CloseHandle(handle);
-        }
-    }
-
-    private static string? TryReadWindowsExecutablePath(nint process)
-    {
-        if (process == 0) return null;
-        var path = new StringBuilder(32768);
-        uint length = (uint)path.Capacity;
-        return QueryFullProcessImageName(process, 0, path, ref length) ? path.ToString() : null;
-    }
-
-    private static string? TryReadUnixExecutablePath(int processId)
+    /// <summary>Open file handles system-wide: the kernel's file table on Linux, kern.num_files on macOS.</summary>
+    public static long? ReadOpenFiles()
     {
         try
         {
             if (OperatingSystem.IsLinux())
-                return File.ResolveLinkTarget($"/proc/{processId}/exe", returnFinalTarget: true)?.FullName;
+                return long.Parse(File.ReadAllText("/proc/sys/fs/file-nr").Split('\t', ' ')[0], CultureInfo.InvariantCulture);
+            if (OperatingSystem.IsMacOS()) return MacNative.SysctlInt64("kern.num_files");
+        }
+        catch { }
+        return null;
+    }
 
+    [DllImport("libproc")]
+    private static extern int proc_pid_rusage(int processId, int flavor, byte[] buffer);
+}
+
+internal static class ExecutablePathReader
+{
+    public static string? Read(int processId)
+    {
+        try
+        {
+            if (OperatingSystem.IsWindows()) return ReadWindows(processId);
+            if (OperatingSystem.IsLinux())
+                return File.ResolveLinkTarget($"/proc/{processId}/exe", returnFinalTarget: true)?.FullName;
             if (OperatingSystem.IsMacOS())
             {
                 var path = new StringBuilder(4096);
@@ -229,37 +380,25 @@ internal static class ProcessMetricsReader
         return null;
     }
 
-    [StructLayout(LayoutKind.Sequential)]
-    private struct FileTime
+    private static string? ReadWindows(int processId)
     {
-        public uint Low;
-        public uint High;
-        public ulong ToUInt64() => ((ulong)High << 32) | Low;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct ProcessMemoryCounters
-    {
-        public uint Size;
-        public uint PageFaultCount;
-        public nuint PeakWorkingSetSize;
-        public nuint WorkingSetSize;
-        public nuint QuotaPeakPagedPoolUsage;
-        public nuint QuotaPagedPoolUsage;
-        public nuint QuotaPeakNonPagedPoolUsage;
-        public nuint QuotaNonPagedPoolUsage;
-        public nuint PageFileUsage;
-        public nuint PeakPageFileUsage;
+        const uint QUERY_LIMITED_INFORMATION = 0x1000;
+        nint handle = OpenProcess(QUERY_LIMITED_INFORMATION, false, processId);
+        if (handle == 0) return null;
+        try
+        {
+            var path = new StringBuilder(32768);
+            uint length = (uint)path.Capacity;
+            return QueryFullProcessImageName(handle, 0, path, ref length) ? path.ToString() : null;
+        }
+        finally
+        {
+            CloseHandle(handle);
+        }
     }
 
     [DllImport("kernel32", SetLastError = true)]
     private static extern nint OpenProcess(uint desiredAccess, bool inheritHandle, int processId);
-
-    [DllImport("kernel32", SetLastError = true)]
-    private static extern bool GetProcessTimes(nint process, out FileTime creation, out FileTime exit, out FileTime kernel, out FileTime user);
-
-    [DllImport("kernel32", SetLastError = true)]
-    private static extern bool K32GetProcessMemoryInfo(nint process, ref ProcessMemoryCounters counters, uint size);
 
     [DllImport("kernel32", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern bool QueryFullProcessImageName(nint process, uint flags, StringBuilder path, ref uint size);
@@ -326,6 +465,7 @@ internal sealed class MonitorController : IDisposable
         _disposed = true;
         _started = false;
         _timer.Dispose();
+        _sampler.Dispose();
     }
 }
 
@@ -702,113 +842,3 @@ internal sealed class PlatformCpuReader
     private static extern int vm_deallocate(uint targetTask, nint address, nuint size);
 }
 
-internal static class PlatformMemoryReader
-{
-    public static (long Used, long Total) Read()
-    {
-        if (OperatingSystem.IsWindows())
-        {
-            var status = new MemoryStatusEx { Length = (uint)Marshal.SizeOf<MemoryStatusEx>() };
-            if (GlobalMemoryStatusEx(ref status))
-                return Normalize((long)(status.TotalPhysical - status.AvailablePhysical), (long)status.TotalPhysical);
-        }
-
-        if (OperatingSystem.IsLinux())
-        {
-            try
-            {
-                var values = File.ReadLines("/proc/meminfo")
-                    .Select(line => line.Split(':', 2))
-                    .Where(parts => parts.Length == 2)
-                    .ToDictionary(parts => parts[0], parts => long.Parse(parts[1].Trim().Split(' ')[0]) * 1024);
-                long total = values.GetValueOrDefault("MemTotal");
-                long available = values.GetValueOrDefault("MemAvailable");
-                return Normalize(total - available, total);
-            }
-            catch { }
-        }
-
-        if (OperatingSystem.IsMacOS())
-        {
-            nuint length = sizeof(ulong);
-            if (sysctlbyname("hw.memsize", out ulong total, ref length, 0, 0) == 0)
-            {
-                uint count = 38;
-                if (host_page_size(mach_host_self(), out uint pageSize) == 0 &&
-                    host_statistics64(mach_host_self(), 4, out var stats, ref count) == 0)
-                {
-                    ulong available = ((ulong)stats.Free + stats.Inactive + stats.Speculative) * pageSize;
-                    return Normalize((long)(total - Math.Min(total, available)), (long)total);
-                }
-                return Normalize(0, (long)total);
-            }
-        }
-
-        long fallback = Math.Max(1, GC.GetGCMemoryInfo().TotalAvailableMemoryBytes);
-        return Normalize(GC.GetTotalMemory(false), fallback);
-    }
-
-    private static (long Used, long Total) Normalize(long used, long total)
-    {
-        total = Math.Max(1, total);
-        return (Math.Clamp(used, 0, total), total);
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct MemoryStatusEx
-    {
-        public uint Length;
-        public uint MemoryLoad;
-        public ulong TotalPhysical;
-        public ulong AvailablePhysical;
-        public ulong TotalPageFile;
-        public ulong AvailablePageFile;
-        public ulong TotalVirtual;
-        public ulong AvailableVirtual;
-        public ulong AvailableExtendedVirtual;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct VmStatistics64
-    {
-        public uint Free;
-        public uint Active;
-        public uint Inactive;
-        public uint Wired;
-        public ulong ZeroFill;
-        public ulong Reactivations;
-        public ulong PageIns;
-        public ulong PageOuts;
-        public ulong Faults;
-        public ulong CopyOnWriteFaults;
-        public ulong Lookups;
-        public ulong Hits;
-        public ulong Purges;
-        public uint Purgeable;
-        public uint Speculative;
-        public ulong Decompressions;
-        public ulong Compressions;
-        public ulong SwapIns;
-        public ulong SwapOuts;
-        public uint CompressorPages;
-        public uint Throttled;
-        public uint External;
-        public uint Internal;
-        public ulong TotalUncompressedPagesInCompressor;
-    }
-
-    [DllImport("kernel32")]
-    private static extern bool GlobalMemoryStatusEx(ref MemoryStatusEx buffer);
-
-    [DllImport("/usr/lib/libSystem.B.dylib")]
-    private static extern int sysctlbyname(string name, out ulong oldValue, ref nuint oldLength, nint newValue, nuint newLength);
-
-    [DllImport("/usr/lib/libSystem.B.dylib")]
-    private static extern uint mach_host_self();
-
-    [DllImport("/usr/lib/libSystem.B.dylib")]
-    private static extern int host_page_size(uint host, out uint pageSize);
-
-    [DllImport("/usr/lib/libSystem.B.dylib")]
-    private static extern int host_statistics64(uint host, int flavor, out VmStatistics64 statistics, ref uint count);
-}

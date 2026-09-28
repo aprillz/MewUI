@@ -8,10 +8,16 @@ namespace Aprillz.MewUI.TaskManager.Sample;
 internal sealed class ProcessesPage : UserControl
 {
     private readonly ObservableCollection<ProcessNode> _roots = [];
+    private readonly ObservableCollection<ProcessNode> _flat = [];
     private readonly Dictionary<ProcessKey, ProcessNode> _nodes = [];
     private readonly TreeItemsView<ProcessNode> _tree;
+    private readonly ItemsView<ProcessNode> _flatView;
     private readonly GridView _grid;
     private string _query = string.Empty;
+
+    // Unsorted, processes stand under their parents; sorted by a column, every process is one row of a
+    // flat list, as a parent's children would otherwise only be sorted among themselves.
+    private bool _isFlat;
 
     public ProcessesPage(MonitorController monitor)
     {
@@ -20,11 +26,19 @@ internal sealed class ProcessesPage : UserControl
             node => node.Children,
             node => node.Name,
             node => node.Key);
+        _flatView = ItemsView.Create<ProcessNode>(_flat, node => node.Name, node => node.Key);
 
         _grid = BuildGrid();
+        _grid.SortChanged += change =>
+        {
+            bool flat = change.Direction != GridViewSortDirection.None;
+            if (flat == _isFlat) return;
+            _isFlat = flat;
+            _grid.ItemsSource = flat ? _flatView : _tree;
+        };
         _grid.ItemDoubleClicked += item =>
         {
-            if (item is not ProcessNode node) return;
+            if (_isFlat || item is not ProcessNode node) return;
             for (int index = 0; index < _tree.Count; index++)
             {
                 if (!ReferenceEquals(_tree.GetItem(index), node)) continue;
@@ -48,30 +62,61 @@ internal sealed class ProcessesPage : UserControl
                 RebuildHierarchy(_nodes.Values.Select(node => node.LastSample).Where(sample => sample != null).Cast<ProcessSample>().ToArray());
             });
 
+        // The row menu and the page buttons act on a process; a row hands its own over as the argument.
+        var endTask = new Command("taskmanager.process.end", "End task");
+        var openLocation = new Command("taskmanager.process.openLocation", "Open file location");
+        var copyDetails = new Command("taskmanager.process.copy", "Copy details");
+        Commands.Register(endTask, (ProcessNode node) => _ = TaskActions.EndProcessAsync(node, FindVisualRoot() as Window));
+        Commands.Register(openLocation, (ProcessNode node) => TaskActions.OpenFileLocation(node.ExecutablePath), (ProcessNode node) => node.ExecutablePath != null);
+        Commands.Register(copyDetails, (ProcessNode node) => TaskActions.Copy(TaskActions.Describe(node)));
+        var rowMenu = new ContextMenu()
+            .Item(endTask)
+            .Separator()
+            .Item(openLocation)
+            .Item(copyDetails);
+        _grid.PrepareContainer<ProcessNode>((row, _, _, _) => row.ContextMenu = rowMenu);
+
+        var endTaskButton = TaskManagerView.CommandButton("dismiss_circle_regular", "End task").IsEnabled(false);
+        endTaskButton.OnClick(() =>
+        {
+            if (_grid.SelectedItem is ProcessNode node) _ = TaskActions.EndProcessAsync(node, FindVisualRoot() as Window);
+        });
+        _grid.OnSelectionChanged(item => endTaskButton.IsEnabled = item is ProcessNode);
+
+        var expandAll = new Command("taskmanager.process.expandAll", "Expand all");
+        var collapseAll = new Command("taskmanager.process.collapseAll", "Collapse all");
+        var openSelected = new Command("taskmanager.process.openSelectedLocation", "Open file location");
+        var copySelected = new Command("taskmanager.process.copySelected", "Copy details");
+        Commands.Register(expandAll, () => SetAllExpanded(true), () => !_isFlat);
+        Commands.Register(collapseAll, () => SetAllExpanded(false), () => !_isFlat);
+        Commands.Register(openSelected, () => TaskActions.OpenFileLocation((_grid.SelectedItem as ProcessNode)?.ExecutablePath), () => (_grid.SelectedItem as ProcessNode)?.ExecutablePath != null);
+        Commands.Register(copySelected, () =>
+        {
+            if (_grid.SelectedItem is ProcessNode node) TaskActions.Copy(TaskActions.Describe(node));
+        }, () => _grid.SelectedItem is ProcessNode);
+        var more = TaskManagerView.MoreButton(new ContextMenu()
+            .Item(expandAll)
+            .Item(collapseAll)
+            .Separator()
+            .Item(openSelected)
+            .Item(copySelected)
+            .Separator()
+            .Item(TaskManagerView.OpenSystemMonitorCommand(this)));
+
         return new Grid()
             .Rows("Auto, *")
             .Children(
-                new DockPanel()
-                    .Padding(28, 18)
-                    .Spacing(12)
-                    .Children(
-                        new StackPanel()
-                            .DockRight()
-                            .Horizontal()
-                            .Spacing(8)
-                            .Children(
-                                search,
-                                new Button()
-                                    .Content(new StackPanel().Horizontal().Spacing(7).Children(
-                                        FluentIcons.Create("window_new_regular").Size(16, 16),
-                                        new TextBlock().Text("Run new task"))),
-                                new Button().Content(FluentIcons.Create("more_regular").Size(18, 18)).Width(38)),
-                        new TextBlock()
-                            .Text("Processes")
-                            .FontSize(ThemeFontSize.Medium)
-                            .SemiBold()
-                            .CenterVertical()),
+                TaskManagerView.PageHeader("Processes", search.CenterVertical().Margin(0, 0, 8, 0), TaskManagerView.RunNewTaskButton(), endTaskButton, more),
                 _grid.Row(1).Margin(20, 0, 20, 18));
+    }
+
+    private void SetAllExpanded(bool expanded)
+    {
+        // Expanding a row adds its children after it, so the walk goes on until the end moves no more.
+        for (int index = 0; index < _tree.Count; index++)
+        {
+            if (_tree.GetHasChildren(index) && _tree.GetIsExpanded(index) != expanded) _tree.SetIsExpanded(index, expanded);
+        }
     }
 
     private GridView BuildGrid()
@@ -90,10 +135,11 @@ internal sealed class ProcessesPage : UserControl
                 .SortBy(node => node.Name, StringComparer.OrdinalIgnoreCase)
                 .Bind(
                     _ => new ProcessNameCell(_tree),
-                    (cell, node, index, _) => cell.Bind(node, index)),
+                    (cell, node, index, _) => cell.Bind(node, _isFlat ? -1 : index)),
             TextColumn("Status", 100, node => node.IsAccessible ? string.Empty : "Limited", node => node.IsAccessible),
-            TextColumn("CPU", 90, node => $"{node.CpuPercent:0.0}%", node => node.CpuPercent),
-            TextColumn("Memory", 120, node => FormatBytes(node.WorkingSetBytes), node => node.WorkingSetBytes),
+            HeatColumn("CPU", 90, node => $"{node.CpuPercent:0.0}%", node => node.CpuPercent, node => node.CpuPercent / 100),
+            HeatColumn("Memory", 120, node => FormatBytes(node.MemoryBytes), node => node.MemoryBytes, node => node.MemoryBytes / (double)_totalMemoryBytes),
+            HeatColumn("Disk", 100, node => $"{node.DiskBytesPerSecond / (1024 * 1024):0.0} MB/s", node => node.DiskBytesPerSecond, node => node.DiskBytesPerSecond / DISK_HEAT_FULL_SCALE),
             TextColumn("PID", 85, node => node.ProcessId.ToString(), node => node.ProcessId));
 
         return grid;
@@ -113,8 +159,54 @@ internal sealed class ProcessesPage : UserControl
                 _ => new TextBlock { TextAlignment = TextAlignment.Right }.Margin(8, 0).CenterVertical(),
                 (view, node) => view.Text(text(node)));
 
-    private void UpdateProcesses(IReadOnlyList<ProcessSample> samples, PerformanceSample _)
-        => RebuildHierarchy(samples);
+    // Disk throughput that shades a cell fully; Task Manager scales the disk column the same way, by rate.
+    private const double DISK_HEAT_FULL_SCALE = 100 * 1024 * 1024;
+
+    /// <summary>
+    /// A resource column shaded as a heat map, as Windows Task Manager does it: the cell takes the accent
+    /// color, darker the larger the share of the machine's resource the process uses.
+    /// </summary>
+    private static GridViewColumn<ProcessNode> HeatColumn<TKey>(
+        string header,
+        double width,
+        Func<ProcessNode, string> text,
+        Func<ProcessNode, TKey> sortKey,
+        Func<ProcessNode, double> share) =>
+        new GridViewColumn<ProcessNode>()
+            .Header(header)
+            .HeaderTextAlignment(TextAlignment.Right)
+            .Width(width)
+            .SortBy(sortKey)
+            .Bind(
+                _ => new Border().Child(new TextBlock { TextAlignment = TextAlignment.Right }.Margin(8, 0).CenterVertical()),
+                (cell, node) =>
+                {
+                    ((TextBlock)cell.Child!).Text = text(node);
+                    cell.Background = Application.IsRunning
+                        ? Application.Current.Theme.Palette.Accent.WithAlpha(HeatAlpha(share(node)))
+                        : Color.Transparent;
+                });
+
+    /// <summary>A few steps of shade: the lightest for an idle process, the darkest for one taking a large share.</summary>
+    private static byte HeatAlpha(double share) => share switch
+    {
+        < 0.001 => 22,
+        < 0.005 => 38,
+        < 0.02 => 58,
+        < 0.05 => 82,
+        < 0.15 => 110,
+        < 0.3 => 140,
+        _ => 172,
+    };
+
+    private long _totalMemoryBytes = 1;
+
+    private void UpdateProcesses(IReadOnlyList<ProcessSample> samples, PerformanceSample performance)
+    {
+        var memory = performance.Resources.FirstOrDefault(resource => resource.Kind == ResourceKind.Memory);
+        if (memory != null) _totalMemoryBytes = Math.Max(1, memory.CompositionTotal);
+        RebuildHierarchy(samples);
+    }
 
     private void RebuildHierarchy(IReadOnlyList<ProcessSample> samples)
     {
@@ -179,6 +271,18 @@ internal sealed class ProcessesPage : UserControl
         foreach (var root in roots.OrderBy(node => node.Name, StringComparer.OrdinalIgnoreCase)) _roots.Add(root);
         _tree.Invalidate();
 
+        // The flat list holds the matches alone: the parents a search brings in only give the tree its shape.
+        _flat.Clear();
+        foreach (var node in _nodes.Values)
+        {
+            if (string.IsNullOrEmpty(_query) ||
+                node.Name.Contains(_query, StringComparison.OrdinalIgnoreCase) ||
+                node.ProcessId.ToString().Contains(_query, StringComparison.OrdinalIgnoreCase))
+            {
+                _flat.Add(node);
+            }
+        }
+
         if (!string.IsNullOrEmpty(_query))
         {
             for (int index = 0; index < _tree.Count; index++)
@@ -232,12 +336,17 @@ internal sealed class ProcessesPage : UserControl
                     _name);
         }
 
+        /// <summary>Shows <paramref name="node"/> at row <paramref name="index"/> of the tree, or unindented without an expander when the index is -1.</summary>
         public void Bind(ProcessNode node, int index)
         {
             _index = index;
-            Margin = new Thickness(_tree.GetDepth(index) * 18, 0, 0, 0);
-            _expander.IsVisible = _tree.GetHasChildren(index);
-            _chevron.Kind(_tree.GetIsExpanded(index) ? GlyphKind.ChevronDown: GlyphKind.ChevronRight);
+            bool inTree = index >= 0;
+            Margin = new Thickness(inTree ? _tree.GetDepth(index) * 18 : 0, 0, 0, 0);
+            _expander.IsVisible = inTree && _tree.GetHasChildren(index);
+            if (inTree)
+            {
+                _chevron.Kind(_tree.GetIsExpanded(index) ? GlyphKind.ChevronDown : GlyphKind.ChevronRight);
+            }
             long request = ++_iconRequest;
             Task<ImageSource?>? realTask = string.IsNullOrWhiteSpace(node.ExecutablePath)
                 ? null
@@ -324,7 +433,8 @@ internal sealed class ProcessNode(ProcessKey key)
     public string Name { get; private set; } = string.Empty;
     public string? ExecutablePath { get; private set; }
     public double CpuPercent { get; private set; }
-    public long WorkingSetBytes { get; private set; }
+    public long MemoryBytes { get; private set; }
+    public double DiskBytesPerSecond { get; private set; }
     public bool IsAccessible { get; private set; }
     public ProcessSample? LastSample { get; private set; }
     public ObservableCollection<ProcessNode> Children { get; } = [];
@@ -336,7 +446,8 @@ internal sealed class ProcessNode(ProcessKey key)
         Name = sample.Name;
         ExecutablePath = sample.ExecutablePath;
         CpuPercent = sample.CpuPercent;
-        WorkingSetBytes = sample.WorkingSetBytes;
+        MemoryBytes = sample.MemoryBytes;
+        DiskBytesPerSecond = sample.DiskBytesPerSecond;
         IsAccessible = sample.IsAccessible;
     }
 }

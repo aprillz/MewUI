@@ -81,6 +81,13 @@ internal sealed class TaskManagerView : UserControl
                                 ThemeRadio("Light", ThemeVariant.Light),
                                 ThemeRadio("Dark", ThemeVariant.Dark))),
                     SettingsSection(
+                        "Accent color",
+                        "Colors the selection and the Processes heat map, whose cells darken as a process uses more.",
+                        new StackPanel()
+                            .Horizontal()
+                            .Spacing(8)
+                            .Children(BuiltInAccent.Accents.Select(AccentSwatch).ToArray())),
+                    SettingsSection(
                         "Real time update speed",
                         "Choose how often resource usage is refreshed.",
                         refresh.Width(220)),
@@ -97,6 +104,17 @@ internal sealed class TaskManagerView : UserControl
                             .OnClick(PrivilegeService.RestartElevated)))
         );
 
+        Button AccentSwatch(Accent accent) => new Button()
+            .CornerRadius(12)
+            .MinHeight(24)
+            .Width(24)
+            .Height(24)
+            .BorderThickness(0)
+            .Content(string.Empty)
+            .WithTheme((theme, button) => button.Background(accent.GetAccentColor(theme.IsDark)))
+            .ToolTip(accent.ToString())
+            .OnClick(() => Application.Current.SetAccent(accent));
+
         RadioButton ThemeRadio(string text, ThemeVariant variant) => new RadioButton()
             .Content(text)
             .BindIsChecked(themeMode, value => value == variant)
@@ -105,6 +123,59 @@ internal sealed class TaskManagerView : UserControl
                 themeMode.Value = variant;
                 Application.Current.SetTheme(variant);
             });
+    }
+
+    /// <summary>A page title with the page's actions on the right, as Task Manager's command bar lays them out.</summary>
+    internal static FrameworkElement PageHeader(string title, params FrameworkElement[] actions) =>
+        new DockPanel()
+            .Padding(28, 14)
+            .Spacing(12)
+            .Children(
+                new StackPanel().DockRight().Horizontal().Spacing(4).Children(actions),
+                new TextBlock().Text(title).FontSize(ThemeFontSize.Medium).SemiBold().CenterVertical());
+
+    internal static Button CommandButton(string icon, string text) =>
+        new Button()
+            .StyleName("flat-button")
+            .Padding(10, 6)
+            .Content(new StackPanel().Horizontal().Spacing(7).Children(
+                FluentIcons.Create(icon).Size(16, 16).CenterVertical(),
+                new TextBlock().Text(text).CenterVertical()));
+
+    internal static Button RunNewTaskButton()
+    {
+        var button = CommandButton("window_new_regular", "Run new task");
+        button.OnClick(async () =>
+        {
+            var owner = button.FindVisualRoot() as Window;
+            var dialog = new RunTaskWindow();
+            if (owner != null) await dialog.ShowDialogAsync(owner);
+            else dialog.Show();
+        });
+        return button;
+    }
+
+    /// <summary>The overflow button: opens <paramref name="menu"/> under itself.</summary>
+    internal static Button MoreButton(ContextMenu menu)
+    {
+        menu.Placement = MenuPlacement.Below;
+        var button = new Button()
+            .StyleName("flat-button")
+            .Padding(10, 6)
+            .ToolTip("See more")
+            .Content(FluentIcons.Create("more_regular").Size(18, 18));
+        button.OnClick(() => menu.Show(button));
+        return button;
+    }
+
+    /// <summary>A command that opens the platform's own system monitor, handled on <paramref name="scope"/>.</summary>
+    internal static Command OpenSystemMonitorCommand(UIElement scope)
+    {
+        var command = new Command(
+            "taskmanager.openSystemMonitor",
+            OperatingSystem.IsWindows() ? "Open Resource Monitor" : OperatingSystem.IsMacOS() ? "Open Activity Monitor" : "Open system monitor");
+        scope.Commands.Register(command, TaskActions.OpenSystemMonitor);
+        return command;
     }
 
     internal static FrameworkElement PageChrome(string title, FrameworkElement content) =>
