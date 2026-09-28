@@ -15,6 +15,10 @@ namespace Aprillz.MewUI.Controls;
 /// </remarks>
 public sealed class GridViewRow : Control, IVisualTreeHost, ICommandArgumentSource
 {
+    // Removes beforefieldinit so the registration below does not depend on some other static field
+    // being read: trimming drops the initializer of a field nothing reads.
+    static GridViewRow() { }
+
     // A style without setters keeps the themed border of the Control base style off the row, which
     // would inset every cell. Later triggers win, so selection covers the hover.
     private static readonly bool _defaultStyleRegistered =

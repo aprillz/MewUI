@@ -17,6 +17,10 @@ namespace Aprillz.MewUI.Controls;
 /// </remarks>
 public class ItemContainer : ContentControl, ICommandArgumentSource
 {
+    // Removes beforefieldinit so the registration below does not depend on some other static field
+    // being read: trimming drops the initializer of a field nothing reads.
+    static ItemContainer() { }
+
     // The wrapper must be layout-transparent: a style without setters blocks the Control base style,
     // whose themed border thickness would otherwise inset the content by a pixel on every side.
     private static readonly bool _defaultStyleRegistered =

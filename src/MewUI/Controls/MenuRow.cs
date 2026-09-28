@@ -17,6 +17,10 @@ internal readonly record struct MenuRowColumns(
 /// </summary>
 internal sealed class MenuRow : Control, IVisualTreeHost
 {
+    // Removes beforefieldinit: nothing reads the field below, so trimming would otherwise drop its
+    // initializer and the registration with it.
+    static MenuRow() { }
+
     // Triggers only: a style without setters keeps out the Control base style and its themed border.
     private static readonly bool _defaultStyleRegistered =
         DefaultStyles.Register<MenuRow>(static () => new Style(typeof(MenuRow))
