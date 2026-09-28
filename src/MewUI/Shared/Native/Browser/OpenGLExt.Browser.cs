@@ -16,7 +16,8 @@ internal static unsafe partial class OpenGLExt
         _glRenderbufferStorage = (delegate* unmanaged<uint, uint, int, int, void>)BrowserGL.GetProcAddress("glRenderbufferStorage");
         _glFramebufferRenderbuffer = (delegate* unmanaged<uint, uint, uint, uint, void>)BrowserGL.GetProcAddress("glFramebufferRenderbuffer");
         _glCheckFramebufferStatus = (delegate* unmanaged<uint, uint>)BrowserGL.GetProcAddress("glCheckFramebufferStatus");
-        _hasPackedBlitFramebuffer = true;
+        // Ten arguments are more than the runtime can pass to a native entry point; BlitFramebufferPacked stands in.
+        _glBlitFramebuffer = null;
 
         // Shader / program / VAO / buffer entrypoints (GL 2.0+ / 3.0+) - required by
         // OpenGLGaussianBlur and any other GPU effect pass. Without these, IsShaderPipelineSupported

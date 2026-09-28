@@ -47,8 +47,8 @@ internal static unsafe partial class OpenGLExt
     private static delegate* unmanaged<uint, uint> _glCheckFramebufferStatus;
     private static delegate* unmanaged<int, int, int, int, int, int, int, int, uint, uint, void> _glBlitFramebuffer;
 
-    // Set in place of _glBlitFramebuffer where a ten-argument native call is not possible (the browser).
-    private static bool _hasPackedBlitFramebuffer;
+    // The browser cannot make a ten-argument native call, so it blits through a packed-argument shim instead.
+    private static bool HasPackedBlitFramebuffer => OperatingSystem.IsBrowser();
 
     static partial void BlitFramebufferPacked(int* args);
 
@@ -263,7 +263,7 @@ internal static unsafe partial class OpenGLExt
         get
         {
             EnsureInitialized();
-            return _supported && (_glBlitFramebuffer != null || _hasPackedBlitFramebuffer);
+            return _supported && (_glBlitFramebuffer != null || HasPackedBlitFramebuffer);
         }
     }
 
@@ -274,7 +274,7 @@ internal static unsafe partial class OpenGLExt
         {
             _glBlitFramebuffer(srcX0, srcY0, srcX1, srcY1, dstX0, dstY0, dstX1, dstY1, mask, filter);
         }
-        else if (_hasPackedBlitFramebuffer)
+        else if (HasPackedBlitFramebuffer)
         {
             int* args = stackalloc int[10] { srcX0, srcY0, srcX1, srcY1, dstX0, dstY0, dstX1, dstY1, (int)mask, (int)filter };
             BlitFramebufferPacked(args);
