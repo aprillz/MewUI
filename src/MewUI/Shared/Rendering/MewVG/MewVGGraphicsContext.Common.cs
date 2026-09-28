@@ -435,6 +435,14 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
             return false;
         }
 
+        // A multisampled target rejects the blit: a browser canvas whose context the page made first
+        // keeps the page's antialias setting.
+        BindFrameTarget();
+        if (Native.GL.GetInteger(Native.GL.GL_SAMPLES) > 0)
+        {
+            return false;
+        }
+
         if (!TryGetTargetPixels(area, out int left, out int top, out int right, out int bottom))
         {
             return true;
