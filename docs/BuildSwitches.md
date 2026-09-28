@@ -54,7 +54,7 @@ Text on Windows is laid out and rasterized with DirectWrite on every backend. Th
 
 Any other value fails the build with an error.
 
-A NativeAOT publish with `Gdi` is about 70 to 95 KB smaller than the same app with `DirectWrite`. An app that draws no text is the same size either way.
+Publishing with `Gdi` removes the DirectWrite text path from a NativeAOT executable, so it is slightly smaller. An app that draws no text is the same size either way.
 
 ---
 
