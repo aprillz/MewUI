@@ -212,6 +212,7 @@ internal sealed class PerformancePage : UserControl
         private readonly TextBlock? _compositionLegend;
         private readonly TaskManagerChart? _chart;
         private readonly TaskManagerChart? _secondChart;
+        private TaskManagerChart? _cardChart;
         private FrameworkElement? _detail;
         private string[] _metricLabels = [];
         private string[] _propertyLabels = [];
@@ -280,14 +281,14 @@ internal sealed class PerformancePage : UserControl
             if (sample.Chart.IsRate)
             {
                 Append(_secondary, now, sample.Chart.Secondary ?? 0);
-                _chartMax.Value = Rescale(_chart, _primary, _secondary);
+                _chartMax.Value = Rescale(_primary, _secondary, _chart, _cardChart);
             }
             if (sample.SecondChart is ChartSample second)
             {
                 _secondLabel.Value = second.Label;
                 Append(_secondPrimary, now, second.Primary);
                 Append(_secondSecondary, now, second.Secondary ?? 0);
-                _secondMax.Value = Rescale(_secondChart, _secondPrimary, _secondSecondary);
+                _secondMax.Value = Rescale(_secondPrimary, _secondSecondary, _secondChart);
             }
 
             SyncMetrics(_metrics, ref _metricLabels, _metricValues, sample.Metrics, large: true);
@@ -300,14 +301,14 @@ internal sealed class PerformancePage : UserControl
             }
         }
 
-        /// <summary>Scales a rate chart to the largest value in view and returns the label for its top.</summary>
-        private string Rescale(TaskManagerChart? chart, ObservableCollection<ObservablePoint> first, ObservableCollection<ObservablePoint> second)
+        /// <summary>Scales the rate charts showing these values to the largest one in view and returns the label for their top.</summary>
+        private string Rescale(ObservableCollection<ObservablePoint> first, ObservableCollection<ObservablePoint> second, params TaskManagerChart?[] charts)
         {
             double peak = first.Concat(second).Select(point => point.Y ?? 0).DefaultIfEmpty(0).Max();
             // A floor keeps an idle device from scaling noise up to the full height.
             double floor = Kind == ResourceKind.Network ? 100_000 / 8.0 : 1024 * 1024;
             double top = NiceCeiling(Math.Max(peak, floor));
-            chart?.SetMaximum(top);
+            foreach (var chart in charts) chart?.SetMaximum(top);
             return Kind == ResourceKind.Network ? Format.BitRate(top) : Format.ByteRate(top);
         }
 
@@ -372,7 +373,7 @@ internal sealed class PerformancePage : UserControl
                             new Grid()
                                 .Columns("105, *")
                                 .Children(
-                                    new TaskManagerChart(_primary, _color, compact: true, secondaryValues: Latest.Chart.IsRate ? _secondary : null)
+                                    (_cardChart = new TaskManagerChart(_primary, _color, compact: true, secondaryValues: Latest.Chart.IsRate ? _secondary : null))
                                         .Margin(0, 4, 10, 4),
                                     new StackPanel()
                                         .Column(1)
