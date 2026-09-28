@@ -495,7 +495,7 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
     /// <summary>Sends the draws queued so far to the frame target, so direct target writes land after them.</summary>
     private void FlushQueuedDraws()
     {
-        _frameSession.BindFrameTarget();
+        BindFrameTarget();
         Native.GL.Viewport(0, 0, _viewportWidthPx, _viewportHeightPx);
         ApplyPendingFrameClear();
         _vg.EndFrame();
@@ -525,11 +525,6 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
     /// <summary>Drops a deferred frame clear because the first write replaces the whole target anyway.</summary>
     partial void DiscardPendingFrameClear();
 
-#if MEWUI_MEWVG_X11
-    private static nint GetCurrentGLContext() => MewVGX11GraphicsFactory.GetCurrentGLContextStatic();
-#else
-    private static nint GetCurrentGLContext() => Native.OpenGL32.wglGetCurrentContext();
-#endif
 #endif
 
     protected override void DrawLineCore(Point start, Point end, Color color, double thickness = 1)

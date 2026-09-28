@@ -46,6 +46,11 @@ internal sealed partial class MewVGWin32GraphicsContext
 
     private uint FrameTargetFbo => _pixelSurface?.Fbo ?? 0;
 
+    /// <summary>Binds the framebuffer this frame draws into.</summary>
+    private void BindFrameTarget() => OpenGLExt.BindFramebuffer(OpenGLExt.GL_FRAMEBUFFER, FrameTargetFbo);
+
+    private static nint GetCurrentGLContext() => MewVGWin32GraphicsFactory.GetCurrentGLContextStatic();
+
     partial void BeginFramePlatform()
     {
         try

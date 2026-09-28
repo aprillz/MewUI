@@ -61,6 +61,11 @@ internal sealed partial class MewVGWin32GraphicsContext
     internal void SetWindowTarget(nint hwnd, nint hdc)
         => (_frameSession as WindowBackbufferFrameSession)?.SetTarget(hwnd, hdc);
 
+    /// <summary>Binds the framebuffer this frame draws into.</summary>
+    private void BindFrameTarget() => _frameSession.BindFrameTarget();
+
+    private static nint GetCurrentGLContext() => Native.OpenGL32.wglGetCurrentContext();
+
     partial void DestroyPlatform()
     {
         // Drop the resources' cached reference to this instance. Without this

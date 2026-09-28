@@ -109,6 +109,11 @@ internal sealed partial class MewVGX11GraphicsContext
         }
     }
 
+    /// <summary>Binds the framebuffer this frame draws into.</summary>
+    private void BindFrameTarget() => _frameSession.BindFrameTarget();
+
+    private static nint GetCurrentGLContext() => MewVGX11GraphicsFactory.GetCurrentGLContextStatic();
+
     partial void DestroyPlatform()
     {
         _frameSession.DisposeContext(this);
