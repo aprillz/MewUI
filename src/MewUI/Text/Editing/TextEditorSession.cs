@@ -412,9 +412,15 @@ public sealed class TextEditorSession
         {
             current--;
         }
-        while (current > 0 && IsWordCharacter(Document.GetCharAt(current - 1)))
+
+        // A run of symbols is a word of its own, as a run of letters is; stepping over neither would leave the caret stuck.
+        if (current > 0)
         {
-            current--;
+            bool word = IsWordCharacter(Document.GetCharAt(current - 1));
+            while (current > 0 && IsInRun(Document.GetCharAt(current - 1), word))
+            {
+                current--;
+            }
         }
         return current;
     }
@@ -446,9 +452,13 @@ public sealed class TextEditorSession
     private int FindNextWordBoundary(int position)
     {
         int current = position;
-        while (current < Document.TextLength && IsWordCharacter(Document.GetCharAt(current)))
+        if (current < Document.TextLength && !char.IsWhiteSpace(Document.GetCharAt(current)))
         {
-            current++;
+            bool word = IsWordCharacter(Document.GetCharAt(current));
+            while (current < Document.TextLength && IsInRun(Document.GetCharAt(current), word))
+            {
+                current++;
+            }
         }
         while (current < Document.TextLength && char.IsWhiteSpace(Document.GetCharAt(current)))
         {
@@ -458,6 +468,10 @@ public sealed class TextEditorSession
     }
 
     private static bool IsWordCharacter(char value) => char.IsLetterOrDigit(value) || value == '_';
+
+    /// <summary>Whether a character continues a run of word characters, or of symbols when <paramref name="word"/> is false.</summary>
+    private static bool IsInRun(char value, bool word) =>
+        word ? IsWordCharacter(value) : !IsWordCharacter(value) && !char.IsWhiteSpace(value);
 
     private sealed class CompositionState(int start, string removed, int anchorBefore, int caretBefore)
     {

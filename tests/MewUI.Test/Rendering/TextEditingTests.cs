@@ -185,6 +185,45 @@ public sealed class TextEditingTests
         Assert.AreEqual("beta_value", document.GetText(editor.Selection.Start, editor.Selection.Length));
     }
 
+    [TestMethod]
+    public void Session_WordMovementStopsAtEachRunOfSymbols()
+    {
+        var document = new EditableTextDocument("nState := nState + 1;");
+        var editor = new TextEditorSession(document);
+
+        var forward = new List<int>();
+        for (int step = 0; step < 6; step++)
+        {
+            editor.MoveLogical(LogicalDirection.Forward, extendSelection: false, byWord: true);
+            forward.Add(editor.CaretPosition);
+        }
+
+        var backward = new List<int>();
+        for (int step = 0; step < 6; step++)
+        {
+            editor.MoveLogical(LogicalDirection.Backward, extendSelection: false, byWord: true);
+            backward.Add(editor.CaretPosition);
+        }
+
+        CollectionAssert.AreEqual(new[] { 7, 10, 17, 19, 20, 21 }, forward, $"forward stops were {string.Join(", ", forward)}");
+        CollectionAssert.AreEqual(new[] { 20, 19, 17, 10, 7, 0 }, backward, $"backward stops were {string.Join(", ", backward)}");
+    }
+
+    [TestMethod]
+    public void Session_WordDeletionRemovesARunOfSymbols()
+    {
+        var document = new EditableTextDocument("a := b;");
+        var editor = new TextEditorSession(document);
+
+        editor.SetCaret(document.TextLength);
+        editor.Backspace(byWord: true);
+        Assert.AreEqual("a := b", document.ToString(), "Ctrl+Backspace after a semicolon deleted nothing or too much.");
+
+        editor.SetCaret(2);
+        editor.Delete(byWord: true);
+        Assert.AreEqual("a b", document.ToString(), "Ctrl+Delete before an assignment deleted nothing or too much.");
+    }
+
     private static void AssertDocumentLines(EditableTextDocument document, string expected, int iteration)
     {
         string[] lines = expected.Split('\n');
