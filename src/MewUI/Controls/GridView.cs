@@ -1238,12 +1238,12 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
     {
         _presenter.ItemsSource = _core.ItemsSource;
         // Presenters handle Add/Remove/Replace internally (remapping realized indices,
-        // updating height caches and offsets). Force a full recycle only for Reset, which
-        // signals a wholesale collection change.
+        // updating height caches and offsets). A Reset is a wholesale change: the realized rows are
+        // held and handed back to their items by key at the next layout.
         if (change.Kind == ItemsChangeKind.Reset)
         {
             _core.ResetAutoDesiredWidths();
-            _presenter.RecycleAll();
+            _presenter.HoldRealizedForReset();
             if (_presenter is VariableHeightItemsPresenter variableHeightPresenter)
             {
                 variableHeightPresenter.InvalidateHeights();

@@ -209,6 +209,9 @@ internal sealed class StackItemsPresenter : Control, IItemsPresenter
         _totalHeight = 0;
     }
 
+    /// <summary>Recycles everything: this presenter keeps a container for every item and rebuilds them on a Reset.</summary>
+    public void HoldRealizedForReset() => RecycleAll();
+
     public void VisitRealized(Action<Element> visitor)
     {
         for (int i = 0; i < _containers.Count; i++)

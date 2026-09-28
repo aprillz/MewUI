@@ -854,10 +854,10 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
     {
         // VariableHeightItemsPresenter handles Add/Remove/Replace internally:
         // it remaps realized indices and preserves the scroll anchor.
-        // Force a full recycle only for Reset/Move where the presenter itself resets.
+        // Reset and Move hold the realized containers for the next layout to hand back by key.
         if (change.Kind is ItemsChangeKind.Reset or ItemsChangeKind.Move)
         {
-            _presenter.RecycleAll();
+            _presenter.HoldRealizedForReset();
         }
         _hoverIndex = -1;
         InvalidateItemBindings();

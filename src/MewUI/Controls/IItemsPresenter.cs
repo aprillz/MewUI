@@ -70,6 +70,12 @@ internal interface IItemsPresenter : IScrollContent, IVisualTreeHost
 
     void RecycleAll();
 
+    /// <summary>
+    /// Keeps the realized containers after a Reset for the next layout pass to give back to their items,
+    /// found by key, bound again; the rest are recycled then.
+    /// </summary>
+    void HoldRealizedForReset();
+
     void VisitRealized(Action<Element> visitor);
 
     bool VisitRealized(Func<Element, bool> visitor);

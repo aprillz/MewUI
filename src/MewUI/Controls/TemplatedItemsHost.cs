@@ -37,7 +37,8 @@ internal sealed class TemplatedItemsHost : IDisposable
         Func<int, object?> getItem,
         Action invalidateMeasureAndVisual,
         IDataTemplate template,
-        Action<FrameworkElement>? recycle = null)
+        Action<FrameworkElement>? recycle = null,
+        Func<int, object?>? getKey = null)
     {
         ArgumentNullException.ThrowIfNull(owner);
         ArgumentNullException.ThrowIfNull(getItem);
@@ -54,7 +55,8 @@ internal sealed class TemplatedItemsHost : IDisposable
             owner,
             createContainer: CreateItemContainer,
             bind: BindItemContainer,
-            unbind: UnbindItemContainer);
+            unbind: UnbindItemContainer,
+            keyAt: getKey);
     }
 
     public IDataTemplate ItemTemplate
@@ -75,6 +77,9 @@ internal sealed class TemplatedItemsHost : IDisposable
     }
 
     public void RecycleAll() => _presenter.RecycleAll();
+
+    /// <inheritdoc cref="VirtualizedItemsPresenter.HoldRealizedForReset"/>
+    public void HoldRealizedForReset() => _presenter.HoldRealizedForReset();
 
     public void Dispose() => _presenter.Dispose();
 

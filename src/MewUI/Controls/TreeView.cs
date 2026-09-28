@@ -532,7 +532,7 @@ public sealed partial class TreeView : Control, ISubtreeInvalidationHost, IFocus
     private void OnItemsChanged(ItemsChange change)
     {
         _observedExtentWidth = 0;
-        _presenter.RecycleAll();
+        _presenter.HoldRealizedForReset();
         InvalidateItemBindings();
         _hoverVisibleIndex = -1;
         ReevaluateMouseOverAfterScroll();

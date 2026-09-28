@@ -14,8 +14,10 @@ internal sealed class VirtualizedItemsPresenter
     private Func<FrameworkElement> _createContainer;
     private Action<FrameworkElement, int> _bind;
     private Action<FrameworkElement>? _unbind;
+    private readonly Func<int, object?>? _keyAt;
 
     private readonly Dictionary<int, FrameworkElement> _realized = new();
+    private readonly ResetHeldContainers _resetHeld = new();
     private readonly Dictionary<FrameworkElement, uint> _itemBindingGenerations = new();
     private readonly Stack<FrameworkElement> _pool = new();
     private readonly Dictionary<int, FrameworkElement> _recycledByIndex = new();
@@ -31,12 +33,14 @@ internal sealed class VirtualizedItemsPresenter
         FrameworkElement owner,
         Func<FrameworkElement> createContainer,
         Action<FrameworkElement, int> bind,
-        Action<FrameworkElement>? unbind = null)
+        Action<FrameworkElement>? unbind = null,
+        Func<int, object?>? keyAt = null)
     {
         _owner = owner ?? throw new ArgumentNullException(nameof(owner));
         _createContainer = createContainer ?? throw new ArgumentNullException(nameof(createContainer));
         _bind = bind ?? throw new ArgumentNullException(nameof(bind));
         _unbind = unbind;
+        _keyAt = keyAt;
     }
 
     /// <summary>
@@ -78,6 +82,41 @@ internal sealed class VirtualizedItemsPresenter
         for (int i = 0; i < keys.Length; i++)
         {
             Recycle(keys[i]);
+        }
+
+        ReleaseResetHeld();
+    }
+
+    /// <summary>
+    /// Takes the realized containers out of their indices after a Reset without detaching them. The next
+    /// layout pass gives each back to the index its item now has, bound again, and recycles the rest.
+    /// Without item keys this recycles everything, as <see cref="RecycleAll"/> does.
+    /// </summary>
+    public void HoldRealizedForReset()
+    {
+        if (_keyAt == null)
+        {
+            RecycleAll();
+            return;
+        }
+
+        // An index a focus-pinned item waited on means nothing once the items have moved.
+        _pendingRebind?.Clear();
+        var indices = GetSortedKeys();
+        for (int i = 0; i < indices.Length; i++)
+        {
+            int index = indices[i];
+            var element = _realized[index];
+            if (_resetHeld.TryHold(element))
+            {
+                _realized.Remove(index);
+                // Bound again whatever it shows next: a key says which item, not what the item holds now.
+                _itemBindingGenerations.Remove(element);
+            }
+            else
+            {
+                Recycle(index);
+            }
         }
     }
 
@@ -306,6 +345,8 @@ internal sealed class VirtualizedItemsPresenter
             element.Arrange(containerRect);
         }
 
+        // What the Reset held and no visible item took back has left the view.
+        ReleaseResetHeld();
         FlushRecycledByIndexToPool();
     }
 
@@ -321,6 +362,7 @@ internal sealed class VirtualizedItemsPresenter
             {
                 _bind(existing, index);
                 _itemBindingGenerations[existing] = itemBindingGeneration;
+                _resetHeld.NoteBound(existing, _keyAt?.Invoke(index));
             }
 
             // When a focus-pinned item re-enters the visible range after being off-screen,
@@ -334,8 +376,14 @@ internal sealed class VirtualizedItemsPresenter
             return existing;
         }
 
+        object? key = _keyAt?.Invoke(index);
         FrameworkElement element;
-        if (_recycledByIndex.Remove(index, out var recycled))
+        if (!_resetHeld.IsEmpty && _resetHeld.TryTake(key, out var held))
+        {
+            // Still attached from before the Reset: it keeps its place in the tree and what it recorded.
+            element = held;
+        }
+        else if (_recycledByIndex.Remove(index, out var recycled))
         {
             element = recycled;
         }
@@ -349,6 +397,7 @@ internal sealed class VirtualizedItemsPresenter
 
         _bind(element, index);
         _itemBindingGenerations[element] = itemBindingGeneration;
+        _resetHeld.NoteBound(element, key);
         _realized[index] = element;
 
         TryRestoreDeferredFocus(element, index);
@@ -362,6 +411,18 @@ internal sealed class VirtualizedItemsPresenter
             return;
         }
 
+        RecycleElement(element, index);
+    }
+
+    private void ReleaseResetHeld()
+        => _resetHeld.Release(element => RecycleElement(element, index: null));
+
+    /// <summary>
+    /// Unbinds and detaches a container no longer realized. Focus inside it moves to the owner; it comes
+    /// back when <paramref name="index"/> is realized again, and not at all without an index.
+    /// </summary>
+    private void RecycleElement(FrameworkElement element, int? index)
+    {
         if (element is UIElement uiElement && _owner.FindVisualRoot() is Window window)
         {
             var focused = window.FocusManager.FocusedElement;
@@ -388,8 +449,9 @@ internal sealed class VirtualizedItemsPresenter
 
         _unbind?.Invoke(element);
         _itemBindingGenerations.Remove(element);
+        _resetHeld.Forget(element);
         element.Parent = null;
-        if (!_recycledByIndex.TryAdd(index, element))
+        if (index is not int recycledIndex || !_recycledByIndex.TryAdd(recycledIndex, element))
         {
             _pool.Push(element);
         }

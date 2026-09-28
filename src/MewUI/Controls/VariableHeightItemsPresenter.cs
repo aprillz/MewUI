@@ -19,6 +19,7 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
     private readonly Dictionary<FrameworkElement, uint> _itemBindingGenerations = new();
     private readonly Stack<FrameworkElement> _pool = new();
     private readonly Dictionary<int, FrameworkElement> _recycledByIndex = new();
+    private readonly ResetHeldContainers _resetHeld = new();
     private readonly List<int> _recycleScratch = new();
     private readonly List<int> _arrangedItems = new();
     private readonly List<(int OldIndex, FrameworkElement Element)> _remapScratch = new();
@@ -494,6 +495,8 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
                 y += alignedH;
             }
 
+            // What the Reset held and no visible item took back has left the view.
+            ReleaseResetHeld();
             FlushRecycledByIndexToPool();
             return heightChanged;
         }
@@ -657,7 +660,39 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
         {
             Recycle(_recycleScratch[i]);
         }
+
+        ReleaseResetHeld();
     }
+
+    public void HoldRealizedForReset()
+    {
+        // An index a focus-pinned item waited on means nothing once the items have moved.
+        _pendingRebind?.Clear();
+        _recycleScratch.Clear();
+        foreach (var index in _realized.Keys)
+        {
+            _recycleScratch.Add(index);
+        }
+
+        for (int i = 0; i < _recycleScratch.Count; i++)
+        {
+            int index = _recycleScratch[i];
+            var element = _realized[index];
+            if (_resetHeld.TryHold(element))
+            {
+                _realized.Remove(index);
+                // Bound again whatever it shows next: a key says which item, not what the item holds now.
+                _itemBindingGenerations.Remove(element);
+            }
+            else
+            {
+                Recycle(index);
+            }
+        }
+    }
+
+    private void ReleaseResetHeld()
+        => _resetHeld.Release(element => RecycleElement(element, index: null));
 
     public void VisitRealized(Action<Element> visitor)
     {
@@ -1118,6 +1153,7 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
             {
                 BindItemContainer(existing, index);
                 _itemBindingGenerations[existing] = itemBindingGeneration;
+                _resetHeld.NoteBound(existing, ResetHeldContainers.KeyAt(ItemsSource, index));
             }
 
             // When a focus-pinned item re-enters the visible range after being off-screen,
@@ -1131,8 +1167,14 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
             return existing;
         }
 
+        object? key = ResetHeldContainers.KeyAt(ItemsSource, index);
         FrameworkElement element;
-        if (_recycledByIndex.Remove(index, out var recycled))
+        if (!_resetHeld.IsEmpty && _resetHeld.TryTake(key, out var held))
+        {
+            // Still attached from before the Reset: it keeps its place in the tree and what it recorded.
+            element = held;
+        }
+        else if (_recycledByIndex.Remove(index, out var recycled))
         {
             element = recycled;
         }
@@ -1145,6 +1187,7 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
         element.IsVisible = true;
         BindItemContainer(element, index);
         _itemBindingGenerations[element] = itemBindingGeneration;
+        _resetHeld.NoteBound(element, key);
         _realized[index] = element;
         TryRestoreDeferredFocus(element, index);
         return element;
@@ -1184,6 +1227,15 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
             return;
         }
 
+        RecycleElement(element, index);
+    }
+
+    /// <summary>
+    /// Unbinds and detaches a container no longer realized. Focus inside it moves to this presenter; it
+    /// comes back when <paramref name="index"/> is realized again, and not at all without an index.
+    /// </summary>
+    private void RecycleElement(FrameworkElement element, int? index)
+    {
         if (element is UIElement uiElement && FindVisualRoot() is Window window)
         {
             var focused = window.FocusManager.FocusedElement;
@@ -1207,9 +1259,10 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
 
         UnbindItemContainer(element);
         _itemBindingGenerations.Remove(element);
+        _resetHeld.Forget(element);
         element.Parent = null;
 
-        if (!_recycledByIndex.TryAdd(index, element))
+        if (index is not int recycledIndex || !_recycledByIndex.TryAdd(recycledIndex, element))
         {
             _pool.Push(element);
         }
@@ -1459,7 +1512,7 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
         if (oldCountForAnchor > heightsCount)
         {
             ResetHeights();
-            RecycleAll();
+            HoldRealizedForReset();
             EnsureHeightsCapacity(newCount);
             InvalidateMeasure();
             InvalidateVisual();
@@ -1495,7 +1548,7 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
         {
             case ItemsChangeKind.Reset:
                 ResetHeights();
-                RecycleAll();
+                HoldRealizedForReset();
                 break;
 
             case ItemsChangeKind.Add:
@@ -1578,9 +1631,9 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
                 break;
 
             case ItemsChangeKind.Move:
-                // Conservative fallback: reset heights and recycle. (Can be optimized later.)
+                // Heights are measured again; the containers follow their items by key.
                 ResetHeights();
-                RecycleAll();
+                HoldRealizedForReset();
                 break;
         }
 

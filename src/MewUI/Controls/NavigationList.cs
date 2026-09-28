@@ -553,7 +553,7 @@ public class NavigationList : ScrollableItemsBase, ISelector, IIndexedSelector
     {
         if (change.Kind is ItemsChangeKind.Reset or ItemsChangeKind.Move)
         {
-            _presenter.RecycleAll();
+            _presenter.HoldRealizedForReset();
         }
         _hoverIndex = -1;
         InvalidateItemBindings();

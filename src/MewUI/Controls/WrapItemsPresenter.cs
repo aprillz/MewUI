@@ -89,6 +89,8 @@ internal sealed class WrapItemsPresenter : Control, IItemsPresenter
     public event Action<Point>? OffsetCorrectionRequested;
 
     public void RecycleAll() => _itemsHost.RecycleAll();
+
+    public void HoldRealizedForReset() => _itemsHost.HoldRealizedForReset();
     public void VisitRealized(Action<Element> visitor) => _itemsHost.VisitRealized(visitor);
     public bool VisitRealized(Func<Element, bool> visitor) => _itemsHost.VisitRealized(visitor);
     public void VisitRealized(Action<int, FrameworkElement> visitor) => _itemsHost.VisitRealized(visitor);
@@ -98,6 +100,7 @@ internal sealed class WrapItemsPresenter : Control, IItemsPresenter
         _itemsHost = new TemplatedItemsHost(
             owner: this,
             getItem: i => ItemsSource.GetItem(i),
+            getKey: index => ResetHeldContainers.KeyAt(ItemsSource, index),
             invalidateMeasureAndVisual: () =>
             {
                 InvalidateMeasure();
