@@ -613,9 +613,14 @@ internal sealed class FlexTabSetView : Control, IVisualTreeHost, INodeView, IPan
         }
 
         int leadCount = fitCount;
-        if (activeIndex >= leadCount && leadCount > 0)
+        if (activeIndex >= leadCount)
         {
-            leadCount--;
+            // The selected tab goes after the leading run, so drop leading tabs until it fits beside them.
+            double activeWidth = active[activeIndex].DesiredSize.Width;
+            while (leadCount > 0 && LeadingWidth(active, leadCount) + TabSpacing + activeWidth > availableForTabs)
+            {
+                leadCount--;
+            }
         }
 
         var visible = new List<FlexTabButton>();
@@ -640,6 +645,17 @@ internal sealed class FlexTabSetView : Control, IVisualTreeHost, INodeView, IPan
 
         _overflowActive = _hiddenTabs.Count > 0;
         return visible;
+    }
+
+    /// <summary>The width of the first <paramref name="count"/> tabs laid out side by side.</summary>
+    private static double LeadingWidth(List<FlexTabButton> tabs, int count)
+    {
+        double width = 0;
+        for (int index = 0; index < count; index++)
+        {
+            width += tabs[index].DesiredSize.Width + (index > 0 ? TabSpacing : 0);
+        }
+        return width;
     }
 
     private void ShowOverflowMenu()
