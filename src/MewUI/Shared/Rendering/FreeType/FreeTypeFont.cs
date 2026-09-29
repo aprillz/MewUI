@@ -32,16 +32,18 @@ internal sealed class FreeTypeFont : FontBase, IGlyphOutlineFont
             lock (face.SyncRoot)
             {
                 var metrics = FreeTypeFaceCache.GetSizeMetrics(face.Face);
-                double ascentPx = (long)metrics.ascender / 64.0;
-                double descentPx = -(long)metrics.descender / 64.0; // FreeType descender is negative
-                double heightPx = (long)metrics.height / 64.0;
+                // A bitmap-only face reports the strike it selected; its glyphs are scaled to the size asked for.
+                double strikeScale = face.BitmapScale;
+                double ascentPx = (long)metrics.ascender / 64.0 * strikeScale;
+                double descentPx = -(long)metrics.descender / 64.0 * strikeScale; // FreeType descender is negative
+                double heightPx = (long)metrics.height / 64.0 * strikeScale;
                 double dpiScale = pixelHeight > 0 ? pixelHeight / size : 1.0;
 
                 Ascent = ascentPx / dpiScale;
                 Descent = descentPx / dpiScale;
                 InternalLeading = Math.Max(0, (heightPx - ascentPx - descentPx) / dpiScale);
-                CapHeight = ResolveCapHeight(face.Face, in metrics, dpiScale, Ascent);
-                XHeight = ResolveXHeight(face.Face, dpiScale, CapHeight);
+                CapHeight = ResolveCapHeight(face.Face, in metrics, dpiScale / strikeScale, Ascent);
+                XHeight = ResolveXHeight(face.Face, dpiScale / strikeScale, CapHeight);
             }
         }
         catch
@@ -159,11 +161,12 @@ internal sealed class FreeTypeFont : FontBase, IGlyphOutlineFont
                 if (slotPointer != 0)
                 {
                     var metrics = ((FT_GlyphSlotRec*)slotPointer)->metrics;
-                    double bearingX = (long)metrics.horiBearingX / 64.0;
-                    double bearingY = (long)metrics.horiBearingY / 64.0;
-                    double width = (long)metrics.width / 64.0;
-                    double height = (long)metrics.height / 64.0;
-                    double advance = (long)metrics.horiAdvance / 64.0;
+                    double scale = activeFace.BitmapScale;
+                    double bearingX = (long)metrics.horiBearingX / 64.0 * scale;
+                    double bearingY = (long)metrics.horiBearingY / 64.0 * scale;
+                    double width = (long)metrics.width / 64.0 * scale;
+                    double height = (long)metrics.height / 64.0 * scale;
+                    double advance = (long)metrics.horiAdvance / 64.0 * scale;
                     ink = new GlyphInk(-bearingX, bearingX + width - advance, bearingY, height - bearingY, advance);
                 }
             }

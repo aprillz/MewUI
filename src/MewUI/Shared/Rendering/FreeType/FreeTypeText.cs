@@ -301,7 +301,7 @@ internal static unsafe class FreeTypeText
                 {
                     foreach (var run in fallbackRuns)
                     {
-                        double scale = run.Face?.BitmapScale ?? 1.0;
+                        double scale = (run.Face ?? face).BitmapScale;
                         foreach (var shaped in run.Glyphs)
                         {
                             long advance = SnapAdvanceToPixels((long)Math.Round(shaped.XAdvance26_6 * scale));
@@ -317,7 +317,7 @@ internal static unsafe class FreeTypeText
                 for (int j = runStart; j <= i; j++)
                 {
                     ref readonly var gg = ref glyphs[j];
-                    long advance = SnapAdvanceToPixels(gg.XAdvance26_6);
+                    long advance = SnapAdvanceToPixels((long)Math.Round(gg.XAdvance26_6 * face.BitmapScale));
                     uint codepoint = GetCodepointFromCluster(sourceText, gg.Cluster);
                     if (codepoint != 0)
                     {
@@ -333,7 +333,7 @@ internal static unsafe class FreeTypeText
                 continue;
             }
 
-            long snapped = SnapAdvanceToPixels(g.XAdvance26_6);
+            long snapped = SnapAdvanceToPixels((long)Math.Round(g.XAdvance26_6 * face.BitmapScale));
             total += snapped;
             RecordClusterAdvance(clusterAdvances26_6, (int)g.Cluster, snapped);
         }
@@ -645,7 +645,6 @@ internal static unsafe class FreeTypeText
     {
         long penX26_6 = (long)startPenX << 6;
         int baseY = penY + GetBaselinePx(font);
-        int flags = FreeTypeLoad.FT_LOAD_DEFAULT | FreeTypeLoad.FT_LOAD_TARGET_LIGHT;
 
         for (int i = 0; i < glyphs.Length; i++)
         {
@@ -665,7 +664,7 @@ internal static unsafe class FreeTypeText
                             // Nothing covers these characters; they keep the primary face's advance and draw nothing.
                             foreach (var shaped in run.Glyphs)
                             {
-                                penX26_6 += SnapAdvanceToPixels(shaped.XAdvance26_6);
+                                penX26_6 += SnapAdvanceToPixels((long)Math.Round(shaped.XAdvance26_6 * face.BitmapScale));
                             }
                         }
                         else
@@ -700,50 +699,16 @@ internal static unsafe class FreeTypeText
                             }
                         }
                     }
-                    penX26_6 += SnapAdvanceToPixels(gg.XAdvance26_6);
+                    penX26_6 += SnapAdvanceToPixels((long)Math.Round(gg.XAdvance26_6 * face.BitmapScale));
                 }
                 continue;
             }
 
-            int glyphDrawX = (int)((penX26_6 + g.XOffset26_6) >> 6);
-            int drawYOffset = (int)(g.YOffset26_6 >> 6);
-
-            lock (face.SyncRoot)
-            {
-                if (FT.FT_Load_Glyph(face.Face, g.GlyphId, flags) != 0)
-                {
-                    goto Advance;
-                }
-
-                var slotPtr = face.GetGlyphSlotPointer();
-                if (slotPtr != 0 && FT.FT_Get_Glyph(slotPtr, out var glyphPtr) == 0 && glyphPtr != 0)
-                {
-                    nint bmpGlyphPtr = glyphPtr;
-                    try
-                    {
-                        if (FT.FT_Glyph_To_Bitmap(ref bmpGlyphPtr, FreeTypeRenderMode.FT_RENDER_MODE_NORMAL, origin: 0, destroy: false) == 0 && bmpGlyphPtr != 0)
-                        {
-                            var bmpGlyph = Marshal.PtrToStructure<FT_BitmapGlyphRec>(bmpGlyphPtr);
-                            int dstX0 = glyphDrawX + bmpGlyph.left;
-                            int dstY0 = baseY - bmpGlyph.top - drawYOffset;
-                            BlitGlyph(bmpGlyph.bitmap, (int)bmpGlyph.bitmap.width, (int)bmpGlyph.bitmap.rows,
-                                dstX0, dstY0, buffer, widthPx, heightPx, color);
-                        }
-                    }
-                    finally
-                    {
-                        if (bmpGlyphPtr != 0 && bmpGlyphPtr != glyphPtr)
-                        {
-                            FT.FT_Done_Glyph(bmpGlyphPtr);
-                        }
-
-                        FT.FT_Done_Glyph(glyphPtr);
-                    }
-                }
-            }
-
-            Advance:
-            penX26_6 += SnapAdvanceToPixels(g.XAdvance26_6);
+            // The primary face draws through the same path as a fallback face, so a bitmap colour font scales and
+            // keeps its colours when it is the font asked for.
+            penX26_6 += RenderShapedGlyphsDirect(
+                glyphs.AsSpan(i, 1), face, font, penX26_6, baseY,
+                buffer, widthPx, heightPx, color);
         }
     }
 
@@ -753,7 +718,7 @@ internal static unsafe class FreeTypeText
     /// Returns total advance in 26.6 fixed-point, each glyph snapped to a whole pixel as measurement snaps it.
     /// </summary>
     private static long RenderShapedGlyphsDirect(
-        ShapedGlyph[] glyphs,
+        ReadOnlySpan<ShapedGlyph> glyphs,
         FreeTypeFaceCache.FaceEntry face,
         FreeTypeFont font,
         long startPenX26_6,
@@ -978,8 +943,9 @@ internal static unsafe class FreeTypeText
                             if (err == 0 && bmpGlyphPtr != 0)
                             {
                                 var bmpGlyph = Marshal.PtrToStructure<FT_BitmapGlyphRec>(bmpGlyphPtr);
+                                double scale = activeFace.BitmapScale;
                                 BlitGlyph(bmpGlyph.bitmap, (int)bmpGlyph.bitmap.width, (int)bmpGlyph.bitmap.rows,
-                                    penX + bmpGlyph.left, baseY - bmpGlyph.top, buffer, widthPx, heightPx, color);
+                                    penX + (int)(bmpGlyph.left * scale), baseY - (int)(bmpGlyph.top * scale), buffer, widthPx, heightPx, color, scale);
                             }
                         }
                         finally
