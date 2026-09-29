@@ -269,7 +269,7 @@ internal static unsafe class FreeTypeText
             var shaped = HarfBuzzShaper.Shape(text, face);
             if (shaped != null)
             {
-                return MeasureShapedWidth(shaped, text, font);
+                return MeasureShapedWidth(shaped, text, face, font);
             }
         }
 
@@ -279,12 +279,12 @@ internal static unsafe class FreeTypeText
     /// <summary>
     /// Measures the total width of shaped glyphs, substituting fallback face advances
     /// for .notdef glyphs (glyph ID 0) so that measurement matches rendering.
-    /// Consecutive .notdef glyphs are re-shaped with the fallback font to handle ZWJ sequences.
+    /// The text of consecutive .notdef glyphs is re-shaped run by run with the fallback faces that cover it.
     /// When <paramref name="clusterAdvances26_6"/> is provided, each advance is also recorded
     /// at its source cluster index so callers can build per-code-unit prefix advances.
     /// </summary>
     private static int MeasureShapedWidth(ShapedGlyph[] glyphs,
-        ReadOnlySpan<char> sourceText, FreeTypeFont font,
+        ReadOnlySpan<char> sourceText, FreeTypeFaceCache.FaceEntry face, FreeTypeFont font,
         long[]? clusterAdvances26_6 = null)
     {
         long total = 0;
@@ -295,39 +295,22 @@ internal static unsafe class FreeTypeText
 
             if (g.GlyphId == 0 && !sourceText.IsEmpty)
             {
-                // Use grapheme cluster boundary to capture full ZWJ sequences
-                int textStart = (int)g.Cluster;
-                int clusterLen = StringInfo.GetNextTextElementLength(sourceText.Slice(textStart));
-                int textEnd = textStart + clusterLen;
-
-                // Collect ALL glyphs within this grapheme cluster range
                 int runStart = i;
-                while (i + 1 < glyphs.Length && (int)glyphs[i + 1].Cluster < textEnd)
-                    i++;
-
-                if (textEnd > textStart)
+                var fallbackRuns = ShapeFallbackRange(glyphs, ref i, sourceText, face, font);
+                if (fallbackRuns != null)
                 {
-                    uint firstCp = GetCodepointFromCluster(sourceText, (uint)textStart);
-                    if (firstCp != 0)
+                    foreach (var run in fallbackRuns)
                     {
-                        var fallbackFace = font.FallbackFace(firstCp);
-                        if (fallbackFace != null)
+                        double scale = run.Face?.BitmapScale ?? 1.0;
+                        foreach (var shaped in run.Glyphs)
                         {
-                            // Re-shape with fallback font (ZWJ sequences combine here)
-                            var clusterText = sourceText.Slice(textStart, textEnd - textStart);
-                            var reshaped = HarfBuzzShaper.Shape(clusterText, fallbackFace);
-                            if (reshaped != null && reshaped.Length > 0)
-                            {
-                                double bitmapScale = fallbackFace.BitmapScale;
-                                long clusterTotal = 0;
-                                for (int j = 0; j < reshaped.Length; j++)
-                                    clusterTotal += SnapAdvanceToPixels((long)Math.Round(reshaped[j].XAdvance26_6 * bitmapScale));
-                                total += clusterTotal;
-                                RecordClusterAdvance(clusterAdvances26_6, textStart, clusterTotal);
-                                continue;
-                            }
+                            long advance = SnapAdvanceToPixels((long)Math.Round(shaped.XAdvance26_6 * scale));
+                            total += advance;
+                            RecordClusterAdvance(clusterAdvances26_6, run.TextStart + (int)shaped.Cluster, advance);
                         }
                     }
+
+                    continue;
                 }
 
                 // Fallback: individual codepoint advances
@@ -357,6 +340,91 @@ internal static unsafe class FreeTypeText
 
         return (int)Math.Round(total / 64.0, MidpointRounding.AwayFromZero);
     }
+
+    /// <summary>
+    /// Text the primary face could not draw, shaped with one fallback face; <see cref="Face"/> is null when no
+    /// installed font covers it, and <see cref="Glyphs"/> then hold the primary face's .notdef glyphs.
+    /// Glyph clusters count from <see cref="TextStart"/>.
+    /// </summary>
+    private readonly record struct FallbackRun(int TextStart, FreeTypeFaceCache.FaceEntry? Face, ShapedGlyph[] Glyphs);
+
+    /// <summary>
+    /// Re-shapes the text behind the .notdef glyphs that start at <paramref name="glyphIndex"/>, split into runs
+    /// of the fallback face that covers each character, so a script drawn from a fallback font is shaped with
+    /// the context it needs (joining, conjuncts, reordering). Moves <paramref name="glyphIndex"/> to the last
+    /// glyph the runs replace. Null when HarfBuzz cannot shape a run; the caller then falls back per code point.
+    /// </summary>
+    private static List<FallbackRun>? ShapeFallbackRange(
+        ShapedGlyph[] glyphs,
+        ref int glyphIndex,
+        ReadOnlySpan<char> text,
+        FreeTypeFaceCache.FaceEntry primaryFace,
+        FreeTypeFont font)
+    {
+        // The primary shaping may run right to left, so the text range is taken from the smallest and largest
+        // clusters; a glyph inside it (a joiner the primary face has) belongs to the same text.
+        int textStart = (int)glyphs[glyphIndex].Cluster;
+        int textEnd = textStart + ElementLength(text, textStart);
+        int last = glyphIndex;
+        while (last + 1 < glyphs.Length)
+        {
+            int cluster = (int)glyphs[last + 1].Cluster;
+            if (glyphs[last + 1].GlyphId != 0 && (cluster < textStart || cluster >= textEnd))
+            {
+                break;
+            }
+
+            last++;
+            textStart = Math.Min(textStart, cluster);
+            textEnd = Math.Max(textEnd, cluster + ElementLength(text, cluster));
+        }
+
+        var runs = new List<FallbackRun>();
+        int runStart = textStart;
+        FreeTypeFaceCache.FaceEntry? runFace = null;
+        for (int position = textStart; position < textEnd;)
+        {
+            int length = ElementLength(text, position);
+            uint codePoint = GetCodepointFromCluster(text, (uint)position);
+            var elementFace = codePoint == 0 ? null : font.FallbackFace(codePoint);
+            if (position > runStart && !ReferenceEquals(elementFace, runFace))
+            {
+                if (!TryAddRun(runs, text, runStart, position, runFace, primaryFace))
+                {
+                    return null;
+                }
+
+                runStart = position;
+            }
+
+            runFace = elementFace;
+            position += length;
+        }
+
+        if (!TryAddRun(runs, text, runStart, textEnd, runFace, primaryFace))
+        {
+            return null;
+        }
+
+        glyphIndex = last;
+        return runs;
+    }
+
+    private static bool TryAddRun(List<FallbackRun> runs, ReadOnlySpan<char> text, int start, int end,
+        FreeTypeFaceCache.FaceEntry? face, FreeTypeFaceCache.FaceEntry primaryFace)
+    {
+        var shaped = HarfBuzzShaper.Shape(text[start..end], face ?? primaryFace);
+        if (shaped == null)
+        {
+            return false;
+        }
+
+        runs.Add(new FallbackRun(start, face, shaped));
+        return true;
+    }
+
+    private static int ElementLength(ReadOnlySpan<char> text, int position)
+        => (uint)position < (uint)text.Length ? Math.Max(1, StringInfo.GetNextTextElementLength(text[position..])) : 1;
 
     private static void RecordClusterAdvance(long[]? clusterAdvances26_6, int clusterIndex, long advance26_6)
     {
@@ -447,7 +515,7 @@ internal static unsafe class FreeTypeText
             if (shaped != null)
             {
                 var clusterAdvances = new long[text.Length];
-                MeasureShapedWidth(shaped, text, font, clusterAdvances);
+                MeasureShapedWidth(shaped, text, face, font, clusterAdvances);
                 long running = 0;
                 for (int index = 0; index < text.Length; index++)
                 {
@@ -583,42 +651,32 @@ internal static unsafe class FreeTypeText
         {
             ref readonly var g = ref glyphs[i];
 
-            // Detect .notdef glyph (glyph ID 0) - try fallback with ZWJ-aware reshaping
+            // A .notdef glyph starts text the primary face lacks: re-shape it with the fallback faces that cover it.
             if (g.GlyphId == 0 && !sourceText.IsEmpty)
             {
-                // Use grapheme cluster boundary (not consecutive .notdef) to capture
-                // the full ZWJ sequence - intermediate chars like ZWJ/VS16 may have
-                // valid glyphs in the primary font but must be re-shaped together.
-                int textStart = (int)g.Cluster;
-                int clusterLen = StringInfo.GetNextTextElementLength(sourceText.Slice(textStart));
-                int textEnd = textStart + clusterLen;
-
-                // Collect ALL glyphs within this grapheme cluster range
                 int runStart = i;
-                while (i + 1 < glyphs.Length && (int)glyphs[i + 1].Cluster < textEnd)
-                    i++;
-
-                if (textEnd > textStart)
+                var fallbackRuns = ShapeFallbackRange(glyphs, ref i, sourceText, face, font);
+                if (fallbackRuns != null)
                 {
-                    var fallbackText = sourceText.Slice(textStart, textEnd - textStart);
-                    uint firstCp = GetCodepointFromCluster(sourceText, (uint)textStart);
-
-                    if (firstCp != 0)
+                    foreach (var run in fallbackRuns)
                     {
-                        var fallbackFace = font.FallbackFace(firstCp);
-                        if (fallbackFace != null)
+                        if (run.Face == null)
                         {
-                            // Re-shape the entire grapheme cluster with fallback font
-                            var reshaped = HarfBuzzShaper.Shape(fallbackText, fallbackFace);
-                            if (reshaped != null && reshaped.Length > 0)
+                            // Nothing covers these characters; they keep the primary face's advance and draw nothing.
+                            foreach (var shaped in run.Glyphs)
                             {
-                                penX26_6 += RenderShapedGlyphsDirect(
-                                    reshaped, fallbackFace, font, penX26_6, baseY,
-                                    buffer, widthPx, heightPx, color);
-                                continue;
+                                penX26_6 += SnapAdvanceToPixels(shaped.XAdvance26_6);
                             }
                         }
+                        else
+                        {
+                            penX26_6 += RenderShapedGlyphsDirect(
+                                run.Glyphs, run.Face, font, penX26_6, baseY,
+                                buffer, widthPx, heightPx, color);
+                        }
                     }
+
+                    continue;
                 }
 
                 // Fallback: render individual codepoints
@@ -692,7 +750,7 @@ internal static unsafe class FreeTypeText
     /// <summary>
     /// Renders shaped glyphs from a specific face (typically a fallback emoji font).
     /// Handles color emoji (BGRA) and BitmapScale. Does NOT attempt further fallback for .notdef.
-    /// Returns total advance in 26.6 fixed-point.
+    /// Returns total advance in 26.6 fixed-point, each glyph snapped to a whole pixel as measurement snaps it.
     /// </summary>
     private static long RenderShapedGlyphsDirect(
         ShapedGlyph[] glyphs,
@@ -712,7 +770,7 @@ internal static unsafe class FreeTypeText
         for (int i = 0; i < glyphs.Length; i++)
         {
             ref readonly var g = ref glyphs[i];
-            long scaledAdvance = (long)Math.Round(g.XAdvance26_6 * scale);
+            long scaledAdvance = SnapAdvanceToPixels((long)Math.Round(g.XAdvance26_6 * scale));
             if (g.GlyphId == 0) { penX26_6 += scaledAdvance; continue; }
 
             int glyphDrawX = (int)((penX26_6 + (long)Math.Round(g.XOffset26_6 * scale)) >> 6);
