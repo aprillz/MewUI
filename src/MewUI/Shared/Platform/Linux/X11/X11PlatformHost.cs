@@ -294,6 +294,7 @@ public sealed class X11PlatformHost : IPlatformHost
         const int ConfigureNotify = 22;
         const int ClientMessage = 33;
         const int PropertyNotify = 28;
+        const int SelectionNotify = 31;
 
         return ev.type switch
         {
@@ -307,6 +308,9 @@ public sealed class X11PlatformHost : IPlatformHost
             ConfigureNotify => ev.xconfigure.window,
             ClientMessage => ev.xclient.window,
             PropertyNotify => ev.xproperty.window,
+
+            // The answer to a selection conversion (a drop's payload) goes to the window that asked for it.
+            SelectionNotify => ev.xselection.requestor,
             _ => 0
         };
     }
