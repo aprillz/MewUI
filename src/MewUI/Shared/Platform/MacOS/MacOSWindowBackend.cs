@@ -76,6 +76,7 @@ internal sealed class MacOSWindowBackend : IWindowBackend
     private string _imeMarkedText = string.Empty;
     private ImeMode _imeMode = ImeMode.Auto;
     private DragEventArgs? _lastDragEventArgs;
+    private MacOSDropDataObject? _dragData;
 
     internal string ImeMarkedText => _imeMarkedText;
 
@@ -970,16 +971,11 @@ internal sealed class MacOSWindowBackend : IWindowBackend
         }
     }
 
-    private DragEventArgs CreateDragEventArgs(IReadOnlyList<string> paths, NSPoint windowPoint)
+    private DragEventArgs CreateDragEventArgs(IDataObject data, NSPoint windowPoint)
     {
         var client = _window.ClientSize;
         var localPoint = new Point(windowPoint.x, client.Height - windowPoint.y);
         var screenPoint = MacOSWindowInterop.WindowConvertPointToScreen(_nsWindow, windowPoint);
-
-        var data = new DataObject(new Dictionary<string, object>
-        {
-            [StandardDataFormats.StorageItems] = paths,
-        });
 
         return new DragEventArgs(
             data,
@@ -987,27 +983,20 @@ internal sealed class MacOSWindowBackend : IWindowBackend
             CocoaScreenPointToTopLeftPx(screenPoint));
     }
 
-    internal ulong HandleNativeDragEnter(IReadOnlyList<string> paths, NSPoint windowPoint)
+    internal ulong HandleNativeDragEnter(nint pasteboard, NSPoint windowPoint)
     {
-        if (paths.Count == 0)
-        {
-            return 0;
-        }
-
-        var args = CreateDragEventArgs(paths, windowPoint);
+        EndNativeDrag();
+        _dragData = new MacOSDropDataObject(pasteboard);
+        var args = CreateDragEventArgs(_dragData, windowPoint);
         _lastDragEventArgs = args;
         WindowDragDropRouter.OnExternalDragEnter(_window, args);
         return args.Accepted ? (ulong)args.Effect : 0;
     }
 
-    internal ulong HandleNativeDragOver(IReadOnlyList<string> paths, NSPoint windowPoint)
+    internal ulong HandleNativeDragOver(nint pasteboard, NSPoint windowPoint)
     {
-        if (paths.Count == 0)
-        {
-            return 0;
-        }
-
-        var args = CreateDragEventArgs(paths, windowPoint);
+        _dragData ??= new MacOSDropDataObject(pasteboard);
+        var args = CreateDragEventArgs(_dragData, windowPoint);
         _lastDragEventArgs = args;
         WindowDragDropRouter.OnExternalDragOver(_window, args);
         return args.Accepted ? (ulong)args.Effect : 0;
@@ -1015,25 +1004,29 @@ internal sealed class MacOSWindowBackend : IWindowBackend
 
     internal void HandleNativeDragLeave()
     {
-        if (_lastDragEventArgs is { } args)
+        if (_lastDragEventArgs is DragEventArgs args)
         {
             WindowDragDropRouter.OnExternalDragLeave(_window, args);
         }
 
-        _lastDragEventArgs = null;
+        EndNativeDrag();
     }
 
-    internal bool HandleNativeDrop(IReadOnlyList<string> paths, NSPoint windowPoint)
+    internal bool HandleNativeDrop(nint pasteboard, NSPoint windowPoint)
     {
-        if (paths.Count == 0)
-        {
-            return false;
-        }
-
-        var args = CreateDragEventArgs(paths, windowPoint);
+        _dragData ??= new MacOSDropDataObject(pasteboard);
+        var args = CreateDragEventArgs(_dragData, windowPoint);
         _lastDragEventArgs = args;
         var effect = WindowDragDropRouter.OnExternalDrop(_window, args);
+        EndNativeDrag();
         return effect != DragDropEffects.None || args.Handled;
+    }
+
+    private void EndNativeDrag()
+    {
+        _dragData?.Close();
+        _dragData = null;
+        _lastDragEventArgs = null;
     }
 
     private void EnsureCreated()

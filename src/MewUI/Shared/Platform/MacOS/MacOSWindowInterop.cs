@@ -107,6 +107,20 @@ internal static unsafe class MacOSWindowInterop
     private static nint SelCount;
     private static nint SelObjectAtIndex;
     private static nint SelUTF8String;
+    private static nint SelArray;
+    private static nint SelAddObject;
+    private static nint SelTypes;
+    private static nint SelDataForType;
+    private static nint SelStringForType;
+    private static nint SelPasteboardItems;
+    private static nint SelBytes;
+    private static nint SelLength;
+    private static nint SelUrlWithString;
+    private static nint SelFilePathUrl;
+    private static nint SelAbsoluteString;
+    private static nint SelPath;
+    private static nint ClsNSMutableArray;
+    private static nint ClsNSUrl;
     private static nint SelAppearanceNamed;
     private static nint _appearanceNameAqua;
     private static nint _appearanceNameDarkAqua;
@@ -589,23 +603,31 @@ internal static unsafe class MacOSWindowInterop
     public static void RegisterForDragDrop(nint view)
     {
         EnsureInitialized();
-        if (view == 0 || ClsNSArray == 0 || SelArrayWithObject == 0 || SelRegisterForDraggedTypes == 0)
+        if (view == 0 || ClsNSMutableArray == 0 || SelArray == 0 || SelAddObject == 0 || SelRegisterForDraggedTypes == 0)
         {
             return;
         }
 
-        var fileNamesType = ObjC.CreateNSString("NSFilenamesPboardType");
-        if (fileNamesType == 0)
+        // A drag reaches the view only when it carries one of these types; the rest of its types are listed once it does.
+        var types = ObjC.MsgSend_nint(ClsNSMutableArray, SelArray);
+        if (types == 0)
         {
             return;
         }
 
-        var array = ObjC.MsgSend_nint_nint(ClsNSArray, SelArrayWithObject, fileNamesType);
-        if (array != 0)
+        foreach (var type in _draggedTypes)
         {
-            ObjC.MsgSend_void_nint_nint(view, SelRegisterForDraggedTypes, array);
+            ObjC.MsgSend_void_nint_nint(types, SelAddObject, ObjC.CreateNSString(type));
         }
+
+        ObjC.MsgSend_void_nint_nint(view, SelRegisterForDraggedTypes, types);
     }
+
+    private static readonly string[] _draggedTypes =
+    [
+        "public.file-url", "NSFilenamesPboardType", "public.url", "public.utf8-plain-text", "NSStringPboardType",
+        "public.html", "public.rtf", "public.png", "public.tiff", "public.jpeg",
+    ];
 
     public static void UnregisterFromDragDrop(nint view)
     {
@@ -1229,6 +1251,20 @@ internal static unsafe class MacOSWindowInterop
         SelCount = ObjC.Sel("count");
         SelObjectAtIndex = ObjC.Sel("objectAtIndex:");
         SelUTF8String = ObjC.Sel("UTF8String");
+        SelArray = ObjC.Sel("array");
+        SelAddObject = ObjC.Sel("addObject:");
+        SelTypes = ObjC.Sel("types");
+        SelDataForType = ObjC.Sel("dataForType:");
+        SelStringForType = ObjC.Sel("stringForType:");
+        SelPasteboardItems = ObjC.Sel("pasteboardItems");
+        SelBytes = ObjC.Sel("bytes");
+        SelLength = ObjC.Sel("length");
+        SelUrlWithString = ObjC.Sel("URLWithString:");
+        SelFilePathUrl = ObjC.Sel("filePathURL");
+        SelAbsoluteString = ObjC.Sel("absoluteString");
+        SelPath = ObjC.Sel("path");
+        ClsNSMutableArray = ObjC.GetClass("NSMutableArray");
+        ClsNSUrl = ObjC.GetClass("NSURL");
 
         SelAppearanceNamed = ObjC.Sel("appearanceNamed:");
         // Retained: cached in statics beyond any autorelease pool scope.
@@ -1714,56 +1750,135 @@ internal static unsafe class MacOSWindowInterop
         }
     }
 
-    private static string[] ExtractPathsFromDraggingInfo(nint draggingInfo)
+    private static nint DraggingPasteboard(nint draggingInfo)
     {
         EnsureInitialized();
-        if (draggingInfo == 0 || SelDraggingPasteboard == 0 || SelPropertyListForType == 0 || SelCount == 0 || SelObjectAtIndex == 0 || SelUTF8String == 0)
+        return draggingInfo != 0 && SelDraggingPasteboard != 0 ? ObjC.MsgSend_nint(draggingInfo, SelDraggingPasteboard) : 0;
+    }
+
+    private static string? ToManagedString(nint nsString)
+    {
+        if (nsString == 0)
         {
-            return [];
+            return null;
         }
 
-        var pasteboard = ObjC.MsgSend_nint(draggingInfo, SelDraggingPasteboard);
-        if (pasteboard == 0)
-        {
-            return [];
-        }
+        var utf8 = ObjC.MsgSend_nint(nsString, SelUTF8String);
+        return utf8 != 0 ? Marshal.PtrToStringUTF8(utf8) : null;
+    }
 
-        var fileNamesType = ObjC.CreateNSString("NSFilenamesPboardType");
-        if (fileNamesType == 0)
-        {
-            return [];
-        }
-
-        var array = ObjC.MsgSend_nint_nint(pasteboard, SelPropertyListForType, fileNamesType);
+    /// <summary>The strings of an array of strings, skipping empty ones.</summary>
+    private static List<string> ToManagedStrings(nint array)
+    {
+        var result = new List<string>();
         if (array == 0)
         {
-            return [];
+            return result;
         }
 
         ulong count = ObjC.MsgSend_ulong(array, SelCount);
-        if (count == 0)
+        for (ulong index = 0; index < count; index++)
         {
-            return [];
-        }
-
-        var paths = new List<string>((int)count);
-        for (ulong i = 0; i < count; i++)
-        {
-            var nsString = ObjC.MsgSend_nint_ulong(array, SelObjectAtIndex, i);
-            if (nsString == 0)
+            if (ToManagedString(ObjC.MsgSend_nint_ulong(array, SelObjectAtIndex, index)) is string text && text.Length > 0)
             {
-                continue;
-            }
-
-            var utf8 = ObjC.MsgSend_nint(nsString, SelUTF8String);
-            var path = utf8 != 0 ? Marshal.PtrToStringUTF8(utf8) : null;
-            if (!string.IsNullOrWhiteSpace(path))
-            {
-                paths.Add(path);
+                result.Add(text);
             }
         }
 
-        return paths.ToArray();
+        return result;
+    }
+
+    /// <summary>The types on the pasteboard, in its order.</summary>
+    public static List<string> PasteboardTypes(nint pasteboard)
+    {
+        EnsureInitialized();
+        return pasteboard != 0 && SelTypes != 0 ? ToManagedStrings(ObjC.MsgSend_nint(pasteboard, SelTypes)) : [];
+    }
+
+    /// <summary>The bytes the pasteboard holds for <paramref name="type"/>, or null when it holds none.</summary>
+    public static unsafe byte[]? PasteboardData(nint pasteboard, string type)
+    {
+        EnsureInitialized();
+        if (pasteboard == 0 || SelDataForType == 0)
+        {
+            return null;
+        }
+
+        var data = ObjC.MsgSend_nint_nint(pasteboard, SelDataForType, ObjC.CreateNSString(type));
+        if (data == 0)
+        {
+            return null;
+        }
+
+        ulong length = ObjC.MsgSend_ulong(data, SelLength);
+        var bytes = ObjC.MsgSend_nint(data, SelBytes);
+        return length == 0 || bytes == 0 ? [] : new ReadOnlySpan<byte>((void*)bytes, checked((int)length)).ToArray();
+    }
+
+    public static string? PasteboardString(nint pasteboard, string type)
+    {
+        EnsureInitialized();
+        return pasteboard != 0 && SelStringForType != 0
+            ? ToManagedString(ObjC.MsgSend_nint_nint(pasteboard, SelStringForType, ObjC.CreateNSString(type)))
+            : null;
+    }
+
+    /// <summary>The string each pasteboard item holds for <paramref name="type"/>, skipping items that hold none.</summary>
+    public static List<string> PasteboardItemStrings(nint pasteboard, string type)
+    {
+        EnsureInitialized();
+        var result = new List<string>();
+        if (pasteboard == 0 || SelPasteboardItems == 0 || SelStringForType == 0)
+        {
+            return result;
+        }
+
+        var items = ObjC.MsgSend_nint(pasteboard, SelPasteboardItems);
+        var typeString = ObjC.CreateNSString(type);
+        ulong count = items != 0 ? ObjC.MsgSend_ulong(items, SelCount) : 0;
+        for (ulong index = 0; index < count; index++)
+        {
+            var item = ObjC.MsgSend_nint_ulong(items, SelObjectAtIndex, index);
+            if (item != 0 && ToManagedString(ObjC.MsgSend_nint_nint(item, SelStringForType, typeString)) is string text && text.Length > 0)
+            {
+                result.Add(text);
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>The paths of the pasteboard's legacy file name list.</summary>
+    public static List<string> PasteboardFileNames(nint pasteboard)
+    {
+        EnsureInitialized();
+        return pasteboard != 0 && SelPropertyListForType != 0
+            ? ToManagedStrings(ObjC.MsgSend_nint_nint(pasteboard, SelPropertyListForType, ObjC.CreateNSString("NSFilenamesPboardType")))
+            : [];
+    }
+
+    /// <summary>
+    /// A file URL in path form (a file reference URL such as <c>file:///.file/id=...</c> resolved to the file's path),
+    /// with the path itself; null when the URL does not name a file.
+    /// </summary>
+    public static (string Url, string Path)? ResolveFileUrl(string url)
+    {
+        EnsureInitialized();
+        if (ClsNSUrl == 0 || SelUrlWithString == 0 || SelFilePathUrl == 0)
+        {
+            return null;
+        }
+
+        var nsUrl = ObjC.MsgSend_nint_nint(ClsNSUrl, SelUrlWithString, ObjC.CreateNSString(url));
+        var pathUrl = nsUrl != 0 ? ObjC.MsgSend_nint(nsUrl, SelFilePathUrl) : 0;
+        if (pathUrl == 0)
+        {
+            return null;
+        }
+
+        var absolute = ToManagedString(ObjC.MsgSend_nint(pathUrl, SelAbsoluteString));
+        var path = ToManagedString(ObjC.MsgSend_nint(pathUrl, SelPath));
+        return absolute != null && path != null ? (absolute, path) : null;
     }
 
     [UnmanagedCallersOnly]
@@ -1774,7 +1889,7 @@ internal static unsafe class MacOSWindowInterop
             if (TryGetTextInputTarget(self, out var backend))
             {
                 return backend.HandleNativeDragEnter(
-                    ExtractPathsFromDraggingInfo(sender),
+                    DraggingPasteboard(sender),
                     ObjC.MsgSend_point(sender, SelDraggingLocation));
             }
         }
@@ -1793,7 +1908,7 @@ internal static unsafe class MacOSWindowInterop
             if (TryGetTextInputTarget(self, out var backend))
             {
                 return backend.HandleNativeDragOver(
-                    ExtractPathsFromDraggingInfo(sender),
+                    DraggingPasteboard(sender),
                     ObjC.MsgSend_point(sender, SelDraggingLocation));
             }
         }
@@ -1826,7 +1941,7 @@ internal static unsafe class MacOSWindowInterop
         {
             if (TryGetTextInputTarget(self, out var backend) &&
                 backend.HandleNativeDrop(
-                    ExtractPathsFromDraggingInfo(sender),
+                    DraggingPasteboard(sender),
                     ObjC.MsgSend_point(sender, SelDraggingLocation)))
             {
                 return 1;
