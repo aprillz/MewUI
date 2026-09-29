@@ -179,6 +179,14 @@ internal static partial class X11
         nint time);
 
     [LibraryImport(LibraryName)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool XCheckTypedWindowEvent(nint display, nint window, int event_type, out XEvent event_return);
+
+    // Returns the atom's name, which the caller releases with XFree.
+    [LibraryImport(LibraryName)]
+    public static partial nint XGetAtomName(nint display, nint atom);
+
+    [LibraryImport(LibraryName)]
     public static partial int XSendEvent(
         nint display,
         nint window,

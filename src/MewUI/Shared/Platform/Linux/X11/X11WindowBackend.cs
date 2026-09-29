@@ -43,10 +43,7 @@ internal sealed class X11WindowBackend : IWindowBackend
     private nint _xdndDropAtom;
     private nint _xdndFinishedAtom;
     private nint _xdndSelectionAtom;
-    private nint _textUriListAtom;
 
-    // The MIME type of a dropped URI list, also the data object key its raw text is kept under: a URI that is not a local file has no place among the paths.
-    private const string URI_LIST_FORMAT = "text/uri-list";
     private nint _xdndSelectionPropertyAtom;
     private nint _xdndSourceWindow;
     private readonly List<nint> _xdndOfferedTypes = new();
@@ -56,6 +53,7 @@ internal sealed class X11WindowBackend : IWindowBackend
     private nint _xdndLastDropTime;
     private bool _xdndEnterDispatched;
     private DragDropEffects _xdndLastEffect;
+    private X11DropDataObject? _xdndData;
     private bool _allowDrop;
     private long _lastRenderTick;
     private bool _resizeRenderPending;
@@ -792,7 +790,6 @@ internal sealed class X11WindowBackend : IWindowBackend
         _xdndDropAtom = NativeX11.XInternAtom(Display, "XdndDrop", false);
         _xdndFinishedAtom = NativeX11.XInternAtom(Display, "XdndFinished", false);
         _xdndSelectionAtom = NativeX11.XInternAtom(Display, "XdndSelection", false);
-        _textUriListAtom = NativeX11.XInternAtom(Display, URI_LIST_FORMAT, false);
         _xdndSelectionPropertyAtom = NativeX11.XInternAtom(Display, "MEWUI_XDND_SELECTION", false);
         _netWmSyncRequestAtom = NativeX11.XInternAtom(Display, "_NET_WM_SYNC_REQUEST", false);
         _netWmSyncRequestCounterAtom = NativeX11.XInternAtom(Display, "_NET_WM_SYNC_REQUEST_COUNTER", false);
@@ -1360,7 +1357,6 @@ internal sealed class X11WindowBackend : IWindowBackend
         const int LeaveNotify = 8;
         const int FocusIn = 9;
         const int FocusOut = 10;
-        const int SelectionNotify = 31;
         const int PropertyNotify = 28;
 
         if (!_enabled && (ev.type == KeyPress || ev.type == KeyRelease || ev.type == ButtonPress || ev.type == ButtonRelease
@@ -1475,10 +1471,6 @@ internal sealed class X11WindowBackend : IWindowBackend
                         Window.Close();
                     }
                 }
-                break;
-
-            case SelectionNotify:
-                HandleXdndSelection(ev.xselection);
                 break;
 
             case DestroyNotify:
@@ -2065,6 +2057,18 @@ internal sealed class X11WindowBackend : IWindowBackend
                 }
             }
         }
+
+        var offered = new List<(string Name, nint Atom)>(_xdndOfferedTypes.Count);
+        foreach (var atom in _xdndOfferedTypes)
+        {
+            if (AtomName(atom) is string name)
+            {
+                offered.Add((name, atom));
+            }
+        }
+
+        _xdndData?.Close();
+        _xdndData = new X11DropDataObject(offered, ConvertXdndSelection);
     }
 
     private unsafe void HandleXdndPosition(XClientMessageEvent client)
@@ -2075,9 +2079,7 @@ internal sealed class X11WindowBackend : IWindowBackend
         _xdndLastRootY = (short)(packed & 0xFFFF);
         _xdndLastDropTime = (nint)client.data[3];
 
-        // Build a lightweight (format-keys-only) IDataObject so element-level routing can decide accept
-        // based on the offered types. The real payload becomes available only after XdndDrop + selection conversion.
-        var args = BuildXdndPositionArgs();
+        var args = BuildXdndArgs();
         if (_xdndEnterDispatched)
         {
             WindowDragDropRouter.OnExternalDragOver(Window, args);
@@ -2096,7 +2098,7 @@ internal sealed class X11WindowBackend : IWindowBackend
     {
         if (_xdndEnterDispatched)
         {
-            var args = BuildXdndPositionArgs();
+            var args = BuildXdndArgs();
             WindowDragDropRouter.OnExternalDragLeave(Window, args);
         }
         ResetXdndState();
@@ -2110,94 +2112,147 @@ internal sealed class X11WindowBackend : IWindowBackend
             _xdndLastDropTime = (nint)client.data[2];
         }
 
-        if (!AcceptsXdndDrop())
-        {
-            SendXdndFinished(false);
-            ResetXdndState();
-            return;
-        }
-
-        _ = NativeX11.XConvertSelection(
-            Display,
-            _xdndSelectionAtom,
-            _textUriListAtom,
-            _xdndSelectionPropertyAtom,
-            Handle,
-            _xdndLastDropTime);
-        NativeX11.XFlush(Display);
-    }
-
-    // Lightweight args for enter/over time: format keys present, no payload (X11 selection-conversion model).
-    private DragEventArgs BuildXdndPositionArgs()
-    {
-        var emptyFormats = new Dictionary<string, object>(capacity: 1);
-        if (_textUriListAtom != 0 && _xdndOfferedTypes.Contains(_textUriListAtom))
-        {
-            emptyFormats[StandardDataFormats.StorageItems] = Array.Empty<string>();
-        }
-
-        var data = new DataObject(emptyFormats);
-        var position = TranslateRootToClient(_xdndLastRootX, _xdndLastRootY);
-        return new DragEventArgs(
-            data,
-            new Point(position.x / Window.DpiScale, position.y / Window.DpiScale),
-            new Point(_xdndLastRootX, _xdndLastRootY),
-            DragDropEffects.Copy | DragDropEffects.Move | DragDropEffects.Link);
-    }
-
-    private void HandleXdndSelection(XSelectionEvent selection)
-    {
-        if (selection.requestor != Handle || selection.selection != _xdndSelectionAtom)
-        {
-            return;
-        }
-
         bool success = false;
         try
         {
-            if (selection.property == 0)
+            if (_xdndData != null)
             {
-                return;
+                // Handlers read the values they need now; each read converts the selection while the source waits.
+                var args = BuildXdndArgs();
+                var effect = WindowDragDropRouter.OnExternalDrop(Window, args);
+                success = effect != DragDropEffects.None || args.Handled;
+                _xdndLastEffect = effect;
             }
-
-            if (ReadXdndUriList(selection.property) is not string uriList)
-            {
-                return;
-            }
-
-            // The paths are the local files only; a drop of other URIs (an archive member, a network share) still
-            // arrives, with them in the raw list.
-            var position = TranslateRootToClient(_xdndLastRootX, _xdndLastRootY);
-            var data = new DataObject(new Dictionary<string, object>
-            {
-                [StandardDataFormats.StorageItems] = ParseUriList(uriList),
-                [URI_LIST_FORMAT] = uriList,
-            });
-
-            var args = new DragEventArgs(
-                data,
-                new Point(position.x / Window.DpiScale, position.y / Window.DpiScale),
-                new Point(_xdndLastRootX, _xdndLastRootY),
-                DragDropEffects.Copy | DragDropEffects.Move | DragDropEffects.Link);
-
-            var effect = WindowDragDropRouter.OnExternalDrop(Window, args);
-            success = effect != DragDropEffects.None || args.Handled;
-            _xdndLastEffect = effect;
         }
         finally
         {
-            if (selection.property != 0)
-            {
-                NativeX11.XDeleteProperty(Display, Handle, selection.property);
-            }
-
             SendXdndFinished(success);
             ResetXdndState();
         }
     }
 
-    private bool AcceptsXdndDrop()
-        => _textUriListAtom != 0 && _xdndOfferedTypes.Contains(_textUriListAtom);
+    private DragEventArgs BuildXdndArgs()
+    {
+        var position = TranslateRootToClient(_xdndLastRootX, _xdndLastRootY);
+        return new DragEventArgs(
+            (IDataObject?)_xdndData ?? new DataObject(),
+            new Point(position.x / Window.DpiScale, position.y / Window.DpiScale),
+            new Point(_xdndLastRootX, _xdndLastRootY),
+            DragDropEffects.Copy | DragDropEffects.Move | DragDropEffects.Link);
+    }
+
+    /// <summary>
+    /// Converts the drag selection to <paramref name="target"/> and waits for the source's answer, leaving other events
+    /// queued; returns the bytes as sent, or null when the source refuses, times out or answers incrementally.
+    /// </summary>
+    private unsafe byte[]? ConvertXdndSelection(nint target)
+    {
+        const int SELECTION_NOTIFY = 31;
+        const int TIMEOUT_MS = 2000;
+
+        if (Handle == 0 || _xdndSelectionAtom == 0 || _xdndSelectionPropertyAtom == 0)
+        {
+            return null;
+        }
+
+        _ = NativeX11.XConvertSelection(Display, _xdndSelectionAtom, target, _xdndSelectionPropertyAtom, Handle, _xdndLastDropTime);
+        NativeX11.XFlush(Display);
+
+        long deadline = Environment.TickCount64 + TIMEOUT_MS;
+        XEvent ev;
+        while (!NativeX11.XCheckTypedWindowEvent(Display, Handle, SELECTION_NOTIFY, out ev)
+            || ev.xselection.selection != _xdndSelectionAtom
+            || ev.xselection.target != target)
+        {
+            if (Environment.TickCount64 > deadline)
+            {
+                return null;
+            }
+
+            Thread.Sleep(1);
+        }
+
+        if (ev.xselection.property == 0)
+        {
+            return null;
+        }
+
+        int status = NativeX11.XGetWindowProperty(
+            Display,
+            Handle,
+            ev.xselection.property,
+            0,
+            int.MaxValue / 4,
+            true,
+            0,
+            out nint actualType,
+            out int actualFormat,
+            out nuint count,
+            out _,
+            out nint data);
+
+        try
+        {
+            if (status != 0 || data == 0 || actualType == AtomOf("INCR"))
+            {
+                return null;
+            }
+
+            // Xlib hands 16- and 32-bit items back as C shorts and longs; the bytes as sent are their low bits.
+            switch (actualFormat)
+            {
+                case 8:
+                    return new ReadOnlySpan<byte>((void*)data, checked((int)count)).ToArray();
+
+                case 16:
+                {
+                    var items = new ReadOnlySpan<short>((void*)data, checked((int)count));
+                    return System.Runtime.InteropServices.MemoryMarshal.AsBytes(items).ToArray();
+                }
+
+                case 32:
+                {
+                    var bytes = new byte[checked((int)count * 4)];
+                    for (int index = 0; index < (int)count; index++)
+                    {
+                        int item = IntPtr.Size == 8 ? (int)((long*)data)[index] : ((int*)data)[index];
+                        System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(index * 4), item);
+                    }
+                    return bytes;
+                }
+
+                default:
+                    return null;
+            }
+        }
+        finally
+        {
+            if (data != 0)
+            {
+                NativeX11.XFree(data);
+            }
+        }
+    }
+
+    private nint AtomOf(string name) => NativeX11.XInternAtom(Display, name, false);
+
+    private string? AtomName(nint atom)
+    {
+        nint name = NativeX11.XGetAtomName(Display, atom);
+        if (name == 0)
+        {
+            return null;
+        }
+
+        try
+        {
+            return Marshal.PtrToStringUTF8(name);
+        }
+        finally
+        {
+            NativeX11.XFree(name);
+        }
+    }
 
     private unsafe void SendXdndStatus(DragDropEffects effect)
     {
@@ -2259,6 +2314,8 @@ internal sealed class X11WindowBackend : IWindowBackend
         _xdndLastDropTime = 0;
         _xdndEnterDispatched = false;
         _xdndLastEffect = DragDropEffects.None;
+        _xdndData?.Close();
+        _xdndData = null;
     }
 
     /// <inheritdoc/>
@@ -2287,49 +2344,6 @@ internal sealed class X11WindowBackend : IWindowBackend
         else
         {
             NativeX11.XDeleteProperty(Display, Handle, _xdndAwareAtom);
-        }
-    }
-
-    /// <summary>The dropped URI list as the source wrote it, or null when the property holds none.</summary>
-    private string? ReadXdndUriList(nint property)
-    {
-        const nint AnyPropertyType = 0;
-        int status = NativeX11.XGetWindowProperty(
-            Display,
-            Handle,
-            property,
-            0,
-            64 * 1024,
-            false,
-            AnyPropertyType,
-            out _,
-            out int actualFormat,
-            out nuint nitems,
-            out _,
-            out nint prop);
-
-        if (status != 0 || prop == 0 || actualFormat != 8 || nitems == 0)
-        {
-            if (prop != 0)
-            {
-                NativeX11.XFree(prop);
-            }
-
-            return null;
-        }
-
-        try
-        {
-            unsafe
-            {
-                var bytes = new ReadOnlySpan<byte>((void*)prop, checked((int)nitems));
-                string text = System.Text.Encoding.UTF8.GetString(bytes);
-                return string.IsNullOrWhiteSpace(text) ? null : text;
-            }
-        }
-        finally
-        {
-            NativeX11.XFree(prop);
         }
     }
 
@@ -2403,32 +2417,6 @@ internal sealed class X11WindowBackend : IWindowBackend
         nint root = NativeX11.XRootWindow(Display, screen);
         _ = NativeX11.XTranslateCoordinates(Display, root, Handle, rootX, rootY, out int clientX, out int clientY, out _);
         return (clientX, clientY);
-    }
-
-    /// <summary>The local paths of the list's <c>file://</c> entries; other schemes have no path and are left to the raw list.</summary>
-    private static List<string> ParseUriList(string text)
-    {
-        var result = new List<string>();
-        foreach (var rawLine in text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            if (rawLine.Length == 0 || rawLine[0] == '#')
-            {
-                continue;
-            }
-
-            if (!Uri.TryCreate(rawLine, UriKind.Absolute, out var uri) || !uri.IsFile)
-            {
-                continue;
-            }
-
-            string path = uri.LocalPath;
-            if (!string.IsNullOrWhiteSpace(path))
-            {
-                result.Add(path);
-            }
-        }
-
-        return result;
     }
 
     internal void NotifyDpiChanged(uint oldDpi, uint newDpi)
