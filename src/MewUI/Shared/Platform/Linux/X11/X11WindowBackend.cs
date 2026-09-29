@@ -57,6 +57,8 @@ internal sealed class X11WindowBackend : IWindowBackend
     private nint _netWmNameAtom;
     private nint _netWmIconNameAtom;
     private nint _utf8StringAtom;
+    private XSizeHintsFlags _startupPositionFlags;
+    private (int x, int y) _startupPositionPx;
     private bool _allowDrop;
     private long _lastRenderTick;
     private bool _resizeRenderPending;
@@ -1137,11 +1139,10 @@ internal sealed class X11WindowBackend : IWindowBackend
 
     private void ApplyStartupPositionHints(Point positionDip, bool userSpecified)
     {
-        var hints = new XSizeHints();
         double dpiScale = Window.DpiScale <= 0 ? 1.0 : Window.DpiScale;
-        hints.x = (int)Math.Round(positionDip.X * dpiScale);
-        hints.y = (int)Math.Round(positionDip.Y * dpiScale);
-        hints.flags = userSpecified ? XSizeHintsFlags.USPosition : XSizeHintsFlags.PPosition;
+        _startupPositionPx = ((int)Math.Round(positionDip.X * dpiScale), (int)Math.Round(positionDip.Y * dpiScale));
+        _startupPositionFlags = userSpecified ? XSizeHintsFlags.USPosition : XSizeHintsFlags.PPosition;
+        var hints = BuildNormalHints();
         NativeX11.XSetWMNormalHints(Display, Handle, ref hints);
     }
 
@@ -1284,10 +1285,54 @@ internal sealed class X11WindowBackend : IWindowBackend
             return;
         }
 
-        var hints = new XSizeHints();
+        var hints = BuildNormalHints();
+        NativeX11.XSetWMNormalHints(Display, Handle, ref hints);
+
+        // Clamp the current window size if it violates the new constraints.
+        if ((hints.flags & (XSizeHintsFlags.PMinSize | XSizeHintsFlags.PMaxSize)) != 0)
+        {
+            double dpiScale = Window.DpiScale > 0 ? Window.DpiScale : 1.0;
+            int curW = (int)Math.Round(Window.Width * dpiScale);
+            int curH = (int)Math.Round(Window.Height * dpiScale);
+            int clampedW = curW;
+            int clampedH = curH;
+
+            if ((hints.flags & XSizeHintsFlags.PMinSize) != 0)
+            {
+                clampedW = Math.Max(clampedW, hints.min_width);
+                clampedH = Math.Max(clampedH, hints.min_height);
+            }
+            if ((hints.flags & XSizeHintsFlags.PMaxSize) != 0)
+            {
+                clampedW = Math.Min(clampedW, hints.max_width);
+                clampedH = Math.Min(clampedH, hints.max_height);
+            }
+
+            if (clampedW != curW || clampedH != curH)
+            {
+                NativeX11.XResizeWindow(Display, Handle, (uint)Math.Max(1, clampedW), (uint)Math.Max(1, clampedH));
+            }
+        }
+
+        NativeX11.XFlush(Display);
+    }
+
+    /// <summary>
+    /// The size limits of the current size mode plus the startup position asked for, if any. The window manager
+    /// replaces WM_NORMAL_HINTS as a whole, so every writer builds it here and none drops the other's part.
+    /// </summary>
+    private XSizeHints BuildNormalHints()
+    {
+        var hints = new XSizeHints
+        {
+            flags = _startupPositionFlags,
+            x = _startupPositionPx.x,
+            y = _startupPositionPx.y,
+        };
+
         if (!Window.WindowSize.IsResizable)
         {
-            hints.flags = XSizeHintsFlags.PMinSize | XSizeHintsFlags.PMaxSize;
+            hints.flags |= XSizeHintsFlags.PMinSize | XSizeHintsFlags.PMaxSize;
             hints.min_width = (int)Math.Max(1, Math.Round(Window.Width * Window.DpiScale));
             hints.min_height = (int)Math.Max(1, Math.Round(Window.Height * Window.DpiScale));
             hints.max_width = hints.min_width;
@@ -1317,35 +1362,7 @@ internal sealed class X11WindowBackend : IWindowBackend
             }
         }
 
-        NativeX11.XSetWMNormalHints(Display, Handle, ref hints);
-
-        // Clamp the current window size if it violates the new constraints.
-        if (hints.flags != 0)
-        {
-            double dpiScale = Window.DpiScale > 0 ? Window.DpiScale : 1.0;
-            int curW = (int)Math.Round(Window.Width * dpiScale);
-            int curH = (int)Math.Round(Window.Height * dpiScale);
-            int clampedW = curW;
-            int clampedH = curH;
-
-            if ((hints.flags & XSizeHintsFlags.PMinSize) != 0)
-            {
-                clampedW = Math.Max(clampedW, hints.min_width);
-                clampedH = Math.Max(clampedH, hints.min_height);
-            }
-            if ((hints.flags & XSizeHintsFlags.PMaxSize) != 0)
-            {
-                clampedW = Math.Min(clampedW, hints.max_width);
-                clampedH = Math.Min(clampedH, hints.max_height);
-            }
-
-            if (clampedW != curW || clampedH != curH)
-            {
-                NativeX11.XResizeWindow(Display, Handle, (uint)Math.Max(1, clampedW), (uint)Math.Max(1, clampedH));
-            }
-        }
-
-        NativeX11.XFlush(Display);
+        return hints;
     }
 
     internal void PumpEventsOnce()
