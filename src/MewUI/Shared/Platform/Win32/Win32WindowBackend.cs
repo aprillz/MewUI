@@ -1106,9 +1106,19 @@ internal sealed class Win32WindowBackend : IWindowBackend
                 User32.ClientToScreen(Handle, ref screenPx);
 
                 double dpi = Window.DpiScale;
+                var uris = new List<string>(paths.Count);
+                foreach (var path in paths)
+                {
+                    if (Uri.TryCreate(path, UriKind.Absolute, out var uri))
+                    {
+                        uris.Add(uri.AbsoluteUri);
+                    }
+                }
+
                 var data = new DataObject(new Dictionary<string, object>
                 {
                     [StandardDataFormats.StorageItems] = paths,
+                    [StandardDataFormats.Uris] = uris,
                 });
 
                 var args = new DragEventArgs(

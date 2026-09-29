@@ -388,6 +388,12 @@ internal static partial class User32
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool IsClipboardFormatAvailable(uint format);
 
+    [LibraryImport(LibraryName, EntryPoint = "GetClipboardFormatNameW")]
+    public static unsafe partial int GetClipboardFormatName(uint format, char* lpszFormatName, int cchMaxCount);
+
+    [LibraryImport(LibraryName, EntryPoint = "RegisterClipboardFormatW", StringMarshalling = StringMarshalling.Utf16)]
+    public static partial uint RegisterClipboardFormat(string lpszFormat);
+
     #endregion
 
     #region System Metrics
