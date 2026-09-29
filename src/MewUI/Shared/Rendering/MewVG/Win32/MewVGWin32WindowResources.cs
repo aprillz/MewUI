@@ -8,6 +8,8 @@ internal sealed class MewVGWin32WindowResources : IDisposable, IMewVGWindowCache
 {
     private readonly nint _hwnd;
     private readonly WglOpenGLWindowResources _gl;
+    private readonly IMewVGOffscreenSurfaceProvider _offscreenProvider;
+    private readonly Func<nint, IDisposable?> _makeCurrentElsewhere;
     private bool _disposed;
 
     public MewVGGL Vg { get; }
@@ -48,16 +50,34 @@ internal sealed class MewVGWin32WindowResources : IDisposable, IMewVGWindowCache
         }
     }
 
-    private MewVGWin32WindowResources(nint hwnd, WglOpenGLWindowResources gl, MewVGGL vg, nint shareContext)
+    private MewVGWin32WindowResources(
+        nint hwnd,
+        WglOpenGLWindowResources gl,
+        MewVGGL vg,
+        nint shareContext,
+        IMewVGOffscreenSurfaceProvider offscreenProvider,
+        Func<nint, IDisposable?> makeCurrentElsewhere)
     {
         _hwnd = hwnd;
         _gl = gl;
+        _offscreenProvider = offscreenProvider;
+        _makeCurrentElsewhere = makeCurrentElsewhere;
         Vg = vg;
         TextCache = new MewVGTextCache(vg);
         OpenGLShareGroup = shareContext != 0 ? shareContext : gl.Hglrc;
     }
 
-    public static MewVGWin32WindowResources Create(nint hwnd, nint hdc, nint shareContext = 0)
+    /// <summary>
+    /// Creates the context for a window. <paramref name="makeCurrentElsewhere"/> makes a context
+    /// current on another device context of the same pixel format, for releasing this one's objects
+    /// once the window's own device context no longer takes it.
+    /// </summary>
+    public static MewVGWin32WindowResources Create(
+        nint hwnd,
+        nint hdc,
+        nint shareContext,
+        IMewVGOffscreenSurfaceProvider offscreenProvider,
+        Func<nint, IDisposable?> makeCurrentElsewhere)
     {
         // MewVG renders without depth or stencil, so the window takes an exact color-only
         // pixel format; a driver without one fails here instead of falling back.
@@ -72,7 +92,7 @@ internal sealed class MewVGWin32WindowResources : IDisposable, IMewVGWindowCache
             MewVGGLBootstrap.EnsureInitialized();
 
             var vg = new MewVGGL();
-            return new MewVGWin32WindowResources(hwnd, gl, vg, shareContext);
+            return new MewVGWin32WindowResources(hwnd, gl, vg, shareContext, offscreenProvider, makeCurrentElsewhere);
         }
         finally
         {
@@ -132,11 +152,22 @@ internal sealed class MewVGWin32WindowResources : IDisposable, IMewVGWindowCache
         if (_hwnd != 0)
         {
             nint hdc = User32.GetDC(_hwnd);
+            IDisposable? elsewhere = null;
             try
             {
-                if (hdc != 0)
+                // A window being destroyed can refuse its own context: the device context of a
+                // closing layered popup reports another pixel format by then.
+                bool current = hdc != 0 && _gl.TryMakeCurrent(hdc);
+                if (!current)
                 {
-                    _gl.MakeCurrent(hdc);
+                    elsewhere = _makeCurrentElsewhere(_gl.Hglrc);
+                    current = elsewhere != null;
+                }
+
+                // Queued targets made under this context are only released under it, and it goes away here.
+                if (current)
+                {
+                    _offscreenProvider.ReleasePendingTargetsUnderCurrentContext();
                 }
 
                 TextCache.Dispose();
@@ -146,10 +177,14 @@ internal sealed class MewVGWin32WindowResources : IDisposable, IMewVGWindowCache
                     disposable.Dispose();
                 }
 
-                _gl.ReleaseCurrent();
+                if (elsewhere == null)
+                {
+                    _gl.ReleaseCurrent();
+                }
             }
             finally
             {
+                elsewhere?.Dispose();
                 if (hdc != 0)
                 {
                     User32.ReleaseDC(_hwnd, hdc);

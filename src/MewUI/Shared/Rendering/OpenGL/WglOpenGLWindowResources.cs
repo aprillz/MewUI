@@ -235,20 +235,23 @@ internal sealed unsafe class WglOpenGLWindowResources : IOpenGLWindowResources
         return true;
     }
 
-    public void MakeCurrent(nint deviceOrDisplay)
+    public void MakeCurrent(nint deviceOrDisplay) => TryMakeCurrent(deviceOrDisplay);
+
+    /// <summary>Makes the context current on <paramref name="deviceOrDisplay"/>; false when the device context does not take it.</summary>
+    internal bool TryMakeCurrent(nint deviceOrDisplay)
     {
         if (_disposed)
         {
-            return;
+            return false;
         }
 
         if (OpenGL32.wglGetCurrentContext() == Hglrc &&
             OpenGL32.wglGetCurrentDC() == deviceOrDisplay)
         {
-            return;
+            return true;
         }
 
-        OpenGL32.wglMakeCurrent(deviceOrDisplay, Hglrc);
+        return OpenGL32.wglMakeCurrent(deviceOrDisplay, Hglrc);
     }
 
     public void ReleaseCurrent()

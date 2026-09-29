@@ -38,7 +38,7 @@ public sealed partial class MewVGWin32GraphicsFactory : IPersistentFrameGraphics
 
     public string Backend => BackendIdentifier;
 
-    private MewVGWin32LayeredPresenter LayeredPresenter => _layeredPresenterField ??= new MewVGWin32LayeredPresenter(_offscreenProvider, () => SharedWorkerContext);
+    private MewVGWin32LayeredPresenter LayeredPresenter => _layeredPresenterField ??= new MewVGWin32LayeredPresenter(_offscreenProvider, () => SharedWorkerContext, MakeCurrentOnWorkerDc);
     private MewVGWin32LayeredPresenter? _layeredPresenterField;
 
     private partial IFont CreateFontCore(string family, double size, FontWeight weight, bool italic, bool underline, bool strikethrough)
@@ -99,7 +99,7 @@ public sealed partial class MewVGWin32GraphicsFactory : IPersistentFrameGraphics
 
         // Share textures/buffers with the worker context so background offscreen render
         // tasks (Task.Run) can hand off FBO textures to this window for sampling.
-        return MewVGWin32WindowResources.Create(win32.Hwnd, win32.Hdc, SharedWorkerContext);
+        return MewVGWin32WindowResources.Create(win32.Hwnd, win32.Hdc, SharedWorkerContext, _offscreenProvider, MakeCurrentOnWorkerDc);
     }
 
     private partial IGraphicsContext CreateContextCore(WindowRenderTarget target, IDisposable resources)
@@ -449,6 +449,30 @@ public sealed partial class MewVGWin32GraphicsFactory : IPersistentFrameGraphics
         return new Win32WorkerContextScope(_workerActivationLock);
     }
 
+    /// <summary>
+    /// Makes <paramref name="hglrc"/> current on the worker window's device context, which has the
+    /// pixel format every window context is made with; null when it cannot. Disposing the result
+    /// leaves no context current.
+    /// </summary>
+    private IDisposable? MakeCurrentOnWorkerDc(nint hglrc)
+    {
+        EnsureWorkerContext();
+        if (_workerHdc == 0 || hglrc == 0)
+        {
+            return null;
+        }
+
+        // The same lock as the worker scope: the worker window's device context is not shared across threads.
+        Monitor.Enter(_workerActivationLock);
+        if (OpenGL32.wglMakeCurrent(_workerHdc, hglrc))
+        {
+            return new Win32WorkerContextScope(_workerActivationLock);
+        }
+
+        Monitor.Exit(_workerActivationLock);
+        return null;
+    }
+
     bool IPersistentFrameGraphicsFactory.IsPersistentFrameRenderingVerified => true;
 
     IDisposable IPersistentFrameGraphicsFactory.AcquirePersistentFrameRenderScope()
@@ -578,15 +602,20 @@ internal sealed class MewVGWin32LayeredPresenter : IDisposable
 {
     private readonly IMewVGOffscreenSurfaceProvider _offscreenProvider;
     private readonly Func<nint> _getShareContext;
+    private readonly Func<nint, IDisposable?> _makeCurrentElsewhere;
     private readonly object _lock = new();
     private readonly Dictionary<nint, OpenGLPixelRenderSurface> _layeredTargets = new();
     private readonly Dictionary<nint, Win32LayeredBitmap> _layeredStagingTargets = new();
     private readonly Dictionary<nint, MewVGWin32WindowResources> _layeredWindowResources = new();
 
-    public MewVGWin32LayeredPresenter(IMewVGOffscreenSurfaceProvider offscreenProvider, Func<nint> getShareContext)
+    public MewVGWin32LayeredPresenter(
+        IMewVGOffscreenSurfaceProvider offscreenProvider,
+        Func<nint> getShareContext,
+        Func<nint, IDisposable?> makeCurrentElsewhere)
     {
         _offscreenProvider = offscreenProvider;
         _getShareContext = getShareContext;
+        _makeCurrentElsewhere = makeCurrentElsewhere;
     }
 
     internal readonly record struct LayeredRenderContext(nint Hwnd, nint Hdc, OpenGLPixelRenderSurface RenderTarget);
@@ -675,7 +704,7 @@ internal sealed class MewVGWin32LayeredPresenter : IDisposable
                 return existing;
             }
 
-            var created = MewVGWin32WindowResources.Create(hwnd, hdc, _getShareContext());
+            var created = MewVGWin32WindowResources.Create(hwnd, hdc, _getShareContext(), _offscreenProvider, _makeCurrentElsewhere);
             _layeredWindowResources[hwnd] = created;
             return created;
         }
