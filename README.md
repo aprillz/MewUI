@@ -364,6 +364,7 @@ Set `PreferNative` to `false` to use the managed dialog directly.
 - [Build Switches](docs/BuildSwitches.md)
 - [C# Markup](docs/CSharpMarkup.md)
 - [Command System](docs/CommandSystem.md)
+- [Drag and Drop](docs/DragAndDrop.md)
 - [Binding](docs/Binding.md)
 - [Items and Templates](docs/ItemsAndTemplates.md)
 - [Theme](docs/Theme.md)

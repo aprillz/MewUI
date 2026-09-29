@@ -24,14 +24,16 @@ public abstract partial class UIElement
     /// and can receive <see cref="DragEnter"/>/<see cref="DragOver"/>/<see cref="DragLeave"/>/<see cref="Drop"/>.
     /// </summary>
     /// <remarks>
-    /// Setting <c>AllowDrop</c> on a <see cref="Window"/> additionally triggers platform drop-target
-    /// registration. What the platform delivers varies:
+    /// Setting <c>AllowDrop</c> on a <see cref="Window"/> additionally registers the window for drags from other
+    /// applications. What the platform delivers varies:
     /// <list type="bullet">
     /// <item><description><b>Windows</b>: An STA UI thread gets the full protocol (DragEnter/Over/Leave/Drop,
     /// effect negotiation, native drag preview). .NET 6+ entry points default to MTA - apply
     /// <c>[STAThread]</c> on <c>Main</c> to opt in. On MTA threads only file drop arrives, with no
     /// enter/over/leave and no preview.</description></item>
-    /// <item><description><b>macOS and Linux</b>: File drop is registered at the window level.</description></item>
+    /// <item><description><b>Linux</b>: Every drag reaches the window with all the formats it offers.</description></item>
+    /// <item><description><b>macOS</b>: A drag reaches the window when it carries files, a URL, text, HTML, rich text
+    /// or an image; it then lists all the formats it offers.</description></item>
     /// </list>
     /// On non-<see cref="Window"/> elements, <c>AllowDrop</c> only affects element-chain participation -
     /// element-level <c>DragEnter</c>/<c>Over</c>/<c>Leave</c>/<c>Drop</c> are bubbled by the framework
