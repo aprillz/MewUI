@@ -109,6 +109,20 @@ internal static partial class X11
     [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
     public static partial int XStoreName(nint display, nint window, string windowName);
 
+    // Sets WM_NAME and WM_ICON_NAME from UTF-8, encoded as STRING when Latin-1 holds the text and as COMPOUND_TEXT
+    // otherwise; null hint and argv arguments leave those properties alone.
+    [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
+    public static partial void Xutf8SetWMProperties(
+        nint display,
+        nint window,
+        string? windowName,
+        string? iconName,
+        nint argv,
+        int argc,
+        nint normalHints,
+        nint wmHints,
+        nint classHints);
+
     [LibraryImport(LibraryName)]
     public static partial int XPending(nint display);
 

@@ -54,6 +54,9 @@ internal sealed class X11WindowBackend : IWindowBackend
     private bool _xdndEnterDispatched;
     private DragDropEffects _xdndLastEffect;
     private X11DropDataObject? _xdndData;
+    private nint _netWmNameAtom;
+    private nint _netWmIconNameAtom;
+    private nint _utf8StringAtom;
     private bool _allowDrop;
     private long _lastRenderTick;
     private bool _resizeRenderPending;
@@ -476,14 +479,30 @@ internal sealed class X11WindowBackend : IWindowBackend
         _host.RequestWake();
     }
 
-    public void SetTitle(string title)
+    public unsafe void SetTitle(string title)
     {
         if (Display == 0 || Handle == 0)
         {
             return;
         }
 
-        NativeX11.XStoreName(Display, Handle, title ?? string.Empty);
+        title ??= string.Empty;
+        if (_netWmNameAtom == 0)
+        {
+            _netWmNameAtom = NativeX11.XInternAtom(Display, "_NET_WM_NAME", false);
+            _netWmIconNameAtom = NativeX11.XInternAtom(Display, "_NET_WM_ICON_NAME", false);
+            _utf8StringAtom = NativeX11.XInternAtom(Display, "UTF8_STRING", false);
+        }
+
+        // Window managers read the UTF-8 names first; the legacy names are for those that do not.
+        var utf8 = System.Text.Encoding.UTF8.GetBytes(title);
+        fixed (byte* data = utf8)
+        {
+            NativeX11.XChangeProperty(Display, Handle, _netWmNameAtom, _utf8StringAtom, 8, 0, (nint)data, utf8.Length);
+            NativeX11.XChangeProperty(Display, Handle, _netWmIconNameAtom, _utf8StringAtom, 8, 0, (nint)data, utf8.Length);
+        }
+
+        NativeX11.Xutf8SetWMProperties(Display, Handle, title, title, 0, 0, 0, 0, 0);
         NativeX11.XFlush(Display);
     }
 
