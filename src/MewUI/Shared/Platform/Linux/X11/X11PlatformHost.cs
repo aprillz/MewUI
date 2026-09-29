@@ -277,7 +277,7 @@ public sealed class X11PlatformHost : IPlatformHost
     internal void RequestWake()
         => SignalWake();
 
-    private static nint GetEventWindow(in XEvent ev)
+    internal static nint GetEventWindow(in XEvent ev)
     {
         // Xlib event types
         const int KeyPress = 2;
