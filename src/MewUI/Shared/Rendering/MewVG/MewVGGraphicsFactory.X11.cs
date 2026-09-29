@@ -166,44 +166,45 @@ public sealed partial class MewVGX11GraphicsFactory : IPersistentFrameGraphicsFa
 
     private partial IFont CreateFontCore(string family, double size, FontWeight weight, bool italic, bool underline, bool strikethrough)
     {
-        (family, string? path) = ResolveFamilyCandidate(family, weight, italic);
+        (family, string? path, string[] listed) = ResolveFamilyCandidate(family, weight, italic);
         int px = (int)Math.Max(1, Math.Round(size)); // Assume 96 dpi.
         return path != null
-            ? new FreeTypeFont(family, size, weight, italic, underline, strikethrough, path, px)
+            ? new FreeTypeFont(family, size, weight, italic, underline, strikethrough, path, px) { ListedFamilies = listed }
             : new BasicFont(family, size, weight, italic, underline, strikethrough);
     }
 
     /// <summary>
-    /// Picks the first installed family from a comma-separated list; when none is installed, the first
-    /// family gets the font that stands in for it, as a single family does.
+    /// Picks the first installed family from a comma-separated list to draw with, and the installed families
+    /// after it to supply what it lacks. When none is installed, the first family gets the font that stands in
+    /// for it, as a single family does.
     /// </summary>
-    private static (string Family, string? Path) ResolveFamilyCandidate(string family, FontWeight weight, bool italic)
+    private static (string Family, string? Path, string[] Listed) ResolveFamilyCandidate(string family, FontWeight weight, bool italic)
     {
         if (!FontFamilyList.IsList(family))
         {
-            return (family, LinuxFontResolver.ResolveFontPath(family, weight, italic));
+            return (family, LinuxFontResolver.ResolveFontPath(family, weight, italic), []);
         }
 
         string[] candidates = FontFamilyList.Split(family);
-        foreach (string candidate in candidates)
+        var installed = candidates
+            .Select(candidate => (Family: candidate, Path: LinuxFontResolver.ResolveInstalledFontPath(candidate, weight, italic)))
+            .Where(candidate => candidate.Path != null)
+            .ToArray();
+        if (installed.Length > 0)
         {
-            var candidatePath = LinuxFontResolver.ResolveInstalledFontPath(candidate, weight, italic);
-            if (candidatePath != null)
-            {
-                return (candidate, candidatePath);
-            }
+            return (installed[0].Family, installed[0].Path, [.. installed[1..].Select(candidate => candidate.Family)]);
         }
 
         string first = candidates.Length > 0 ? candidates[0] : family;
-        return (first, LinuxFontResolver.ResolveFontPath(first, weight, italic));
+        return (first, LinuxFontResolver.ResolveFontPath(first, weight, italic), []);
     }
 
     private partial IFont CreateFontCore(string family, double size, uint dpi, FontWeight weight, bool italic, bool underline, bool strikethrough)
     {
-        (family, string? path) = ResolveFamilyCandidate(family, weight, italic);
+        (family, string? path, string[] listed) = ResolveFamilyCandidate(family, weight, italic);
         int px = (int)Math.Max(1, Math.Round(size * dpi / 96.0, MidpointRounding.AwayFromZero));
         return path != null
-            ? new FreeTypeFont(family, size, weight, italic, underline, strikethrough, path, px)
+            ? new FreeTypeFont(family, size, weight, italic, underline, strikethrough, path, px) { ListedFamilies = listed }
             : new BasicFont(family, size, weight, italic, underline, strikethrough);
     }
 

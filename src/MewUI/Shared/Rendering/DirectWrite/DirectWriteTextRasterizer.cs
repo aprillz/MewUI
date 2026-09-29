@@ -98,7 +98,7 @@ internal static unsafe class DirectWriteTextRasterizer
                 return new TextBitmap(1, 1, _emptyPixel);
             }
 
-            DirectWriteTextMeasure.ApplyCustomFontFallback(factory, textLayout);
+            DirectWriteTextMeasure.ApplyCustomFontFallback(factory, textLayout, font);
 
             if (trimming == TextTrimming.CharacterEllipsis)
             {
@@ -181,7 +181,7 @@ internal static unsafe class DirectWriteTextRasterizer
             }
 
             ApplyTrimming(factory, textFormat, textLayout, trimming);
-            DirectWriteTextMeasure.ApplyCustomFontFallback(factory, textLayout);
+            DirectWriteTextMeasure.ApplyCustomFontFallback(factory, textLayout, font);
 
             int channelBytes = widthPx * heightPx * 3;
             byte[] channels;

@@ -19,6 +19,20 @@ internal sealed unsafe partial class DirectWriteFont : FontBase, IGlyphOutlineFo
     /// </summary>
     internal nint PrivateFontCollection { get; private set; }
 
+    /// <summary>The installed families after this one in the requested list, which supply the characters it lacks.</summary>
+    internal ListedFontFamily[] ListedFallbacks
+    {
+        get;
+        init
+        {
+            field = value;
+            ListedFallbackKey = string.Join(',', value.Select(family => family.Family));
+        }
+    } = [];
+
+    /// <summary>Names the <see cref="ListedFallbacks"/>, for caching what is built from them.</summary>
+    internal string ListedFallbackKey { get; private init; } = string.Empty;
+
     // Cache raw metrics per (family, weight, italic, isPrivate) - size-independent.
     // Avoids repeated COM calls (FindFamilyName → GetFontFamily → GetFirstMatchingFont → GetMetrics).
     private static readonly ConcurrentDictionary<(string family, FontWeight weight, bool italic, bool isPrivate), DWRITE_FONT_METRICS?> _metricsCache = new();
@@ -511,3 +525,6 @@ internal sealed unsafe partial class DirectWriteFont : FontBase, IGlyphOutlineFo
         }
     }
 }
+
+/// <summary>A family listed after the one a font draws with, and the collection it lives in (0 for the system's).</summary>
+internal readonly record struct ListedFontFamily(string Family, nint Collection);

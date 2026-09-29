@@ -9,7 +9,8 @@ public interface IFont : IDisposable
     /// Gets the requested font family name - the family this font was created for, as the caller asked.
     /// Implementations must report this (not a backend-resolved/substituted face name), so consumers can
     /// compare against their requested family. Any internal name resolution stays inside the implementation.
-    /// A comma-separated request resolves to its first installed candidate, which is reported here.
+    /// A comma-separated request resolves to its first installed candidate, which is reported here; the installed
+    /// candidates after it supply the characters it lacks.
     /// </summary>
     string Family { get; }
 

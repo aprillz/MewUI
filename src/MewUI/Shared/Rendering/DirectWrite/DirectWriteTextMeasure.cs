@@ -45,7 +45,7 @@ internal static unsafe class DirectWriteTextMeasure
                 return Size.Empty;
             }
 
-            ApplyCustomFontFallback(factory, textLayout);
+            ApplyCustomFontFallback(factory, textLayout, font);
 
             if (trimming == TextTrimming.CharacterEllipsis)
             {
@@ -147,7 +147,7 @@ internal static unsafe class DirectWriteTextMeasure
                 return TextInkOverhang.None;
             }
 
-            ApplyCustomFontFallback(factory, textLayout);
+            ApplyCustomFontFallback(factory, textLayout, font);
 
             // DirectWrite reports overhangs against the layout's max width and height, not the text, so
             // the run is laid out again in a box of exactly its own size, the one the caller reserves.
@@ -166,7 +166,7 @@ internal static unsafe class DirectWriteTextMeasure
                 return TextInkOverhang.None;
             }
 
-            ApplyCustomFontFallback(factory, textLayout);
+            ApplyCustomFontFallback(factory, textLayout, font);
             if (DWriteVTable.GetOverhangMetrics(textLayout, out var overhangs) < 0)
             {
                 return TextInkOverhang.None;
@@ -207,7 +207,7 @@ internal static unsafe class DirectWriteTextMeasure
                 Marshal.ThrowExceptionForHR(hr);
             }
 
-            ApplyCustomFontFallback(factory, textLayout);
+            ApplyCustomFontFallback(factory, textLayout, font);
 
             foreach (var run in DWriteGlyphRunExtractor.Capture(textLayout))
             {
@@ -268,14 +268,14 @@ internal static unsafe class DirectWriteTextMeasure
         }
     }
 
-    internal static void ApplyCustomFontFallback(nint factory, nint textLayout)
+    internal static void ApplyCustomFontFallback(nint factory, nint textLayout, DirectWriteFont font)
     {
         if (textLayout == 0)
         {
             return;
         }
 
-        var fallback = DWriteFontFallbackHelper.GetOrCreate((IDWriteFactory*)factory);
+        var fallback = DWriteFontFallbackHelper.GetOrCreate((IDWriteFactory*)factory, font);
         if (fallback == 0)
         {
             return;

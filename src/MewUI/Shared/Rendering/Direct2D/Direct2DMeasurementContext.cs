@@ -68,7 +68,7 @@ internal sealed unsafe class Direct2DMeasurementContext : MeasureGraphicsContext
                 (IDWriteFactory*)_dwriteFactory, text, textFormat, w, float.MaxValue, _pixelsPerDip, useGdiNatural: false, out textLayout);
             if (hr < 0 || textLayout == 0) return null;
 
-            ApplyCustomFontFallback(textLayout);
+            ApplyCustomFontFallback(textLayout, dwFont);
 
             hr = DWriteVTable.GetMetrics(textLayout, out var metrics);
             if (hr < 0) return null;
@@ -103,10 +103,10 @@ internal sealed unsafe class Direct2DMeasurementContext : MeasureGraphicsContext
         }
     }
 
-    private void ApplyCustomFontFallback(nint textLayout)
+    private void ApplyCustomFontFallback(nint textLayout, DirectWriteFont font)
     {
         if (textLayout == 0) return;
-        var fallback = DWriteFontFallbackHelper.GetOrCreate((IDWriteFactory*)_dwriteFactory);
+        var fallback = DWriteFontFallbackHelper.GetOrCreate((IDWriteFactory*)_dwriteFactory, font);
         if (fallback == 0) return;
         _ = DWriteTextLayout2VTable.SetFontFallback(textLayout, fallback);
     }

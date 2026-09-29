@@ -273,7 +273,10 @@ internal sealed partial class GdiFont : FontBase, IGlyphOutlineFont, IWin32TextF
 
     private readonly record struct GlyphInk(int Left, int Right, int Above, int Below, int Advance);
 
-    /// <summary>Picks the first installed family from a comma-separated list; single names pass through.</summary>
+    /// <summary>
+    /// Picks the first installed family from a comma-separated list; single names pass through. GDI text draws with that
+    /// family alone: the families after it are not consulted for missing characters, which font linking supplies.
+    /// </summary>
     internal static string SelectFamilyCandidate(string family)
     {
         if (!FontFamilyList.IsList(family))

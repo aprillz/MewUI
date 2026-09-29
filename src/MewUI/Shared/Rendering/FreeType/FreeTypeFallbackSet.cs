@@ -8,8 +8,8 @@ using FC = Aprillz.MewUI.Native.Fontconfig.Fontconfig;
 namespace Aprillz.MewUI.Rendering.FreeType;
 
 /// <summary>
-/// The fonts tried, in order, for what a font's own face lacks: the installed families of the
-/// <see cref="FontFallback"/> chain, then the fonts fontconfig sorts after the primary one.
+/// The fonts tried, in order, for what a font's own face lacks: the installed families listed after it in its
+/// family list, those of the <see cref="FontFallback"/> chain, then the fonts fontconfig sorts after the primary one.
 /// </summary>
 internal sealed class FreeTypeFallbackSet
 {
@@ -22,13 +22,13 @@ internal sealed class FreeTypeFallbackSet
     private readonly object _systemGate = new();
     private SystemEntry[]? _system;
 
-    private FreeTypeFallbackSet(SetKey key, long version)
+    private FreeTypeFallbackSet(SetKey key, long version, string[] listed)
     {
         _key = key;
         Version = version;
 
         var chainPaths = new List<string>();
-        foreach (string family in FontFallback.GetChainSnapshot())
+        foreach (string family in listed.Concat(FontFallback.GetChainSnapshot()))
         {
             // A missing family would bring fontconfig's stand-in, which the sorted list below already has.
             var path = LinuxFontResolver.ResolveInstalledFontPath(family, key.Weight, key.Italic);
@@ -49,8 +49,11 @@ internal sealed class FreeTypeFallbackSet
 
     private static long CurrentVersion => ((long)FontFallback.Version << 32) | (uint)FontRegistry.Version;
 
-    /// <summary>The set for the font <paramref name="family"/> resolved to <paramref name="primaryPath"/>.</summary>
-    public static FreeTypeFallbackSet For(string family, string primaryPath, FontWeight weight, bool italic)
+    /// <summary>
+    /// The set for the font <paramref name="family"/> resolved to <paramref name="primaryPath"/>, with the families
+    /// <paramref name="listed"/> after it in the requested family list.
+    /// </summary>
+    public static FreeTypeFallbackSet For(string family, string primaryPath, string[] listed, FontWeight weight, bool italic)
     {
         long version = CurrentVersion;
         var sets = _sets;
@@ -61,7 +64,10 @@ internal sealed class FreeTypeFallbackSet
             Interlocked.Exchange(ref _setsVersion, version);
         }
 
-        return sets.GetOrAdd(new SetKey(family, primaryPath, weight, italic), static (key, version) => new FreeTypeFallbackSet(key, version), version);
+        return sets.GetOrAdd(
+            new SetKey(family, primaryPath, string.Join(',', listed), weight, italic),
+            static (key, argument) => new FreeTypeFallbackSet(key, argument.Version, argument.Listed),
+            (Version: version, Listed: listed));
     }
 
     /// <summary>The face that draws <paramref name="codePoint"/>, or <see langword="null"/> when no installed font has it.</summary>
@@ -187,7 +193,7 @@ internal sealed class FreeTypeFallbackSet
         return [.. entries];
     }
 
-    private readonly record struct SetKey(string Family, string PrimaryPath, FontWeight Weight, bool Italic);
+    private readonly record struct SetKey(string Family, string PrimaryPath, string Listed, FontWeight Weight, bool Italic);
 
     private readonly record struct SystemEntry(string Path, CharSetHandle CharSet);
 

@@ -14,6 +14,9 @@ internal sealed class FreeTypeFont : FontBase, IGlyphOutlineFont
     public string FontPath { get; }
     public int PixelHeight { get; }
 
+    /// <summary>The installed families after this one in the requested family list, which supply the characters it lacks.</summary>
+    public string[] ListedFamilies { get; init; } = [];
+
     private FreeTypeFallbackSet? _fallbackSet;
 
     public FreeTypeFont(string family, double size, FontWeight weight, bool italic, bool underline, bool strikethrough, string fontPath, int pixelHeight)
@@ -116,7 +119,7 @@ internal sealed class FreeTypeFont : FontBase, IGlyphOutlineFont
         var set = _fallbackSet;
         if (set == null || !set.IsCurrent)
         {
-            _fallbackSet = set = FreeTypeFallbackSet.For(Family, FontPath, Weight, IsItalic);
+            _fallbackSet = set = FreeTypeFallbackSet.For(Family, FontPath, ListedFamilies, Weight, IsItalic);
         }
 
         return set.FaceFor(codePoint, PixelHeight);

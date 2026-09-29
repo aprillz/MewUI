@@ -1033,7 +1033,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITra
             return null;
         }
 
-        ApplyCustomFontFallback(nativeLayout);
+        ApplyCustomFontFallback(nativeLayout, dwFont);
 
         // Apply trimming if requested.
         if (format.Trimming == TextTrimming.CharacterEllipsis)
@@ -1891,7 +1891,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITra
                 return Size.Empty;
             }
 
-            ApplyCustomFontFallback(textLayout);
+            ApplyCustomFontFallback(textLayout, dwFont);
 
             hr = DWriteVTable.GetMetrics(textLayout, out var metrics);
             if (hr < 0)
@@ -1957,14 +1957,14 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITra
     /// built from <see cref="FontFallback.FallbackChain"/>.
     /// Safe to call on any layout - silently no-ops if IDWriteFactory2 is unavailable.
     /// </summary>
-    private void ApplyCustomFontFallback(nint textLayout)
+    private void ApplyCustomFontFallback(nint textLayout, DirectWriteFont font)
     {
         if (textLayout == 0)
         {
             return;
         }
 
-        var fallback = DWriteFontFallbackHelper.GetOrCreate((IDWriteFactory*)_dwriteFactory);
+        var fallback = DWriteFontFallbackHelper.GetOrCreate((IDWriteFactory*)_dwriteFactory, font);
         if (fallback == 0)
         {
             return;

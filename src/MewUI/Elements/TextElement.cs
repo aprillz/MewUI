@@ -44,7 +44,9 @@ public abstract class TextElement : FrameworkElement
     }
 
     /// <summary>
-    /// Gets or sets the font family. An empty value follows the theme's font family.
+    /// Gets or sets the font family. An empty value follows the theme's font family. A comma-separated list draws with
+    /// its first installed family; the installed families after it supply the characters that one lacks, ahead of
+    /// <see cref="Rendering.FontFallback"/>.
     /// </summary>
     public string FontFamily
     {

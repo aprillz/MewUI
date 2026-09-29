@@ -42,29 +42,34 @@ internal sealed unsafe class DirectWriteFontFactory : IDisposable
     internal DirectWriteFont CreateFont(string family, double size, FontWeight weight,
         bool italic, bool underline, bool strikethrough, uint dpi = 96, bool gridFitMetrics = false)
     {
-        family = SelectFamilyCandidate(ValidateFamilyName(family));
-        var (resolvedFamily, fontCollection) = ResolveWithCollection(family);
+        var (primary, listed) = SelectFamilyCandidates(ValidateFamilyName(family));
+        var (resolvedFamily, fontCollection) = ResolveWithCollection(primary);
         return new DirectWriteFont(resolvedFamily, size, weight, italic, underline, strikethrough,
-            Factory, fontCollection, dpi, gridFitMetrics);
+            Factory, fontCollection, dpi, gridFitMetrics)
+        {
+            ListedFallbacks = [.. listed.Select(name => ResolveWithCollection(name)).Select(resolved => new ListedFontFamily(resolved.Family, resolved.FontCollection))],
+        };
     }
 
-    /// <summary>Picks the first installed family from a comma-separated list; single names pass through.</summary>
-    internal string SelectFamilyCandidate(string family)
+    /// <summary>
+    /// Picks the first installed family from a comma-separated list to draw with, and the installed families after
+    /// it to supply what it lacks. A single name, or a list with none installed, draws with its first name.
+    /// </summary>
+    internal (string Primary, string[] Listed) SelectFamilyCandidates(string family)
     {
         if (!FontFamilyList.IsList(family))
         {
-            return family;
+            return (family, []);
         }
 
         string[] candidates = FontFamilyList.Split(family);
-        foreach (string candidate in candidates)
+        var installed = candidates.Where(candidate => FontRegistry.Resolve(candidate) != null || IsSystemFamilyInstalled(candidate)).ToArray();
+        if (installed.Length == 0)
         {
-            if (FontRegistry.Resolve(candidate) != null || IsSystemFamilyInstalled(candidate))
-            {
-                return candidate;
-            }
+            return (candidates.Length > 0 ? candidates[0] : family, []);
         }
-        return candidates.Length > 0 ? candidates[0] : family;
+
+        return (installed[0], installed[1..]);
     }
 
     internal static string ValidateFamilyName(string? family)

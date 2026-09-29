@@ -13,6 +13,9 @@ internal sealed unsafe partial class CoreTextFont : FontBase, IGlyphOutlineFont
     private readonly uint _createdDpi;
     private readonly Dictionary<uint, nint> _dpiFontRefs = new();
     private readonly object _gate = new();
+
+    /// <summary>The installed families after this one in the requested family list, which supply the characters it lacks.</summary>
+    internal string[] ListedFamilies { get; init; } = [];
     /// <summary>True when bold weight was requested but the font's actual face has no bold
     /// trait (CoreText doesn't synthesize bold like GDI / DirectWrite / FreeType do). When
     /// set, glyph outline emission also appends a stroked copy of the path to thicken the
@@ -77,13 +80,9 @@ internal sealed unsafe partial class CoreTextFont : FontBase, IGlyphOutlineFont
         bool underline,
         bool strikethrough)
     {
-        family = SelectFamilyCandidate(family);
-        var resolved = FontRegistry.Resolve(family);
-        if (resolved != null)
-        {
-            EnsureRegisteredWithCoreText(resolved.Value.FilePath);
-            family = resolved.Value.FamilyName;
-        }
+        (family, string[] listed) = SelectFamilyCandidates(family);
+        family = ResolveRegisteredFamily(family);
+        listed = [.. listed.Select(ResolveRegisteredFamily)];
 
         // MewUI font size is in DIPs (1/96 inch). When rasterizing via CoreGraphics into a pixel bitmap,
         // treat CTFont "size" as pixel size so retina/backing scale produces the expected physical size.
@@ -104,6 +103,8 @@ internal sealed unsafe partial class CoreTextFont : FontBase, IGlyphOutlineFont
                 throw new InvalidOperationException("CTFontCreateWithName failed.");
             }
 
+            font = WithCascade(font, sizePx, listed);
+
             // Detect bold-synthesis need: bold-class weight requested but the resulting
             // font's symbolic traits don't have kCTFontTraitBold set - the family lacks a
             // bold face on this system. CoreText (unlike GDI/DirectWrite/FreeType) doesn't
@@ -114,7 +115,7 @@ internal sealed unsafe partial class CoreTextFont : FontBase, IGlyphOutlineFont
             bool synthesizeBold = wantBold && !hasBoldTrait;
 
             // Keep the public Size as the DIP size for layout/measurement consistency.
-            return new CoreTextFont(family, size, weight, italic, underline, strikethrough, font, actualDpi, synthesizeBold);
+            return new CoreTextFont(family, size, weight, italic, underline, strikethrough, font, actualDpi, synthesizeBold) { ListedFamilies = listed };
         }
         finally
         {
@@ -139,23 +140,128 @@ internal sealed unsafe partial class CoreTextFont : FontBase, IGlyphOutlineFont
         _ => 0.0
     };
 
-    /// <summary>Picks the first installed family from a comma-separated list; single names pass through.</summary>
-    private static string SelectFamilyCandidate(string family)
+    /// <summary>
+    /// Picks the first installed family from a comma-separated list to draw with, and the installed families after
+    /// it to supply what it lacks. A single name, or a list with none installed, draws with its first name.
+    /// </summary>
+    private static (string Primary, string[] Listed) SelectFamilyCandidates(string family)
     {
         if (!FontFamilyList.IsList(family))
+        {
+            return (family, []);
+        }
+
+        string[] candidates = FontFamilyList.Split(family);
+        var installed = candidates.Where(candidate => FontRegistry.Resolve(candidate) != null || IsInstalled(candidate)).ToArray();
+        if (installed.Length == 0)
+        {
+            return (candidates.Length > 0 ? candidates[0] : family, []);
+        }
+
+        return (installed[0], installed[1..]);
+    }
+
+    /// <summary>The family CoreText knows <paramref name="family"/> by, registering its file first when it was registered with MewUI.</summary>
+    private static string ResolveRegisteredFamily(string family)
+    {
+        var resolved = FontRegistry.Resolve(family);
+        if (resolved == null)
         {
             return family;
         }
 
-        string[] candidates = FontFamilyList.Split(family);
-        foreach (string candidate in candidates)
+        EnsureRegisteredWithCoreText(resolved.Value.FilePath);
+        return resolved.Value.FamilyName;
+    }
+
+    /// <summary>
+    /// A copy of <paramref name="font"/> that draws what it lacks from <paramref name="families"/> before the
+    /// system's cascade; <paramref name="font"/> itself when there is nothing to add. Takes ownership of
+    /// <paramref name="font"/>.
+    /// </summary>
+    private static nint WithCascade(nint font, double sizePx, string[] families)
+    {
+        if (families.Length == 0 || !CTConstants.IsAvailable || CTConstants.CascadeListAttribute == 0 || CTConstants.ArrayCallBacks == 0)
         {
-            if (FontRegistry.Resolve(candidate) != null || IsInstalled(candidate))
+            return font;
+        }
+
+        var descriptors = new nint[families.Length];
+        nint cascade = 0;
+        nint attributes = 0;
+        nint descriptor = 0;
+        try
+        {
+            for (int index = 0; index < families.Length; index++)
             {
-                return candidate;
+                descriptors[index] = CreateFamilyDescriptor(families[index]);
+            }
+
+            var made = descriptors.Where(candidate => candidate != 0).ToArray();
+            if (made.Length == 0)
+            {
+                return font;
+            }
+
+            fixed (nint* values = made)
+            {
+                cascade = CoreFoundation.CFArrayCreate(0, values, made.Length, CTConstants.ArrayCallBacks);
+            }
+
+            if (cascade == 0)
+            {
+                return font;
+            }
+
+            nint key = CTConstants.CascadeListAttribute;
+            attributes = CoreFoundation.CFDictionaryCreate(0, &key, &cascade, 1, CTConstants.KeyCallBacks, CTConstants.ValueCallBacks);
+            descriptor = attributes != 0 ? CoreText.CTFontDescriptorCreateWithAttributes(attributes) : 0;
+            nint cascaded = descriptor != 0 ? CoreText.CTFontCreateCopyWithAttributes(font, sizePx, 0, descriptor) : 0;
+            if (cascaded == 0)
+            {
+                return font;
+            }
+
+            CoreFoundation.CFRelease(font);
+            return cascaded;
+        }
+        finally
+        {
+            if (descriptor != 0) CoreFoundation.CFRelease(descriptor);
+            if (attributes != 0) CoreFoundation.CFRelease(attributes);
+            if (cascade != 0) CoreFoundation.CFRelease(cascade);
+            foreach (nint made in descriptors)
+            {
+                if (made != 0) CoreFoundation.CFRelease(made);
             }
         }
-        return candidates.Length > 0 ? candidates[0] : family;
+    }
+
+    private static nint CreateFamilyDescriptor(string family)
+    {
+        nint name = 0;
+        nint attributes = 0;
+        try
+        {
+            fixed (char* characters = family)
+            {
+                name = CoreFoundation.CFStringCreateWithCharacters(0, characters, family.Length);
+            }
+
+            if (name == 0)
+            {
+                return 0;
+            }
+
+            nint key = CTConstants.FamilyNameAttribute;
+            attributes = CoreFoundation.CFDictionaryCreate(0, &key, &name, 1, CTConstants.KeyCallBacks, CTConstants.ValueCallBacks);
+            return attributes != 0 ? CoreText.CTFontDescriptorCreateWithAttributes(attributes) : 0;
+        }
+        finally
+        {
+            if (attributes != 0) CoreFoundation.CFRelease(attributes);
+            if (name != 0) CoreFoundation.CFRelease(name);
+        }
     }
 
     private static unsafe bool IsInstalled(string family)
@@ -365,6 +471,8 @@ internal sealed unsafe partial class CoreTextFont : FontBase, IGlyphOutlineFont
         public static readonly nint SlantTrait;
         public static readonly nint KeyCallBacks;
         public static readonly nint ValueCallBacks;
+        public static readonly nint CascadeListAttribute;
+        public static readonly nint ArrayCallBacks;
 
         static CTConstants()
         {
@@ -384,6 +492,8 @@ internal sealed unsafe partial class CoreTextFont : FontBase, IGlyphOutlineFont
                 // which is the symbol address itself (not dereferenced).
                 KeyCallBacks = NativeLibrary.GetExport(_cfLib, "kCFTypeDictionaryKeyCallBacks");
                 ValueCallBacks = NativeLibrary.GetExport(_cfLib, "kCFTypeDictionaryValueCallBacks");
+                CascadeListAttribute = ReadSymbol(_ctLib, "kCTFontCascadeListAttribute");
+                ArrayCallBacks = NativeLibrary.GetExport(_cfLib, "kCFTypeArrayCallBacks");
 
                 IsAvailable = FamilyNameAttribute != 0 && TraitsAttribute != 0 &&
                               WeightTrait != 0 && SlantTrait != 0 &&
@@ -447,6 +557,8 @@ internal sealed unsafe partial class CoreTextFont : FontBase, IGlyphOutlineFont
                 {
                     return baseRef;
                 }
+
+                font = WithCascade(font, sizePx, ListedFamilies);
 
                 _dpiFontRefs[actualDpi] = font;
                 return font;
@@ -548,6 +660,9 @@ internal sealed unsafe partial class CoreTextFont : FontBase, IGlyphOutlineFont
         internal static partial nint CFDictionaryCreate(
             nint allocator, nint* keys, nint* values, nint numValues,
             nint keyCallBacks, nint valueCallBacks);
+
+        [LibraryImport("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")]
+        internal static partial nint CFArrayCreate(nint allocator, nint* values, nint numValues, nint callBacks);
 
         [LibraryImport("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")]
         internal static partial nint CFURLCreateWithFileSystemPath(
