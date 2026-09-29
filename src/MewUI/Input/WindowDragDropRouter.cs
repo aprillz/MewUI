@@ -249,75 +249,11 @@ internal static class WindowDragDropRouter
 
         BuildChain(targetWindow, leaf, _scratchNewChain);
 
-        var args = new DragEventArgs(session.Data, positionInWindow, screenPosition, session.AllowedEffects)
-        {
-            Effect = DragDropEffects.None,
-        };
-
-        // Diff old chain vs new chain.
-        var oldChain = session.CurrentChain;
-        var oldWindow = session.CurrentTargetWindow;
-
-        // DragLeave on entries removed (those in oldChain not in newChain, or when window changed).
-        if (!ReferenceEquals(oldWindow, targetWindow))
-        {
-            // Different window - leave everything in old chain.
-            for (int i = 0; i < oldChain.Count; i++)
-            {
-                oldChain[i].RaiseDragLeave(args);
-            }
-            oldChain.Clear();
-        }
-        else
-        {
-            // Same window - leave entries no longer present.
-            for (int i = 0; i < oldChain.Count; i++)
-            {
-                if (!_scratchNewChain.Contains(oldChain[i]))
-                {
-                    oldChain[i].RaiseDragLeave(args);
-                }
-            }
-        }
-
-        // DragEnter on entries newly added.
-        for (int i = _scratchNewChain.Count - 1; i >= 0; i--)
-        {
-            if (!oldChain.Contains(_scratchNewChain[i]))
-            {
-                _scratchNewChain[i].RaiseDragEnter(args);
-            }
-        }
-
-        // Save new chain.
-        oldChain.Clear();
-        oldChain.AddRange(_scratchNewChain);
+        var args = new DragEventArgs(session.Data, positionInWindow, screenPosition, session.AllowedEffects);
+        RouteEnterOver(session.CurrentChain, _scratchNewChain, args);
         session.CurrentTargetWindow = targetWindow;
-
-        // DragOver on the current chain (leaf to root).
-        var overArgs = new DragEventArgs(session.Data, positionInWindow, screenPosition, session.AllowedEffects)
-        {
-            Effect = args.Effect,
-            Accepted = args.Accepted,
-        };
-        for (int i = 0; i < oldChain.Count; i++)
-        {
-            oldChain[i].RaiseDragOver(overArgs);
-            if (overArgs.Accepted) overArgs.Handled = true;
-            if (overArgs.Handled) break;
-        }
-
-        // Normalize the effect: must be within AllowedEffects, and accepted-implies-non-None.
-        var effect = overArgs.Effect & session.AllowedEffects;
-        if (!overArgs.Accepted) effect = DragDropEffects.None;
-        if (overArgs.Accepted && effect == DragDropEffects.None)
-        {
-            // Default fallback when target says "accepted" but did not pick a specific effect.
-            effect = (session.AllowedEffects & DragDropEffects.Copy) != 0
-                ? DragDropEffects.Copy
-                : session.AllowedEffects;
-        }
-        session.LastEffect = effect;
+        ApplyDefaultAcceptance(args);
+        session.LastEffect = targetWindow == null ? DragDropEffects.None : NormalizeEffect(args);
 
         UpdatePreviewPosition(targetWindow, session, positionInWindow, screenPosition);
     }
@@ -330,30 +266,28 @@ internal static class WindowDragDropRouter
 
         BuildChain(targetWindow, leaf, _scratchNewChain);
 
-        var args = new DragEventArgs(session.Data, positionInWindow, screenPosition, session.AllowedEffects)
-        {
-            Effect = session.LastEffect,
-            Accepted = session.LastEffect != DragDropEffects.None,
-        };
+        var args = new DragEventArgs(session.Data, positionInWindow, screenPosition, session.AllowedEffects);
 
-        if (targetWindow != null && _scratchNewChain.Count > 0 && args.Accepted)
+        // As OLE does, a drop the last drag over refused is not delivered; the targets are left instead.
+        if (targetWindow != null && session.LastEffect != DragDropEffects.None)
         {
-            for (int i = 0; i < _scratchNewChain.Count; i++)
+            RouteDrop(_scratchNewChain, args);
+            if (!args.IsDecided)
             {
-                _scratchNewChain[i].RaiseDrop(args);
-                if (args.Accepted) args.Handled = true;
-                if (args.Handled) break;
+                // A target that says nothing about the drop, having handled it or not, confirms what it answered while
+                // the drag was over it.
+                args.ApplyDefault(accepted: true, session.LastEffect);
             }
-        }
 
-        var finalEffect = args.Accepted ? (args.Effect & session.AllowedEffects) : DragDropEffects.None;
-        if (args.Accepted && finalEffect == DragDropEffects.None)
-        {
-            finalEffect = (session.AllowedEffects & DragDropEffects.Copy) != 0
-                ? DragDropEffects.Copy
-                : session.AllowedEffects;
+            session.LastEffect = NormalizeEffect(args);
+
+            // Dropped on, not left: the chain gets no DragLeave after its Drop.
+            session.CurrentChain.Clear();
         }
-        session.LastEffect = finalEffect;
+        else
+        {
+            session.LastEffect = DragDropEffects.None;
+        }
 
         // A release is NOT a cancel even when no target accepted it: report WasCanceled=false with
         // FinalEffect=None so a source can tell "released over empty space" (e.g. spawn a window there) apart
@@ -453,8 +387,10 @@ internal static class WindowDragDropRouter
     private static void BuildChain(Window? window, UIElement? leaf, List<UIElement> chain)
     {
         chain.Clear();
-        if (window == null || leaf == null) return;
-        for (var current = leaf; current != null; current = WindowInputRouter.GetInputBubbleParent(window, current))
+        if (window == null) return;
+
+        // Over no element the pointer is still over the window, which is the start of the chain then.
+        for (var current = leaf ?? window; current != null; current = WindowInputRouter.GetInputBubbleParent(window, current))
         {
             if (current.AllowDrop)
             {
@@ -575,7 +511,7 @@ internal static class WindowDragDropRouter
     //   Win32  : IDropTarget COM impl
     //   macOS  : NSDraggingDestination protocol callbacks
     //   X11    : XdndEnter / XdndPosition / XdndLeave / XdndDrop client messages
-    // The router is responsible only for element-chain routing + window-level fallback.
+    // The router routes them along the same element chain as a drag inside the application, the window at its root.
     // ============================================================================================
 
     /// <summary>External drag entered the window. Computes the target chain and raises element-level DragEnter.</summary>
@@ -593,7 +529,7 @@ internal static class WindowDragDropRouter
             }
 
             _externalSession = new ExternalDragSession(window);
-            DispatchExternalEnterOver(window, args, raiseEnter: true);
+            DispatchExternalEnterOver(window, args);
         }
         finally
         {
@@ -617,11 +553,11 @@ internal static class WindowDragDropRouter
                     LeaveExternalChain(args);
                 }
                 _externalSession = new ExternalDragSession(window);
-                DispatchExternalEnterOver(window, args, raiseEnter: true);
+                DispatchExternalEnterOver(window, args);
                 return;
             }
 
-            DispatchExternalEnterOver(window, args, raiseEnter: false);
+            DispatchExternalEnterOver(window, args);
         }
         finally
         {
@@ -638,8 +574,8 @@ internal static class WindowDragDropRouter
             if (_activeSession != null) return;
             if (_externalSession == null || !ReferenceEquals(_externalSession.Window, window)) return;
 
+            // The window is the root of the chain it leaves; it is not told a second time.
             LeaveExternalChain(args);
-            window.RaiseDragLeave(args);
         }
         finally
         {
@@ -647,7 +583,7 @@ internal static class WindowDragDropRouter
         }
     }
 
-    /// <summary>External drag dropped on the window. Routes the drop through the element chain, then falls back to window-level.</summary>
+    /// <summary>External drag dropped on the window. Routes the drop through the element chain, the window at its root.</summary>
     /// <returns>The final negotiated effect (None when nothing accepted).</returns>
     public static DragDropEffects OnExternalDrop(Window window, DragEventArgs args)
     {
@@ -660,31 +596,20 @@ internal static class WindowDragDropRouter
 
         try
         {
-            var leaf = window.HitTest(args.Position);
-            BuildChain(window, leaf, _scratchNewChain);
-
-            for (int i = 0; i < _scratchNewChain.Count; i++)
+            BuildChain(window, window.HitTest(args.Position), _scratchNewChain);
+            RouteDrop(_scratchNewChain, args);
+            if (!args.IsDecided)
             {
-                _scratchNewChain[i].RaiseDrop(args);
-                if (args.Accepted) args.Handled = true;
-                if (args.Handled) break;
-            }
-
-            if (!args.Handled)
-            {
-                // Same default-accept policy as DragEnter/Over so an unaware window-level Drop handler
-                // still produces a valid effect for the OS to confirm the operation.
-                if (HasStandardFormat(args.Data))
+                // Unanswered, the drop confirms what the drag over settled; a drop with no drag over before it (a
+                // platform that only reports drops) gets the default answer.
+                if (_externalSession is ExternalDragSession session)
                 {
-                    args.Accepted = true;
-                    if (args.Effect == DragDropEffects.None)
-                    {
-                        args.Effect = (args.AllowedEffects & DragDropEffects.Copy) != 0
-                            ? DragDropEffects.Copy
-                            : args.AllowedEffects;
-                    }
+                    args.ApplyDefault(session.LastEffect != DragDropEffects.None, session.LastEffect);
                 }
-                window.RaiseDrop(args);
+                else
+                {
+                    ApplyDefaultAcceptance(args);
+                }
             }
 
             return NormalizeEffect(args);
@@ -697,62 +622,75 @@ internal static class WindowDragDropRouter
         }
     }
 
-    private static void DispatchExternalEnterOver(Window window, DragEventArgs args, bool raiseEnter)
+    private static void DispatchExternalEnterOver(Window window, DragEventArgs args)
     {
         var session = _externalSession!;
-        var leaf = window.HitTest(args.Position);
-        BuildChain(window, leaf, _scratchNewChain);
+        BuildChain(window, window.HitTest(args.Position), _scratchNewChain);
+        RouteEnterOver(session.CurrentChain, _scratchNewChain, args);
+        ApplyDefaultAcceptance(args);
+        session.LastEffect = NormalizeEffect(args);
+    }
 
-        var oldChain = session.CurrentChain;
-
-        // DragLeave on entries removed.
-        for (int i = 0; i < oldChain.Count; i++)
+    /// <summary>
+    /// The one path a drag over takes, from this application or another: DragLeave on the elements that left the
+    /// chain, DragEnter on the ones that joined it, then DragOver from the leaf up until a target handles it. The
+    /// window is the chain's root, so it hears each of them once.
+    /// </summary>
+    private static void RouteEnterOver(List<UIElement> currentChain, List<UIElement> newChain, DragEventArgs args)
+    {
+        for (int i = 0; i < currentChain.Count; i++)
         {
-            if (!_scratchNewChain.Contains(oldChain[i]))
+            if (!newChain.Contains(currentChain[i]))
             {
-                oldChain[i].RaiseDragLeave(args);
+                currentChain[i].RaiseDragLeave(args);
             }
         }
 
-        // DragEnter on entries newly added (leaf to root order to mirror mouse-enter semantics).
-        for (int i = _scratchNewChain.Count - 1; i >= 0; i--)
+        for (int i = newChain.Count - 1; i >= 0; i--)
         {
-            if (!oldChain.Contains(_scratchNewChain[i]))
+            if (!currentChain.Contains(newChain[i]))
             {
-                _scratchNewChain[i].RaiseDragEnter(args);
+                newChain[i].RaiseDragEnter(args);
             }
         }
 
-        // DragOver bubbling, leaf to root.
-        for (int i = 0; i < _scratchNewChain.Count; i++)
+        for (int i = 0; i < newChain.Count; i++)
         {
-            _scratchNewChain[i].RaiseDragOver(args);
+            newChain[i].RaiseDragOver(args);
             if (args.Accepted) args.Handled = true;
             if (args.Handled) break;
         }
 
-        // Window-level fallback for unhandled events.
-        // The framework default at window scope is "accept if any standard format is present" so the OS
-        // shows a "drop allowed" cursor without every consumer wiring up a DragOver handler purely for
-        // visual feedback. Handlers can still explicitly opt out (set Accepted=false / Effect=None).
-        if (!args.Handled)
+        currentChain.Clear();
+        currentChain.AddRange(newChain);
+    }
+
+    /// <summary>The Drop along the same path, from the leaf up until a target handles it.</summary>
+    private static void RouteDrop(List<UIElement> chain, DragEventArgs args)
+    {
+        for (int i = 0; i < chain.Count; i++)
         {
-            if (HasStandardFormat(args.Data))
-            {
-                args.Accepted = true;
-                if (args.Effect == DragDropEffects.None)
-                {
-                    args.Effect = (args.AllowedEffects & DragDropEffects.Copy) != 0
-                        ? DragDropEffects.Copy
-                        : args.AllowedEffects;
-                }
-            }
-            if (raiseEnter) window.RaiseDragEnter(args);
-            else window.RaiseDragOver(args);
+            chain[i].RaiseDrop(args);
+            if (args.Accepted) args.Handled = true;
+            if (args.Handled) break;
+        }
+    }
+
+    /// <summary>
+    /// The answer for targets that gave none: a standard format is accepted, so a window shows "drop allowed" without
+    /// a DragOver handler written only for that. A target that set <see cref="DragEventArgs.Accepted"/> or
+    /// <see cref="DragEventArgs.Effect"/>, refusing included, keeps its answer.
+    /// </summary>
+    private static void ApplyDefaultAcceptance(DragEventArgs args)
+    {
+        if (args.IsDecided || !HasStandardFormat(args.Data))
+        {
+            return;
         }
 
-        oldChain.Clear();
-        oldChain.AddRange(_scratchNewChain);
+        args.ApplyDefault(
+            accepted: true,
+            (args.AllowedEffects & DragDropEffects.Copy) != 0 ? DragDropEffects.Copy : args.AllowedEffects);
     }
 
     private static bool HasStandardFormat(IDataObject data)
@@ -843,6 +781,9 @@ internal sealed class ExternalDragSession
     public Window Window { get; }
 
     public List<UIElement> CurrentChain { get; } = new();
+
+    /// <summary>What the last drag over settled on.</summary>
+    public DragDropEffects LastEffect { get; set; }
 
     public ExternalDragSession(Window window) => Window = window;
 }

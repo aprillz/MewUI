@@ -7,6 +7,9 @@ namespace Aprillz.MewUI;
 /// </summary>
 public sealed class DragEventArgs
 {
+    private bool _accepted;
+    private DragDropEffects _effect;
+
     /// <summary>
     /// Gets the dropped or dragged data payload.
     /// </summary>
@@ -31,7 +34,15 @@ public sealed class DragEventArgs
     /// Gets or sets whether the current target accepts the drop.
     /// Setting this to <see langword="true"/> implicitly handles the event.
     /// </summary>
-    public bool Accepted { get; set; }
+    public bool Accepted
+    {
+        get => _accepted;
+        set
+        {
+            _accepted = value;
+            IsDecided = true;
+        }
+    }
 
     /// <summary>
     /// Gets the effects allowed by the drag source.
@@ -42,7 +53,25 @@ public sealed class DragEventArgs
     /// Gets or sets the effect chosen by the target.
     /// Must be a subset of <see cref="AllowedEffects"/>; values outside are coerced to <see cref="DragDropEffects.None"/>.
     /// </summary>
-    public DragDropEffects Effect { get; set; }
+    public DragDropEffects Effect
+    {
+        get => _effect;
+        set
+        {
+            _effect = value;
+            IsDecided = true;
+        }
+    }
+
+    /// <summary>Whether a handler set <see cref="Accepted"/> or <see cref="Effect"/>; the router applies its default otherwise.</summary>
+    internal bool IsDecided { get; private set; }
+
+    /// <summary>Sets the router's default answer without counting it as a handler's decision.</summary>
+    internal void ApplyDefault(bool accepted, DragDropEffects effect)
+    {
+        _accepted = accepted;
+        _effect = effect;
+    }
 
     public DragEventArgs(IDataObject data, Point position, Point screenPosition)
         : this(data, position, screenPosition, DragDropEffects.Copy)
@@ -55,6 +84,5 @@ public sealed class DragEventArgs
         Position = position;
         ScreenPosition = screenPosition;
         AllowedEffects = allowedEffects;
-        Effect = DragDropEffects.None;
     }
 }
