@@ -14,6 +14,8 @@ internal sealed class FreeTypeFont : FontBase, IGlyphOutlineFont
     public string FontPath { get; }
     public int PixelHeight { get; }
 
+    private FreeTypeFallbackSet? _fallbackSet;
+
     public FreeTypeFont(string family, double size, FontWeight weight, bool italic, bool underline, bool strikethrough, string fontPath, int pixelHeight)
         : base(family, size, weight, italic, underline, strikethrough)
     {
@@ -108,6 +110,18 @@ internal sealed class FreeTypeFont : FontBase, IGlyphOutlineFont
         return TextInkOverhang.FromEdges(left / dpiScale, above / dpiScale, right / dpiScale, below / dpiScale);
     }
 
+    /// <summary>The face that draws <paramref name="codePoint"/> where this font's own face lacks it, or <see langword="null"/> when no installed font has it.</summary>
+    public FreeTypeFaceCache.FaceEntry? FallbackFace(uint codePoint)
+    {
+        var set = _fallbackSet;
+        if (set == null || !set.IsCurrent)
+        {
+            _fallbackSet = set = FreeTypeFallbackSet.For(Family, FontPath, Weight, IsItalic);
+        }
+
+        return set.FaceFor(codePoint, PixelHeight);
+    }
+
     private unsafe GlyphInk GetGlyphInk(FreeTypeFaceCache.FaceEntry face, uint code)
     {
         lock (_glyphInkGate)
@@ -124,7 +138,7 @@ internal sealed class FreeTypeFont : FontBase, IGlyphOutlineFont
         var activeFace = face;
         uint glyph = face.GetGlyphIndex(code);
         if (glyph == 0 &&
-            LinuxFontFallbackResolver.Resolve(code, PixelHeight, Weight, IsItalic) is FreeTypeFaceCache.FaceEntry fallbackFace)
+            FallbackFace(code) is FreeTypeFaceCache.FaceEntry fallbackFace)
         {
             activeFace = fallbackFace;
             glyph = fallbackFace.GetGlyphIndex(code);

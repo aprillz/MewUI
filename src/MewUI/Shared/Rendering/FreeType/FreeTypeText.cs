@@ -29,7 +29,7 @@ internal static unsafe class FreeTypeText
         int maxLineWidth = 0;
         int lines = 0;
 
-        TextLayoutUtils.EnumerateLines(text, maxWidthPx, wrapping, span => MeasureRunWidthPx(span, face, font.PixelHeight, font.Weight, font.IsItalic), line =>
+        TextLayoutUtils.EnumerateLines(text, maxWidthPx, wrapping, span => MeasureRunWidthPx(span, face, font), line =>
         {
             int width = (int)Math.Ceiling(line.Width);
             if (width > maxLineWidth)
@@ -79,7 +79,7 @@ internal static unsafe class FreeTypeText
         var lines = new List<LineSegment>();
         int maxLineWidth = 0;
         int effectiveWrapWidth = wrapping == TextWrapping.Wrap ? widthPx : 0;
-        TextLayoutUtils.EnumerateLines(text, effectiveWrapWidth, wrapping, span => MeasureRunWidthPx(span, face, font.PixelHeight, font.Weight, font.IsItalic), line =>
+        TextLayoutUtils.EnumerateLines(text, effectiveWrapWidth, wrapping, span => MeasureRunWidthPx(span, face, font), line =>
         {
             int width = (int)Math.Ceiling(line.Width);
             if (width > maxLineWidth)
@@ -101,7 +101,7 @@ internal static unsafe class FreeTypeText
                     if (line.Width > widthPx && line.Length > 0)
                     {
                         var lineText = text.Slice(line.Start, line.Length);
-                        var trimmed = TextLayoutUtils.TrimLineWithEllipsis(lineText, line.Start, widthPx, span => MeasureRunWidthPx(span, face, font.PixelHeight, font.Weight, font.IsItalic));
+                        var trimmed = TextLayoutUtils.TrimLineWithEllipsis(lineText, line.Start, widthPx, span => MeasureRunWidthPx(span, face, font));
                         lines[i] = new LineSegment(trimmed.Start, trimmed.Length, trimmed.Width);
                         trimmedFlags.Add(true);
                     }
@@ -124,32 +124,32 @@ internal static unsafe class FreeTypeText
                     if (lastLine.Length > 0)
                     {
                         var lineText = text.Slice(lastLine.Start, lastLine.Length);
-                        int ellipsisW = MeasureRunWidthPx("...", face, font.PixelHeight, font.Weight, font.IsItalic);
+                        int ellipsisW = MeasureRunWidthPx("...", face, font);
                         int maxTextW = Math.Max(0, widthPx - ellipsisW);
 
                         // Don't use TrimLineWithEllipsis here - its fast path skips the
                         // ellipsis when text fits, but wrap overflow always needs "...".
                         int trimLen = lastLine.Length;
-                        int textW = MeasureRunWidthPx(lineText, face, font.PixelHeight, font.Weight, font.IsItalic);
+                        int textW = MeasureRunWidthPx(lineText, face, font);
                         if (textW > maxTextW)
                         {
                             double avgChar = (double)textW / trimLen;
                             trimLen = Math.Clamp((int)(maxTextW / avgChar), 0, lastLine.Length);
-                            textW = trimLen > 0 ? MeasureRunWidthPx(lineText.Slice(0, trimLen), face, font.PixelHeight, font.Weight, font.IsItalic) : 0;
+                            textW = trimLen > 0 ? MeasureRunWidthPx(lineText.Slice(0, trimLen), face, font) : 0;
 
                             if (textW > maxTextW)
                             {
                                 while (trimLen > 0 && textW > maxTextW)
                                 {
                                     trimLen--;
-                                    textW = trimLen > 0 ? MeasureRunWidthPx(lineText.Slice(0, trimLen), face, font.PixelHeight, font.Weight, font.IsItalic) : 0;
+                                    textW = trimLen > 0 ? MeasureRunWidthPx(lineText.Slice(0, trimLen), face, font) : 0;
                                 }
                             }
                             else
                             {
                                 while (trimLen < lastLine.Length)
                                 {
-                                    int next = MeasureRunWidthPx(lineText.Slice(0, trimLen + 1), face, font.PixelHeight, font.Weight, font.IsItalic);
+                                    int next = MeasureRunWidthPx(lineText.Slice(0, trimLen + 1), face, font);
                                     if (next > maxTextW) break;
                                     trimLen++;
                                     textW = next;
@@ -249,7 +249,7 @@ internal static unsafe class FreeTypeText
             if (trimmed)
             {
                 // Advance penX to end of line for ellipsis placement.
-                int lineEndX = penX + MeasureRunWidthPxFallback(lineText, face, font.PixelHeight, font.Weight, font.IsItalic);
+                int lineEndX = penX + MeasureRunWidthPxFallback(lineText, face, font);
                 RenderEllipsisFallback(face, font, lineEndX, penY, buffer, widthPx, heightPx, color);
             }
         }
@@ -257,8 +257,7 @@ internal static unsafe class FreeTypeText
         return new TextBitmap(widthPx, heightPx, buffer);
     }
 
-    private static int MeasureRunWidthPx(ReadOnlySpan<char> text, FreeTypeFaceCache.FaceEntry face,
-        int pixelHeight, FontWeight weight, bool italic)
+    private static int MeasureRunWidthPx(ReadOnlySpan<char> text, FreeTypeFaceCache.FaceEntry face, FreeTypeFont font)
     {
         if (text.IsEmpty)
         {
@@ -270,11 +269,11 @@ internal static unsafe class FreeTypeText
             var shaped = HarfBuzzShaper.Shape(text, face);
             if (shaped != null)
             {
-                return MeasureShapedWidth(shaped, text, pixelHeight, weight, italic);
+                return MeasureShapedWidth(shaped, text, font);
             }
         }
 
-        return MeasureRunWidthPxFallback(text, face, pixelHeight, weight, italic);
+        return MeasureRunWidthPxFallback(text, face, font);
     }
 
     /// <summary>
@@ -285,7 +284,7 @@ internal static unsafe class FreeTypeText
     /// at its source cluster index so callers can build per-code-unit prefix advances.
     /// </summary>
     private static int MeasureShapedWidth(ShapedGlyph[] glyphs,
-        ReadOnlySpan<char> sourceText, int pixelHeight, FontWeight weight, bool italic,
+        ReadOnlySpan<char> sourceText, FreeTypeFont font,
         long[]? clusterAdvances26_6 = null)
     {
         long total = 0;
@@ -311,8 +310,7 @@ internal static unsafe class FreeTypeText
                     uint firstCp = GetCodepointFromCluster(sourceText, (uint)textStart);
                     if (firstCp != 0)
                     {
-                        var fallbackFace = LinuxFontFallbackResolver.Resolve(
-                            firstCp, pixelHeight, weight, italic);
+                        var fallbackFace = font.FallbackFace(firstCp);
                         if (fallbackFace != null)
                         {
                             // Re-shape with fallback font (ZWJ sequences combine here)
@@ -340,8 +338,7 @@ internal static unsafe class FreeTypeText
                     uint codepoint = GetCodepointFromCluster(sourceText, gg.Cluster);
                     if (codepoint != 0)
                     {
-                        var fb = LinuxFontFallbackResolver.Resolve(
-                            codepoint, pixelHeight, weight, italic);
+                        var fb = font.FallbackFace(codepoint);
                         if (fb != null && fb.GetGlyphIndex(codepoint) != 0)
                         {
                             advance = (long)fb.GetAdvancePx(codepoint) << 6;
@@ -369,8 +366,7 @@ internal static unsafe class FreeTypeText
         }
     }
 
-    private static int MeasureRunWidthPxFallback(ReadOnlySpan<char> text, FreeTypeFaceCache.FaceEntry face,
-        int pixelHeight, FontWeight weight, bool italic)
+    private static int MeasureRunWidthPxFallback(ReadOnlySpan<char> text, FreeTypeFaceCache.FaceEntry face, FreeTypeFont font)
     {
         int width = 0;
         uint prevGlyph = 0;
@@ -399,7 +395,7 @@ internal static unsafe class FreeTypeText
 
             if (glyph == 0)
             {
-                var fallbackFace = LinuxFontFallbackResolver.Resolve(code, pixelHeight, weight, italic);
+                var fallbackFace = font.FallbackFace(code);
                 if (fallbackFace != null)
                 {
                     uint fbGlyph = fallbackFace.GetGlyphIndex(code);
@@ -451,7 +447,7 @@ internal static unsafe class FreeTypeText
             if (shaped != null)
             {
                 var clusterAdvances = new long[text.Length];
-                MeasureShapedWidth(shaped, text, font.PixelHeight, font.Weight, font.IsItalic, clusterAdvances);
+                MeasureShapedWidth(shaped, text, font, clusterAdvances);
                 long running = 0;
                 for (int index = 0; index < text.Length; index++)
                 {
@@ -482,7 +478,7 @@ internal static unsafe class FreeTypeText
             var activeFace = face;
             if (glyph == 0)
             {
-                var fallbackFace = LinuxFontFallbackResolver.Resolve(code, font.PixelHeight, font.Weight, font.IsItalic);
+                var fallbackFace = font.FallbackFace(code);
                 if (fallbackFace != null)
                 {
                     uint fallbackGlyph = fallbackFace.GetGlyphIndex(code);
@@ -609,8 +605,7 @@ internal static unsafe class FreeTypeText
 
                     if (firstCp != 0)
                     {
-                        var fallbackFace = LinuxFontFallbackResolver.Resolve(
-                            firstCp, font.PixelHeight, font.Weight, font.IsItalic);
+                        var fallbackFace = font.FallbackFace(firstCp);
                         if (fallbackFace != null)
                         {
                             // Re-shape the entire grapheme cluster with fallback font
@@ -633,8 +628,7 @@ internal static unsafe class FreeTypeText
                     uint codepoint = GetCodepointFromCluster(sourceText, gg.Cluster);
                     if (codepoint != 0)
                     {
-                        var fb = LinuxFontFallbackResolver.Resolve(
-                            codepoint, font.PixelHeight, font.Weight, font.IsItalic);
+                        var fb = font.FallbackFace(codepoint);
                         if (fb != null)
                         {
                             uint fbGlyph = fb.GetGlyphIndex(codepoint);
@@ -882,7 +876,7 @@ internal static unsafe class FreeTypeText
 
             if (glyph == 0)
             {
-                var fallbackFace = LinuxFontFallbackResolver.Resolve(code, font.PixelHeight, font.Weight, font.IsItalic);
+                var fallbackFace = font.FallbackFace(code);
                 if (fallbackFace != null && fallbackFace.GetGlyphIndex(code) != 0)
                 {
                     activeFace = fallbackFace;

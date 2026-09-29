@@ -173,7 +173,10 @@ public sealed partial class MewVGX11GraphicsFactory : IPersistentFrameGraphicsFa
             : new BasicFont(family, size, weight, italic, underline, strikethrough);
     }
 
-    /// <summary>Picks the first family from a comma-separated list that resolves to a font file.</summary>
+    /// <summary>
+    /// Picks the first installed family from a comma-separated list; when none is installed, the first
+    /// family gets the font that stands in for it, as a single family does.
+    /// </summary>
     private static (string Family, string? Path) ResolveFamilyCandidate(string family, FontWeight weight, bool italic)
     {
         if (!FontFamilyList.IsList(family))
@@ -184,13 +187,15 @@ public sealed partial class MewVGX11GraphicsFactory : IPersistentFrameGraphicsFa
         string[] candidates = FontFamilyList.Split(family);
         foreach (string candidate in candidates)
         {
-            var candidatePath = LinuxFontResolver.ResolveFontPath(candidate, weight, italic);
+            var candidatePath = LinuxFontResolver.ResolveInstalledFontPath(candidate, weight, italic);
             if (candidatePath != null)
             {
                 return (candidate, candidatePath);
             }
         }
-        return (candidates.Length > 0 ? candidates[0] : family, null);
+
+        string first = candidates.Length > 0 ? candidates[0] : family;
+        return (first, LinuxFontResolver.ResolveFontPath(first, weight, italic));
     }
 
     private partial IFont CreateFontCore(string family, double size, uint dpi, FontWeight weight, bool italic, bool underline, bool strikethrough)

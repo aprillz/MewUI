@@ -87,6 +87,19 @@ internal static partial class Fontconfig
     [LibraryImport(LibraryName)]
     public static partial void FcCharSetDestroy(nint charset);
 
+    // FcCharSetCopy(charset) -> the same charset with one more reference
+    [LibraryImport(LibraryName)]
+    public static partial nint FcCharSetCopy(nint charset);
+
+    // FcCharSetHasChar(charset, ucs4) -> bool
+    [LibraryImport(LibraryName)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool FcCharSetHasChar(nint charset, uint ucs4);
+
+    // FcPatternGetCharSet(pattern, object, n, &charset) -> FcResult; the pattern keeps owning the charset
+    [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
+    public static partial int FcPatternGetCharSet(nint pattern, string obj, int n, out nint charset);
+
     // FcPatternAddCharSet(pattern, object, charset) -> bool
     [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
     [return: MarshalAs(UnmanagedType.Bool)]

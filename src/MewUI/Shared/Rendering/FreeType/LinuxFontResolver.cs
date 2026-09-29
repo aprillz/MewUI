@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 
 using Aprillz.MewUI.Resources;
@@ -10,7 +11,69 @@ internal static class LinuxFontResolver
 {
     private static int _fontconfigProbed; // 0=unknown, 1=available, -1=unavailable
 
+    // fontconfig aliases rather than families: whatever font answers one of them is the one asked for.
+    private static readonly HashSet<string> _genericFamilies = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "sans-serif", "sans", "serif", "monospace", "mono", "system-ui", "cursive", "fantasy", "emoji", "math",
+    };
+
+    // Resolving a family asks fontconfig, which costs far more than the text drawn with it; each answer is
+    // kept until a registered font could change it.
+    private static ConcurrentDictionary<PathKey, string?> _paths = new();
+    private static int _pathsVersion = -1;
+
+    /// <summary>
+    /// The font file for <paramref name="family"/>. A family that is not installed gets the file fontconfig
+    /// offers in its place, then the system's sans-serif, then any font found on disk.
+    /// </summary>
     public static string? ResolveFontPath(string family, FontWeight weight, bool italic)
+        => Cached(new PathKey(family, weight, italic, InstalledOnly: false));
+
+    /// <summary>
+    /// The font file for <paramref name="family"/> when that family is installed or registered, or
+    /// <see langword="null"/> when fontconfig could only offer another family in its place.
+    /// </summary>
+    public static string? ResolveInstalledFontPath(string family, FontWeight weight, bool italic)
+        => Cached(new PathKey(family, weight, italic, InstalledOnly: true));
+
+    private static string? Cached(PathKey key)
+    {
+        var paths = _paths;
+        int version = FontRegistry.Version;
+        if (Volatile.Read(ref _pathsVersion) != version)
+        {
+            paths = new ConcurrentDictionary<PathKey, string?>();
+            _paths = paths;
+            Volatile.Write(ref _pathsVersion, version);
+        }
+
+        return paths.GetOrAdd(key, static key => key.InstalledOnly
+            ? ResolveInstalledFontPathCore(key.Family, key.Weight, key.Italic)
+            : ResolveFontPathCore(key.Family, key.Weight, key.Italic));
+    }
+
+    private static string? ResolveInstalledFontPathCore(string family, FontWeight weight, bool italic)
+    {
+        if (string.IsNullOrWhiteSpace(family))
+        {
+            return null;
+        }
+
+        if (LooksLikePath(family))
+        {
+            return File.Exists(family) ? family : null;
+        }
+
+        var resolved = FontRegistry.Resolve(family);
+        if (resolved != null && File.Exists(resolved.Value.FilePath))
+        {
+            return resolved.Value.FilePath;
+        }
+
+        return FontconfigResolve(family, weight, italic, requireFamily: !_genericFamilies.Contains(family));
+    }
+
+    private static string? ResolveFontPathCore(string family, FontWeight weight, bool italic)
     {
         if (string.IsNullOrWhiteSpace(family))
         {
@@ -105,7 +168,8 @@ internal static class LinuxFontResolver
         return null;
     }
 
-    private static string? FontconfigResolve(string family, FontWeight weight, bool italic)
+    /// <summary>The file fontconfig matches to <paramref name="family"/>; with <paramref name="requireFamily"/>, only a match that is that family.</summary>
+    private static string? FontconfigResolve(string family, FontWeight weight, bool italic, bool requireFamily = false)
     {
         if (!IsFontconfigAvailable())
         {
@@ -140,6 +204,11 @@ internal static class LinuxFontResolver
 
                 try
                 {
+                    if (requireFamily && !IsFamily(match, family))
+                    {
+                        return null;
+                    }
+
                     int r = FC.FcPatternGetString(match, FC.FC_FILE, 0, out nint filePtr);
                     if (r != FC.FcResultMatch || filePtr == 0)
                     {
@@ -170,7 +239,21 @@ internal static class LinuxFontResolver
         return null;
     }
 
-    private static int ToFcWeight(FontWeight weight) => weight switch
+    /// <summary>Whether <paramref name="match"/> is <paramref name="family"/>, under any of the names the font gives itself.</summary>
+    private static bool IsFamily(nint match, string family)
+    {
+        for (int index = 0; FC.FcPatternGetString(match, FC.FC_FAMILY, index, out nint namePointer) == FC.FcResultMatch; index++)
+        {
+            if (namePointer != 0 && string.Equals(Marshal.PtrToStringUTF8(namePointer), family, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    internal static int ToFcWeight(FontWeight weight) => weight switch
     {
         <= FontWeight.Thin => FC.FC_WEIGHT_THIN,
         <= FontWeight.Light => FC.FC_WEIGHT_LIGHT,
@@ -292,4 +375,6 @@ internal static class LinuxFontResolver
         }
         return null;
     }
+
+    private readonly record struct PathKey(string Family, FontWeight Weight, bool Italic, bool InstalledOnly);
 }

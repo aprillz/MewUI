@@ -14,6 +14,11 @@ internal static class FontRegistry
     // Value: file path to the cached font file
     private static readonly ConcurrentDictionary<string, string> _map = new(StringComparer.OrdinalIgnoreCase);
 
+    private static int _version;
+
+    /// <summary>Changes whenever a family is registered, so a cache of resolved font files knows to start over.</summary>
+    internal static int Version => Volatile.Read(ref _version);
+
     /// <summary>
     /// Registers a font file path for a given family name.
     /// </summary>
@@ -23,6 +28,7 @@ internal static class FontRegistry
             return;
 
         _map[familyName] = filePath;
+        Interlocked.Increment(ref _version);
     }
 
     /// <summary>
