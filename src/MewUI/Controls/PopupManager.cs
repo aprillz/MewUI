@@ -122,9 +122,11 @@ internal sealed class PopupManager
         _isClosingPopups = true;
         try
         {
-            for (int i = _popups.Count - 1; i >= 0; i--)
+            // One close can take several entries with it (the popups opened from inside it), so drain
+            // from the end instead of walking indices.
+            while (_popups.Count > 0)
             {
-                CloseAndDetachEntry(i, PopupCloseKind.Lifecycle);
+                CloseAndDetachEntry(_popups.Count - 1, PopupCloseKind.Lifecycle);
             }
         }
         finally
@@ -378,14 +380,23 @@ internal sealed class PopupManager
         try
         {
             bool removedAny = false;
-            for (int i = _popups.Count - 1; i >= 0; i--)
+            var entries = _popups.ToArray();
+            for (int i = entries.Length - 1; i >= 0; i--)
             {
-                if (!ReferenceEquals(_popups[i].Owner, owner))
+                var entry = entries[i];
+                if (!ReferenceEquals(entry.Owner, owner))
                 {
                     continue;
                 }
 
-                CloseAndDetachEntry(i, PopupCloseKind.Lifecycle);
+                // Gone already when it closed along with a popup it was opened from.
+                int index = _popups.IndexOf(entry);
+                if (index < 0)
+                {
+                    continue;
+                }
+
+                CloseAndDetachEntry(index, PopupCloseKind.Lifecycle);
                 removedAny = true;
             }
 
@@ -411,9 +422,10 @@ internal sealed class PopupManager
         try
         {
             bool removedAny = false;
-            for (int i = _popups.Count - 1; i >= 0; i--)
+            var entries = _popups.ToArray();
+            for (int i = entries.Length - 1; i >= 0; i--)
             {
-                var entry = _popups[i];
+                var entry = entries[i];
                 if (entry.StaysOpen)
                 {
                     continue;
@@ -424,7 +436,14 @@ internal sealed class PopupManager
                     continue;
                 }
 
-                CloseAndDetachEntry(i, PopupCloseKind.Policy);
+                // Gone already when it closed along with a popup it was opened from.
+                int index = _popups.IndexOf(entry);
+                if (index < 0)
+                {
+                    continue;
+                }
+
+                CloseAndDetachEntry(index, PopupCloseKind.Policy);
                 removedAny = true;
             }
 
@@ -441,9 +460,24 @@ internal sealed class PopupManager
 
     private void CloseAndDetachEntry(int index, PopupCloseKind kind)
     {
+        var entry = _popups[index];
+
+        // Popups opened from inside this one close first, even when they stay open by policy: a close sweep suppresses the owner-detach path, and after the detach their owner no longer reaches this popup.
+        for (int nested = LastPopupOpenedFrom(entry.Element); nested >= 0; nested = LastPopupOpenedFrom(entry.Element))
+        {
+            CloseAndDetachEntry(nested, kind);
+        }
+
+        RetireHoverInside(entry);
+
         // Remove from the list before the side-effecting detach: severing the popup's Parent can run
         // focus/close side effects that re-enter this manager, and a stale index would strand RemoveAt.
-        var entry = _popups[index];
+        index = _popups.IndexOf(entry);
+        if (index < 0)
+        {
+            return;
+        }
+
         _popups.RemoveAt(index);
 
         // A Popup learns it closed from its own detach, which carries no reason; hand it the reason
@@ -468,6 +502,55 @@ internal sealed class PopupManager
         {
             _toolTipOwner = null;
         }
+    }
+
+    /// <summary>
+    /// Takes hover off the closing popup's content while it is still attached, so an element the popup
+    /// returns to its owner (a borrowed toolbar entry) does not keep a hover no move will end.
+    /// </summary>
+    private void RetireHoverInside(PopupEntry entry)
+    {
+        if (entry.NativeWindow is Window surface && surface.MouseOverElement is UIElement hoveredOnSurface
+            && IsWithin(hoveredOnSurface, entry.Element))
+        {
+            surface.ClearMouseOverState();
+        }
+
+        if (_window.MouseOverElement is UIElement hovered && IsWithin(hovered, entry.Element))
+        {
+            _window.ClearMouseOverState();
+            // Whatever the popup uncovered under the pointer takes the hover without waiting for a move.
+            _window.ReevaluateMouseOver();
+        }
+    }
+
+    /// <summary>Index of the most recently opened popup whose owner is <paramref name="popup"/> or inside it, or -1.</summary>
+    private int LastPopupOpenedFrom(UIElement popup)
+    {
+        for (int i = _popups.Count - 1; i >= 0; i--)
+        {
+            var entry = _popups[i];
+            if (!ReferenceEquals(entry.Element, popup) && IsWithin(entry.Owner, popup))
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    /// <summary>Whether <paramref name="element"/> is <paramref name="root"/> or in its subtree.</summary>
+    private static bool IsWithin(UIElement element, UIElement root)
+    {
+        for (Element? current = element; current != null; current = current.Parent)
+        {
+            if (ReferenceEquals(current, root))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     internal bool TryGetPopupOwner(UIElement popup, out UIElement owner)
