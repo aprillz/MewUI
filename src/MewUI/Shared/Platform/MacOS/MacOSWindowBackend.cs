@@ -952,7 +952,8 @@ internal sealed class MacOSWindowBackend : IWindowBackend
             // it already - and releasing the per-window render context and disposing the visual tree
             // here stops both from leaking until process teardown.
             _window.RaiseClosed();
-            _window.ReleaseWindowGraphicsResources(_nsWindow);
+            // The factory keys a window's render resources by its surface handle, the metal layer.
+            _window.ReleaseWindowGraphicsResources(_metalLayer != 0 ? _metalLayer : _nsWindow);
             _window.DisposeVisualTree();
 
             _host.UnregisterWindow(_nsWindow);
