@@ -495,11 +495,27 @@ internal sealed class X11WindowBackend : IWindowBackend
         }
 
         // Window managers read the UTF-8 names first; the legacy names are for those that do not.
-        var utf8 = System.Text.Encoding.UTF8.GetBytes(title);
-        fixed (byte* data = utf8)
+        const int STACK_TITLE_BYTES = 256;
+        int byteCount = System.Text.Encoding.UTF8.GetByteCount(title);
+        byte[]? rented = null;
+        Span<byte> utf8 = byteCount <= STACK_TITLE_BYTES
+            ? stackalloc byte[STACK_TITLE_BYTES]
+            : rented = System.Buffers.ArrayPool<byte>.Shared.Rent(byteCount);
+        try
         {
-            NativeX11.XChangeProperty(Display, Handle, _netWmNameAtom, _utf8StringAtom, 8, 0, (nint)data, utf8.Length);
-            NativeX11.XChangeProperty(Display, Handle, _netWmIconNameAtom, _utf8StringAtom, 8, 0, (nint)data, utf8.Length);
+            int length = System.Text.Encoding.UTF8.GetBytes(title, utf8);
+            fixed (byte* data = utf8)
+            {
+                NativeX11.XChangeProperty(Display, Handle, _netWmNameAtom, _utf8StringAtom, 8, 0, (nint)data, length);
+                NativeX11.XChangeProperty(Display, Handle, _netWmIconNameAtom, _utf8StringAtom, 8, 0, (nint)data, length);
+            }
+        }
+        finally
+        {
+            if (rented != null)
+            {
+                System.Buffers.ArrayPool<byte>.Shared.Return(rented);
+            }
         }
 
         NativeX11.Xutf8SetWMProperties(Display, Handle, title, title, 0, 0, 0, 0, 0);
