@@ -694,7 +694,9 @@ internal static class WindowDragDropRouter
     }
 
     private static bool HasStandardFormat(IDataObject data)
-        => data.Contains(StandardDataFormats.StorageItems) || data.Contains(StandardDataFormats.Text);
+        => data.Contains(StandardDataFormats.StorageItems)
+            || data.Contains(StandardDataFormats.Uris)
+            || data.Contains(StandardDataFormats.Text);
 
     private static void LeaveExternalChain(DragEventArgs args)
     {

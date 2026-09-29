@@ -5,6 +5,11 @@ namespace Aprillz.MewUI.Platform;
 /// <summary>
 /// Represents drag-and-drop or clipboard data in a format-agnostic way.
 /// </summary>
+/// <remarks>
+/// Data from another application lists the standard formats it can be read as, followed by every format the source
+/// offered under the platform's own name (see <see cref="DataFormats.FromPlatformName"/>). Values are read when requested, and
+/// only while the drag lasts: a value not read before the drag ends is no longer available.
+/// </remarks>
 public interface IDataObject
 {
     /// <summary>
@@ -21,6 +26,12 @@ public interface IDataObject
     /// Attempts to retrieve strongly typed data for the specified format.
     /// </summary>
     bool TryGetData<T>(string format, [NotNullWhen(true)] out T? value);
+
+    /// <summary>
+    /// Attempts to retrieve the value of <paramref name="format"/>, typed by the format.
+    /// </summary>
+    bool TryGetData<T>(DataFormat<T> format, [NotNullWhen(true)] out T? value) where T : class
+        => TryGetData(format.Name, out value);
 
     /// <summary>
     /// Returns the raw data for the specified format, or null when not present.
@@ -42,6 +53,12 @@ public static class StandardDataFormats
     /// Plain text represented as <see cref="string"/>.
     /// </summary>
     public const string Text = nameof(Text);
+
+    /// <summary>
+    /// Absolute URIs represented as <see cref="IReadOnlyList{T}"/> of strings as the source sent them, including items
+    /// that are not local files.
+    /// </summary>
+    public const string Uris = nameof(Uris);
 }
 
 /// <summary>
@@ -84,6 +101,10 @@ public sealed class DataObject : IDataObject
         return false;
     }
 
+    /// <inheritdoc/>
+    public bool TryGetData<T>(DataFormat<T> format, [NotNullWhen(true)] out T? value) where T : class
+        => TryGetData(format.Name, out value);
+
     public object? GetData(string format)
         => !string.IsNullOrWhiteSpace(format) && _data.TryGetValue(format, out var raw) ? raw : null;
 
@@ -95,6 +116,15 @@ public sealed class DataObject : IDataObject
         ArgumentException.ThrowIfNullOrWhiteSpace(format);
         ArgumentNullException.ThrowIfNull(value);
         _data[format] = value;
+    }
+
+    /// <summary>
+    /// Sets <paramref name="value"/> under <paramref name="format"/>. Overwrites any existing value.
+    /// </summary>
+    public void SetData<T>(DataFormat<T> format, T value) where T : class
+    {
+        ArgumentNullException.ThrowIfNull(format);
+        SetData(format.Name, value);
     }
 
     /// <summary>
