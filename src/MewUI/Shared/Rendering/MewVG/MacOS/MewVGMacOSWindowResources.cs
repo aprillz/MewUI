@@ -22,6 +22,7 @@ internal sealed class MewVGMetalWindowResources : IDisposable, IMewVGWindowCache
 
     public nint Layer { get; }
 
+    // The factory's shared device, which every window uses: not retained here, so not released either.
     public nint Device { get; }
 
     public nint CommandQueue { get; }
@@ -112,7 +113,6 @@ internal sealed class MewVGMetalWindowResources : IDisposable, IMewVGWindowCache
                 disposable.Dispose();
             }
 
-            ObjCRuntime.Release(device);
             throw new InvalidOperationException("Failed to create MTLCommandQueue.");
         }
 
@@ -150,12 +150,6 @@ internal sealed class MewVGMetalWindowResources : IDisposable, IMewVGWindowCache
         if (queue != 0)
         {
             ObjCRuntime.Release(queue);
-        }
-
-        nint device = Device;
-        if (device != 0)
-        {
-            ObjCRuntime.Release(device);
         }
     }
 
