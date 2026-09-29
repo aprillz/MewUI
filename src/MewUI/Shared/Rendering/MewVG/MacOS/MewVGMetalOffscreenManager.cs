@@ -83,6 +83,8 @@ internal sealed class MewVGMetalOffscreenSurfaceProvider : IDisposable
     // thread-safe - calling vg.DeleteImage from a thread that doesn't own the NVG
     // (or while the NVG is mid-frame elsewhere) corrupts the image table.
     private readonly Dictionary<MewVGContext, Queue<(MewVGImage Image, MewVGImageFlags Flags)>> _pendingImageDisposal = new();
+    // NVGs disposed with their window: an entry queued for one afterwards has no NVG left to drain it.
+    private readonly System.Runtime.CompilerServices.ConditionalWeakTable<MewVGContext, object> _retiredVgs = new();
     private nint _defaultDevice;
     // One queue per device, shared by every offscreen NVG instance and by the filter passes.
     // Same-queue command buffers execute in commit order, so a pass that samples what the
@@ -268,10 +270,17 @@ internal sealed class MewVGMetalOffscreenSurfaceProvider : IDisposable
             return;
         }
 
+        List<(MewVGContext Vg, MewVGImageFlags Flags)>? retired = null;
         lock (_lock)
         {
             foreach (var (vg, flags) in entries)
             {
+                if (_retiredVgs.TryGetValue(vg, out _))
+                {
+                    (retired ??= []).Add((vg, flags));
+                    continue;
+                }
+
                 if (!_pendingImageDisposal.TryGetValue(vg, out var queue))
                 {
                     queue = new Queue<(MewVGImage, MewVGImageFlags)>();
@@ -279,6 +288,28 @@ internal sealed class MewVGMetalOffscreenSurfaceProvider : IDisposable
                 }
                 queue.Enqueue((image, flags));
             }
+        }
+
+        if (retired != null)
+        {
+            foreach (var (vg, flags) in retired)
+            {
+                image.ReleaseEntryOfDisposedVg(vg, flags);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Drains what is queued for <paramref name="vg"/> and retires it, so nothing queued for it
+    /// afterwards waits on a drain that never comes. Call before disposing it, on its owning thread.
+    /// </summary>
+    internal void RetireVg(MewVGContext vg)
+    {
+        ReleasePendingImagesForVg(vg);
+        lock (_lock)
+        {
+            _pendingImageDisposal.Remove(vg);
+            _retiredVgs.AddOrUpdate(vg, vg);
         }
     }
 

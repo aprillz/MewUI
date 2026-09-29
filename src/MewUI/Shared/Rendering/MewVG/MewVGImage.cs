@@ -282,13 +282,23 @@ internal sealed class MewVGImage : IImage
     /// post-release callback fires.
     /// </summary>
     internal void ReleasePendingEntry(MewVGContext vg, MewVGImageFlags flags)
+        => ReleaseEntry(vg, flags, deleteImage: true);
+
+    /// <summary>
+    /// Drops the entry for an NVG that has been disposed: its image-id went away with it, so only
+    /// the entry and, with the last one, the GPU retain are released.
+    /// </summary>
+    internal void ReleaseEntryOfDisposedVg(MewVGContext vg, MewVGImageFlags flags)
+        => ReleaseEntry(vg, flags, deleteImage: false);
+
+    private void ReleaseEntry(MewVGContext vg, MewVGImageFlags flags, bool deleteImage)
     {
         if (_disposed) return;
 
         var key = new ImageKey(vg, flags);
         if (_images.TryGetValue(key, out var entry))
         {
-            if (entry.ImageId != 0)
+            if (deleteImage && entry.ImageId != 0)
             {
                 vg.DeleteImage(entry.ImageId);
             }

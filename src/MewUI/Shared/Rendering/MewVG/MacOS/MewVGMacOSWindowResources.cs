@@ -32,11 +32,16 @@ internal sealed class MewVGMetalWindowResources : IDisposable, IMewVGWindowCache
     public MewVGMetalTextCache TextCache { get; }
 
     private MewVGMacOSGraphicsContext? _cachedContext;
+    // The provider that queues image disposals for Vg; the window hands it over with its first context.
+    private MewVGMetalOffscreenSurfaceProvider? _offscreenProvider;
 
     internal MewVGMacOSGraphicsContext GetOrCreateContext(
         MewVGMetalOffscreenSurfaceProvider offscreenProvider,
         Action<GpuInteropInvalidatedEventArgs>? gpuInteropInvalidated)
-        => _cachedContext ??= MewVGMacOSGraphicsContext.CreateForWindow(this, offscreenProvider, gpuInteropInvalidated);
+    {
+        _offscreenProvider = offscreenProvider;
+        return _cachedContext ??= MewVGMacOSGraphicsContext.CreateForWindow(this, offscreenProvider, gpuInteropInvalidated);
+    }
 
     /// <summary>
     /// Drops the cached graphics context reference when the context is
@@ -138,6 +143,9 @@ internal sealed class MewVGMetalWindowResources : IDisposable, IMewVGWindowCache
 
         _cachedContext?.Dispose();
         _cachedContext = null;
+
+        // Images still queued for Vg are released only from its frames, and it draws none after this.
+        _offscreenProvider?.RetireVg(Vg);
 
         TextCache.Dispose();
 
