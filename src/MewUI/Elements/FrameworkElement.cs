@@ -194,7 +194,8 @@ public abstract class FrameworkElement : UIElement, IDisposable
             return;
         }
 
-        var anchor = window.LastMousePositionDip;
+        // Moves over a native popup reach that popup's surface, not the owner window; both record them in the owner's coordinates.
+        var anchor = (ResolveInputHostWindow() ?? window).LastMousePositionDip;
         if (anchor.X == 0 && anchor.Y == 0)
         {
             anchor = _lastMousePositionInWindow;

@@ -611,17 +611,20 @@ internal sealed class PopupManager
         ArgumentNullException.ThrowIfNull(content);
         ArgumentNullException.ThrowIfNull(place);
 
-        // Tooltips stay away while an interactive popup (menu, drop-down) is open: hover is not the
-        // user's focus then, and the tooltip surface appearing/disappearing under the pointer flips
-        // hover state against the popup surface, which reads as flicker.
-        if (HasInteractivePopup())
+        // While an interactive popup (menu, drop-down) is open, only elements inside the most recent one show
+        // tooltips: hover elsewhere is not the user's focus, and a tooltip surface appearing/disappearing
+        // under the pointer there flips hover state against the popup surface, which reads as flicker.
+        var topPopup = TopInteractivePopup();
+        if (topPopup != null && !IsWithin(owner, topPopup))
         {
             return;
         }
 
         // A pointer arriving with a button held is mid-click or mid-drag, not resting on the element;
-        // the tooltip waits for a fresh enter with the buttons up, as WPF does.
-        if (_window.IsLeftOrRightButtonDown)
+        // the tooltip waits for a fresh enter with the buttons up, as WPF does. The buttons are read from
+        // the surface that delivered the move, which for a native popup is not this window.
+        var inputHost = owner.ResolveInputHostWindow() ?? _window;
+        if (inputHost.IsLeftOrRightButtonDown)
         {
             return;
         }
@@ -638,17 +641,17 @@ internal sealed class PopupManager
         });
     }
 
-    private bool HasInteractivePopup()
+    private UIElement? TopInteractivePopup()
     {
-        for (int i = 0; i < _popups.Count; i++)
+        for (int i = _popups.Count - 1; i >= 0; i--)
         {
             if (_popups[i].Element.IsHitTestVisible)
             {
-                return true;
+                return _popups[i].Element;
             }
         }
 
-        return false;
+        return null;
     }
 
     internal void CloseToolTip(UIElement? owner = null)
