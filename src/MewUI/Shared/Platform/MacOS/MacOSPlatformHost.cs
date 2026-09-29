@@ -352,6 +352,9 @@ public sealed class MacOSPlatformHost : IPlatformHost
 
         while (_running && (keepRunning == null || keepRunning()))
         {
+            // Dispatcher work and rendering below run outside the event pools; without this, what they
+            // autorelease (a closed window, its view and layer) is never freed.
+            using var iterationPool = new MacOSInterop.AutoReleasePool();
             try
             {
                 ProcessEventsAndDispatcher();
