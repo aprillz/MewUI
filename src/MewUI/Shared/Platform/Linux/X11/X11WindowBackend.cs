@@ -44,6 +44,9 @@ internal sealed class X11WindowBackend : IWindowBackend
     private nint _xdndFinishedAtom;
     private nint _xdndSelectionAtom;
     private nint _textUriListAtom;
+
+    // The MIME type of a dropped URI list, also the data object key its raw text is kept under: a URI that is not a local file has no place among the paths.
+    private const string URI_LIST_FORMAT = "text/uri-list";
     private nint _xdndSelectionPropertyAtom;
     private nint _xdndSourceWindow;
     private readonly List<nint> _xdndOfferedTypes = new();
@@ -789,7 +792,7 @@ internal sealed class X11WindowBackend : IWindowBackend
         _xdndDropAtom = NativeX11.XInternAtom(Display, "XdndDrop", false);
         _xdndFinishedAtom = NativeX11.XInternAtom(Display, "XdndFinished", false);
         _xdndSelectionAtom = NativeX11.XInternAtom(Display, "XdndSelection", false);
-        _textUriListAtom = NativeX11.XInternAtom(Display, "text/uri-list", false);
+        _textUriListAtom = NativeX11.XInternAtom(Display, URI_LIST_FORMAT, false);
         _xdndSelectionPropertyAtom = NativeX11.XInternAtom(Display, "MEWUI_XDND_SELECTION", false);
         _netWmSyncRequestAtom = NativeX11.XInternAtom(Display, "_NET_WM_SYNC_REQUEST", false);
         _netWmSyncRequestCounterAtom = NativeX11.XInternAtom(Display, "_NET_WM_SYNC_REQUEST_COUNTER", false);
@@ -2157,16 +2160,18 @@ internal sealed class X11WindowBackend : IWindowBackend
                 return;
             }
 
-            var paths = ReadXdndPaths(selection.property);
-            if (paths.Count == 0)
+            if (ReadXdndUriList(selection.property) is not string uriList)
             {
                 return;
             }
 
+            // The paths are the local files only; a drop of other URIs (an archive member, a network share) still
+            // arrives, with them in the raw list.
             var position = TranslateRootToClient(_xdndLastRootX, _xdndLastRootY);
             var data = new DataObject(new Dictionary<string, object>
             {
-                [StandardDataFormats.StorageItems] = paths,
+                [StandardDataFormats.StorageItems] = ParseUriList(uriList),
+                [URI_LIST_FORMAT] = uriList,
             });
 
             var args = new DragEventArgs(
@@ -2285,7 +2290,8 @@ internal sealed class X11WindowBackend : IWindowBackend
         }
     }
 
-    private List<string> ReadXdndPaths(nint property)
+    /// <summary>The dropped URI list as the source wrote it, or null when the property holds none.</summary>
+    private string? ReadXdndUriList(nint property)
     {
         const nint AnyPropertyType = 0;
         int status = NativeX11.XGetWindowProperty(
@@ -2309,7 +2315,7 @@ internal sealed class X11WindowBackend : IWindowBackend
                 NativeX11.XFree(prop);
             }
 
-            return [];
+            return null;
         }
 
         try
@@ -2317,7 +2323,8 @@ internal sealed class X11WindowBackend : IWindowBackend
             unsafe
             {
                 var bytes = new ReadOnlySpan<byte>((void*)prop, checked((int)nitems));
-                return ParseUriList(bytes);
+                string text = System.Text.Encoding.UTF8.GetString(bytes);
+                return string.IsNullOrWhiteSpace(text) ? null : text;
             }
         }
         finally
@@ -2398,9 +2405,9 @@ internal sealed class X11WindowBackend : IWindowBackend
         return (clientX, clientY);
     }
 
-    private static List<string> ParseUriList(ReadOnlySpan<byte> bytes)
+    /// <summary>The local paths of the list's <c>file://</c> entries; other schemes have no path and are left to the raw list.</summary>
+    private static List<string> ParseUriList(string text)
     {
-        string text = System.Text.Encoding.UTF8.GetString(bytes);
         var result = new List<string>();
         foreach (var rawLine in text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
