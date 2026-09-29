@@ -40,6 +40,12 @@ PathGeometry union = PathGeometryOperations.Combine(
 Operations accept tolerance overloads when callers need to choose between absolute and relative
 flattening tolerance. Invalid coordinates return safe empty or false results instead of throwing.
 
+## Sample
+
+[`MewUI.Geometry.Sample`](https://github.com/aprillz/MewUI/tree/main/samples/MewUI.Geometry.Sample)
+shows each operation and Boolean mode with its input and result. Click or drag a query point, move
+the input shapes in relationship and combine examples, or resize the ring in the area example.
+
 ## Shape hit testing
 
 Enable precise geometry hit testing once during application startup:

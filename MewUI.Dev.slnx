@@ -13,6 +13,7 @@
     <Project Path="samples/MewUI.Concept/MewUI.Concept.csproj" />
     <Project Path="samples/MewUI.Gallery.Browser/MewUI.Gallery.Browser.csproj" />
     <Project Path="samples/MewUI.Gallery/MewUI.Gallery.csproj" />
+    <Project Path="samples/MewUI.Geometry.Sample/MewUI.Geometry.Sample.csproj" />
     <Project Path="samples/MewUI.Markdown.Sample/MewUI.Markdown.Sample.csproj" />
     <Project Path="samples/MewUI.ImeTest/MewUI.ImeTest.csproj" />
     <Project Path="samples/MewUI.MewCharts.Sample/MewUI.MewCharts.Sample.csproj" />
