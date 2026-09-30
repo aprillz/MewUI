@@ -71,7 +71,8 @@ public sealed partial class Calendar : Control, IVisualTreeHost
 
     public static readonly MewProperty<DateTime> DisplayDateProperty =
         MewProperty<DateTime>.Register<Calendar>(nameof(DisplayDate), DateTime.Today,
-            MewPropertyOptions.AffectsRender);
+            MewPropertyOptions.AffectsRender,
+            static (self, _, _) => self.UpdateHeaderText());
 
     public static readonly MewProperty<CalendarMode> DisplayModeProperty =
         MewProperty<CalendarMode>.Register<Calendar>(nameof(DisplayMode), CalendarMode.Month,
@@ -128,6 +129,7 @@ public sealed partial class Calendar : Control, IVisualTreeHost
         _headerButton.StyleName = BuiltInStyles.FlatButton;
         _headerButton.Click += OnHeaderClick;
         _headerButton.Parent = this;
+        UpdateHeaderText();
     }
 
     /// <summary>Gets or sets the selected date.</summary>
@@ -187,6 +189,7 @@ public sealed partial class Calendar : Control, IVisualTreeHost
 
     private void OnDisplayModeChanged(CalendarMode oldValue, CalendarMode newValue)
     {
+        UpdateHeaderText();
         DisplayModeChanged?.Invoke(newValue);
     }
 
@@ -273,9 +276,6 @@ public sealed partial class Calendar : Control, IVisualTreeHost
 
     internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
     {
-        // The header shows the displayed month, which is settled here as RenderSubtree settles it.
-        UpdateHeaderText();
-
         builder.Content(0);
         builder.Child(_prevButton);
         builder.Child(_headerButton);
@@ -316,9 +316,6 @@ public sealed partial class Calendar : Control, IVisualTreeHost
     {
         // Ensure cell rects match current display mode (mode may change between Arrange and Render).
         ComputeCellRects(GetInnerBounds());
-
-        // Update header text
-        UpdateHeaderText();
 
         // Render header buttons
         _prevButton.Render(context);
