@@ -1307,7 +1307,8 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
         _horizontalOffset = value;
         UpdateScrollBarRanges();
         ScrollOffsetChanged?.Invoke(this);
-        if (invalidate) InvalidateVisual();
+        // A long line is laid out only around the offset, so the new one has to be stood up, not just drawn.
+        if (invalidate) InvalidateArrange();
     }
 
     private void ReplaceDocument(EditableTextDocument document)

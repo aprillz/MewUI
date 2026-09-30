@@ -130,6 +130,76 @@ public sealed class ScrollRepaintTests
             "the viewer moved the offset but not the content");
     }
 
+    /// <summary>
+    /// A line long enough to be laid out in slices is cut around the horizontal offset. Dragging the
+    /// scroll bar across it has to cut it again there, or the text ends where the old slice ended.
+    /// </summary>
+    [TestMethod]
+    public void TheHorizontalScrollBarMovesALongLinesSliceAlong()
+    {
+        if (!OperatingSystem.IsWindows()) { Assert.Inconclusive("GDI backend is Windows-only."); return; }
+
+        var textBox = new MultiLineTextBox().Width(WIDTH).Height(HEIGHT).Text(SlicedText());
+        textBox.Wrap = false;
+        var window = HeadlessWindow.Create(WIDTH, HEIGHT);
+        window.Content = textBox;
+        window.PerformLayout();
+        using var surface = Application.DefaultGraphicsFactory
+            .CreateSurface(RenderSurfaceDescriptor.CachedImage(WIDTH, HEIGHT, 1));
+
+        Frame(window, textBox, surface);
+        Assert.IsTrue(textBox.IsHorizontalScrollBarVisible, "the long line did not make the box scroll sideways");
+        DragHorizontalScrollBar(textBox, 3_000);
+        Frame(window, textBox, surface);
+
+        AssertSliceCoversViewport(textBox, textBox.HorizontalOffset, "the text box");
+    }
+
+    [TestMethod]
+    public void TheSyntaxViewersHorizontalScrollBarMovesALongLinesSliceAlong()
+    {
+        if (!OperatingSystem.IsWindows()) { Assert.Inconclusive("GDI backend is Windows-only."); return; }
+
+        var viewer = new SyntaxViewer().Width(WIDTH).Height(HEIGHT);
+        viewer.Text = SlicedText();
+        var window = HeadlessWindow.Create(WIDTH, HEIGHT);
+        window.Content = viewer;
+        window.PerformLayout();
+        using var surface = Application.DefaultGraphicsFactory
+            .CreateSurface(RenderSurfaceDescriptor.CachedImage(WIDTH, HEIGHT, 1));
+
+        Frame(window, viewer, surface);
+        Assert.IsTrue(viewer.IsHorizontalScrollBarVisible, "the long line did not make the viewer scroll sideways");
+        DragHorizontalScrollBar(viewer, 3_000);
+        Frame(window, viewer, surface);
+
+        AssertSliceCoversViewport(viewer, viewer.HorizontalOffset, "the viewer");
+    }
+
+    /// <summary>Sets the horizontal scroll bar's value the way dragging its thumb does.</summary>
+    private static void DragHorizontalScrollBar(FrameworkElement element, double value)
+    {
+        var field = element.GetType().GetField("_horizontalScrollBar",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+        ((ScrollBar)field.GetValue(element)!).Value = value;
+    }
+
+    private static void AssertSliceCoversViewport(FrameworkElement element, double horizontalOffset, string what)
+    {
+        Assert.IsGreaterThan(1_000, horizontalOffset, $"{what} did not scroll far enough to need another slice");
+        var line = ((ITextViewHost)element).VisibleTextLines.Single(static line => line.LogicalLine.LineNumber == 1);
+        double left = line.DocumentX;
+        double right = left + line.VisualLines.Max(static visual => visual.Bounds.Right);
+        Assert.IsLessThanOrEqualTo(horizontalOffset, left,
+            $"{what} draws the long line from {left:0}, right of the offset {horizontalOffset:0}");
+        Assert.IsGreaterThanOrEqualTo(horizontalOffset + WIDTH / 2, right,
+            $"{what} ends the long line at {right:0}, short of the viewport at {horizontalOffset:0}: the slice was not cut again");
+    }
+
+    /// <summary>Short lines around one far past the slicing threshold.</summary>
+    private static string SlicedText()
+        => "first\n" + string.Join(' ', Enumerable.Range(0, 800).Select(static word => $"w{word}")) + "\nlast";
+
     private static string LongText()
         => string.Join('\n', Enumerable.Range(0, 4_000)
             .Select(static line => $"line {line} " + new string('W', line % 3 == 0 ? 120 : 8)));
