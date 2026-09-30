@@ -38,16 +38,11 @@ internal static unsafe class DirectWriteTextRasterizer
         return span;
     }
 
-    // The layout is built with CreateGdiCompatibleTextLayout, which places glyphs on GDI's metrics.
-    // Rasterizing in a natural mode instead would render shapes the layout never measured, so both
-    // the rendering and the measuring mode follow the layout.
-    private const DWRITE_RENDERING_MODE RENDERING_MODE = DWRITE_RENDERING_MODE.GDI_CLASSIC;
+    // Glyphs sit where the GDI-compatible layout places them and are rasterized as Direct2D draws that
+    // layout, so text looks the same on every Win32 backend. Colour glyphs need the natural mode too:
+    // grid fitting costs them their gradation (7 distinct coverage values in a layer against 60).
+    private const DWRITE_RENDERING_MODE RENDERING_MODE = DWRITE_RENDERING_MODE.NATURAL_SYMMETRIC;
     private const DWRITE_MEASURING_MODE MEASURING_MODE = DWRITE_MEASURING_MODE.GDI_CLASSIC;
-
-    // Colour glyphs carry no stems to fit to the pixel grid, and grid fitting costs them their
-    // gradation: the same layer yields 7 distinct coverage values grid fitted against 60 here.
-    // Positions still come from the GDI-compatible layout; only the outline rasterization differs.
-    private const DWRITE_RENDERING_MODE COLOR_RENDERING_MODE = DWRITE_RENDERING_MODE.NATURAL_SYMMETRIC;
 
     /// <summary>
     /// Lays <paramref name="text"/> out in a box of <paramref name="widthPx"/> by
@@ -460,7 +455,7 @@ internal static unsafe class DirectWriteTextRasterizer
     {
         int hr = DWriteGlyphRunAnalysis.Create(
             (IDWriteFactory*)factory, in glyphRun, pixelsPerDip,
-            COLOR_RENDERING_MODE, MEASURING_MODE,
+            RENDERING_MODE, MEASURING_MODE,
             baselineOriginX, baselineOriginY, out nint analysis);
         if (hr < 0 || analysis == 0)
         {
