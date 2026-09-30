@@ -357,6 +357,10 @@ MewUI provides cross-platform managed file and folder dialogs. By default, file 
 
 Set `PreferNative` to `false` to use the managed dialog directly.
 
+### Drag and drop
+
+Windows, Linux/X11 and macOS deliver drops from other applications through the same events as drags inside the application. The data lists the standard formats every platform reads the same way (`DataFormats.StorageItems`, `Uris`, `Text`) followed by every format the source offered under the platform's own name, read as bytes with `DataFormats.FromPlatformName`. The browser platform does not receive drops from other applications. See [Drag and Drop](docs/DragAndDrop.md).
+
 ---
 ## 📄Docs
 

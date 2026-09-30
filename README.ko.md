@@ -335,6 +335,10 @@ MewUI는 크로스플랫폼 관리형 파일 및 폴더 대화상자를 제공�
 
 관리형 대화상자를 바로 사용하려면 `PreferNative`를 `false`로 설정합니다.
 
+### 드래그 앤 드롭
+
+Windows, Linux/X11, macOS에서는 다른 앱의 드롭도 앱 안의 드래그와 같은 이벤트로 전달됩니다. 데이터에는 모든 플랫폼에서 같은 방식으로 읽히는 표준 형식(`DataFormats.StorageItems`, `Uris`, `Text`)이 먼저 오고, 그 뒤에 소스가 제공한 모든 형식이 플랫폼 고유의 이름으로 실리며, 이 형식은 `DataFormats.FromPlatformName`으로 바이트 그대로 읽습니다. 브라우저 플랫폼은 다른 앱의 드롭을 받지 않습니다. 자세한 내용은 [드래그 앤 드롭](docs/DragAndDrop.ko.md)을 참고하십시오.
+
 ---
 ## 📄 문서
 
