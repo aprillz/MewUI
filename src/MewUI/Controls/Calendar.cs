@@ -206,7 +206,11 @@ public sealed partial class Calendar : Control, IVisualTreeHost
         // Measure nav buttons
         _prevButton.Measure(new Size(NavButtonWidth, HeaderHeight));
         _nextButton.Measure(new Size(NavButtonWidth, HeaderHeight));
-        _headerButton.Measure(new Size(Math.Max(0, width - NavButtonWidth * 2), HeaderHeight));
+
+        // The header gets the width it is arranged at, not the grid's, and the calendar widens when its text needs more.
+        double headerSpace = double.IsFinite(slot.Width) ? Math.Max(0, slot.Width - NavButtonWidth * 2) : double.PositiveInfinity;
+        _headerButton.Measure(new Size(headerSpace, HeaderHeight));
+        width = Math.Max(width, _headerButton.DesiredSize.Width + NavButtonWidth * 2);
         // Layout: [Header] [Prev] [Next] - both nav buttons on the right
 
         return new Size(width, height).Inflate(Padding).Inflate(border);
