@@ -58,7 +58,7 @@ internal static class Program
                                         .Width(140)
                                         .Minimum(0)
                                         .Maximum(100)
-                                        .Step(1)
+                                        .SmallChange(1)
                                         .BindValue(numericValue)
                                         .CenterVertical(),
 

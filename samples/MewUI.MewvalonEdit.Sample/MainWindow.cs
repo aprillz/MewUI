@@ -171,7 +171,7 @@ public sealed class MainWindow : Window
         {
             Minimum = 1,
             Maximum = 16,
-            Step = 1,
+            SmallChange = 1,
             Format = "0",
             Value = _editor.Options.IndentationSize,
             Width = 80
@@ -182,7 +182,7 @@ public sealed class MainWindow : Window
         {
             Minimum = 10,
             Maximum = 200,
-            Step = 5,
+            SmallChange = 5,
             Format = "0",
             Value = _editor.Options.ColumnRulerPosition,
             Width = 80

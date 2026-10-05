@@ -197,7 +197,7 @@ partial class GalleryView
                     .Header("Amount")
                     .AutoWidth()
                     .Template(
-                        build: _ => new NumericUpDown().Padding(6, 0).CenterVertical().Minimum(0).Maximum(100).Step(0.5).Format("0.##"),
+                        build: _ => new NumericUpDown().Padding(6, 0).CenterVertical().Minimum(0).Maximum(100).SmallChange(0.5).Format("0.##"),
                         bind: (view, row) => view.BindValue(row.Amount)
                     )
                     .SortBy(row => row.Amount.Value),
@@ -277,7 +277,7 @@ partial class GalleryView
                                 .Width(90)
                                 .Minimum(0)
                                 .Maximum(100)
-                                .Step(1)
+                                .SmallChange(1)
                                 .Format("0")
                                 .BindValue(minAmount),
 

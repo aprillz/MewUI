@@ -25,7 +25,7 @@ partial class GalleryView
                             .Width(140)
                             .Minimum(0)
                             .Maximum(100)
-                            .Step(1)
+                            .SmallChange(1)
                             .Format("0")
                             .BindValue(intBinding)
                             .CenterVertical(),
@@ -42,7 +42,7 @@ partial class GalleryView
                             .Width(140)
                             .Minimum(0)
                             .Maximum(100)
-                            .Step(0.1)
+                            .SmallChange(0.1)
                             .Format("0.##")
                             .BindValue(doubleBinding)
                             .CenterVertical(),
@@ -60,7 +60,7 @@ partial class GalleryView
                             .Width(140)
                             .Minimum(0)
                             .Maximum(100)
-                            .Step(0.1)
+                            .SmallChange(0.1)
                             .Format("0.##")
                             .BindValue(doubleBinding)
                             .CenterVertical()
