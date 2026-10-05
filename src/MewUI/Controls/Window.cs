@@ -2085,6 +2085,19 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     /// Queues <paramref name="element"/> for visual-state reconciliation at the next layout pass.
     /// Called by <see cref="UIElement.InvalidateVisualState"/>.
     /// </summary>
+    /// <summary>Where the element was last drawn on this window's surface, or its layout box when the scene has no place for it.</summary>
+    private Rect SurfaceBoundsOf(UIElement element)
+    {
+        if (_renderScene?.FindNode(element) is Rendering.Retained.VisualNode node && !node.SurfaceBounds.IsEmpty)
+        {
+            return node.SurfaceBounds;
+        }
+        else
+        {
+            return element.Bounds;
+        }
+    }
+
     internal void RegisterVisualStateDirty(UIElement element)
     {
         // Registrations while UpdateVisualStates is running are allowed: its indexed loop
@@ -2117,10 +2130,9 @@ public partial class Window : ContentControl, ILayoutRoundingHost
                 continue;
             }
 
-            // Offscreen: snap to avoid wasting animations on invisible pixels.
-            // SkipViewportCull elements (e.g. transformed subtrees) always animate since their
-            // bounds don't reflect true visibility.
-            bool onscreen = element.SkipViewportCull || viewport.IntersectsWith(element.Bounds);
+            // Offscreen: snap to avoid wasting animations on invisible pixels. The scene's surface box says where
+            // an element under a transform is drawn; its layout box stands in until the scene has placed it.
+            bool onscreen = element.SkipViewportCull || viewport.IntersectsWith(SurfaceBoundsOf(element));
             element.ResolveVisualStateInternal(snap: !onscreen);
         }
 
@@ -3155,12 +3167,10 @@ public partial class Window : ContentControl, ILayoutRoundingHost
                     frameTiming.RenderBodyTicks += Stopwatch.GetTimestamp() - phaseStart;
                 }
 
-                // Cull viewport in layout coordinates: this window's client rect, offset into the owner's
-                // coordinate space when hosting a portal subtree so popup content that lies outside the
-                // owner but inside this surface is not culled by the viewport-bounds check in Render.
+                // Cull viewport in this surface's coordinates. A portal subtree is drawn under the transform that
+                // puts it here, and Render carries each element's box through that transform before the check.
                 var previousCullViewport = UIElement.RenderCullViewport;
-                UIElement.RenderCullViewport = new Rect(
-                    _hostedPortalOrigin.X, _hostedPortalOrigin.Y, clientSize.Width / _hostedPortalScale, clientSize.Height / _hostedPortalScale);
+                UIElement.RenderCullViewport = new Rect(0, 0, clientSize.Width, clientSize.Height);
 
                 // Ensure nothing paints outside the client area.
                 context.Save();

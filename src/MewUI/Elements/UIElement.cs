@@ -109,9 +109,9 @@ public abstract partial class UIElement : Element
 
     /// <summary>
     /// When <see langword="true"/>, the viewport-bounds cull check in <see cref="Render"/> is skipped.
-    /// Set this on children whose layout bounds do not reflect their actual visible area
-    /// (e.g. children rendered under a parent-applied scale/rotation transform).
-    /// Inherits to descendants so deep child trees under a transform host are not culled.
+    /// The check already follows transforms applied through the drawing context; set this on children
+    /// whose visible area differs from their layout bounds in some other way.
+    /// Inherits to descendants.
     /// </summary>
     public static readonly MewProperty<bool> SkipViewportCullProperty =
         MewProperty<bool>.Register<UIElement>(nameof(SkipViewportCull), false,
@@ -465,11 +465,9 @@ public abstract partial class UIElement : Element
 
     protected virtual Size ArrangeOverride(Size finalSize) => finalSize;
 
-    // Render-time cull viewport in layout coordinates (the space element Bounds live in), set by the
-    // window driving the current render. A normal window sets its client rect; a popup surface hosting
-    // a portal subtree sets its client rect in the owner's coordinate space (where the subtree is
-    // arranged), so content that lies outside the owner but inside the popup is not wrongly culled.
-    // null (no active window frame) disables the cull.
+    // Render-time cull viewport in the space of the frame's root context: the client rect of the surface being
+    // drawn. Bounds are carried into that space through the context transform, so a subtree drawn under a
+    // transform (a portal, a rotation) is judged where it lands. null (no active window frame) disables the cull.
     [ThreadStatic] private static Rect? _renderCullViewport;
 
     internal static Rect? RenderCullViewport
@@ -493,7 +491,7 @@ public abstract partial class UIElement : Element
 
         bool outsideViewport =
             !SkipViewportCull && this is not Window &&
-            _renderCullViewport is Rect cullViewport && !cullViewport.IntersectsWith(Bounds);
+            _renderCullViewport is Rect cullViewport && !cullViewport.IntersectsWith(DrawnBounds(context));
 
         if (outsideViewport && _cacheSnapshotDepth == 0)
         {
@@ -533,6 +531,28 @@ public abstract partial class UIElement : Element
             {
                 RenderVisual(context);
             }
+        }
+    }
+
+    /// <summary>
+    /// The box this element covers in the cull viewport's space. A cache snapshot draws into its own surface,
+    /// whose transform does not lead to the viewport, so there the layout box stands in as before.
+    /// </summary>
+    private Rect DrawnBounds(IGraphicsContext context)
+    {
+        if (_cacheSnapshotDepth > 0)
+        {
+            return Bounds;
+        }
+
+        var transform = context.GetTransform();
+        if (transform.IsIdentity)
+        {
+            return Bounds;
+        }
+        else
+        {
+            return Rendering.Retained.RetainedGeometry.TransformRect(Bounds, transform);
         }
     }
 
