@@ -1063,7 +1063,6 @@ internal sealed class ColorPickerPopup : Control, IVisualTreeHost
         {
             Minimum = min,
             Maximum = max,
-            Step = 1,
             Format = "0",
         }.IsInteger();
 

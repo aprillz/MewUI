@@ -46,7 +46,7 @@ public sealed class NumericUpDownTemplateTests
     [TestMethod]
     public void StepUp_IncreasesValueByEffectiveStep()
     {
-        var nud = new NumericUpDown { Minimum = 0, Maximum = 100, Step = 2, Value = 5 };
+        var nud = new NumericUpDown { Minimum = 0, Maximum = 100, SmallChange = 2, Value = 5 };
 
         nud.StepUp();
 
@@ -56,7 +56,7 @@ public sealed class NumericUpDownTemplateTests
     [TestMethod]
     public void StepDown_DecreasesValueByEffectiveStep()
     {
-        var nud = new NumericUpDown { Minimum = 0, Maximum = 100, Step = 2, Value = 5 };
+        var nud = new NumericUpDown { Minimum = 0, Maximum = 100, SmallChange = 2, Value = 5 };
 
         nud.StepDown();
 
@@ -66,7 +66,7 @@ public sealed class NumericUpDownTemplateTests
     [TestMethod]
     public void StepUp_ClampsAtMaximum()
     {
-        var nud = new NumericUpDown { Minimum = 0, Maximum = 10, Step = 5, Value = 9 };
+        var nud = new NumericUpDown { Minimum = 0, Maximum = 10, SmallChange = 5, Value = 9 };
 
         nud.StepUp();
 
@@ -76,7 +76,7 @@ public sealed class NumericUpDownTemplateTests
     [TestMethod]
     public void StepDown_ClampsAtMinimum()
     {
-        var nud = new NumericUpDown { Minimum = 0, Maximum = 10, Step = 5, Value = 1 };
+        var nud = new NumericUpDown { Minimum = 0, Maximum = 10, SmallChange = 5, Value = 1 };
 
         nud.StepDown();
 
@@ -86,7 +86,7 @@ public sealed class NumericUpDownTemplateTests
     [TestMethod]
     public void StepUp_WhenIsInteger_UsesStepOfAtLeastOne()
     {
-        var nud = new NumericUpDown { Minimum = 0, Maximum = 100, IsInteger = true, Step = 0.2, Value = 1 };
+        var nud = new NumericUpDown { Minimum = 0, Maximum = 100, IsInteger = true, SmallChange = 0.2, Value = 1 };
 
         nud.StepUp();
 
@@ -265,7 +265,7 @@ public sealed class NumericUpDownTemplateTests
         }
 
         var window = HeadlessWindow.Create();
-        var nud = new NumericUpDown { Minimum = 0, Maximum = 10, Step = 1, Value = 5, Width = 120, Height = 28 };
+        var nud = new NumericUpDown { Minimum = 0, Maximum = 10, SmallChange = 1, Value = 5, Width = 120, Height = 28 };
         window.Content = nud;
         window.PerformLayout();
 

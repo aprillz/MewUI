@@ -18,8 +18,9 @@ public sealed partial class NumericUpDown : RangeBase
         MewProperty<string>.Register<NumericUpDown>(nameof(Format), "0.##", MewPropertyOptions.AffectsLayout,
             static (self, _, _) => self.OnFormatChanged());
 
-    public static readonly MewProperty<double> StepProperty =
-        MewProperty<double>.Register<NumericUpDown>(nameof(Step), 1.0, MewPropertyOptions.None);
+    /// <summary>Obsolete name of <see cref="RangeBase.SmallChangeProperty"/>.</summary>
+    [Obsolete("Use SmallChangeProperty. Step is the SmallChange the box steps by; PageUp and PageDown step by LargeChange.")]
+    public static readonly MewProperty<double> StepProperty = SmallChangeProperty;
 
     public static readonly MewProperty<bool> IsIntegerProperty =
         MewProperty<bool>.Register<NumericUpDown>(nameof(IsInteger), false,
@@ -54,16 +55,21 @@ public sealed partial class NumericUpDown : RangeBase
     protected override double OnCoerceValue(double value)
         => IsInteger ? Math.Round(value, MidpointRounding.AwayFromZero) : value;
 
-    private double GetEffectiveStep()
+    /// <summary>The change the box steps by, rounded to a whole number of at least 1 when <see cref="IsInteger"/> is set.</summary>
+    private double GetEffectiveChange(double change)
         => IsInteger
-            ? Math.Max(1, Math.Round(Step, MidpointRounding.AwayFromZero))
-            : Step;
+            ? Math.Max(1, Math.Round(change, MidpointRounding.AwayFromZero))
+            : change;
 
-    /// <summary>Increases the value by one effective step.</summary>
-    public void StepUp() => CommitValue(Value + GetEffectiveStep());
+    private double SmallStep => GetEffectiveChange(SmallChange);
 
-    /// <summary>Decreases the value by one effective step.</summary>
-    public void StepDown() => CommitValue(Value - GetEffectiveStep());
+    private double LargeStep => GetEffectiveChange(LargeChange);
+
+    /// <summary>Increases the value by <see cref="RangeBase.SmallChange"/>.</summary>
+    public void StepUp() => CommitValue(Value + SmallStep);
+
+    /// <summary>Decreases the value by <see cref="RangeBase.SmallChange"/>.</summary>
+    public void StepDown() => CommitValue(Value - SmallStep);
 
     private TextBlock? _displayPart;
     private TextBox? _partTextBox;
@@ -72,6 +78,9 @@ public sealed partial class NumericUpDown : RangeBase
 
     static NumericUpDown()
     {
+        MaximumProperty.OverrideDefaultValue<NumericUpDown>(100.0);
+        SmallChangeProperty.OverrideDefaultValue<NumericUpDown>(1.0);
+        LargeChangeProperty.OverrideDefaultValue<NumericUpDown>(10.0);
         FocusableProperty.OverrideDefaultValue<NumericUpDown>(true);
     }
 
@@ -83,6 +92,9 @@ public sealed partial class NumericUpDown : RangeBase
     public static readonly MewProperty<bool> ChangeOnWheelProperty =
         MewProperty<bool>.Register<NumericUpDown>(nameof(ChangeOnWheel), true, MewPropertyOptions.None);
 
+    /// <summary>
+    /// Whether the mouse wheel changes the value by <see cref="RangeBase.SmallChange"/> per notch while the pointer is over the box.
+    /// </summary>
     public bool ChangeOnWheel
     {
         get => GetValue(ChangeOnWheelProperty);
@@ -167,15 +179,17 @@ public sealed partial class NumericUpDown : RangeBase
         set => SetValue(FormatProperty, value);
     }
 
+    /// <summary>Obsolete name of <see cref="RangeBase.SmallChange"/>.</summary>
+    [Obsolete("Use SmallChange. Step is the SmallChange the box steps by; PageUp and PageDown step by LargeChange.")]
     public double Step
     {
-        get => GetValue(StepProperty);
-        set => SetValue(StepProperty, value);
+        get => SmallChange;
+        set => SmallChange = value;
     }
 
     /// <summary>
     /// When true, <see cref="RangeBase.Value"/> is rounded to the nearest whole number
-    /// on every assignment and the effective step is at least 1. Default is false.
+    /// on every assignment and each step is a whole number of at least 1. Default is false.
     /// </summary>
     public bool IsInteger
     {
@@ -208,7 +222,7 @@ public sealed partial class NumericUpDown : RangeBase
     protected override void OnMouseWheel(MouseWheelEventArgs e)
     {
         base.OnMouseWheel(e);
-        if (!IsEffectivelyEnabled || !ChangeOnWheel)
+        if (e.Handled || !IsEffectivelyEnabled || !ChangeOnWheel)
         {
             return;
         }
@@ -220,7 +234,7 @@ public sealed partial class NumericUpDown : RangeBase
             return;
         }
 
-        CommitValue(Value + notches * GetEffectiveStep());
+        CommitValue(Value + notches * SmallStep);
         e.Handled = true;
     }
 
@@ -264,6 +278,16 @@ public sealed partial class NumericUpDown : RangeBase
         else if (e.Key == Key.Down)
         {
             StepDown();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.PageUp)
+        {
+            CommitValue(Value + LargeStep);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.PageDown)
+        {
+            CommitValue(Value - LargeStep);
             e.Handled = true;
         }
     }
@@ -487,14 +511,28 @@ public sealed partial class NumericUpDown : RangeBase
 
         if (e.Key == Key.Up)
         {
-            StepWhileEditing(GetEffectiveStep());
+            StepWhileEditing(SmallStep);
             e.Handled = true;
             return;
         }
 
         if (e.Key == Key.Down)
         {
-            StepWhileEditing(-GetEffectiveStep());
+            StepWhileEditing(-SmallStep);
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.PageUp)
+        {
+            StepWhileEditing(LargeStep);
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.PageDown)
+        {
+            StepWhileEditing(-LargeStep);
             e.Handled = true;
         }
     }

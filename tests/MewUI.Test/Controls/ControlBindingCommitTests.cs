@@ -66,7 +66,7 @@ public sealed class ControlBindingCommitTests
     public void NumericUpDownStep_CommitsNormalizedValue()
     {
         var source = new ObservableValue<double>(1);
-        var numeric = new NumericUpDown { Minimum = 0, Maximum = 10, Step = 20 };
+        var numeric = new NumericUpDown { Minimum = 0, Maximum = 10, SmallChange = 20 };
         numeric.SetBinding(RangeBase.ValueProperty, source);
 
         numeric.StepUp();

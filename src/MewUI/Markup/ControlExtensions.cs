@@ -4849,14 +4849,15 @@ public static class ControlExtensions
     #region NumericUpDown
 
     /// <summary>
-    /// Sets the step value.
+    /// Sets the step value. Obsolete name of <c>SmallChange</c>.
     /// </summary>
     /// <param name="numericUpDown">Target numeric up-down.</param>
     /// <param name="step">Step value.</param>
     /// <returns>The numeric up-down for chaining.</returns>
+    [Obsolete("Use SmallChange. PageUp and PageDown step by LargeChange.")]
     public static NumericUpDown Step(this NumericUpDown numericUpDown, double step)
     {
-        numericUpDown.Step = step;
+        numericUpDown.SmallChange = step;
         return numericUpDown;
     }
 
