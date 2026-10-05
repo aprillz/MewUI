@@ -533,6 +533,15 @@ public static class DefaultStyles
             ],
         };
 
+    internal static Style CreateProgressRingStyle() =>
+        new(typeof(ProgressRing))
+        {
+            Setters =
+            [
+                Setter.Create(Control.BackgroundProperty, t => t.Palette.ControlBorder.WithAlpha(128)),
+            ],
+        };
+
     internal static Style CreateExpanderStyle() =>
         new(typeof(Expander))
         {

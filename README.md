@@ -248,7 +248,7 @@ Controls (Implemented):
 - `TextBox`, `MultiLineTextBox`, `SyntaxViewer`, `PasswordBox`
 - `CheckBox`, `RadioButton`, `ToggleSwitch`
 - `ComboBox`, `ListBox`, `ItemsControl`, `TreeView`, `GridView`
-- `Slider`, `ProgressBar`, `ProgressIndicator`, `NumericUpDown`
+- `Slider`, `ProgressBar`, `ProgressRing`, `ProgressIndicator`, `NumericUpDown`
 - `TabControl`, `GroupBox`, `Expander`, `Border`
 - `ColorPicker`, `DatePicker`, `Calendar`
 - `MenuBar`, `ContextMenu`, `ToolTip` (in-window popups)

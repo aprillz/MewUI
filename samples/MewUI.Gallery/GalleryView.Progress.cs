@@ -23,6 +23,20 @@ partial class GalleryView
             ),
 
             Card(
+                "ProgressRing",
+                new StackPanel()
+                    .Horizontal()
+                    .Spacing(16)
+                    .Children(
+                        new ProgressRing().Value(20),
+                        new ProgressRing().Value(65),
+                        new ProgressRing().Value(65).Disable(),
+                        new ProgressRing().IsIndeterminate(),
+                        new ProgressRing().IsIndeterminate().Width(48).Height(48)
+                    )
+            ),
+
+            Card(
                 "ProgressIndicator",
                 new StackPanel()
                     .Vertical()

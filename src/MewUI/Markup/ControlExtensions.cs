@@ -5978,6 +5978,91 @@ public static class ControlExtensions
 
     #endregion
 
+    #region ProgressRing
+
+    /// <summary>
+    /// Sets whether the progress ring shows an indeterminate animation.
+    /// </summary>
+    /// <param name="progressRing">Target progress ring.</param>
+    /// <param name="value">Whether the progress ring is indeterminate.</param>
+    /// <returns>The progress ring for chaining.</returns>
+    public static ProgressRing IsIndeterminate(this ProgressRing progressRing, bool value = true)
+    {
+        progressRing.IsIndeterminate = value;
+        return progressRing;
+    }
+
+    /// <summary>
+    /// Binds the indeterminate state to an observable value.
+    /// </summary>
+    /// <param name="progressRing">Target progress ring.</param>
+    /// <param name="source">Observable source.</param>
+    /// <returns>The progress ring for chaining.</returns>
+    public static ProgressRing BindIsIndeterminate(this ProgressRing progressRing, ObservableValue<bool> source)
+    {
+        progressRing.SetBinding(ProgressRing.IsIndeterminateProperty, source);
+        return progressRing;
+    }
+
+    /// <summary>
+    /// Binds the indeterminate state to a converted observable value.
+    /// </summary>
+    /// <typeparam name="TSource">Source value type.</typeparam>
+    /// <param name="progressRing">Target progress ring.</param>
+    /// <param name="source">Observable source.</param>
+    /// <param name="convert">Source-to-indeterminate-state converter.</param>
+    /// <returns>The progress ring for chaining.</returns>
+    public static ProgressRing BindIsIndeterminate<TSource>(
+        this ProgressRing progressRing,
+        ObservableValue<TSource> source,
+        Func<TSource, bool> convert)
+    {
+        ArgumentNullException.ThrowIfNull(progressRing);
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(convert);
+
+        progressRing.SetBinding(ProgressRing.IsIndeterminateProperty, source, convert, mode: BindingMode.OneWay);
+        return progressRing;
+    }
+
+    /// <summary>
+    /// Binds the value to an observable value.
+    /// </summary>
+    /// <param name="progressRing">Target progress ring.</param>
+    /// <param name="source">Observable source.</param>
+    /// <returns>The progress ring for chaining.</returns>
+    public static ProgressRing BindValue(this ProgressRing progressRing, ObservableValue<double> source)
+    {
+        ArgumentNullException.ThrowIfNull(progressRing);
+        ArgumentNullException.ThrowIfNull(source);
+
+        progressRing.SetBinding(RangeBase.ValueProperty, source, BindingMode.OneWay);
+        return progressRing;
+    }
+
+    /// <summary>
+    /// Binds the value to a converted observable value.
+    /// </summary>
+    /// <typeparam name="TSource">Source value type.</typeparam>
+    /// <param name="progressRing">Target progress ring.</param>
+    /// <param name="source">Observable source.</param>
+    /// <param name="convert">Source-to-value converter.</param>
+    /// <returns>The progress ring for chaining.</returns>
+    public static ProgressRing BindValue<TSource>(
+        this ProgressRing progressRing,
+        ObservableValue<TSource> source,
+        Func<TSource, double> convert)
+    {
+        ArgumentNullException.ThrowIfNull(progressRing);
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(convert);
+
+        progressRing.SetBinding(RangeBase.ValueProperty, source, convert, mode: BindingMode.OneWay);
+        return progressRing;
+    }
+
+    #endregion
+
     #region PromptIcon
 
     /// <summary>
