@@ -2742,6 +2742,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         // Dispose the cached render context BEFORE the factory tears down its window
         // resources - backends may still hold references that the factory is about to free.
         ReleaseRetainedFrameSurface();
+        ReleasePresentSurfaceContext();
         _renderContext?.Dispose();
         _renderContext = null;
         _cachedRenderTarget = null;
@@ -3040,8 +3041,10 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         // Window-targeted contexts are cached so backends can pool per-frame state.
         // The frame surface is drawn into every frame, so its context stays too: what a context gathers
         // as it draws, the realized text runs above all, would otherwise be built again every frame.
+        // A presenter's surface is handed in every frame too, and keeps its context the same way.
         bool keptFrame = ReferenceEquals(target, _retainedFrameSurface);
-        bool oneShot = target is IRenderSurface && !keptFrame;
+        bool keptPresent = !keptFrame && _presentSurface != null && ReferenceEquals(target, _presentSurface);
+        bool oneShot = target is IRenderSurface && !keptFrame && !keptPresent;
         IGraphicsContext context;
         if (oneShot)
         {
@@ -3050,6 +3053,10 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         else if (keptFrame)
         {
             context = _retainedFrameContext ??= GraphicsFactory.CreateContext(target);
+        }
+        else if (keptPresent)
+        {
+            context = _presentSurfaceContext ??= GraphicsFactory.CreateContext(target);
         }
         else
         {

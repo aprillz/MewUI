@@ -50,6 +50,9 @@ internal abstract class GraphicsContextBase : IGraphicsContext, ITextBackendRend
     /// <summary>Whether this context has been permanently disposed.</summary>
     private bool _disposed;
 
+    /// <summary>Whether <see cref="Dispose"/> has run.</summary>
+    internal bool IsDisposed => _disposed;
+
     /// <summary>Total draw/fill calls attempted this frame.</summary>
     public int DrawCallCount => _drawCalls;
 

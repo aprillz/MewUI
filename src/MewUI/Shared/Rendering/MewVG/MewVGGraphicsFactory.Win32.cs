@@ -180,9 +180,9 @@ public sealed partial class MewVGWin32GraphicsFactory : IPersistentFrameGraphics
         }
 
         var resources = LayeredPresenter.GetOrCreateWindowResources(hwnd, hdc);
-        // Layered pixel-surface rendering creates a fresh context per Present call so the caller
-        // can Dispose() it as a one-shot. Heavy resources (MewVGGL,
-        // text cache) live on MewVGWindowResources and are reused.
+        // The window keeps this context while the presenter keeps the surface. Heavy resources (MewVGGL,
+        // text cache) live on MewVGWindowResources; the window's DC is its own (CS_OWNDC), so the HDC
+        // captured here stays valid across Present calls.
         context = MewVGWin32GraphicsContext.CreateForLayeredWindow(
             resources,
             _offscreenProvider,
@@ -222,7 +222,7 @@ public sealed partial class MewVGWin32GraphicsFactory : IPersistentFrameGraphics
                 _pixelSurfacePresentTarget.Value = ctx.RenderTarget;
                 try
                 {
-                    window.RenderFrameToSurface(ctx.RenderTarget);
+                    window.RenderFrameToPresentSurface(ctx.RenderTarget);
                 }
                 finally
                 {
@@ -645,7 +645,7 @@ internal sealed class MewVGWin32LayeredPresenter : IDisposable
 
         try
         {
-            var glTarget = GetOrCreateLayeredTarget(hwnd, w, h, dpiScale);
+            var glTarget = GetOrCreateLayeredTarget(window, hwnd, w, h, dpiScale);
             render(new LayeredRenderContext(hwnd, hdc, glTarget));
 
             var staging = GetOrCreateLayeredStagingTarget(hwnd, w, h, dpiScale);
@@ -752,7 +752,7 @@ internal sealed class MewVGWin32LayeredPresenter : IDisposable
         srcBgra.Slice(0, byteCount).CopyTo(dstBgra);
     }
 
-    private OpenGLPixelRenderSurface GetOrCreateLayeredTarget(nint hwnd, int pixelWidth, int pixelHeight, double dpiScale)
+    private OpenGLPixelRenderSurface GetOrCreateLayeredTarget(Window window, nint hwnd, int pixelWidth, int pixelHeight, double dpiScale)
     {
         lock (_lock)
         {
@@ -766,6 +766,8 @@ internal sealed class MewVGWin32LayeredPresenter : IDisposable
 
             if (_layeredTargets.Remove(hwnd, out var old))
             {
+                // The window's context for the old surface still points at it.
+                window.ReleasePresentSurfaceContext();
                 old.Dispose();
             }
 

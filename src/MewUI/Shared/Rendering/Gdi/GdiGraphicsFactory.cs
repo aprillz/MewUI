@@ -325,8 +325,8 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, ITextBackendFactory, 
         int h = Math.Max(1, win32Surface.PixelHeight);
         double dpiScale = win32Surface.DpiScale <= 0 ? 1.0 : win32Surface.DpiScale;
 
-        var target = GetOrCreateLayeredTarget(hwnd, w, h, dpiScale);
-        window.RenderFrameToSurface(target);
+        var target = GetOrCreateLayeredTarget(window, hwnd, w, h, dpiScale);
+        window.RenderFrameToPresentSurface(target);
 
         // UpdateLayeredWindow expects premultiplied BGRA. The GDI pipeline already renders premultiplied
         // into the pixel surface; only fix up missing alpha from legacy GDI text/bitblt paths.
@@ -365,7 +365,7 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, ITextBackendFactory, 
         return true;
     }
 
-    private GdiPixelRenderSurface GetOrCreateLayeredTarget(nint hwnd, int pixelWidth, int pixelHeight, double dpiScale)
+    private GdiPixelRenderSurface GetOrCreateLayeredTarget(Window window, nint hwnd, int pixelWidth, int pixelHeight, double dpiScale)
     {
         lock (_layeredLock)
         {
@@ -379,6 +379,8 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, ITextBackendFactory, 
 
             if (_layeredTargets.Remove(hwnd, out var old))
             {
+                // The window's context for the old surface still points at it.
+                window.ReleasePresentSurfaceContext();
                 old.Dispose();
             }
 

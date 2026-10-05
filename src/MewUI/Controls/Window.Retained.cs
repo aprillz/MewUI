@@ -18,6 +18,11 @@ public partial class Window
     // The context that draws into the frame surface, kept for as long as that surface is.
     private IGraphicsContext? _retainedFrameContext;
 
+    // The surface a window presenter keeps for this window and draws every frame into (a layered
+    // window's bitmap), and the context kept for it while the presenter keeps the surface.
+    private IRenderSurface? _presentSurface;
+    private IGraphicsContext? _presentSurfaceContext;
+
     /// <summary>
     /// Draws straight into the window target instead of going through the frame surface, so a test can
     /// compare what the two ways of presenting the same frame put on screen.
@@ -891,6 +896,34 @@ public partial class Window
 
         _retainedFrameSurface = surface;
         return surface;
+    }
+
+    /// <summary>
+    /// Renders a frame into <paramref name="surface"/>, a surface the window presenter keeps for this window
+    /// and hands in every frame. The context drawing into it is kept until the presenter hands in another
+    /// surface or calls <see cref="ReleasePresentSurfaceContext"/>.
+    /// </summary>
+    internal void RenderFrameToPresentSurface(IRenderSurface surface)
+    {
+        ArgumentNullException.ThrowIfNull(surface);
+        if (!ReferenceEquals(surface, _presentSurface))
+        {
+            ReleasePresentSurfaceContext();
+            _presentSurface = surface;
+        }
+
+        RenderFrameToSurface(surface);
+    }
+
+    /// <summary>
+    /// Lets go of the context kept for the presenter's surface. A presenter calls this before it frees or
+    /// replaces that surface, since the context still points at it.
+    /// </summary>
+    internal void ReleasePresentSurfaceContext()
+    {
+        _presentSurfaceContext?.Dispose();
+        _presentSurfaceContext = null;
+        _presentSurface = null;
     }
 
     private void ReleaseRetainedFrameSurface()

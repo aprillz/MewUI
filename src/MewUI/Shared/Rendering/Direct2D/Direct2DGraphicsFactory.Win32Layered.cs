@@ -33,9 +33,9 @@ public sealed unsafe partial class Direct2DGraphicsFactory
         int pixelHeight = Math.Max(1, win32Surface.PixelHeight);
         double dpiScale = win32Surface.DpiScale <= 0 ? 1.0 : win32Surface.DpiScale;
 
-        var target = GetOrCreateLayeredTarget(hwnd, pixelWidth, pixelHeight, dpiScale);
+        var target = GetOrCreateLayeredTarget(window, hwnd, pixelWidth, pixelHeight, dpiScale);
 
-        window.RenderFrameToSurface(target);
+        window.RenderFrameToPresentSurface(target);
         Gdi32.GdiFlush();
 
         // ID2D1DCRenderTarget blits to the GDI DC at EndDraw, which can leave the DIB's alpha
@@ -94,7 +94,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory
         }
     }
 
-    private Direct2DPixelRenderSurface GetOrCreateLayeredTarget(nint hwnd, int pixelWidth, int pixelHeight, double dpiScale)
+    private Direct2DPixelRenderSurface GetOrCreateLayeredTarget(Window window, nint hwnd, int pixelWidth, int pixelHeight, double dpiScale)
     {
         lock (_layeredLock)
         {
@@ -108,6 +108,8 @@ public sealed unsafe partial class Direct2DGraphicsFactory
                 }
 
                 _layeredTargets.Remove(hwnd);
+                // The window's context for the old surface still points at it.
+                window.ReleasePresentSurfaceContext();
                 existing.Dispose();
             }
 
