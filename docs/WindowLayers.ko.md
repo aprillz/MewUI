@@ -57,7 +57,7 @@ Native popup은 이 적층 구조에 포함되지 않습니다. 기본 popup hos
 모든 `Window`는 하나의 `OverlayLayer`를 제공합니다.
 
 ```csharp
-var overlay = new ProgressRing
+var overlay = new ProgressIndicator
 {
     IsActive = true,
     IsHitTestVisible = false,

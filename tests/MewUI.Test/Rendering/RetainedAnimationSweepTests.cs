@@ -28,7 +28,7 @@ public sealed class RetainedAnimationSweepTests
         foreach (string name in new[]
         {
             "Button", "ToggleButton", "RepeatButton", "CheckBox", "RadioButton", "ToggleSwitch", "Slider",
-            "ProgressBarIndeterminate", "ProgressRing", "ComboBox", "NumericUpDown", "TextBox", "PasswordBox",
+            "ProgressBarIndeterminate", "ProgressIndicator", "ComboBox", "NumericUpDown", "TextBox", "PasswordBox",
             "MultiLineTextBox", "Expander", "GroupBox", "TabControl", "SegmentedControl", "ButtonGroup",
             "ListBox", "TreeView", "GridView", "NavigationView", "ToolBar", "Calendar", "DatePicker",
             "ColorPicker", "MenuBar", "SplitButton", "DropDownButton", "ScrollViewerAutoHide", "Label",
@@ -204,7 +204,7 @@ public sealed class RetainedAnimationSweepTests
             case "ToggleSwitch": return new ToggleSwitch();
             case "Slider": return new Slider { Width = 200, Minimum = 0, Maximum = 100, Value = 30 };
             case "ProgressBarIndeterminate": return new ProgressBar { Width = 200, Height = 8, IsIndeterminate = true };
-            case "ProgressRing": return new ProgressRing { Width = 40, Height = 40, IsActive = true };
+            case "ProgressIndicator": return new ProgressIndicator { Width = 40, Height = 40, IsActive = true };
             case "ComboBox": return new ComboBox { Width = 160 }.Items(new[] { "Alpha", "Beta", "Gamma" }).SelectedIndex(0);
             case "NumericUpDown": return new NumericUpDown { Width = 160, Value = 5 };
             case "TextBox": return new TextBox { Width = 200, Text = "text" };

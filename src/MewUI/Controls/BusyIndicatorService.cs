@@ -130,7 +130,7 @@ internal sealed class BusyIndicatorPresenter : Control, IVisualTreeHost
 {
     private const int FadeDurationMs = 250;
 
-    private readonly ProgressRing _ring;
+    private readonly ProgressIndicator _ring;
     private readonly Label _messageLabel;
     private readonly CancellationTokenSource? _cts;
     private readonly bool _cancellable;
@@ -180,7 +180,7 @@ internal sealed class BusyIndicatorPresenter : Control, IVisualTreeHost
         _cancellable = cancellable;
         _cts = cts;
 
-        _ring = new ProgressRing
+        _ring = new ProgressIndicator
         {
             IsActive = true,
             Width = RingSizeProperty.DefaultValue,

@@ -57,7 +57,7 @@ contract.
 Every `Window` exposes one `OverlayLayer`:
 
 ```csharp
-var overlay = new ProgressRing
+var overlay = new ProgressIndicator
 {
     IsActive = true,
     IsHitTestVisible = false,

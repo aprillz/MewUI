@@ -5929,51 +5929,51 @@ public static class ControlExtensions
 
     #endregion
 
-    #region ProgressRing
+    #region ProgressIndicator
 
     /// <summary>
-    /// Sets whether the progress ring is active.
+    /// Sets whether the progress indicator is active.
     /// </summary>
-    /// <param name="progressRing">Target progress ring.</param>
-    /// <param name="value">Whether the progress ring is active.</param>
-    /// <returns>The progress ring for chaining.</returns>
-    public static ProgressRing IsActive(this ProgressRing progressRing, bool value = true)
+    /// <param name="progressIndicator">Target progress indicator.</param>
+    /// <param name="value">Whether the progress indicator is active.</param>
+    /// <returns>The progress indicator for chaining.</returns>
+    public static ProgressIndicator IsActive(this ProgressIndicator progressIndicator, bool value = true)
     {
-        progressRing.IsActive = value;
-        return progressRing;
+        progressIndicator.IsActive = value;
+        return progressIndicator;
     }
 
     /// <summary>
     /// Binds the active state to an observable value.
     /// </summary>
-    /// <param name="progressRing">Target progress ring.</param>
+    /// <param name="progressIndicator">Target progress indicator.</param>
     /// <param name="source">Observable source.</param>
-    /// <returns>The progress ring for chaining.</returns>
-    public static ProgressRing BindIsActive(this ProgressRing progressRing, ObservableValue<bool> source)
+    /// <returns>The progress indicator for chaining.</returns>
+    public static ProgressIndicator BindIsActive(this ProgressIndicator progressIndicator, ObservableValue<bool> source)
     {
-        progressRing.SetBinding(ProgressRing.IsActiveProperty, source);
-        return progressRing;
+        progressIndicator.SetBinding(ProgressIndicator.IsActiveProperty, source);
+        return progressIndicator;
     }
 
     /// <summary>
     /// Binds the active state to a converted observable value.
     /// </summary>
     /// <typeparam name="TSource">Source value type.</typeparam>
-    /// <param name="progressRing">Target progress ring.</param>
+    /// <param name="progressIndicator">Target progress indicator.</param>
     /// <param name="source">Observable source.</param>
     /// <param name="convert">Source-to-active-state converter.</param>
-    /// <returns>The progress ring for chaining.</returns>
-    public static ProgressRing BindIsActive<TSource>(
-        this ProgressRing progressRing,
+    /// <returns>The progress indicator for chaining.</returns>
+    public static ProgressIndicator BindIsActive<TSource>(
+        this ProgressIndicator progressIndicator,
         ObservableValue<TSource> source,
         Func<TSource, bool> convert)
     {
-        ArgumentNullException.ThrowIfNull(progressRing);
+        ArgumentNullException.ThrowIfNull(progressIndicator);
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(convert);
 
-        progressRing.SetBinding(ProgressRing.IsActiveProperty, source, convert, mode: BindingMode.OneWay);
-        return progressRing;
+        progressIndicator.SetBinding(ProgressIndicator.IsActiveProperty, source, convert, mode: BindingMode.OneWay);
+        return progressIndicator;
     }
 
     #endregion

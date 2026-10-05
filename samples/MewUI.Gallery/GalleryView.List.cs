@@ -463,7 +463,7 @@ partial class GalleryView
                                     .Register(ctx, "Icon")
                                     .Size(16, 16)
                                     .StretchMode(Stretch.None),
-                                new ProgressRing()
+                                new ProgressIndicator()
                                     .Register(ctx, "Loading")
                                     .Size(16, 16)
                                     .WithTheme((t, c) => c.Foreground(t.Palette.Accent))
@@ -481,9 +481,9 @@ partial class GalleryView
 
                     ctx.Get<TextBlock>("Text").Text(item.Name);
 
-                    var loading = ctx.Get<ProgressRing>("Loading");
+                    var loading = ctx.Get<ProgressIndicator>("Loading");
                     icon.BindIsVisible(item.IsLoading, isLoading => !isLoading);
-                    loading.Bind(ProgressRing.IsActiveProperty, item.IsLoading);
+                    loading.Bind(ProgressIndicator.IsActiveProperty, item.IsLoading);
                     loading.BindIsVisible(item.IsLoading);
                 });
 

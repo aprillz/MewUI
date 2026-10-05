@@ -62,7 +62,7 @@ partial class GalleryView
     private static FrameworkElement AsyncConfettiContent()
     {
         var canvas = new AsyncConfettiCanvas { Height = 200, Width = 280 };
-        var ring = new ProgressRing { Width = 64, Height = 64 }
+        var ring = new ProgressIndicator { Width = 64, Height = 64 }
             .WithTheme((t, c) => c.Foreground(t.Palette.Accent))
             .HorizontalAlignment(HorizontalAlignment.Center)
             .VerticalAlignment(VerticalAlignment.Center)

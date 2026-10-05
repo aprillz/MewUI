@@ -28,7 +28,7 @@ public sealed class FluentExtensionCoverageTests
     [TestMethod]
     public void ControlPropertyExtensions_SetValues()
     {
-        var ring = new ProgressRing().IsActive(false);
+        var ring = new ProgressIndicator().IsActive(false);
         var bar = new ProgressBar().IsIndeterminate(false);
         var password = new PasswordBox().PasswordChar('*');
         var slider = new Slider()
@@ -206,7 +206,7 @@ public sealed class FluentExtensionCoverageTests
         _ = new NumericUpDown().BindValue(source, value => value, value => (int)value);
         _ = new Calendar().BindSelectedDate(source, value => new DateTime(2000, 1, value), value => value?.Day ?? 1);
         _ = new DatePicker().BindSelectedDate(source, value => new DateTime(2000, 1, value), value => value?.Day ?? 1);
-        _ = new ProgressRing().BindIsActive(source, value => value > 0);
+        _ = new ProgressIndicator().BindIsActive(source, value => value > 0);
     }
 
     [TestMethod]

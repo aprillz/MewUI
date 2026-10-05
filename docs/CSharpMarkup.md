@@ -902,7 +902,7 @@ The tables below index the remaining public markup extensions. Some methods have
 | `ChangeOnWheel(...)` | Mouse-wheel value/selection changes |
 | `MaxMenuHeight(...)` | Context menu height limit |
 | `IsExpanded(...)`, `BindIsExpanded(...)`, `OnExpandedChanged(...)` | Expanded state |
-| `IsActive(...)`, `BindIsActive(...)` | ProgressRing activity |
+| `IsActive(...)`, `BindIsActive(...)` | ProgressIndicator activity |
 
 ### Input Controls
 

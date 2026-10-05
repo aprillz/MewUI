@@ -4,13 +4,13 @@ using Aprillz.MewUI.Rendering;
 namespace Aprillz.MewUI.Controls;
 
 /// <summary>
-/// An indeterminate progress ring that displays orbiting dots,
+/// An indeterminate activity indicator that displays orbiting dots,
 /// matching the WPF/WinUI ProgressRing animation style.
 /// </summary>
-public class ProgressRing : Control
+public class ProgressIndicator : Control
 {
     public static readonly MewProperty<bool> IsActiveProperty =
-        MewProperty<bool>.Register<ProgressRing>(
+        MewProperty<bool>.Register<ProgressIndicator>(
             nameof(IsActive),
             false,
             MewPropertyOptions.AffectsRender,

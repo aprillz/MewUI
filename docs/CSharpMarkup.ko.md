@@ -901,7 +901,7 @@ new DockPanel()
 | `ChangeOnWheel(...)` | 마우스 휠 값/선택 변경 |
 | `MaxMenuHeight(...)` | ContextMenu 높이 제한 |
 | `IsExpanded(...)`, `BindIsExpanded(...)`, `OnExpandedChanged(...)` | 확장 상태 |
-| `IsActive(...)`, `BindIsActive(...)` | ProgressRing 실행 상태 |
+| `IsActive(...)`, `BindIsActive(...)` | ProgressIndicator 실행 상태 |
 
 ### 입력 컨트롤
 

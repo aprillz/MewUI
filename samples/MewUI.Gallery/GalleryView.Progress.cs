@@ -6,7 +6,7 @@ partial class GalleryView
 {
     private FrameworkElement ProgressPage()
     {
-        var ring = new ProgressRing { IsActive = false };
+        var ring = new ProgressIndicator { IsActive = false };
 
         return CardGrid(
             Card(
@@ -23,7 +23,7 @@ partial class GalleryView
             ),
 
             Card(
-                "ProgressRing",
+                "ProgressIndicator",
                 new StackPanel()
                     .Vertical()
                     .Spacing(8)
