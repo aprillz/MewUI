@@ -540,9 +540,15 @@ internal sealed class MacOSWindowBackend : IWindowBackend
             // setContentSize: is synchronous but AppKit may clamp (titled-window minimums);
             // record the applied content size, not the request.
             var applied = MacOSWindowInterop.GetContentSize(_nsWindow);
-            _window.SetClientSizeDip(
-                applied.Width > 0 ? applied.Width : widthDip,
-                applied.Height > 0 ? applied.Height : heightDip);
+            double appliedWidth = applied.Width > 0 ? applied.Width : widthDip;
+            double appliedHeight = applied.Height > 0 ? applied.Height : heightDip;
+            if (_metalLayer != 0)
+            {
+                // The size recorded below is what the next frame compares the view against, so it would see no change to resize the drawable for.
+                MacOSWindowInterop.UpdateMetalLayerDrawableSize(_metalLayer, appliedWidth, appliedHeight, _lastDpiScale);
+            }
+
+            _window.SetClientSizeDip(appliedWidth, appliedHeight);
         }
     }
 
