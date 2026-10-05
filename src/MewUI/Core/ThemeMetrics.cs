@@ -33,6 +33,7 @@ public sealed record class ThemeMetrics
         ControlBorderThickness = 0.5,
         ItemPadding = new Thickness(8, 2, 8, 2),
         ContainerPadding = new Thickness(8),
+        ItemsContainerPadding = new Thickness(4),
         FontFamily = SystemFontFamily,
         FontSizeSmall = 11,
         FontSize = 12,
@@ -68,6 +69,11 @@ public sealed record class ThemeMetrics
     /// Gets the default padding for container controls (in DIPs).
     /// </summary>
     public required Thickness ContainerPadding { get; init; }
+
+    /// <summary>
+    /// Gets the default padding between the border of an item list control (menu, list, tree) and its items (in DIPs).
+    /// </summary>
+    public Thickness ItemsContainerPadding { get; init; }
 
     /// <summary>
     /// Gets the default padding for list items (in DIPs).

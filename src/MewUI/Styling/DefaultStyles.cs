@@ -224,12 +224,14 @@ public static class DefaultStyles
         return new(typeof(ListBox))
         {
             BasedOn = GetStyle(typeof(ScrollableItemsBase)),
+            Setters = [Setter.Create(Control.PaddingProperty, t => t.Metrics.ItemsContainerPadding)],
             Triggers = [CreateValidationBorderTrigger()],
         };
     }
 
     internal static Style CreateTreeViewStyle()
-        => CreateControlBasedStyle(typeof(TreeView));
+        => CreateControlBasedStyle(typeof(TreeView),
+            Setter.Create(Control.PaddingProperty, t => t.Metrics.ItemsContainerPadding));
 
     internal static Style CreateGridViewStyle()
         => CreateControlBasedStyle(typeof(GridView));
@@ -258,6 +260,7 @@ public static class DefaultStyles
                 Setter.Create(Control.BorderBrushProperty, t => t.Palette.ControlBorder.Lerp(t.Palette.Accent, 0.5)),
                 Setter.Create(Control.CornerRadiusProperty, t => t.Metrics.ControlCornerRadius),
                 Setter.Create(Control.BorderThicknessProperty, t => t.Metrics.ControlBorderThickness),
+                Setter.Create(Control.PaddingProperty, t => t.Metrics.ItemsContainerPadding),
             ],
         };
 
