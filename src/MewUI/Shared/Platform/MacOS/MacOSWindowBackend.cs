@@ -1272,17 +1272,17 @@ internal sealed class MacOSWindowBackend : IWindowBackend
             return;
         }
 
-        // Zoom semantics do not apply to non-activating surfaces; a spurious isZoomed on a borderless
-        // window would otherwise flip WindowState to Maximized and balloon the popup to the work area.
-        if (_window.IsNonActivatingSurface)
-        {
-            return;
-        }
-
         // Skip during fullscreen transitions.
         var mask = MacOSWindowInterop.GetWindowStyleMask(_nsWindow);
         const ulong NSWindowStyleMaskFullScreen = 1ul << 14;
         if ((mask & NSWindowStyleMaskFullScreen) != 0)
+        {
+            return;
+        }
+
+        // isZoomed is YES for a window whose maximum size is its size and for one without a title bar, so it only counts where the user can zoom.
+        const ulong TITLED_AND_RESIZABLE = 1ul | 8ul;
+        if (!_window.WindowSize.IsResizable || !_window.CanMaximize || (mask & TITLED_AND_RESIZABLE) != TITLED_AND_RESIZABLE)
         {
             return;
         }
