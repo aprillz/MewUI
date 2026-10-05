@@ -130,6 +130,9 @@ public sealed partial class ComboBox : DropDownBase, ISelector, IIndexedSelector
     public static readonly MewProperty<bool> ChangeOnWheelProperty =
         MewProperty<bool>.Register<ComboBox>(nameof(ChangeOnWheel), true, MewPropertyOptions.None);
 
+    /// <summary>
+    /// Whether the mouse wheel changes the selection to the previous or next item while the pointer is over the combo box.
+    /// </summary>
     public bool ChangeOnWheel
     {
         get => GetValue(ChangeOnWheelProperty);
@@ -588,7 +591,7 @@ public sealed partial class ComboBox : DropDownBase, ISelector, IIndexedSelector
     protected override void OnMouseWheel(MouseWheelEventArgs e)
     {
         base.OnMouseWheel(e);
-        if (!IsEffectivelyEnabled || !ChangeOnWheel /*|| IsDropDownOpen*/)
+        if (e.Handled || !IsEffectivelyEnabled || !ChangeOnWheel /*|| IsDropDownOpen*/)
         {
             return;
         }

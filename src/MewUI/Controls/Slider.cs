@@ -1,3 +1,4 @@
+using Aprillz.MewUI.Input;
 using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
@@ -21,6 +22,8 @@ public sealed partial class Slider : RangeBase
     public static readonly MewProperty<bool> ChangeOnWheelProperty =
         MewProperty<bool>.Register<Slider>(nameof(ChangeOnWheel), true, MewPropertyOptions.None);
 
+    private WheelNotchAccumulator _wheelAccumulator;
+
     static Slider()
     {
         MaximumProperty.OverrideDefaultValue<Slider>(100.0);
@@ -30,6 +33,9 @@ public sealed partial class Slider : RangeBase
         FocusableProperty.OverrideDefaultValue<Slider>(true);
     }
 
+    /// <summary>
+    /// Whether the mouse wheel changes the value by <see cref="RangeBase.SmallChange"/> per notch while the pointer is over the slider.
+    /// </summary>
     public bool ChangeOnWheel
     {
         get => GetValue(ChangeOnWheelProperty);
@@ -178,12 +184,17 @@ public sealed partial class Slider : RangeBase
     protected override void OnMouseWheel(MouseWheelEventArgs e)
     {
         base.OnMouseWheel(e);
-        if (!IsEffectivelyEnabled || !ChangeOnWheel || e.Delta.Y == 0)
+        if (e.Handled || !IsEffectivelyEnabled || e.Delta.Y == 0 || !ChangeOnWheel)
         {
             return;
         }
 
-        SetValueInternal(Value + e.Delta.Y, true);
+        int notches = _wheelAccumulator.TakeY(e.Delta.Y);
+        if (notches != 0)
+        {
+            SetValueInternal(Value + notches * GetKeyboardSmallStep(), true);
+        }
+
         e.Handled = true;
     }
 
@@ -249,6 +260,11 @@ public sealed partial class Slider : RangeBase
 
     private double GetKeyboardLargeStep(double smallStep)
     {
+        if (LargeChange > 0 && double.IsFinite(LargeChange))
+        {
+            return LargeChange;
+        }
+
         double range = Math.Abs(Maximum - Minimum);
         if (range > 0)
         {
