@@ -316,7 +316,8 @@ public sealed class GridViewColumnSizingTests
         var scrollViewer = (ScrollViewer?)VisualTree.Find(grid, static element => element is ScrollViewer);
         Assert.IsNotNull(scrollViewer);
         double remaining = Math.Max(0, scrollViewer.ViewportWidth - 100);
-        double secondBoundary = 100 + remaining / 3;
+        // Columns start at the rows' inset.
+        double secondBoundary = ThemeMetrics.Default.ItemsContainerPadding.Left + 100 + remaining / 3;
 
         Assert.IsTrue(grid.TryGetColumnIndexAt(new Point(secondBoundary - 2, 10), out int before));
         Assert.AreEqual(1, before);
@@ -457,7 +458,8 @@ public sealed class GridViewColumnSizingTests
         double progressAutoWidth =
             progressCell.DesiredSize.Width + grid.CellPadding.HorizontalThickness;
 
-        window.SendDoubleClick(new Point(grid.Bounds.X + 400, grid.Bounds.Y + 10));
+        double columnsLeft = grid.Bounds.X + ThemeMetrics.Default.ItemsContainerPadding.Left;
+        window.SendDoubleClick(new Point(columnsLeft + 400, grid.Bounds.Y + 10));
         window.PerformLayout();
 
         var onlineHeader = (TextBlock?)VisualTree.Find(
@@ -475,7 +477,7 @@ public sealed class GridViewColumnSizingTests
             onlineHeader.Bounds.X,
             0.001);
         Assert.AreEqual(
-            grid.Bounds.X + 300 + progressAutoWidth - scrollViewer.HorizontalOffset + 6,
+            columnsLeft + 300 + progressAutoWidth - scrollViewer.HorizontalOffset + 6,
             onlineHeader.Bounds.X,
             0.001);
         Assert.IsTrue(window.IsUpdatePassSettled);
@@ -518,14 +520,15 @@ public sealed class GridViewColumnSizingTests
         Assert.IsNotNull(collapsedCell);
         Assert.AreEqual(0, collapsedCell.RenderCount);
 
-        var boundary = new Point(grid.Bounds.X + 100, grid.Bounds.Y + 10);
+        double columnsLeft = grid.Bounds.X + ThemeMetrics.Default.ItemsContainerPadding.Left;
+        var boundary = new Point(columnsLeft + 100, grid.Bounds.Y + 10);
         window.SendMouseDown(boundary);
         window.SendMouseMove(new Point(boundary.X + 40, boundary.Y));
         window.SendMouseUp(new Point(boundary.X + 40, boundary.Y));
         window.PerformLayout();
 
         Assert.IsTrue(grid.TryGetColumnIndexAt(
-            new Point(grid.Bounds.X + 120, grid.Bounds.Y + 10), out int column));
+            new Point(columnsLeft + 120, grid.Bounds.Y + 10), out int column));
         Assert.AreEqual(1, column);
         RenderGrid(grid);
         Assert.AreEqual(1, collapsedCell.RenderCount);
@@ -551,7 +554,7 @@ public sealed class GridViewColumnSizingTests
         window.Content = grid;
         window.PerformLayout();
 
-        var boundary = new Point(grid.Bounds.Right - 1, grid.Bounds.Y + 10);
+        var boundary = new Point(grid.Bounds.Right - ThemeMetrics.Default.ItemsContainerPadding.Right - 1, grid.Bounds.Y + 10);
         window.SendMouseDown(boundary);
         window.SendMouseMove(new Point(boundary.X - 100, boundary.Y));
         window.SendMouseUp(new Point(boundary.X - 100, boundary.Y));

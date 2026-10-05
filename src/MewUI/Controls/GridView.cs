@@ -74,7 +74,8 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
 
         CellPadding = Theme.Metrics.ItemPadding;
 
-        _scrollViewer.Padding = new Thickness(0);
+        // Rows sit inside the list inset; the header spans the full width and starts its columns where the rows do.
+        _scrollViewer.Padding = Theme.Metrics.ItemsContainerPadding;
         _scrollViewer.CornerRadius = 0;
 
         _header = new HeaderRow(this) { Parent = this };
@@ -285,6 +286,7 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
     {
         base.OnThemeChanged(oldTheme, newTheme);
         _core.ResetAutoDesiredWidths();
+        _scrollViewer.Padding = newTheme.Metrics.ItemsContainerPadding;
         InvalidateItemBindings();
         InvalidateMeasure();
         InvalidateVisual();
@@ -613,8 +615,9 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
             return false;
         }
 
-        double rowsHeight = Math.Max(0, contentBounds.Height - headerH);
-        double rowsY = contentBounds.Y + headerH;
+        var rowsInset = _scrollViewer.Padding;
+        double rowsHeight = Math.Max(0, contentBounds.Height - headerH - rowsInset.VerticalThickness);
+        double rowsY = contentBounds.Y + headerH + rowsInset.Top;
         if (rowsHeight <= 0)
         {
             return false;
@@ -679,7 +682,7 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
             return false;
         }
 
-        return TryGetColumnIndexAtX(position.X, contentBounds.X, contentBounds.Width, out columnIndex);
+        return TryGetColumnIndexAtX(position.X, contentBounds, out columnIndex);
     }
 
     /// <summary>
@@ -721,7 +724,7 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
         double headerY1 = contentBounds.Y + headerH;
         if (position.Y >= headerY0 && position.Y < headerY1)
         {
-            if (!TryGetColumnIndexAtX(position.X, contentBounds.X, contentBounds.Width, out columnIndex))
+            if (!TryGetColumnIndexAtX(position.X, contentBounds, out columnIndex))
             {
                 return false;
             }
@@ -736,7 +739,7 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
             return false;
         }
 
-        if (!TryGetColumnIndexAtX(position.X, contentBounds.X, contentBounds.Width, out columnIndex))
+        if (!TryGetColumnIndexAtX(position.X, contentBounds, out columnIndex))
         {
             return false;
         }
@@ -768,9 +771,11 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
         return true;
     }
 
-    private bool TryGetColumnIndexAtX(double x, double contentX, double contentWidth, out int columnIndex)
+    private bool TryGetColumnIndexAtX(double x, Rect contentBounds, out int columnIndex)
     {
         columnIndex = -1;
+        double contentX = contentBounds.X + _scrollViewer.Padding.Left;
+        double contentWidth = Math.Max(0, contentBounds.Width - _scrollViewer.Padding.HorizontalThickness);
 
         if (x < contentX || x >= contentX + contentWidth)
         {
@@ -894,10 +899,11 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
     {
         var dpiScale = GetDpi() / 96.0;
         var borderInset = GetBorderVisualInset();
+        var rowsInset = _scrollViewer.Padding;
 
         double widthLimit = double.IsPositiveInfinity(availableSize.Width)
             ? double.PositiveInfinity
-            : Math.Max(0, availableSize.Width - Padding.HorizontalThickness - borderInset * 2);
+            : Math.Max(0, availableSize.Width - Padding.HorizontalThickness - borderInset * 2 - rowsInset.HorizontalThickness);
 
         double headerH = ResolveHeaderHeight();
         _header.MeasureAutoColumns(headerH);
@@ -931,24 +937,26 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
         }
         else
         {
-            desiredRowsHeight = Math.Max(0, availableSize.Height - headerH - Padding.VerticalThickness - borderInset * 2);
+            desiredRowsHeight = Math.Max(0, availableSize.Height - headerH - Padding.VerticalThickness - borderInset * 2 - rowsInset.VerticalThickness);
         }
 
         _presenter.ItemHeightHint = rowH;
         _presenter.ExtentWidth = unstretchedWidth;
 
         _header.HorizontalOffset = _scrollViewer.HorizontalOffset;
-        _header.Measure(new Size(Math.Max(0, contentWidth), headerH));
+        _header.Measure(new Size(Math.Max(0, contentWidth + rowsInset.HorizontalThickness), headerH));
 
         _scrollViewer.Measure(new Size(
-            double.IsPositiveInfinity(contentWidth) ? double.PositiveInfinity : Math.Max(0, contentWidth),
-            double.IsPositiveInfinity(desiredRowsHeight) ? double.PositiveInfinity : Math.Max(0, desiredRowsHeight)));
+            double.IsPositiveInfinity(contentWidth) ? double.PositiveInfinity : Math.Max(0, contentWidth + rowsInset.HorizontalThickness),
+            double.IsPositiveInfinity(desiredRowsHeight) ? double.PositiveInfinity : Math.Max(0, desiredRowsHeight + rowsInset.VerticalThickness)));
 
         double desiredWidth = double.IsPositiveInfinity(widthLimit)
             ? unstretchedWidth
             : Math.Min(unstretchedWidth, widthLimit);
 
-        var desired = new Size(Math.Max(0, desiredWidth), Math.Max(0, headerH + desiredRowsHeight));
+        var desired = new Size(
+            Math.Max(0, desiredWidth + rowsInset.HorizontalThickness),
+            Math.Max(0, headerH + desiredRowsHeight + rowsInset.VerticalThickness));
         return desired
             .Inflate(Padding)
             .Inflate(new Thickness(borderInset));
@@ -974,10 +982,11 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
         // Rows are measured by the presenter against the final layout width below, so updating
         // ActualWidth here is sufficient; it must not invalidate measure or rewrite the measured
         // scroll extent.
-        _columnsExtentWidth = _core.ResolveColumnWidths(Math.Max(0, contentBounds.Width), out _);
+        var rowsInset = _scrollViewer.Padding;
+        _columnsExtentWidth = _core.ResolveColumnWidths(Math.Max(0, contentBounds.Width - rowsInset.HorizontalThickness), out _);
 
-        _rowsViewportWidth = LayoutRounding.RoundToPixel(Math.Max(0, contentBounds.Width), dpiScale);
-        _rowsViewportHeight = LayoutRounding.RoundToPixel(Math.Max(0, contentBounds.Height - headerH), dpiScale);
+        _rowsViewportWidth = LayoutRounding.RoundToPixel(Math.Max(0, contentBounds.Width - rowsInset.HorizontalThickness), dpiScale);
+        _rowsViewportHeight = LayoutRounding.RoundToPixel(Math.Max(0, contentBounds.Height - headerH - rowsInset.VerticalThickness), dpiScale);
 
         var rowsViewport = new Rect(
             contentBounds.X,
@@ -998,6 +1007,7 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
         // can shrink that extent, so arrange the header only after the clamp; otherwise its text
         // keeps the old offset for this frame while separators render with the new offset.
         _header.HorizontalOffset = _scrollViewer.HorizontalOffset;
+        _header.ColumnInset = rowsInset;
         _header.Arrange(new Rect(contentBounds.X, contentBounds.Y, Math.Max(0, contentBounds.Width), headerH));
 
         if (TryConsumeScrollIntoViewRequest(out var request))
@@ -1469,6 +1479,7 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
         private readonly GridView _owner;
         private readonly List<TextBlock> _cells = new();
         private double _horizontalOffset;
+        private Thickness _columnInset;
 
         // Column resize drag state
         private int _resizeColumnIndex = -1;
@@ -1496,6 +1507,26 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
                 }
             }
         }
+
+        /// <summary>The rows' inset; header columns start and stop where the rows' columns do.</summary>
+        public Thickness ColumnInset
+        {
+            get => _columnInset;
+            set
+            {
+                if (_columnInset != value)
+                {
+                    _columnInset = value;
+                    InvalidateArrange();
+                    InvalidateVisual();
+                }
+            }
+        }
+
+        private double ColumnOrigin => _columnInset.Left - HorizontalOffset;
+
+        private Rect ColumnsArea(Rect bounds)
+            => new(bounds.X + _columnInset.Left, bounds.Y, Math.Max(0, bounds.Width - _columnInset.HorizontalThickness), bounds.Height);
 
         public void SetColumns(IReadOnlyList<GridViewCore.ColumnDefinition> columns)
         {
@@ -1552,7 +1583,7 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
 
         protected override void ArrangeContent(Rect bounds)
         {
-            double x = bounds.X - HorizontalOffset;
+            double x = bounds.X + ColumnOrigin;
             for (int i = 0; i < _cells.Count; i++)
             {
                 double w = Math.Max(0, _owner._core.Columns[i].ActualWidth);
@@ -1589,7 +1620,8 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
                 dpiScale);
             context.FillRectangle(rect, Theme.Palette.ControlBorder);
 
-            double x = bounds.X - HorizontalOffset;
+            var columns = ColumnsArea(bounds);
+            double x = columns.X - HorizontalOffset;
             double inset = Math.Min(6, Math.Max(0, (bounds.Height - 2) / 2));
             for (int i = 0; i < _owner._core.Columns.Count; i++)
             {
@@ -1598,7 +1630,7 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
                 if (_owner._core.SortColumnIndex == i && width >= SortIndicatorSlotWidth)
                 {
                     double centerX = right - SortIndicatorSlotWidth / 2;
-                    if (centerX >= bounds.Left && centerX <= bounds.Right)
+                    if (centerX >= columns.Left && centerX <= columns.Right)
                     {
                         Glyph.Draw(
                             context,
@@ -1613,18 +1645,50 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
                 }
 
                 x = right;
-                if (x >= bounds.Right - 0.5)
+                if (x >= columns.Right - 0.5)
                 {
                     break;
+                }
+
+                if (x <= columns.Left)
+                {
+                    continue;
                 }
 
                 context.DrawLine(new Point(x, bounds.Y + inset), new Point(x, bounds.Bottom - inset), stroke, 1, pixelSnap: true);
             }
         }
 
+        protected override void RenderSubtree(IGraphicsContext context)
+        {
+            // Cells scrolled past the rows' inset stay hidden, as the rows under them do.
+            context.Save();
+            context.SetClip(ColumnsArea(Bounds));
+            try
+            {
+                base.RenderSubtree(context);
+            }
+            finally
+            {
+                context.Restore();
+            }
+        }
+
+        internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
+        {
+            builder.Content(0);
+            builder.PushClipRect(ColumnsArea(Bounds));
+            foreach (var child in Children)
+            {
+                builder.Child(child);
+            }
+
+            builder.Pop();
+        }
+
         private int HitTestColumn(double localX)
         {
-            double x = -HorizontalOffset;
+            double x = ColumnOrigin;
             for (int i = 0; i < _owner._core.Columns.Count; i++)
             {
                 double right = x + Math.Max(0, _owner._core.Columns[i].ActualWidth);
@@ -1644,7 +1708,7 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
         private int HitTestSeparator(double localX)
         {
             var columns = _owner._core.Columns;
-            double x = -HorizontalOffset;
+            double x = ColumnOrigin;
             double nearestDistance = double.PositiveInfinity;
             double nearestBoundary = double.NaN;
             int nearestColumn = -1;

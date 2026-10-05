@@ -284,8 +284,10 @@ public sealed class GridViewSortingTests
         var window = HeadlessWindow.Create(300, 180);
         window.Content = grid;
         window.PerformLayout();
-        var firstHeader = new Point(grid.Bounds.X + 70, grid.Bounds.Y + 12);
-        var separator = new Point(grid.Bounds.X + 150, grid.Bounds.Y + 12);
+        // Header columns start at the rows' inset.
+        double columnsLeft = grid.Bounds.X + ThemeMetrics.Default.ItemsContainerPadding.Left;
+        var firstHeader = new Point(columnsLeft + 70, grid.Bounds.Y + 12);
+        var separator = new Point(columnsLeft + 150, grid.Bounds.Y + 12);
 
         window.SendMouseMove(separator);
         var backend = (HeadlessWindowBackend?)window.Backend;
@@ -321,11 +323,11 @@ public sealed class GridViewSortingTests
         Assert.AreEqual(-1, grid.SortColumnIndex);
         Assert.AreEqual(GridViewSortDirection.None, grid.SortDirection);
 
-        window.SendClick(new Point(grid.Bounds.X + 220, grid.Bounds.Y + 12));
+        window.SendClick(new Point(columnsLeft + 220, grid.Bounds.Y + 12));
         Assert.AreEqual(1, grid.SortColumnIndex);
         Assert.AreEqual(GridViewSortDirection.Ascending, grid.SortDirection);
 
-        window.SendClick(new Point(grid.Bounds.X + 150, grid.Bounds.Y + 12));
+        window.SendClick(new Point(columnsLeft + 150, grid.Bounds.Y + 12));
         Assert.AreEqual(1, grid.SortColumnIndex);
         Assert.AreEqual(GridViewSortDirection.Ascending, grid.SortDirection);
         Assert.AreSame(source, grid.ItemsSource);
@@ -365,7 +367,7 @@ public sealed class GridViewSortingTests
         window.Content = grid;
         window.PerformLayout();
 
-        var separator = new Point(grid.Bounds.X + 150, grid.Bounds.Y + 12);
+        var separator = new Point(grid.Bounds.X + ThemeMetrics.Default.ItemsContainerPadding.Left + 150, grid.Bounds.Y + 12);
         window.SendMouseMove(separator);
         var backend = (HeadlessWindowBackend?)window.Backend;
         var header = (Panel?)VisualTree.Find(
