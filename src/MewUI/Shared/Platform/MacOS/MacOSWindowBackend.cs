@@ -810,6 +810,9 @@ internal sealed class MacOSWindowBackend : IWindowBackend
                 MacOSWindowInterop.SetWindowStyleMask(_nsWindow, _defaultStyleMask);
                 MacOSWindowInterop.SetTitlebarForTransparency(_nsWindow, false);
             }
+
+            // The shadow is computed once from what the window shows, so a transparent window would keep the shadow of its first frame; popups draw their own.
+            ObjC.MsgSend_void_nint_bool(_nsWindow, ObjC.Sel("setHasShadow:"), !_allowsTransparency && _window.Kind != Controls.WindowKind.Popup);
             ApplyNativeChromeCapabilities();
             if (_metalLayer != 0)
             {
