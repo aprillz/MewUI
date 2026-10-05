@@ -241,18 +241,9 @@ internal sealed class MacOSWindowBackend : IWindowBackend
             MacOSWindowInterop.HideCloseButton(_nsWindow);
         }
 
-        if (_allowsTransparency && _window.UsesBorderlessSurfaceChrome)
+        if (_allowsTransparency)
         {
-            // Borderless mask = square corners (titled windows get rounded corners that would clip the overlay's
-            // own content, e.g. a rounded chip). Transparency comes from the non-opaque layer, not the mask.
-            MacOSWindowInterop.SetWindowStyleMask(_nsWindow, 0); // NSWindowStyleMaskBorderless
-        }
-        else if (_allowsTransparency)
-        {
-            MacOSWindowInterop.SetWindowStyleMask(_nsWindow, MacOSWindowInterop.TransparentStyleMask);
-            MacOSWindowInterop.SetTitlebarForTransparency(_nsWindow, true);
-            MacOSWindowInterop.HideDialogChromeButtons(_nsWindow);
-            MacOSWindowInterop.HideCloseButton(_nsWindow);
+            ApplyTransparentStyleMask();
         }
         else if (_extendTitleBarHeight > 0)
         {
@@ -498,13 +489,36 @@ internal sealed class MacOSWindowBackend : IWindowBackend
 
     public void SetBorderless(bool value)
     {
-        // Transparency already manages a borderless mask; do not fight it. styleMask must not change mid-fullscreen.
-        if (_nsWindow == 0 || _allowsTransparency || IsNativeFullScreen())
+        // styleMask must not change mid-fullscreen.
+        if (_nsWindow == 0 || IsNativeFullScreen())
         {
             return;
         }
 
-        MacOSWindowInterop.SetWindowStyleMask(_nsWindow, value ? 0 : _defaultStyleMask);
+        if (_allowsTransparency)
+        {
+            ApplyTransparentStyleMask();
+        }
+        else
+        {
+            MacOSWindowInterop.SetWindowStyleMask(_nsWindow, value ? 0 : _defaultStyleMask);
+        }
+    }
+
+    private void ApplyTransparentStyleMask()
+    {
+        if (_window.UsesBorderlessSurfaceChrome || _window.Borderless)
+        {
+            // A title bar, even a hidden one, rounds the corners over the window's own content and has the pointer set again on every move.
+            MacOSWindowInterop.SetWindowStyleMask(_nsWindow, 0);
+        }
+        else
+        {
+            MacOSWindowInterop.SetWindowStyleMask(_nsWindow, MacOSWindowInterop.TransparentStyleMask);
+            MacOSWindowInterop.SetTitlebarForTransparency(_nsWindow, true);
+            MacOSWindowInterop.HideDialogChromeButtons(_nsWindow);
+            MacOSWindowInterop.HideCloseButton(_nsWindow);
+        }
     }
 
     public void Invalidate(bool erase)
@@ -782,16 +796,19 @@ internal sealed class MacOSWindowBackend : IWindowBackend
         if (_nsWindow != 0)
         {
             MacOSWindowInterop.SetWindowTransparency(_nsWindow, _nsView, _allowsTransparency);
-            if (_window.UsesBorderlessSurfaceChrome)
+            if (_allowsTransparency)
             {
-                // Chrome-less surfaces stay borderless: the transparent-titled mask would re-grow
-                // window chrome and let the window become key.
+                ApplyTransparentStyleMask();
+            }
+            else if (_window.UsesBorderlessSurfaceChrome)
+            {
+                // Chrome-less surfaces stay borderless: a titled mask would re-grow window chrome and let the window become key.
                 MacOSWindowInterop.SetWindowStyleMask(_nsWindow, 0);
             }
             else
             {
-                MacOSWindowInterop.SetWindowStyleMask(_nsWindow, _allowsTransparency ? MacOSWindowInterop.TransparentStyleMask : _defaultStyleMask);
-                MacOSWindowInterop.SetTitlebarForTransparency(_nsWindow, _allowsTransparency);
+                MacOSWindowInterop.SetWindowStyleMask(_nsWindow, _defaultStyleMask);
+                MacOSWindowInterop.SetTitlebarForTransparency(_nsWindow, false);
             }
             ApplyNativeChromeCapabilities();
             if (_metalLayer != 0)
