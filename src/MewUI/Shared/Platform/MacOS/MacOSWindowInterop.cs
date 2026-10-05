@@ -768,9 +768,9 @@ internal static unsafe class MacOSWindowInterop
         }
         // MouseMoved events are not delivered unless this is enabled.
         ObjC.MsgSend_void_nint_bool(win, SelSetAcceptsMouseMovedEvents, true);
-        if (isToolWindow)
+        if (isToolWindow && !allowsTransparency)
         {
-            // A utility panel only becomes key "if needed" by default; force it so text fields receive input.
+            // A utility panel only becomes key "if needed" by default; force it so text fields receive input. A transparent tool window is not a panel and has no such setting.
             ObjC.MsgSend_void_nint_bool(win, ObjC.Sel("setBecomesKeyOnlyIfNeeded:"), false);
         }
         return win;
