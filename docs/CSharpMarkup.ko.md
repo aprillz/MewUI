@@ -920,6 +920,7 @@ new DockPanel()
 | `Item(string, Command)`, `Text(string)` | `_` 표식으로 MenuItem 텍스트와 AccessKey를 함께 override |
 | `Menu(...)`, `Command(...)`, `Icon(...)` | MenuItem 하위 메뉴, 명령 및 아이콘 placement override 설정 |
 | `BindText(...)`, `BindCommand(...)`, `BindIcon(...)`, `BindIsEnabled(...)` | MenuItem의 실제 MewProperty binding |
+| `IsCheckable(...)`, `IsChecked(...)`, `BindIsChecked(...)` | MenuItem의 체크 자리와 체크 표시 여부 |
 
 `MenuItem.Text`/`Icon`에 값 source가 없으면 Command의 기본 표시를 사용합니다. 명시적인 빈 텍스트와 null
 아이콘은 각각 Command 기본값을 숨깁니다. `IsEnabled` binding은 `CanExecute`에 의해 교체되지 않고 최종

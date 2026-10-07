@@ -263,6 +263,19 @@ new MenuItem("_Copy", copy)
 
 `MenuItem.Text` and `Icon` are **placement overrides**: the command default is used only while the property has no value source. An explicit empty string hides the text, and an explicit `null` icon hides the command icon. `BindText`, `BindIcon`, `BindCommand`, and `BindIsEnabled` create real bindings to the corresponding MenuItem MewProperties. Local `IsEnabled` is combined with `CanExecute` by AND and is never overwritten by the binding.
 
+## Checkable menu items
+
+A menu item shows a check with two properties. `IsCheckable` declares that the item has a check slot. The slot is the icon column: a menu with such an item keeps that column even when no item has an icon, and a checkable item shows its check there instead of its own icon. `IsChecked` decides whether the check is drawn in that slot.
+
+Clicking the item does not change `IsChecked`. The item invokes its command, the command changes the application state, and the item shows that state through a binding. A set of exclusive choices is several items bound to the same state.
+
+```csharp
+menu.Items(
+    new MenuItem(toggleGrid).IsCheckable().BindIsChecked(showGrid),
+    new MenuItem("100%", setZoom, 100).IsCheckable().BindIsChecked(zoom, chosen => chosen == 100),
+    new MenuItem("200%", setZoom, 200).IsCheckable().BindIsChecked(zoom, chosen => chosen == 200));
+```
+
 ## ContextMenu placement
 
 A `ContextMenu` opens with `Show(placementTarget)`. `Placement` decides where it appears.

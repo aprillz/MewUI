@@ -263,6 +263,19 @@ new MenuItem("_Copy", copy)
 
 MenuItem의 `Text`와 `Icon`은 **placement override**입니다. 속성에 값 source가 없을 때만 Command 기본값을 사용합니다. 따라서 명시적인 빈 문자열은 텍스트를 숨기고, 명시적인 `null` 아이콘은 Command 아이콘을 숨깁니다. `BindText`, `BindIcon`, `BindCommand`, `BindIsEnabled`는 각각 해당 MenuItem MewProperty에 실제 바인딩을 만듭니다. 로컬 `IsEnabled`는 `CanExecute`와 AND로 결합되며 바인딩이 덮어써지지 않습니다.
 
+## 체크 가능한 메뉴 항목
+
+메뉴 항목의 체크 표시는 속성 두 개로 정합니다. `IsCheckable`은 항목에 체크 자리가 있다는 선언입니다. 체크 자리는 아이콘 열입니다. 이런 항목이 하나라도 있는 메뉴는 아이콘 있는 항목이 없어도 그 열을 유지하고, 체크 가능한 항목은 자기 아이콘 대신 그 자리에 체크를 보여 줍니다. `IsChecked`는 그 자리에 체크를 그릴지 정합니다.
+
+항목을 클릭해도 `IsChecked`는 바뀌지 않습니다. 항목은 Command를 호출하고, Command가 앱 상태를 바꾸며, 항목은 바인딩으로 그 상태를 보여 줍니다. 여럿 중 하나를 고르는 선택은 같은 상태에 바인딩한 항목 여러 개로 만듭니다.
+
+```csharp
+menu.Items(
+    new MenuItem(toggleGrid).IsCheckable().BindIsChecked(showGrid),
+    new MenuItem("100%", setZoom, 100).IsCheckable().BindIsChecked(zoom, chosen => chosen == 100),
+    new MenuItem("200%", setZoom, 200).IsCheckable().BindIsChecked(zoom, chosen => chosen == 200));
+```
+
 ## ContextMenu 배치
 
 `ContextMenu`는 `Show(placementTarget)`로 엽니다. 어디에 뜰지는 `Placement`가 정합니다.

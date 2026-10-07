@@ -921,6 +921,7 @@ The tables below index the remaining public markup extensions. Some methods have
 | `Item(string, Command)`, `Text(string)` | Override MenuItem text and access key together with `_` markers |
 | `Menu(...)`, `Command(...)`, `Icon(...)` | Menu item submenu, command, and icon placement override |
 | `BindText(...)`, `BindCommand(...)`, `BindIcon(...)`, `BindIsEnabled(...)` | Real bindings to MenuItem MewProperties |
+| `IsCheckable(...)`, `IsChecked(...)`, `BindIsChecked(...)` | Check slot of a menu item and whether the check is shown |
 
 `MenuItem.Text` and `Icon` inherit the Command defaults only while they have no value source. Explicit empty text and
 a null icon suppress those defaults. An `IsEnabled` binding is preserved and ANDed with `CanExecute` for the effective
