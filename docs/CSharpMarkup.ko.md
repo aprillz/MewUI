@@ -578,6 +578,29 @@ new ProgressBar()
 | `BindValue(ObservableValue<double>)` | 값 바인딩 |
 | `BindValue(source, convert)` | 변환된 단방향 값 바인딩 |
 
+### ProgressRing
+
+고리 모양의 `ProgressBar`입니다. 호가 위쪽에서 시계 방향으로 채워지고, `IsIndeterminate`를 켜면 값 대신 회전하는 호를 보여 줍니다.
+
+```csharp
+new ProgressRing()
+    .Width(48)
+    .Height(48)
+    .BindValue(vm.Progress)
+
+new ProgressRing().IsIndeterminate()
+```
+
+| 메서드 | 설명 |
+|--------|------|
+| `Minimum(double)` | 최소값 |
+| `Maximum(double)` | 최대값 |
+| `Value(double)` | 현재값 |
+| `IsIndeterminate(bool)` | 값 대신 회전하는 호 표시 |
+| `BindValue(ObservableValue<double>)` | 값 바인딩 |
+| `BindValue(source, convert)` | 변환된 단방향 값 바인딩 |
+| `BindIsIndeterminate(ObservableValue<bool>)` | 진행률 미정 상태 바인딩 |
+
 ### Calendar
 
 | 메서드 | 설명 |

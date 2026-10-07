@@ -579,6 +579,29 @@ new ProgressBar()
 | `BindValue(ObservableValue<double>)` | Value binding |
 | `BindValue(source, convert)` | Converted one-way value binding |
 
+### ProgressRing
+
+A ring-shaped `ProgressBar`: the arc fills clockwise from the top, and `IsIndeterminate` shows a spinning arc instead of the value.
+
+```csharp
+new ProgressRing()
+    .Width(48)
+    .Height(48)
+    .BindValue(vm.Progress)
+
+new ProgressRing().IsIndeterminate()
+```
+
+| Method | Description |
+|--------|-------------|
+| `Minimum(double)` | Minimum value |
+| `Maximum(double)` | Maximum value |
+| `Value(double)` | Current value |
+| `IsIndeterminate(bool)` | Show the spinning arc instead of the value |
+| `BindValue(ObservableValue<double>)` | Value binding |
+| `BindValue(source, convert)` | Converted one-way value binding |
+| `BindIsIndeterminate(ObservableValue<bool>)` | Indeterminate state binding |
+
 ### Calendar
 
 | Method | Description |
