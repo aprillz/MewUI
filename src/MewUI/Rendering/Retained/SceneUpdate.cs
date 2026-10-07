@@ -128,10 +128,11 @@ internal sealed class SceneUpdate
     /// <summary>
     /// Stages where a slot reaches on the surface. <paramref name="staysInsideTheVisual"/> says whether
     /// all of that lies within the visual's own box, which is what a slot drawn live answers for.
+    /// <paramref name="reach"/> is the same extent before the clips around the slot cut it down.
     /// </summary>
-    internal void StageSlotExtent(VisualNode node, int slotIndex, Rect extent, bool staysInsideTheVisual)
+    internal void StageSlotExtent(VisualNode node, int slotIndex, Rect extent, Rect reach, bool staysInsideTheVisual)
     {
-        _extents.Add(new PendingExtent(node, slotIndex, extent));
+        _extents.Add(new PendingExtent(node, slotIndex, extent, reach));
         int last = _slots.Count - 1;
         if (last >= 0 && ReferenceEquals(_slots[last].Node, node) && _slots[last].SlotIndex == slotIndex)
         {
@@ -330,6 +331,7 @@ internal sealed class SceneUpdate
                 // The margin around them never reaches past what the two recordings answer for as a whole.
                 _scene.AddDirtyRect(change.Intersect(previous.SurfaceExtent.Union(slot.Extent)));
                 slot.Data.SurfaceExtent = previous.SurfaceExtent;
+                slot.Data.SurfaceReach = previous.SurfaceReach;
             }
             else
             {
@@ -369,14 +371,16 @@ internal sealed class SceneUpdate
             if (data != null)
             {
                 // A recording that stands somewhere else now, recorded again or not, leaves where it was
-                // and covers where it is.
-                if (data.SurfaceExtent != extent.Extent)
+                // and covers where it is. One that overhangs its clip on both sides shows the same extent
+                // after a move, so where it stood unclipped is compared as well.
+                if (data.SurfaceExtent != extent.Extent || data.SurfaceReach != extent.Reach)
                 {
                     _scene.AddDirtyRect(data.SurfaceExtent);
                     _scene.AddDirtyRect(extent.Extent);
                 }
 
                 data.SurfaceExtent = extent.Extent;
+                data.SurfaceReach = extent.Reach;
             }
         }
 
@@ -496,7 +500,7 @@ internal sealed class SceneUpdate
         Rect? Change = null,
         bool StaysInsideTheVisual = false);
 
-    private readonly record struct PendingExtent(VisualNode Node, int SlotIndex, Rect Extent);
+    private readonly record struct PendingExtent(VisualNode Node, int SlotIndex, Rect Extent, Rect Reach);
 
     private readonly record struct PendingComposition(
         VisualNode Node,

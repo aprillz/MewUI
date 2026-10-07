@@ -349,8 +349,9 @@ internal sealed class SceneCapture
         }
 
         var bounds = default(BoundsAccumulator);
-        var subtreeExtent = Visible(RetainedGeometry.TransformRect(SlotBounds(update, node, OWN_CONTENT_SLOT), transform));
-        update.StageSlotExtent(node, OWN_CONTENT_SLOT, subtreeExtent, StaysInsideTheVisual(subtreeExtent, element, transform));
+        var subtreeReach = RetainedGeometry.TransformRect(SlotBounds(update, node, OWN_CONTENT_SLOT), transform);
+        var subtreeExtent = Visible(subtreeReach);
+        update.StageSlotExtent(node, OWN_CONTENT_SLOT, subtreeExtent, subtreeReach, StaysInsideTheVisual(subtreeExtent, element, transform));
         StageChangeWithinSlot(update, node, OWN_CONTENT_SLOT, transform);
         bounds.Add(subtreeExtent);
         update.StageBounds(node, bounds.Result, bounds.Result, Origin(element), IsClippedAway(element, transform, bounds.Result));
@@ -392,8 +393,9 @@ internal sealed class SceneCapture
                         ReplaySlot(scene, node, slotIndex, recorder);
                     }
 
-                    var slotExtent = Visible(RetainedGeometry.TransformRect(SlotBounds(update, node, slotIndex), transform));
-                    update.StageSlotExtent(node, slotIndex, slotExtent, StaysInsideTheVisual(slotExtent, node.Element, transform));
+                    var slotReach = RetainedGeometry.TransformRect(SlotBounds(update, node, slotIndex), transform);
+                    var slotExtent = Visible(slotReach);
+                    update.StageSlotExtent(node, slotIndex, slotExtent, slotReach, StaysInsideTheVisual(slotExtent, node.Element, transform));
                     StageChangeWithinSlot(update, node, slotIndex, transform);
                     ownBounds.Add(slotExtent);
                     entryIndex++;

@@ -49,6 +49,12 @@ internal sealed class RenderData : IDisposable
     /// <summary>Where this recording reached the surface in the last pass that looked at it.</summary>
     internal Rect SurfaceExtent { get; set; }
 
+    /// <summary>
+    /// Where this recording stood on the surface before the clips around it cut it down. A recording wider
+    /// than its clip on both sides keeps the same extent when it moves, and only this tells that it did.
+    /// </summary>
+    internal Rect SurfaceReach { get; set; }
+
     /// <summary>The transform to the surface this was recorded under.</summary>
     internal Matrix3x2 SurfaceTransform { get; set; }
 
