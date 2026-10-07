@@ -80,6 +80,9 @@ public partial class Window
 
     private int _rejectedSceneUpdates;
     private int _consecutiveRejectedUpdates;
+
+    // What the frame the target keeps was erased with.
+    private Color? _keptFrameClearColor;
     private const int REJECTIONS_BEFORE_DRAWING_DIRECTLY = 2;
 
     /// <summary>How many scene updates were rejected and left the previous scene in place.</summary>
@@ -372,6 +375,14 @@ public partial class Window
 
         _consecutiveRejectedUpdates = 0;
         _retainedSceneReady = true;
+
+        var clearColor = AllowsTransparency ? Color.Transparent : EffectiveOpaqueBackground;
+        if (_keptFrameClearColor != clearColor)
+        {
+            // No visual draws the window background: the kept frame holds the previous one wherever nothing covers it.
+            _keptFrameClearColor = clearColor;
+            _renderScene.MarkFullyDirty();
+        }
 
         if (_renderScene.IsFullyDirty || !CanRepaintPartOfTheFrame(context, target))
         {
