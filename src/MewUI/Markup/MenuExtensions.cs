@@ -230,6 +230,55 @@ public static class MenuExtensions
     }
 
     /// <summary>
+    /// Sets whether the menu item has a check slot. The slot takes the place of the item's icon.
+    /// </summary>
+    /// <param name="item">Target menu item.</param>
+    /// <param name="value">Whether the item has a check slot.</param>
+    /// <returns>The menu item for chaining.</returns>
+    public static MenuItem IsCheckable(this MenuItem item, bool value = true)
+    {
+        item.IsCheckable = value;
+        return item;
+    }
+
+    /// <summary>
+    /// Sets whether the check is shown. Only an item that is checkable shows it.
+    /// </summary>
+    /// <param name="item">Target menu item.</param>
+    /// <param name="value">Whether the check is shown.</param>
+    /// <returns>The menu item for chaining.</returns>
+    public static MenuItem IsChecked(this MenuItem item, bool value = true)
+    {
+        item.IsChecked = value;
+        return item;
+    }
+
+    /// <summary>
+    /// Binds whether the check is shown to an observable value. Clicking the item does not write it back.
+    /// </summary>
+    public static MenuItem BindIsChecked(this MenuItem item, ObservableValue<bool> source)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        ArgumentNullException.ThrowIfNull(source);
+        item.SetBinding(MenuItem.IsCheckedProperty, source, BindingMode.OneWay);
+        return item;
+    }
+
+    /// <summary>
+    /// Binds whether the check is shown to a converted observable value, such as whether a chosen value
+    /// equals the one this item stands for.
+    /// </summary>
+    /// <typeparam name="TSource">Source value type.</typeparam>
+    public static MenuItem BindIsChecked<TSource>(this MenuItem item, ObservableValue<TSource> source, Func<TSource, bool> convert)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(convert);
+        item.SetBinding(MenuItem.IsCheckedProperty, source, convert, mode: BindingMode.OneWay);
+        return item;
+    }
+
+    /// <summary>
     /// Sets the nested submenu.
     /// </summary>
     /// <param name="item">Target menu item.</param>

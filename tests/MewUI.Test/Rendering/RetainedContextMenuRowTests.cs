@@ -90,6 +90,39 @@ public sealed class RetainedContextMenuRowTests
 
     [TestMethod]
     [DataRow(TestBackend.Gdi, 1.0)]
+    [DataRow(TestBackend.Gdi, 1.5)]
+    [DataRow(TestBackend.Direct2D, 1.0)]
+    [DataRow(TestBackend.Direct2D, 1.5)]
+    [DataRow(TestBackend.MewVG, 1.0)]
+    [DataRow(TestBackend.MewVG, 1.5)]
+    public void AChangeOfTheCheck_RecordsOnlyItsRow(TestBackend backend, double scale)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("The backends under test are Windows-only.");
+            return;
+        }
+
+        using var session = TestBackendSession.Open(backend);
+        var (window, menu, _) = ShowMenu(scale);
+        var item = (MenuItem)menu.Items[5];
+        item.IsCheckable = true;
+        using var surface = CreateSurface(session, scale);
+
+        Render(window, surface);
+        Render(window, surface);
+        int menuVersion = menu.RenderContentVersion;
+
+        item.IsChecked = true;
+        Render(window, surface);
+
+        Assert.AreEqual(menuVersion, menu.RenderContentVersion, "checking one row recorded the menu again");
+        AssertRepaintedOnly(window, [RowBounds(menu, 5)], "checking row 5");
+        AssertEqualsReference(session, window, surface, scale, "after the check changed");
+    }
+
+    [TestMethod]
+    [DataRow(TestBackend.Gdi, 1.0)]
     [DataRow(TestBackend.Gdi, 1.25)]
     [DataRow(TestBackend.Direct2D, 1.25)]
     [DataRow(TestBackend.MewVG, 1.25)]

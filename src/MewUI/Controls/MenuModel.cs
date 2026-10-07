@@ -13,7 +13,9 @@ internal enum MenuModelChange
     Command = 1 << 4,
     Shortcut = 1 << 5,
     SubMenu = 1 << 6,
-    All = Structure | Text | Icon | Enabled | Command | Shortcut | SubMenu,
+    Checked = 1 << 7,
+    Checkable = 1 << 8,
+    All = Structure | Text | Icon | Enabled | Command | Shortcut | SubMenu | Checked | Checkable,
 }
 
 public abstract class MenuEntry : MewObject
@@ -56,6 +58,24 @@ public sealed class MenuItem : MenuEntry
         MewProperty<Menu?>.Register<MenuItem>(nameof(SubMenu), null,
             MewPropertyOptions.None,
             static (self, _, _) => self.Changed?.Invoke(self, MenuModelChange.SubMenu));
+
+    /// <summary>
+    /// Whether the item has a check slot. The slot is the icon column, which a menu with such an item keeps
+    /// whether or not any check is currently shown; the item's own icon is not shown.
+    /// </summary>
+    public static readonly MewProperty<bool> IsCheckableProperty =
+        MewProperty<bool>.Register<MenuItem>(nameof(IsCheckable), false,
+            MewPropertyOptions.None,
+            static (self, _, _) => self.Changed?.Invoke(self, MenuModelChange.Checkable));
+
+    /// <summary>
+    /// Whether the check is shown in the slot of an item that <see cref="IsCheckable"/>. Clicking the item
+    /// does not change it: the application sets it, usually from the state its command changes.
+    /// </summary>
+    public static readonly MewProperty<bool> IsCheckedProperty =
+        MewProperty<bool>.Register<MenuItem>(nameof(IsChecked), false,
+            MewPropertyOptions.None,
+            static (self, _, _) => self.Changed?.Invoke(self, MenuModelChange.Checked));
 
     /// <summary>
     /// The value this placement hands its command as the invocation argument, so several items can
@@ -156,6 +176,20 @@ public sealed class MenuItem : MenuEntry
     {
         get => GetValue(SubMenuProperty);
         set => SetValue(SubMenuProperty, value);
+    }
+
+    /// <inheritdoc cref="IsCheckableProperty"/>
+    public bool IsCheckable
+    {
+        get => GetValue(IsCheckableProperty);
+        set => SetValue(IsCheckableProperty, value);
+    }
+
+    /// <inheritdoc cref="IsCheckedProperty"/>
+    public bool IsChecked
+    {
+        get => GetValue(IsCheckedProperty);
+        set => SetValue(IsCheckedProperty, value);
     }
 
     /// <summary>

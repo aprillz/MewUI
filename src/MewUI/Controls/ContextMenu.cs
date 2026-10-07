@@ -45,6 +45,7 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
     private double _maxShortcutWidth;
     private bool _hasAnyShortcut;
     private bool _hasAnyIcon;
+    private bool _hasAnyCheck;
 
     // Icons are built when their row is first realized and kept across scrolling until the size changes.
     private readonly Dictionary<MenuItem, FrameworkElement> _icons = new();
@@ -196,6 +197,13 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
             MenuModelChange.Command | MenuModelChange.Shortcut)) != 0)
         {
             _textLayouts.Invalidate();
+            InvalidateMeasure();
+        }
+
+        if ((change & MenuModelChange.Checkable) != 0)
+        {
+            // A checkable item shows its check where its icon would be, and may be the only reason for that column.
+            ResetIcons();
             InvalidateMeasure();
         }
 
@@ -368,7 +376,20 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
     {
         foreach (var entry in Items)
         {
-            if (entry is MenuItem item && item.ResolveIconTemplate() != null)
+            if (entry is MenuItem item && !item.IsCheckable && item.ResolveIconTemplate() != null)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private bool HasAnyCheckable()
+    {
+        foreach (var entry in Items)
+        {
+            if (entry is MenuItem item && item.IsCheckable)
             {
                 return true;
             }
@@ -379,7 +400,8 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
 
     private FrameworkElement? IconFor(MenuEntry entry)
     {
-        if (entry is not MenuItem item || item.ResolveIconTemplate() is not IconTemplate template)
+        // A checkable item keeps the column for its check, so its icon is not shown.
+        if (entry is not MenuItem item || item.IsCheckable || item.ResolveIconTemplate() is not IconTemplate template)
         {
             return null;
         }
@@ -781,6 +803,7 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
         _hasAnyShortcut = false;
         bool hasAnySubMenu = false;
         _hasAnyIcon = HasAnyIcon();
+        _hasAnyCheck = HasAnyCheckable();
 
         foreach (var entry in Items)
         {
@@ -813,7 +836,7 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
 
         double maxWidth = Math.Ceiling(_maxTextWidth) + ItemPadding.HorizontalThickness;
 
-        if (_hasAnyIcon)
+        if (_hasAnyIcon || _hasAnyCheck)
         {
             maxWidth += ResolveIconSize() + IconTextGap;
         }
@@ -919,7 +942,7 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
         double dpiScale = GetDpi() / 96.0;
         double itemRadius = Math.Max(0, LayoutRounding.RoundToPixel(CornerRadius, dpiScale) - GetBorderVisualInset());
         var columns = new MenuRowColumns(
-            ResolveIconSize(), _hasAnyIcon, _maxShortcutWidth, _hasAnyShortcut, ItemPadding, itemRadius);
+            ResolveIconSize(), _hasAnyIcon || _hasAnyCheck, _maxShortcutWidth, _hasAnyShortcut, ItemPadding, itemRadius);
 
         int first = -1;
         int last = -2;

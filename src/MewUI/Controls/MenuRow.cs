@@ -41,6 +41,8 @@ internal sealed class MenuRow : Control, IVisualTreeHost
         });
 
     private const double DISABLED_ICON_OPACITY = 0.5;
+    private const double CHECK_GLYPH_SIZE = 4;
+    private const double CHECK_GLYPH_THICKNESS = 1.5;
 
     private MenuEntry? _entry;
     private FrameworkElement? _icon;
@@ -113,7 +115,8 @@ internal sealed class MenuRow : Control, IVisualTreeHost
             InvalidateVisualState();
         }
 
-        if ((change & (MenuModelChange.Text | MenuModelChange.Command | MenuModelChange.Shortcut | MenuModelChange.SubMenu)) != 0)
+        if ((change & (MenuModelChange.Text | MenuModelChange.Command | MenuModelChange.Shortcut | MenuModelChange.SubMenu |
+            MenuModelChange.Checked | MenuModelChange.Checkable)) != 0)
         {
             InvalidateVisual();
         }
@@ -201,6 +204,12 @@ internal sealed class MenuRow : Control, IVisualTreeHost
         var foreground = Foreground;
         var chevronReserved = item.SubMenu != null ? ContextMenu.SubMenuGlyphAreaWidth : 0;
         var paddedRow = row.Deflate(_columns.ItemPadding);
+
+        if (item.IsCheckable && item.IsChecked)
+        {
+            var checkCenter = new Point(paddedRow.X + _columns.IconSize / 2, paddedRow.Y + paddedRow.Height / 2);
+            Glyph.Draw(context, checkCenter, CHECK_GLYPH_SIZE, foreground, GlyphKind.CheckMark, CHECK_GLYPH_THICKNESS);
+        }
 
         double textLeft = paddedRow.X;
         if (_columns.HasIconColumn)
