@@ -209,7 +209,7 @@ internal static unsafe class DirectWriteTextMeasure
 
             ApplyCustomFontFallback(factory, textLayout, font);
 
-            foreach (var run in DWriteGlyphRunExtractor.Capture(textLayout))
+            foreach (var run in DWriteGlyphRunExtractor.Capture(textLayout, pixelsPerDip))
             {
                 var glyphPrefix = new double[run.Advances.Length + 1];
                 for (int i = 0; i < run.Advances.Length; i++)

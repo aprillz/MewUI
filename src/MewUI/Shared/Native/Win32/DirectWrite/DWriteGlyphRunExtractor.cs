@@ -52,7 +52,12 @@ internal static unsafe class DWriteGlyphRunExtractor
         }
     }
 
-    public static IReadOnlyList<GlyphRun> Capture(nint textLayout, bool retainFontFaces = false)
+    /// <summary>
+    /// Copies the runs of <paramref name="textLayout"/>. DirectWrite sets each baseline on the pixel grid of
+    /// <paramref name="pixelsPerDip"/>, so it must be the scale the runs are drawn at; 1 keeps them on whole
+    /// layout units.
+    /// </summary>
+    public static IReadOnlyList<GlyphRun> Capture(nint textLayout, float pixelsPerDip, bool retainFontFaces = false)
     {
         if (textLayout == 0)
         {
@@ -67,7 +72,8 @@ internal static unsafe class DWriteGlyphRunExtractor
             {
                 VTable = RendererVTable,
                 ReferenceCount = 1,
-                StateHandle = GCHandle.ToIntPtr(stateHandle)
+                StateHandle = GCHandle.ToIntPtr(stateHandle),
+                PixelsPerDip = pixelsPerDip > 0 ? pixelsPerDip : 1
             };
 
             var vtable = *(void***)textLayout;
@@ -109,6 +115,7 @@ internal static unsafe class DWriteGlyphRunExtractor
         public void** VTable;
         public int ReferenceCount;
         public nint StateHandle;
+        public float PixelsPerDip;
     }
 
     private sealed class CaptureState(bool retainFontFaces)
@@ -204,7 +211,7 @@ internal static unsafe class DWriteGlyphRunExtractor
     {
         if (pixelsPerDip != null)
         {
-            *pixelsPerDip = 1;
+            *pixelsPerDip = self == null ? 1 : self->PixelsPerDip;
         }
 
         return S_OK;

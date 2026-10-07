@@ -112,6 +112,73 @@ public sealed class DirectWriteTextRasterizerTests
             "Colour layers should paint more than the single tint a monochrome run would produce.");
     }
 
+    /// <summary>
+    /// The layout sets its lines on device pixels, and the run has to be drawn there. A baseline rounded to a
+    /// whole layout unit instead falls between two rows at a fractional scale, and the foot of every stem
+    /// spreads over both.
+    /// </summary>
+    [TestMethod]
+    [DataRow(1.25f)]
+    [DataRow(1.5f)]
+    [DataRow(1.75f)]
+    public void Rasterize_SetsTheBaselineOnADevicePixelAtAFractionalScale(float pixelsPerDip)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("DirectWrite is Windows-only.");
+            return;
+        }
+
+        using var fonts = new DWriteRendering.DirectWriteFontFactory();
+        var soft = new List<string>();
+        for (int size = 9; size <= 20; size++)
+        {
+            var font = fonts.CreateFont("Segoe UI", size, FontWeight.Normal, false, false, false, (uint)Math.Round(96 * pixelsPerDip));
+            var bitmap = DWriteRendering.DirectWriteTextRasterizer.Rasterize(
+                fonts.Factory, font, "HHHH", 240, 80,
+                Color.FromArgb(255, 255, 255, 255),
+                TextAlignment.Left, TextAlignment.Top, TextWrapping.NoWrap, TextTrimming.None,
+                pixelsPerDip);
+
+            var (foot, body) = FootAndBody(bitmap);
+            if (foot < body * 0.9)
+            {
+                soft.Add($"{size}pt:{foot}/{body}");
+            }
+        }
+
+        Assert.IsEmpty(soft, $"stems end on a partly covered row at {pixelsPerDip}x: {string.Join(", ", soft)}");
+    }
+
+    /// <summary>
+    /// The coverage of a stem in the lowest row that carries ink, and in the row above it. The two match
+    /// when the stem ends on a pixel edge; a stem ending inside a row leaves it only partly covered.
+    /// </summary>
+    private static (int Foot, int Body) FootAndBody(TextBitmap bitmap)
+    {
+        for (int y = bitmap.HeightPx - 1; y >= 1; y--)
+        {
+            int strongest = 0;
+            int column = 0;
+            for (int x = 0; x < bitmap.WidthPx; x++)
+            {
+                int coverage = bitmap.Data[(((y * bitmap.WidthPx) + x) * 4) + 3];
+                if (coverage > strongest)
+                {
+                    strongest = coverage;
+                    column = x;
+                }
+            }
+
+            if (strongest > 0)
+            {
+                return (strongest, bitmap.Data[((((y - 1) * bitmap.WidthPx) + column) * 4) + 3]);
+            }
+        }
+
+        return (0, 0);
+    }
+
     private static TextBitmap Rasterize(DWriteRendering.DirectWriteFontFactory fonts, string text,
         TextAlignment horizontalAlignment, Color? color = null)
     {

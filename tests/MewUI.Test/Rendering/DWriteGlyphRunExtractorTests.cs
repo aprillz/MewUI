@@ -34,7 +34,7 @@ public sealed class DWriteGlyphRunExtractorTests
             Assert.IsNotNull(run);
             Assert.AreNotEqual(0, run.NativeHandle);
 
-            var runs = direct2d::Aprillz.MewUI.Native.DirectWrite.DWriteGlyphRunExtractor.Capture(run.NativeHandle);
+            var runs = direct2d::Aprillz.MewUI.Native.DirectWrite.DWriteGlyphRunExtractor.Capture(run.NativeHandle, pixelsPerDip: 1);
 
             Assert.IsNotEmpty(runs);
             Assert.AreEqual(text.Length, runs.Sum(run => checked((int)run.TextLength)));

@@ -52,7 +52,7 @@ public sealed class TextBaselinePlacementTests
                 Assert.IsNotNull(nativeLayout);
                 try
                 {
-                    var captured = direct2d::Aprillz.MewUI.Native.DirectWrite.DWriteGlyphRunExtractor.Capture(nativeLayout.BackendHandle);
+                    var captured = direct2d::Aprillz.MewUI.Native.DirectWrite.DWriteGlyphRunExtractor.Capture(nativeLayout.BackendHandle, pixelsPerDip: 1);
                     Assert.IsNotEmpty(captured);
                     double nativeBaseline = captured[0].BaselineOriginY;
                     var layout = (ManagedTextLayout)factory.TextEngine.CreateLayout(

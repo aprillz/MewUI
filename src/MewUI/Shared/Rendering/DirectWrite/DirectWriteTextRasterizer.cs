@@ -108,7 +108,7 @@ internal static unsafe class DirectWriteTextRasterizer
             // glyphs cannot share that plane because each layer carries its own colour.
             var coverage = Scratch(ref _coveragePlane, widthPx * heightPx, clear: true);
             float[]? colorPlane = null;
-            foreach (var run in DWriteGlyphRunExtractor.Capture(textLayout, retainFontFaces: true))
+            foreach (var run in DWriteGlyphRunExtractor.Capture(textLayout, scale, retainFontFaces: true))
             {
                 using (run)
                 {
@@ -190,7 +190,7 @@ internal static unsafe class DirectWriteTextRasterizer
                 channels = new byte[channelBytes];
             }
 
-            foreach (var run in DWriteGlyphRunExtractor.Capture(textLayout, retainFontFaces: true))
+            foreach (var run in DWriteGlyphRunExtractor.Capture(textLayout, scale, retainFontFaces: true))
             {
                 using (run)
                 {
