@@ -97,8 +97,71 @@ partial class GalleryView
                     )
             ),
 
+            CheckItemsCard(),
+
             AccessKeyCard()
         );
+    }
+
+    private FrameworkElement CheckItemsCard()
+    {
+        var showGrid = new ObservableValue<bool>(true);
+        var wordWrap = new ObservableValue<bool>(false);
+        var zoom = new ObservableValue<int>(100);
+
+        var toggleGrid = new Command("gallery.menu.showGrid", "Show _grid");
+        var toggleWrap = new Command("gallery.menu.wordWrap", "_Word wrap");
+        var wrapIcon = new IconTemplate(size =>
+        {
+            var shape = SegmentIconShape(size.Dip);
+            BindNamedIcon(shape, "text_wrap_regular");
+            return shape;
+        });
+        var setZoom = new Command("gallery.menu.zoom", "Zoom");
+
+        var state = new TextBlock().FontSize(ThemeFontSize.Small);
+        void ShowState() => state.Text = $"Grid {(showGrid.Value ? "on" : "off")}, wrap {(wordWrap.Value ? "on" : "off")}, zoom {zoom.Value}%";
+        ShowState();
+
+        var button = new Button()
+            .Content("Right-click: checkable items")
+            .HorizontalAlignment(HorizontalAlignment.Left);
+
+        // A click only invokes the command; the command changes the state and the item shows it.
+        button.Commands.Register(toggleGrid, () => { showGrid.Value = !showGrid.Value; ShowState(); });
+        button.Commands.Register(toggleWrap, () => { wordWrap.Value = !wordWrap.Value; ShowState(); });
+        button.Commands.Register(setZoom, (int percent) => { zoom.Value = percent; ShowState(); });
+
+        var zoomMenu = new ContextMenu();
+        foreach (int percent in new[] { 50, 100, 150, 200 })
+        {
+            zoomMenu.AddEntry(new MenuItem($"{percent}%", setZoom, percent)
+                .IsCheckable()
+                .BindIsChecked(zoom, chosen => chosen == percent));
+        }
+
+        var menu = new ContextMenu()
+            .Items(
+                new MenuItem(toggleGrid).IsCheckable().BindIsChecked(showGrid),
+                new MenuItem(toggleWrap).IsCheckable().BindIsChecked(wordWrap))
+            .Separator()
+            .SubMenu("Zoom", zoomMenu)
+            .Separator();
+        menu.AddEntry(new MenuItem("Plain item with an icon").Icon(wrapIcon));
+        button.ContextMenu(menu);
+
+        return Card(
+            "Checkable menu items",
+            new StackPanel()
+                .Vertical()
+                .Spacing(8)
+                .Children(
+                    new TextBlock()
+                        .Text("IsCheckable puts a check slot in the icon column; IsChecked follows the state the command changes.")
+                        .TextWrapping(TextWrapping.Wrap)
+                        .FontSize(ThemeFontSize.Small),
+                    button,
+                    state));
     }
 
     private FrameworkElement MenusCard()
