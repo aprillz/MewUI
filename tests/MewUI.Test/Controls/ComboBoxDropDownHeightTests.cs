@@ -1,5 +1,6 @@
 using Aprillz.MewUI;
 using Aprillz.MewUI.Controls;
+using Aprillz.MewUI.Rendering.Gdi;
 using MewUI.Test.Infrastructure;
 
 namespace MewUI.Test.Controls;
@@ -7,8 +8,10 @@ namespace MewUI.Test.Controls;
 /// <summary>
 /// A drop-down short enough to show every item must not scroll. The list rounds its row height to device
 /// pixels, so at a fractional scale the rows are taller than the nominal height the popup is sized from.
+/// Not parallelizable: assigns the process-wide Application.DefaultGraphicsFactory.
 /// </summary>
 [TestClass]
+[DoNotParallelize]
 public sealed class ComboBoxDropDownHeightTests
 {
     [TestMethod]
@@ -25,6 +28,21 @@ public sealed class ComboBoxDropDownHeightTests
             return;
         }
 
+        var previousFactory = Application.DefaultGraphicsFactory;
+        using var factory = new GdiGraphicsFactory();
+        Application.DefaultGraphicsFactory = factory;
+        try
+        {
+            AssertNoScrollBar(dpi);
+        }
+        finally
+        {
+            Application.DefaultGraphicsFactory = previousFactory;
+        }
+    }
+
+    private static void AssertNoScrollBar(uint dpi)
+    {
         var window = HeadlessWindow.Create(400, 300);
         window.SetDpi(dpi);
         var combo = new ComboBox { Width = 160 }.Items(["Alpha", "Beta"]);
