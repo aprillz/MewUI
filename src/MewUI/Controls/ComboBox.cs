@@ -476,9 +476,12 @@ public sealed partial class ComboBox : DropDownBase, ISelector, IIndexedSelector
         double x = PopupPlacement.ClampHorizontal(bounds.X, width, region, floorToLeftEdge: true);
 
         // Do not measure the popup ListBox with infinite height; it can reset its scroll state.
-        double itemHeight = ResolveItemHeight();
+        // The list lays its rows out at whole device pixels, so the height is counted in those rounded rows
+        // and rounded up: an unrounded total falls short at a fractional scale and brings a scroll bar up.
+        double dpiScale = GetDpi() / 96.0;
+        double itemHeight = LayoutRounding.RoundToPixel(ResolveItemHeight(), dpiScale);
         double chrome = _popupList!.Padding.VerticalThickness + (_popupList.BorderThickness * 2);
-        double desiredHeight = ItemsSource.Count * itemHeight + chrome;
+        double desiredHeight = Math.Ceiling(((ItemsSource.Count * itemHeight) + chrome) * dpiScale) / dpiScale;
         double maxHeight = Math.Max(0, MaxDropDownHeight);
         double desiredClamped = Math.Min(desiredHeight, maxHeight);
 
