@@ -406,7 +406,10 @@ public sealed partial class ToolBar : Control, IVisualTreeHost
             widest = Math.Max(widest, visual.Measure(entryHeight));
         }
 
-        return new Size(widest, (_visuals.Count + (HasPendingBand ? 1 : 0)) * bandHeight);
+        // The bands are arranged inside the padding; without it here the last band runs past the toolbar and under whatever follows.
+        return new Size(
+            widest + Padding.HorizontalThickness,
+            ((_visuals.Count + (HasPendingBand ? 1 : 0)) * bandHeight) + Padding.VerticalThickness);
     }
 
     protected override void ArrangeContent(Rect bounds)

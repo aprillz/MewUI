@@ -265,6 +265,35 @@ public sealed class ToolBarTests
     }
 
     [TestMethod]
+    public void TheToolBarAsksForItsPaddingAroundTheBands()
+    {
+        if (SkipOnNonWindows()) return;
+
+        var window = HeadlessWindow.Create();
+        var bar = new ToolBar();
+        bar.Bands.Add(new ToolBarBand(new ToolBarGroup(Text("g1"))));
+        bar.Bands.Add(new ToolBarBand(new ToolBarGroup(Text("g2"))));
+        var below = new Border { Height = 40 };
+        var stack = new StackPanel();
+        stack.Add(bar);
+        stack.Add(below);
+        window.Content = stack;
+        window.PerformLayout();
+
+        double bands = bar.VisualsInternal.Sum(band => band.Bounds.Height);
+        var last = bar.VisualsInternal[^1].Bounds;
+
+        // The bands sit inside the padding, so the padding has to be in what the toolbar asks for: otherwise
+        // the last band runs past the toolbar and the next element is laid over its lower edge.
+        Assert.AreEqual(bands + bar.Padding.VerticalThickness, bar.DesiredSize.Height, "the height leaves the padding out");
+        Assert.AreEqual(bar.Bounds.Bottom - bar.Padding.Bottom, last.Bottom, "the last band does not end where the lower padding starts");
+        Assert.IsGreaterThanOrEqualTo(last.Bottom + bar.Padding.Bottom, below.Bounds.Y, "the element below overlaps the toolbar's lower padding");
+
+        double widest = bar.VisualsInternal.Max(band => band.Groups[^1].Bounds.Right - band.Bounds.X);
+        Assert.IsGreaterThanOrEqualTo(widest + bar.Padding.HorizontalThickness, bar.DesiredSize.Width, "the width leaves the padding out");
+    }
+
+    [TestMethod]
     public void EveryIcon_IsTheCommandIconSizeSquare()
     {
         if (SkipOnNonWindows()) return;
