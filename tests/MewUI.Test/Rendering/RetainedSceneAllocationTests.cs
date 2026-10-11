@@ -3,6 +3,7 @@ using Aprillz.MewUI.Controls;
 using Aprillz.MewUI.Rendering;
 using Aprillz.MewUI.Rendering.Gdi;
 using Aprillz.MewUI.Rendering.Retained;
+using MewUI.Test.Infrastructure;
 
 namespace MewUI.Test.Rendering;
 
@@ -43,7 +44,7 @@ public sealed class RetainedSceneAllocationTests
         }
 
         using var factory = new GdiGraphicsFactory();
-        Application.DefaultGraphicsFactory = factory;
+        using var factoryScope = new DefaultGraphicsFactoryScope(factory);
 
         var root = BuildTree();
         root.Measure(new Size(SURFACE_WIDTH, SURFACE_HEIGHT));
@@ -76,7 +77,7 @@ public sealed class RetainedSceneAllocationTests
         }
 
         using var factory = new GdiGraphicsFactory();
-        Application.DefaultGraphicsFactory = factory;
+        using var factoryScope = new DefaultGraphicsFactoryScope(factory);
 
         var root = BuildTree();
         root.Measure(new Size(SURFACE_WIDTH, SURFACE_HEIGHT));

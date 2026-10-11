@@ -22,13 +22,15 @@ internal sealed class TestBackendSession : IDisposable
     private const int MEWVG_CHANNEL_TOLERANCE = 1;
 
     private readonly IDisposable? _renderScope;
+    private readonly DefaultGraphicsFactoryScope _factoryScope;
+    private bool _disposed;
 
     private TestBackendSession(IGraphicsFactory factory, IDisposable? renderScope, int channelTolerance)
     {
         Factory = factory;
         _renderScope = renderScope;
         ChannelTolerance = channelTolerance;
-        Application.DefaultGraphicsFactory = factory;
+        _factoryScope = new DefaultGraphicsFactoryScope(factory);
     }
 
     internal IGraphicsFactory Factory { get; }
@@ -79,7 +81,20 @@ internal sealed class TestBackendSession : IDisposable
 
     public void Dispose()
     {
-        _renderScope?.Dispose();
-        (Factory as IDisposable)?.Dispose();
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        try
+        {
+            _renderScope?.Dispose();
+        }
+        finally
+        {
+            _factoryScope.Dispose();
+            (Factory as IDisposable)?.Dispose();
+        }
     }
 }

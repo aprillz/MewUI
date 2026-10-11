@@ -71,7 +71,7 @@ public sealed class RetainedTranslucentRepaintTests
 
         // The GL backend draws offscreen only with a context current on this thread.
         using var renderScope = factory is MewVGWin32GraphicsFactory ? factory.AcquireBackgroundRenderScope() : null;
-        Application.DefaultGraphicsFactory = factory;
+        using var factoryScope = new DefaultGraphicsFactoryScope(factory);
 
         byte[] once = Render(factory, frames: 1, wholeFrames);
         byte[] many = Render(factory, frames: 12, wholeFrames);

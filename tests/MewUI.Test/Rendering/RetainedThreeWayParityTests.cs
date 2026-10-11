@@ -44,7 +44,7 @@ public sealed class RetainedThreeWayParityTests
             _ => new MewVGWin32GraphicsFactory(),
         };
         using var disposable = factory as IDisposable;
-        Application.DefaultGraphicsFactory = factory;
+        using var factoryScope = new DefaultGraphicsFactoryScope(factory);
         using var renderScope = factory is MewVGWin32GraphicsFactory ? factory.AcquireBackgroundRenderScope() : null;
 
         var lower = new Border

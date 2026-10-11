@@ -191,7 +191,7 @@ public sealed class OffscreenTextAlphaTests
         }
 
         GdiGraphicsFactory factory = new GdiGraphicsFactory();
-        Application.DefaultGraphicsFactory = factory;   // TextBlock.Measure needs a factory for text measurement
+        using var factoryScope = new DefaultGraphicsFactoryScope(factory);
         IRenderSurface surface = factory.CreateSurface(RenderSurfaceDescriptor.CachedImage(Width, Height, 1.0));
         try
         {
@@ -265,7 +265,7 @@ public sealed class OffscreenTextAlphaTests
         int pxW = (int)(Width * dpi), pxH = (int)(Height * dpi);
 
         GdiGraphicsFactory factory = new GdiGraphicsFactory();
-        Application.DefaultGraphicsFactory = factory;
+        using var factoryScope = new DefaultGraphicsFactoryScope(factory);
 
         IRenderSurface cache = factory.CreateSurface(RenderSurfaceDescriptor.CachedImage(pxW, pxH, dpi));
         // Opaque (no-alpha) target, closer to the live WindowRenderTarget than a premultiplied surface.
@@ -342,7 +342,7 @@ public sealed class OffscreenTextAlphaTests
         }
 
         GdiGraphicsFactory factory = new GdiGraphicsFactory();
-        Application.DefaultGraphicsFactory = factory;
+        using var factoryScope = new DefaultGraphicsFactoryScope(factory);
 
         // Larger surface; place the cached label at a non-zero offset (as inside a padded StackPanel).
         const int surfW = 360, surfH = 220;
@@ -406,7 +406,7 @@ public sealed class OffscreenTextAlphaTests
         }
 
         GdiGraphicsFactory factory = new GdiGraphicsFactory();
-        Application.DefaultGraphicsFactory = factory;
+        using var factoryScope = new DefaultGraphicsFactoryScope(factory);
 
         const int surfaceWidth = 260;
         const int surfaceHeight = 60;
@@ -463,7 +463,7 @@ public sealed class OffscreenTextAlphaTests
         }
 
         GdiGraphicsFactory factory = new GdiGraphicsFactory();
-        Application.DefaultGraphicsFactory = factory;
+        using var factoryScope = new DefaultGraphicsFactoryScope(factory);
 
         const int surfaceWidth = 240;
         const int surfaceHeight = 60;
@@ -531,7 +531,7 @@ public sealed class OffscreenTextAlphaTests
         }
 
         GdiGraphicsFactory factory = new GdiGraphicsFactory();
-        Application.DefaultGraphicsFactory = factory;
+        using var factoryScope = new DefaultGraphicsFactoryScope(factory);
 
         const int surfaceWidth = 240;
         const int surfaceHeight = 60;
