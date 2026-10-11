@@ -23,6 +23,46 @@ public sealed class ImageMetadataTests
         Assert.IsFalse(ImageDecoders.TryReadMetadata(CreateBmpHeader(40000, 1, 32), out _));
     }
 
+    [TestMethod]
+    [DataRow(32768, 1, true)]
+    [DataRow(32769, 1, false)]
+    [DataRow(1, 32768, true)]
+    [DataRow(1, 32769, false)]
+    [DataRow(8192, 8192, true)]
+    [DataRow(8192, 8193, false)]
+    [DataRow(8193, 8192, false)]
+    [DataRow(0, 1, false)]
+    [DataRow(1, 0, false)]
+    [DataRow(-1, 1, false)]
+    public void MetadataProbe_SeparatesDimensionAndPixelCountLimits(int width, int height, bool valid)
+    {
+        Assert.AreEqual(valid, ImageDecoders.TryReadMetadata(CreatePngHeader(width, height), out var png));
+        Assert.AreEqual(valid, ImageDecoders.TryReadMetadata(CreateBmpHeader(width, height, 32), out var bitmap));
+        if (valid)
+        {
+            Assert.AreEqual(width, png.PixelWidth);
+            Assert.AreEqual(height, png.PixelHeight);
+            Assert.AreEqual(width, bitmap.PixelWidth);
+            Assert.AreEqual(height, bitmap.PixelHeight);
+        }
+    }
+
+    [TestMethod]
+    [DataRow(-1, true, 1)]
+    [DataRow(-32768, true, 32768)]
+    [DataRow(-32769, false, 0)]
+    [DataRow(int.MinValue, false, 0)]
+    public void MetadataProbe_BmpTopDownHeightUsesItsMagnitude(int signedHeight, bool valid, int expectedHeight)
+    {
+        Assert.AreEqual(valid, ImageDecoders.TryReadMetadata(CreateBmpHeader(1, signedHeight, 32), out var metadata));
+        if (valid)
+        {
+            Assert.AreEqual(1, metadata.PixelWidth);
+            Assert.AreEqual(expectedHeight, metadata.PixelHeight);
+        }
+        Assert.IsFalse(ImageDecoders.TryReadMetadata(CreatePngHeader(1, signedHeight), out _));
+    }
+
     private static void AssertMetadata(byte[] encoded, int width, int height, bool hasAlpha)
     {
         Assert.IsTrue(ImageDecoders.TryReadMetadata(encoded, out var metadata));
