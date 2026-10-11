@@ -28,7 +28,10 @@ public sealed class ShaderClipOracleTests
     private static readonly Color _background = Color.FromRgb(250, 250, 250);
     private static readonly Color _fill = Color.FromRgb(30, 90, 200);
 
-    private sealed record Scene(string Name, Action<IGraphicsContext, Rect, IImage> Draw, Expectation Expectation);
+    private sealed record Probe(Point Position, bool Filled, Color? Color = null);
+
+    private sealed record Scene(string Name, Action<IGraphicsContext, Rect, IImage> Draw,
+        Expectation Expectation, Probe[] Probes);
 
     private enum Expectation { Compare, NothingFilled, FullyFilled }
 
@@ -38,27 +41,27 @@ public sealed class ShaderClipOracleTests
         {
             context.SetClip(Inset(area, 40));
             context.FillRectangle(area, _fill);
-        }, Expectation.Compare),
+        }, Expectation.Compare, [new(new Point(100, 100), true, _fill), new(new Point(10, 100), false)]),
 
         new("nested clip", static (context, area, _) =>
         {
             context.SetClip(Inset(area, 20));
             context.IntersectClip(new Rect(area.X, area.Y, area.Width * 0.6, area.Height * 0.6));
             context.FillRectangle(area, _fill);
-        }, Expectation.Compare),
+        }, Expectation.Compare, [new(new Point(60, 60), true, _fill), new(new Point(150, 60), false), new(new Point(10, 60), false)]),
 
         new("empty clip", static (context, area, _) =>
         {
             context.SetClip(Inset(area, 20));
             context.IntersectClip(new Rect(area.Right + 10, area.Y, 50, 50));
             context.FillRectangle(area, _fill);
-        }, Expectation.NothingFilled),
+        }, Expectation.NothingFilled, []),
 
         new("clip beyond bounds", static (context, area, _) =>
         {
             context.SetClip(new Rect(area.X - 500, area.Y + 60, area.Width + 1000, 80));
             context.FillRectangle(area, _fill);
-        }, Expectation.Compare),
+        }, Expectation.Compare, [new(new Point(100, 100), true, _fill), new(new Point(100, 30), false), new(new Point(100, 170), false)]),
 
         new("fill after restore", static (context, area, _) =>
         {
@@ -67,7 +70,7 @@ public sealed class ShaderClipOracleTests
             context.FillRectangle(area, Color.FromRgb(200, 40, 40));
             context.Restore();
             context.FillRectangle(area, _fill);
-        }, Expectation.FullyFilled),
+        }, Expectation.FullyFilled, []),
 
         new("clip then transform", static (context, area, _) =>
         {
@@ -77,7 +80,7 @@ public sealed class ShaderClipOracleTests
             context.Scale(0.7, 0.7);
             context.FillRectangle(new Rect(0, 0, area.Width, area.Height), _fill);
             context.Restore();
-        }, Expectation.Compare),
+        }, Expectation.Compare, [new(new Point(100, 100), true, _fill), new(new Point(25, 100), false)]),
 
         new("rounded clip, linear gradient", static (context, area, _) =>
         {
@@ -86,7 +89,7 @@ public sealed class ShaderClipOracleTests
                 new Point(area.X, area.Y), new Point(area.Right, area.Bottom),
                 [new GradientStop(0, Color.FromRgb(240, 60, 60)), new GradientStop(1, Color.FromRgb(60, 60, 240))]);
             context.FillRectangle(area, brush);
-        }, Expectation.Compare),
+        }, Expectation.Compare, [new(new Point(100, 100), true), new(new Point(25, 25), false), new(new Point(100, 10), false)]),
 
         new("path clip, radial gradient", static (context, area, _) =>
         {
@@ -104,14 +107,14 @@ public sealed class ShaderClipOracleTests
             var brush = new RadialGradientBrush(center, center, area.Width / 2, area.Height / 2,
                 [new GradientStop(0, Color.FromRgb(255, 220, 80)), new GradientStop(1, Color.FromRgb(120, 40, 160))]);
             context.FillRectangle(area, brush);
-        }, Expectation.Compare),
+        }, Expectation.Compare, [new(new Point(100, 100), true), new(new Point(100, 30), true), new(new Point(10, 10), false)]),
 
         new("rect clip, image brush", static (context, area, image) =>
         {
             context.SetClip(Inset(area, 30));
             var brush = new ImageBrush(image, new Rect(0, 0, 32, 32), new Rect(area.X, area.Y, 32, 32), TileMode.Tile);
             context.FillRectangle(area, brush);
-        }, Expectation.Compare),
+        }, Expectation.Compare, [new(new Point(100, 100), true), new(new Point(10, 100), false)]),
     ];
 
     private static Rect Inset(Rect rect, double amount)
@@ -160,6 +163,7 @@ public sealed class ShaderClipOracleTests
                     var fromWindow = await window.Render(scene);
                     var fromOffscreen = RenderOffscreen(scene, pattern, scale);
                     CheckAbsolute(scene, fromWindow, $"window {scene.Name} on {monitor.Label}", failures);
+                    CheckAbsolute(scene, fromOffscreen, $"offscreen {scene.Name} on {monitor.Label}", failures);
                     CheckAgainst(scene, fromWindow, fromOffscreen, $"offscreen {scene.Name} at {monitor.ScalePercent}%", failures);
                 }
             }
@@ -408,6 +412,22 @@ public sealed class ShaderClipOracleTests
 
     private static void CheckAbsolute(Scene scene, Pixels pixels, string label, List<string> failures)
     {
+        double scale = (pixels.Width + EDGE_INSET_PX * 2) / CANVAS_DIP;
+        foreach (var probe in scene.Probes)
+        {
+            int horizontal = (int)Math.Floor(probe.Position.X * scale) - EDGE_INSET_PX;
+            int vertical = (int)Math.Floor(probe.Position.Y * scale) - EDGE_INSET_PX;
+            bool filled = pixels.Distance(horizontal, vertical, _background) > CHANNEL_TOLERANCE;
+            if (filled != probe.Filled)
+            {
+                failures.Add($"{label}: probe at {probe.Position} expected filled={probe.Filled}, got {filled}");
+            }
+            if (probe.Color.HasValue && pixels.Distance(horizontal, vertical, probe.Color.Value) > CHANNEL_TOLERANCE)
+            {
+                failures.Add($"{label}: probe at {probe.Position} has the wrong fill color");
+            }
+        }
+
         if (scene.Expectation == Expectation.Compare)
         {
             return;
