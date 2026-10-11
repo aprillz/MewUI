@@ -106,22 +106,49 @@ public sealed class MarkdownLifecycleTests
     }
 
     [TestMethod]
-    public void ResolverFailureAndNullResolverKeepAlternativeText()
+    [DataRow("none")]
+    [DataRow("throw")]
+    [DataRow("null")]
+    public void ResolverFailureAndNullResolverKeepAlternativeText(string resolverMode)
     {
-        EnsureGdi();
-        using (var noResolver = new MarkdownPresenter { Markdown = "![alternative](image.png)" })
+        var factory = EnsureGdi();
+        IMarkdownImageResolver? resolver = resolverMode switch
         {
-            noResolver.Measure(new Size(240, 100));
-            Assert.IsNotNull(noResolver.DocumentRoot);
-        }
-
-        using var throwing = new MarkdownPresenter
+            "throw" => new ThrowingResolver(),
+            "null" => new ImmediateResolver(() => null),
+            _ => null,
+        };
+        using var presenter = new MarkdownPresenter
         {
             Markdown = "![alternative](image.png)",
-            ImageResolver = new ThrowingResolver()
+            ImageResolver = resolver
         };
-        throwing.Measure(new Size(240, 100));
-        Assert.IsNotNull(throwing.DocumentRoot);
+        using var expected = new MarkdownPresenter { Markdown = "alternative" };
+        byte[] actualPixels = RenderPresenter(presenter, factory);
+        byte[] expectedPixels = RenderPresenter(expected, factory);
+        var paragraph = VisualTree.Find(presenter.DocumentRoot, static element => element is MarkdownParagraph)
+            as MarkdownParagraph;
+        Assert.IsNotNull(paragraph);
+        Assert.AreEqual("alternative", paragraph.Text);
+        Assert.IsTrue(expectedPixels.Chunk(4).Any(pixel => pixel[0] < 128 && pixel[1] < 128 && pixel[2] < 128),
+            "The text reference must contain visible glyphs.");
+        CollectionAssert.AreEqual(expectedPixels, actualPixels,
+            "An unresolved image must render its alternative text just like a plain text paragraph.");
+    }
+
+    private static byte[] RenderPresenter(MarkdownPresenter presenter, IGraphicsFactory factory)
+    {
+        presenter.Measure(new Size(240, 100));
+        presenter.Arrange(new Rect(0, 0, 240, 100));
+        using var surface = factory.CreateSurface(RenderSurfaceDescriptor.CachedImage(240, 100, 1));
+        using (var context = factory.CreateContext(surface))
+        {
+            context.BeginFrame(surface);
+            context.Clear(Color.White);
+            presenter.Render(context);
+            context.EndFrame();
+        }
+        return ((ICpuPixelSurface)surface).GetReadOnlyPixelSpan().ToArray();
     }
 
     [TestMethod]
