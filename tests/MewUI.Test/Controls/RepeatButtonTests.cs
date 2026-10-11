@@ -16,10 +16,6 @@ public sealed class RepeatButtonTests
         Assert.AreEqual(80.0, repeatButton.Interval);
     }
 
-    // Headless tests have no running Application.Dispatcher, so the repeat DispatcherTimer
-    // never actually ticks (DispatcherTimer.Start queues until a dispatcher appears); verifying
-    // the timer-driven repeat cadence itself is out of reach here and is not simulated.
-
     [TestMethod]
     public void MouseDown_FiresClickImmediatelyOnce()
     {
