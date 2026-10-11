@@ -2,6 +2,7 @@ using Aprillz.MewUI;
 using Aprillz.MewUI.MewvalonEdit;
 using Aprillz.MewUI.MewvalonEdit.Rendering;
 using Aprillz.MewUI.Rendering;
+using MewUI.MewvalonEdit.Test.Infrastructure;
 
 namespace MewUI.MewvalonEdit.Test;
 
@@ -61,30 +62,45 @@ public sealed class BackgroundGeometryBuilderTests
             "Rows that do not overlap in x were joined into one outline.");
     }
 
-    /// <summary>
-    /// With the border snapped to whole device pixels the builder insets by half of that same
-    /// value, which leaves the stroke covering whole pixels: an odd stroke centred on a pixel
-    /// middle, an even one on a pixel boundary. A one-DIP border can do neither off 100%.
-    /// </summary>
+    /// <summary>Snapped rectangle borders meet the expected device pixel boundaries at each scale.</summary>
     [TestMethod]
-    [DataRow(1.0)]
-    [DataRow(1.25)]
-    [DataRow(1.5)]
-    [DataRow(2.0)]
-    public void ASnappedBorderCoversWholePixels(double dpiScale)
+    [DataRow(1.0, 1, 10, 20, 41, 61)]
+    [DataRow(1.25, 1, 10, 20, 41, 61)]
+    [DataRow(1.5, 2, 9, 19, 41, 61)]
+    [DataRow(1.75, 2, 9, 19, 41, 61)]
+    [DataRow(2.0, 2, 9, 19, 41, 61)]
+    public void ASnappedBorderCoversWholePixels(double dpiScale, int borderPixels,
+        int leftPixel, int topPixel, int rightPixel, int bottomPixel)
     {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("GDI backend is Windows-only.");
+        }
+
+        var editor = new TextEditor { Text = "border", ShowLineNumbers = false };
+        using var window = ScaledWindow.Create(dpiScale);
+        window.Content = editor;
+        window.PerformLayout();
+        var view = editor.TextArea.TextView;
+        Assert.AreEqual(dpiScale, view.DpiScale, 1e-9);
         double thickness = LayoutRounding.SnapThicknessToPixels(1, dpiScale, 1);
-        int pixels = (int)Math.Round(thickness * dpiScale);
-        Assert.AreEqual(pixels, thickness * dpiScale, 1e-9, "The border is not a whole number of pixels.");
+        Assert.AreEqual(borderPixels, thickness * dpiScale, 1e-9);
+        var builder = new BackgroundGeometryBuilder { AlignToWholePixels = true, BorderThickness = thickness };
+        builder.AddRectangle(view, new Rect(10.2 / dpiScale, 20.2 / dpiScale, 30.0 / dpiScale, 40.0 / dpiScale));
+        var geometry = builder.CreateGeometry();
+        Assert.IsNotNull(geometry);
+        Assert.AreEqual(1, CountFigures(geometry));
 
-        // What AddRectangle(TextView, Rect) computes for an edge.
-        double edge = LayoutRounding.RoundToPixel(37.3 - (thickness / 2), dpiScale) + (thickness / 2);
-
-        // The stroke reaches half its width either side of the centre, so its outer edge is what
-        // has to land on a pixel boundary.
-        double outer = (edge - (thickness / 2)) * dpiScale;
-        Assert.AreEqual(0, Math.Abs(outer - Math.Round(outer)), 1e-9,
-            $"At {dpiScale:P0} a {pixels}px stroke centred at {edge} straddles two pixels.");
+        var bounds = geometry.GetBounds();
+        double halfBorderPixels = borderPixels / 2.0;
+        Assert.AreEqual(leftPixel,
+            bounds.Left * dpiScale - halfBorderPixels, 1e-9);
+        Assert.AreEqual(topPixel,
+            bounds.Top * dpiScale - halfBorderPixels, 1e-9);
+        Assert.AreEqual(rightPixel,
+            bounds.Right * dpiScale + halfBorderPixels, 1e-9);
+        Assert.AreEqual(bottomPixel,
+            bounds.Bottom * dpiScale + halfBorderPixels, 1e-9);
     }
 
     [TestMethod]
