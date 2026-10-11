@@ -34,14 +34,34 @@ public sealed class ImageVariantCacheTests
     [TestMethod]
     public void RepeatedRender_RealizesOnce(int intrinsicWidth, int intrinsicHeight, double width, double height)
     {
-        var image = CreateArrangedImage(intrinsicWidth, intrinsicHeight, width, height);
-        var context = new NoOpContext();
+        using var scenario = new RenderScenario(intrinsicWidth, intrinsicHeight, width, height);
+        var image = scenario.Image;
+        var context = scenario.Context;
 
+        long beforeFirst = RenderResourceMetrics.Snapshot().ImageRealizationRequests;
         image.Render(context);
         long afterFirst = RenderResourceMetrics.Snapshot().ImageRealizationRequests;
+        Assert.AreEqual(beforeFirst + 1, afterFirst, "The first render must realize an image.");
+        Assert.HasCount(1, context.Calls);
+        var first = context.Calls[0];
+        double fit = Math.Min(width / intrinsicWidth, height / intrinsicHeight);
+        Assert.AreEqual(intrinsicWidth * fit, first.Destination.Width, 1e-9);
+        Assert.AreEqual(intrinsicHeight * fit, first.Destination.Height, 1e-9);
+        Assert.IsGreaterThanOrEqualTo(Math.Max(1, (int)Math.Floor(first.Destination.Width)), first.PixelWidth);
+        Assert.IsGreaterThanOrEqualTo(Math.Max(1, (int)Math.Floor(first.Destination.Height)), first.PixelHeight);
+        Assert.IsLessThanOrEqualTo(intrinsicWidth, first.PixelWidth);
+        Assert.IsLessThanOrEqualTo(intrinsicHeight, first.PixelHeight);
         for (int i = 0; i < 5; i++)
         {
             image.Render(context);
+        }
+
+        Assert.HasCount(6, context.Calls);
+        foreach (var call in context.Calls)
+        {
+            Assert.AreSame(first.Image, call.Image);
+            Assert.AreEqual(first.Source, call.Source);
+            Assert.AreEqual(first.Destination, call.Destination);
         }
 
         Assert.AreEqual(
@@ -53,13 +73,21 @@ public sealed class ImageVariantCacheTests
     [TestMethod]
     public void GrowingLayout_RealizesAgainAtTheLargerScale()
     {
-        var image = CreateArrangedImage(480, 135, 60, 17);
-        var context = new NoOpContext();
+        using var scenario = new RenderScenario(480, 135, 60, 17);
+        var image = scenario.Image;
+        var context = scenario.Context;
         image.Render(context);
+        Assert.HasCount(1, context.Calls);
         long afterSmall = RenderResourceMetrics.Snapshot().ImageRealizationRequests;
 
         image.Arrange(new Rect(0, 0, 480, 135));
         image.Render(context);
+
+        Assert.HasCount(2, context.Calls);
+        Assert.AreNotSame(context.Calls[0].Image, context.Calls[1].Image);
+        Assert.AreEqual(480, context.Calls[1].PixelWidth);
+        Assert.AreEqual(135, context.Calls[1].PixelHeight);
+        Assert.AreEqual(new Rect(0, 0, 480, 135), context.Calls[1].Destination);
 
         Assert.IsGreaterThan(
             afterSmall,
@@ -70,13 +98,22 @@ public sealed class ImageVariantCacheTests
     [TestMethod]
     public void ShrinkingLayout_KeepsTheResidentVariant()
     {
-        var image = CreateArrangedImage(480, 135, 480, 135);
-        var context = new NoOpContext();
+        using var scenario = new RenderScenario(480, 135, 480, 135);
+        var image = scenario.Image;
+        var context = scenario.Context;
         image.Render(context);
+        Assert.HasCount(1, context.Calls);
         long afterLarge = RenderResourceMetrics.Snapshot().ImageRealizationRequests;
 
         image.Arrange(new Rect(0, 0, 60, 17));
         image.Render(context);
+
+        Assert.HasCount(2, context.Calls);
+        Assert.AreSame(context.Calls[0].Image, context.Calls[1].Image);
+        Assert.AreEqual(480, context.Calls[1].PixelWidth);
+        Assert.AreEqual(135, context.Calls[1].PixelHeight);
+        Assert.AreEqual(60.0, context.Calls[1].Destination.Width, 1e-9);
+        Assert.AreEqual(16.875, context.Calls[1].Destination.Height, 1e-9);
 
         Assert.AreEqual(
             afterLarge,
@@ -163,7 +200,41 @@ public sealed class ImageVariantCacheTests
         return crc;
     }
 
-    private sealed class NoOpContext : NoOpGraphicsContext
+    private sealed record DrawCall(IImage Image, Rect Destination, Rect Source, int PixelWidth, int PixelHeight);
+
+    private sealed class RecordingContext : NoOpGraphicsContext
     {
+        internal List<DrawCall> Calls { get; } = [];
+
+        public override void DrawImage(IImage image, Rect destination, Rect source)
+            => Calls.Add(new DrawCall(image, destination, source, image.PixelWidth, image.PixelHeight));
+    }
+
+    private sealed class RenderScenario : IDisposable
+    {
+        private readonly TestBackendSession _backend;
+        private readonly ImageSource _source;
+
+        internal RenderScenario(int intrinsicWidth, int intrinsicHeight, double width, double height)
+        {
+            if (!OperatingSystem.IsWindows())
+            {
+                Assert.Inconclusive("GDI backend is Windows-only.");
+            }
+
+            _backend = TestBackendSession.Open(TestBackend.Gdi);
+            Image = CreateArrangedImage(intrinsicWidth, intrinsicHeight, width, height);
+            _source = (ImageSource)Image.Source!;
+        }
+
+        internal Image Image { get; }
+        internal RecordingContext Context { get; } = new();
+
+        public void Dispose()
+        {
+            Image.Source = null;
+            _source.Dispose();
+            _backend.Dispose();
+        }
     }
 }
