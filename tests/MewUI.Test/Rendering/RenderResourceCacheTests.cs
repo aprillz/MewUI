@@ -50,13 +50,14 @@ public sealed class RenderResourceCacheTests
     public void PersistentCache_PartitionsDeviceGenerationAndContext()
     {
         using var cache = new RenderResourceCache();
-        var generationOne = Key(1) with { DeviceGeneration = 1, ContextId = 7 };
-        var generationTwo = generationOne with { DeviceGeneration = 2 };
-        Add(cache, generationOne, out _).Dispose();
+        var original = Key(1) with { DeviceGeneration = 1, ContextId = 7 };
+        Add(cache, original, out _).Dispose();
 
-        Assert.IsTrue(cache.TryGet(generationOne, out var matching));
+        Assert.IsTrue(cache.TryGet(original, out var matching));
         matching.Dispose();
-        Assert.IsFalse(cache.TryGet(generationTwo, out _));
+        Assert.IsFalse(cache.TryGet(original with { DeviceId = original.DeviceId + 1 }, out _));
+        Assert.IsFalse(cache.TryGet(original with { DeviceGeneration = 2 }, out _));
+        Assert.IsFalse(cache.TryGet(original with { ContextId = 8 }, out _));
     }
 
     [TestMethod]
@@ -99,17 +100,22 @@ public sealed class RenderResourceCacheTests
     }
 
     [TestMethod]
-    public void IdleMaintenance_ExpiresResidentEntriesBelowTheBudget()
+    [DataRow(4_999L, false)]
+    [DataRow(5_000L, true)]
+    [DataRow(5_001L, true)]
+    public void IdleMaintenance_ExpiresResidentEntriesBelowTheBudget(long idleMilliseconds, bool expires)
     {
         long now = 100;
         using var cache = new RenderResourceCache(400 * 1024, 100, () => now);
         Add(cache, Key(1), out var surface).Dispose();
 
-        now += 5_001;
+        now += idleMilliseconds;
         cache.Maintain(RenderCacheMaintenanceMode.Idle);
 
-        Assert.IsTrue(surface.IsDisposed);
-        Assert.AreEqual(0, cache.GetStatistics().PersistentCount);
+        Assert.AreEqual(expires, surface.IsDisposed);
+        Assert.AreEqual(expires ? 0 : 1, cache.GetStatistics().PersistentCount);
+        Assert.AreEqual(!expires, cache.TryGet(Key(1), out var remaining));
+        remaining?.Dispose();
     }
 
     [TestMethod]
