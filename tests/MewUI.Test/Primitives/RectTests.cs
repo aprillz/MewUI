@@ -145,6 +145,47 @@ public sealed class RectTests
     }
 
     [TestMethod]
+    [DataRow(100.0, 50.0, false)]
+    [DataRow(50.0, 100.0, false)]
+    [DataRow(100.0, 100.0, false)]
+    [DataRow(99.999, 50.0, true)]
+    [DataRow(50.0, 99.999, true)]
+    [DataRow(-0.001, 50.0, false)]
+    [DataRow(50.0, -0.001, false)]
+    public void Contains_PointUsesExclusiveRightAndBottom(double horizontal, double vertical, bool contained)
+    {
+        var rectangle = new Rect(0, 0, 100, 100);
+        Assert.AreEqual(contained, rectangle.Contains(new Point(horizontal, vertical)));
+    }
+
+    [TestMethod]
+    [DataRow(0.0, 0.0, 100.0, 100.0, true)]
+    [DataRow(50.0, 50.0, 50.0, 50.0, true)]
+    [DataRow(50.0, 50.0, 50.001, 50.0, false)]
+    [DataRow(50.0, 50.0, 50.0, 50.001, false)]
+    public void Contains_RectIncludesSharedEdges(double left, double top, double width, double height, bool contained)
+    {
+        var rectangle = new Rect(0, 0, 100, 100);
+        Assert.AreEqual(contained, rectangle.Contains(new Rect(left, top, width, height)));
+    }
+
+    [TestMethod]
+    [DataRow(100.0, 0.0, false)]
+    [DataRow(0.0, 100.0, false)]
+    [DataRow(100.0, 100.0, false)]
+    [DataRow(-100.0, 0.0, false)]
+    [DataRow(0.0, -100.0, false)]
+    [DataRow(99.999, 0.0, true)]
+    [DataRow(0.0, 99.999, true)]
+    public void IntersectsWith_TouchingEdgesHaveNoArea(double left, double top, bool intersects)
+    {
+        var rectangle = new Rect(0, 0, 100, 100);
+        var other = new Rect(left, top, 100, 100);
+        Assert.AreEqual(intersects, rectangle.IntersectsWith(other));
+        Assert.AreEqual(intersects, other.IntersectsWith(rectangle));
+    }
+
+    [TestMethod]
     public void Contains_RectInside_ReturnsTrue()
     {
         var outer = new Rect(0, 0, 100, 100);
