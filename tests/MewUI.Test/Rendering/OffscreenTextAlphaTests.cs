@@ -109,9 +109,8 @@ public sealed class OffscreenTextAlphaTests
         var (maxAlpha, coveredPixels) = RenderTextAndMeasureAlpha(fillOpaqueBackground: true);
         Console.WriteLine($"[opaque bg] maxAlpha={maxAlpha}, coveredPixels(alpha>16)={coveredPixels}");
 
-        // With an opaque background the whole surface should be alpha 255; the diagnostic value is
-        // whether the text region differs in color (covered pixels here means non-background pixels).
-        Assert.IsGreaterThan(0, maxAlpha, $"Opaque-background surface unexpectedly has zero alpha (maxAlpha={maxAlpha}).");
+        Assert.AreEqual(255, maxAlpha);
+        Assert.IsGreaterThanOrEqualTo(5, coveredPixels, "Expected visible red text over the opaque background.");
     }
 
     /// <summary>
@@ -427,10 +426,15 @@ public sealed class OffscreenTextAlphaTests
 
             RenderLabel(label, factory, windowSurface, surfaceWidth, surfaceHeight);
 
+            var cpu = (ICpuPixelSurface)windowSurface;
+            Assert.IsGreaterThan(0, CountDarkPixels(cpu, 50, surfaceWidth, surfaceHeight),
+                "The initial long text must reach the region that the shorter text should clear.");
+
             label.Text = "I";
             RenderLabel(label, factory, windowSurface, surfaceWidth, surfaceHeight);
 
-            var cpu = (ICpuPixelSurface)windowSurface;
+            Assert.IsGreaterThan(0, CountDarkPixels(cpu, 0, 50, surfaceHeight),
+                "The replacement text disappeared instead of replacing the cached text.");
             ReadOnlySpan<byte> pixels = cpu.GetReadOnlyPixelSpan();
             int darkPixelsPastShortText = 0;
             for (int y = 0; y < surfaceHeight; y++)
@@ -499,6 +503,8 @@ public sealed class OffscreenTextAlphaTests
             context.EndFrame();
 
             var cpu = (ICpuPixelSurface)surface;
+            Assert.IsGreaterThan(0, CountDarkPixels(cpu, 0, clipWidth, surfaceHeight),
+                "The cached text must remain visible inside the parent clip.");
             ReadOnlySpan<byte> pixels = cpu.GetReadOnlyPixelSpan();
             int darkPixelsOutsideClip = 0;
             for (int y = 0; y < surfaceHeight; y++)
@@ -567,6 +573,8 @@ public sealed class OffscreenTextAlphaTests
             context.EndFrame();
 
             var cpu = (ICpuPixelSurface)surface;
+            Assert.IsGreaterThan(0, CountDarkPixels(cpu, 0, clipWidth, surfaceHeight),
+                "The cached parent must retain visible text inside its internal clip.");
             ReadOnlySpan<byte> pixels = cpu.GetReadOnlyPixelSpan();
             int darkPixelsOutsideClip = 0;
             for (int y = 0; y < surfaceHeight; y++)
@@ -587,6 +595,24 @@ public sealed class OffscreenTextAlphaTests
         {
             surface.Dispose();
         }
+    }
+
+    private static int CountDarkPixels(ICpuPixelSurface surface, int left, int right, int height)
+    {
+        ReadOnlySpan<byte> pixels = surface.GetReadOnlyPixelSpan();
+        int count = 0;
+        for (int vertical = 0; vertical < height; vertical++)
+        {
+            for (int horizontal = left; horizontal < right; horizontal++)
+            {
+                int offset = vertical * surface.StrideBytes + horizontal * 4;
+                if (pixels[offset] < 128 || pixels[offset + 1] < 128 || pixels[offset + 2] < 128)
+                {
+                    count++;
+                }
+            }
+        }
+        return count;
     }
 
     private static void RenderLabel(
@@ -648,7 +674,11 @@ public sealed class OffscreenTextAlphaTests
                         peakR = pixels[offset + 2];
                         peakA = alpha;
                     }
-                    if (alpha > 16) coveredPixels++;
+                    if (alpha > 16 && pixels[offset + 2] > pixels[offset + 1] + 40 &&
+                        pixels[offset + 2] > pixels[offset] + 40)
+                    {
+                        coveredPixels++;
+                    }
                 }
             }
 
