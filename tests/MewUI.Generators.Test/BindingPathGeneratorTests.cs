@@ -102,6 +102,15 @@ public sealed class BindingPathGeneratorTests
                     this TElement element,
                     Aprillz.MewUI.MewProperty<T> property,
                     TSource source,
+                    System.Func<TSource, Aprillz.MewUI.ObservableValue<T>> selector,
+                    Aprillz.MewUI.BindingMode? mode = null)
+                    where TElement : MewObject
+                    where TSource : class => element;
+
+                public static TElement Bind<TElement, TSource, T>(
+                    this TElement element,
+                    Aprillz.MewUI.MewProperty<T> property,
+                    TSource source,
                     System.Func<TSource, T> getter,
                     System.Action<TSource, T> setter = null,
                     Aprillz.MewUI.BindingMode? mode = null,
@@ -218,11 +227,13 @@ public sealed class BindingPathGeneratorTests
     }
 
     [TestMethod]
-    public void ObservableValueLeaf_UsesTheWrapperOverload()
+    public void ObservableValueSelector_IsLeftToTheRuntime()
     {
-        string generated = RunExpectingSuccess("x => x.Profile.DisplayName");
+        var diagnostics = Run("x => x.Caption", out string generated);
 
-        StringAssert.Contains(generated, "BindingPath.From<global::ViewModel>()");
+        Assert.IsFalse(diagnostics.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error),
+            string.Join("\n", diagnostics));
+        Assert.IsEmpty(generated, "The ObservableValue selector overload is handled by the runtime.");
     }
 
     [TestMethod]
