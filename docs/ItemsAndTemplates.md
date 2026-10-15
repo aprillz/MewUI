@@ -254,7 +254,7 @@ new ComboBox()
 new ComboBox().Items(people, p => p.Name);
 ```
 
-The second argument of `Items(...)` is a text selector used by the default template.
+The second argument of `Items(...)` is an optional text selector: the text the default template shows, `SelectedText` returns, and auto-sizing measures. Without one an item's `ToString()` is used, so a list given its own `ItemTemplate` can omit it: `new ComboBox().Items(people).ItemTemplate(...)`.
 
 The view that presents the selected item in the header is also a slot, `ComboBox.SelectedItemViewProperty`. A control template for the ComboBox places it with `new ContentPresenter { ContentSource = ComboBox.SelectedItemViewProperty }`; the slot is empty while nothing is selected.
 

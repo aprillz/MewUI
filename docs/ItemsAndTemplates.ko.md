@@ -253,7 +253,7 @@ new ComboBox()
 new ComboBox().Items(people, p => p.Name);
 ```
 
-`Items(...)`의 두 번째 인자는 기본 템플릿에서 사용하는 텍스트 선택기다.
+`Items(...)`의 두 번째 인자는 선택 사항인 텍스트 선택기다. 기본 템플릿이 표시하고, `SelectedText`가 돌려주고, 자동 크기 계산이 측정하는 텍스트다. 없으면 아이템의 `ToString()`을 쓰므로, 자체 `ItemTemplate`을 주는 목록은 생략해도 된다: `new ComboBox().Items(people).ItemTemplate(...)`.
 
 헤더에서 선택 아이템을 보여 주는 뷰는 `ComboBox.SelectedItemViewProperty`라는 슬롯이기도 하다. ComboBox의 컨트롤 템플릿은 `new ContentPresenter { ContentSource = ComboBox.SelectedItemViewProperty }`로 그 뷰를 배치한다. 선택이 없는 동안 슬롯은 비어 있다.
 
