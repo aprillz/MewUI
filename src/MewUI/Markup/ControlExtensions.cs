@@ -2596,15 +2596,15 @@ public static class ControlExtensions
     }
 
     /// <summary>
-    /// Sets the items with text selector.
+    /// Sets the items, with an optional text selector.
     /// </summary>
     /// <typeparam name="T">Item type.</typeparam>
     /// <param name="listBox">Target list box.</param>
     /// <param name="items">Items collection.</param>
-    /// <param name="textSelector">Text selector function.</param>
+    /// <param name="textSelector">Optional text of an item; without one the item's <c>ToString()</c> is used.</param>
     /// <param name="keySelector">Optional key selector to stabilize selection when items change.</param>
     /// <returns>The list box for chaining.</returns>
-    public static ListBox Items<T>(this ListBox listBox, IReadOnlyList<T> items, Func<T, string> textSelector, Func<T, object?>? keySelector = null)
+    public static ListBox Items<T>(this ListBox listBox, IReadOnlyList<T> items, Func<T, string>? textSelector = null, Func<T, object?>? keySelector = null)
     {
         ArgumentNullException.ThrowIfNull(listBox);
         listBox.ItemsSource = items == null ? ItemsView.EmptySelectable : ItemsView.Create(items, textSelector, keySelector);
@@ -2858,16 +2858,16 @@ public static class ControlExtensions
     }
 
     /// <summary>
-    /// Sets the segments with a display-text selector.
+    /// Sets the segments, with an optional display-text selector.
     /// </summary>
     /// <typeparam name="TSelf">Control type.</typeparam>
     /// <typeparam name="T">Item type.</typeparam>
     /// <param name="control">Target segmented control.</param>
     /// <param name="items">Items collection.</param>
-    /// <param name="textSelector">Text selector function.</param>
+    /// <param name="textSelector">Optional text of an item; without one the item's <c>ToString()</c> is used.</param>
     /// <param name="keySelector">Optional key selector to stabilize selection when items change.</param>
     /// <returns>The control for chaining.</returns>
-    public static TSelf Items<TSelf, T>(this TSelf control, IReadOnlyList<T> items, Func<T, string> textSelector, Func<T, object?>? keySelector = null) where TSelf : SegmentedBase
+    public static TSelf Items<TSelf, T>(this TSelf control, IReadOnlyList<T> items, Func<T, string>? textSelector = null, Func<T, object?>? keySelector = null) where TSelf : SegmentedBase
     {
         ArgumentNullException.ThrowIfNull(control);
         control.ItemsSource = items == null ? ItemsView.EmptySelectable : ItemsView.Create(items, textSelector, keySelector);
@@ -3084,11 +3084,11 @@ public static class ControlExtensions
         return control;
     }
 
-    /// <summary>Binds items using the default text template.</summary>
+    /// <summary>Binds items using the default text template; without a text selector an item shows its <c>ToString()</c>.</summary>
     public static NavigationList Items<T>(
         this NavigationList control,
         IReadOnlyList<T> items,
-        Func<T, string> textSelector,
+        Func<T, string>? textSelector = null,
         Func<T, NavigationItemKind>? kind = null,
         Func<T, object?>? keySelector = null)
     {
@@ -3170,19 +3170,19 @@ public static class ControlExtensions
     }
 
     /// <summary>
-    /// Configures navigation pane items with optional <see cref="PathGeometry"/> icons.
+    /// Configures navigation pane items with optional <see cref="PathGeometry"/> icons. Without a text
+    /// selector an item's label is its <c>ToString()</c>.
     /// </summary>
     public static NavigationView Items<T>(
         this NavigationView view,
         IReadOnlyList<T> items,
-        Func<T, string> textSelector,
+        Func<T, string>? textSelector = null,
         Func<T, PathGeometry?>? icon = null,
         Func<T, Element?>? content = null,
         Func<T, NavigationItemKind>? kind = null,
         Func<T, object?>? keySelector = null)
     {
         ArgumentNullException.ThrowIfNull(view);
-        ArgumentNullException.ThrowIfNull(textSelector);
 
         Func<T, Element?>? elementIcon = icon == null
             ? null
@@ -3202,14 +3202,13 @@ public static class ControlExtensions
     public static NavigationView Items<T>(
         this NavigationView view,
         IReadOnlyList<T> items,
-        Func<T, string> textSelector,
+        Func<T, string>? textSelector,
         Func<T, Element?> icon,
         Func<T, Element?>? content = null,
         Func<T, NavigationItemKind>? kind = null,
         Func<T, object?>? keySelector = null)
     {
         ArgumentNullException.ThrowIfNull(view);
-        ArgumentNullException.ThrowIfNull(textSelector);
         ArgumentNullException.ThrowIfNull(icon);
 
         ApplyNavItems(view, view.Pane, items, textSelector, icon, kind, keySelector);
@@ -3221,19 +3220,19 @@ public static class ControlExtensions
     }
 
     /// <summary>
-    /// Configures bottom-pinned footer items with optional <see cref="PathGeometry"/> icons.
+    /// Configures bottom-pinned footer items with optional <see cref="PathGeometry"/> icons. Without a
+    /// text selector an item's label is its <c>ToString()</c>.
     /// </summary>
     public static NavigationView FooterItems<T>(
         this NavigationView view,
         IReadOnlyList<T> items,
-        Func<T, string> textSelector,
+        Func<T, string>? textSelector = null,
         Func<T, PathGeometry?>? icon = null,
         Func<T, Element?>? content = null,
         Func<T, NavigationItemKind>? kind = null,
         Func<T, object?>? keySelector = null)
     {
         ArgumentNullException.ThrowIfNull(view);
-        ArgumentNullException.ThrowIfNull(textSelector);
 
         Func<T, Element?>? elementIcon = icon == null
             ? null
@@ -3253,14 +3252,13 @@ public static class ControlExtensions
     public static NavigationView FooterItems<T>(
         this NavigationView view,
         IReadOnlyList<T> items,
-        Func<T, string> textSelector,
+        Func<T, string>? textSelector,
         Func<T, Element?> icon,
         Func<T, Element?>? content = null,
         Func<T, NavigationItemKind>? kind = null,
         Func<T, object?>? keySelector = null)
     {
         ArgumentNullException.ThrowIfNull(view);
-        ArgumentNullException.ThrowIfNull(textSelector);
         ArgumentNullException.ThrowIfNull(icon);
 
         ApplyNavItems(view, view.FooterPane, items, textSelector, icon, kind, keySelector);
@@ -3276,11 +3274,12 @@ public static class ControlExtensions
         NavigationView view,
         NavigationList pane,
         IReadOnlyList<T> items,
-        Func<T, string> textSelector,
+        Func<T, string>? textSelector,
         Func<T, Element?>? icon,
         Func<T, NavigationItemKind>? kind,
         Func<T, object?>? keySelector)
     {
+        textSelector ??= static item => item?.ToString() ?? string.Empty;
         pane.ItemsSource = ItemsView.Create(items, textSelector, keySelector);
         pane.KindSelector = kind == null ? null : o => kind((T)o!);
         pane.ItemTemplate = new DelegateTemplate<T>(
@@ -3430,9 +3429,9 @@ public static class ControlExtensions
     /// <typeparam name="T">Item type.</typeparam>
     /// <param name="itemsControl">Target items control.</param>
     /// <param name="items">Items collection.</param>
-    /// <param name="textSelector">Text selector function.</param>
+    /// <param name="textSelector">Optional text of an item; without one the item's <c>ToString()</c> is used.</param>
     /// <returns>The items control for chaining.</returns>
-    public static ItemsControl Items<T>(this ItemsControl itemsControl, IReadOnlyList<T> items, Func<T, string> textSelector)
+    public static ItemsControl Items<T>(this ItemsControl itemsControl, IReadOnlyList<T> items, Func<T, string>? textSelector = null)
     {
         ArgumentNullException.ThrowIfNull(itemsControl);
         itemsControl.ItemsSource = items == null ? ItemsView.Empty : ItemsView.Create(items, textSelector);
@@ -4219,15 +4218,15 @@ public static class ControlExtensions
     }
 
     /// <summary>
-    /// Sets the items with text selector.
+    /// Sets the items, with an optional text selector.
     /// </summary>
     /// <typeparam name="T">Item type.</typeparam>
     /// <param name="comboBox">Target combo box.</param>
     /// <param name="items">Items collection.</param>
-    /// <param name="textSelector">Text selector function.</param>
+    /// <param name="textSelector">Optional text of an item; without one the item's <c>ToString()</c> is used.</param>
     /// <param name="keySelector">Optional key selector to stabilize selection when items change.</param>
     /// <returns>The combo box for chaining.</returns>
-    public static ComboBox Items<T>(this ComboBox comboBox, IReadOnlyList<T> items, Func<T, string> textSelector, Func<T, object?>? keySelector = null)
+    public static ComboBox Items<T>(this ComboBox comboBox, IReadOnlyList<T> items, Func<T, string>? textSelector = null, Func<T, object?>? keySelector = null)
     {
         ArgumentNullException.ThrowIfNull(comboBox);
         comboBox.ItemsSource = items == null ? ItemsView.EmptySelectable : ItemsView.Create(items, textSelector, keySelector);
