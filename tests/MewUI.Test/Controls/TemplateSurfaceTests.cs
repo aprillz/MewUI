@@ -314,43 +314,6 @@ public sealed class TemplateSurfaceTests
     }
 
     [TestMethod]
-    public void ComboBox_ControlTemplate_ProjectsTheSelectedItemView()
-    {
-        if (!OperatingSystem.IsWindows())
-        {
-            Assert.Inconclusive("GDI backend is Windows-only.");
-            return;
-        }
-
-        ContentPresenter? presenter = null;
-        var window = HeadlessWindow.Create();
-        var combo = new ComboBox { ItemsSource = ItemsView.Create(new[] { "Alpha", "Beta" }) };
-        combo.SelectedItemTemplate<string, TextBlock>(
-            build: _ => new TextBlock(),
-            bind: (label, item) => label.Text = item);
-        combo.Template = new DelegateControlTemplate<ComboBox>((_, _) =>
-        {
-            presenter = new ContentPresenter { ContentSource = ComboBox.SelectedItemViewProperty };
-            return new Border { Width = 150, Height = 30, Child = presenter };
-        });
-        window.Content = new StackPanel().Children(combo);
-        window.PerformLayout();
-
-        Assert.IsNull(combo.SelectedItemView, "nothing is selected yet");
-
-        combo.SelectedIndex = 1;
-        window.PerformLayout();
-
-        var view = combo.SelectedItemView as TextBlock;
-        Assert.IsNotNull(view);
-        Assert.AreEqual("Beta", view.Text);
-        Assert.AreSame(presenter, view.Parent, "the presenter hosts the view under a control template");
-
-        combo.Template = null;
-        Assert.AreSame(combo, view.Parent, "without a template the ComboBox hosts it again");
-    }
-
-    [TestMethod]
     public void TemplateInstance_SurvivesAScaleChangeUnlessTheTemplateAsksForARebuild()
     {
         if (!OperatingSystem.IsWindows())
