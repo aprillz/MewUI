@@ -2,7 +2,6 @@ using System.Buffers;
 using System.Runtime.InteropServices;
 using System.Text;
 
-using Aprillz.MewUI.Animation;
 using Aprillz.MewUI.Diagnostics;
 using Aprillz.MewUI.Input;
 using Aprillz.MewUI.Native;
@@ -955,14 +954,8 @@ internal sealed class Win32WindowBackend : IWindowBackend
             case WindowMessages.WM_TIMER:
                 if (wParam == 1)
                 {
-                    // A native move/size loop blocks the host pump. Advance the shared animation pulse
-                    // here and repaint this window only when one of its clocks consumed the pulse.
-                    using var pulse = AnimationManager.Instance.BeginPulse(
-                        Application.Current.RenderLoopSettings);
-                    if (pulse.ShouldRender(Window, NeedsRender))
-                    {
-                        RenderNow();
-                    }
+                    // A native move/size loop blocks the host pump, and every window, not only this one, waits on it.
+                    _host.RenderContinuousWindows(Application.Current.RenderLoopSettings);
                     return 0;
                 }
 

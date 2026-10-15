@@ -541,7 +541,11 @@ public sealed class Win32PlatformHost : IPlatformHost
         }
     }
 
-    private void RenderContinuousWindows(RenderLoopSettings settings)
+    /// <summary>
+    /// Advances the shared animation pulse and renders every window that it or an invalidation asks to draw.
+    /// A window's native move or size loop calls this from its timer, since the loop keeps this host's pump from running.
+    /// </summary>
+    internal void RenderContinuousWindows(RenderLoopSettings settings)
     {
         using var pulse = AnimationManager.Instance.BeginPulse(settings);
 
