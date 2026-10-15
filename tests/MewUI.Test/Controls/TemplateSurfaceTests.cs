@@ -200,6 +200,25 @@ public sealed class TemplateSurfaceTests
         CollectionAssert.AreEquivalent(new[] { "a", "b", "c" }, texts);
     }
 
+    private sealed record Person(string Name)
+    {
+        public override string ToString() => "person " + Name;
+    }
+
+    [TestMethod]
+    public void Items_WithoutATextSelector_UseTheItemsOwnText()
+    {
+        var people = new[] { new Person("Ann"), new Person("Bo") };
+
+        var combo = new ComboBox().Items(people);
+        combo.SelectedIndex = 1;
+        Assert.AreEqual("person Bo", combo.SelectedText);
+
+        var list = new ListBox().Items(people, person => person.Name);
+        list.SelectedIndex = 0;
+        Assert.AreEqual("Ann", list.SelectedText, "a selector still decides the text when given");
+    }
+
     [TestMethod]
     public void TryGetContainer_FindsARealizedItemAndReportsAnUnrealizedOne()
     {
