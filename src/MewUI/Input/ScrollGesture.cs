@@ -33,6 +33,10 @@ internal sealed class ScrollGesture
     // Longer gaps are a loop waking from sleep, not the display's rhythm.
     private const double MAX_FRAME_INTERVAL_MS = 50;
 
+    // Shorter gaps are a second pulse inside one frame; no display refreshes that fast, and reading one
+    // as the rhythm raises the end speed past the coast's own speed.
+    private const double MIN_FRAME_INTERVAL_MS = 1000.0 / 360;
+
     private readonly record struct PanSample(double DeltaX, double DeltaY, double Seconds);
 
     private readonly Window _window;
@@ -347,7 +351,7 @@ internal sealed class ScrollGesture
         if (_lastTickTimestamp != long.MinValue)
         {
             double interval = Stopwatch.GetElapsedTime(_lastTickTimestamp, timestamp).TotalMilliseconds;
-            if (interval > 0 && interval <= MAX_FRAME_INTERVAL_MS)
+            if (interval >= MIN_FRAME_INTERVAL_MS && interval <= MAX_FRAME_INTERVAL_MS)
             {
                 _frameIntervals[_frameIntervalNext] = interval;
                 _frameIntervalNext = (_frameIntervalNext + 1) % FRAME_INTERVAL_SAMPLES;

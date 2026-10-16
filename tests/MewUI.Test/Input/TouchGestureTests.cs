@@ -310,4 +310,29 @@ public sealed class TouchGestureTests
         double total = 1000 / -Math.Log(ScrollGesture.COAST_DECAY_PER_SECOND);
         Assert.IsLessThan(total, scene.Viewer.VerticalOffset - atRelease);
     }
+
+    [TestMethod]
+    public void Coast_KeepsGoingWhenTwoPulsesLandInOneFrame()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("GDI backend is Windows-only.");
+            return;
+        }
+
+        var scene = CreateScene();
+        var contacts = new Contacts(scene.Window);
+
+        contacts.FlickUp(1, new Point(200, 280), steps: 10, step: 10);
+        long release = contacts.Now;
+        long millisecond = Stopwatch.Frequency / 1000;
+        Pulse(release + 3 * millisecond);
+        Pulse(release + 4 * millisecond);
+        for (int frame = 1; frame <= 10; frame++)
+        {
+            Pulse(release + 4 * millisecond + (long)(frame * Stopwatch.Frequency / 60.0));
+        }
+
+        Assert.IsTrue(scene.Window.IsScrollCoasting, "a pulse one millisecond after another is not a 1000Hz display");
+    }
 }
