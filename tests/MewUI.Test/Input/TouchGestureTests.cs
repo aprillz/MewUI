@@ -197,6 +197,69 @@ public sealed class TouchGestureTests
     }
 
     [TestMethod]
+    public void Hold_WhenTheTimerFiresAMomentEarly_StillRightClicks()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("GDI backend is Windows-only.");
+            return;
+        }
+
+        var scene = CreateScene();
+        var contacts = new Contacts(scene.Window);
+        var point = scene.Target.CenterOf();
+        long pressed = contacts.Now;
+
+        contacts.Down(1, point);
+        long early = pressed + (long)((PointerGestureRecognizer.LONG_PRESS_MS - 0.5) * Stopwatch.Frequency / 1000);
+        scene.Window.PointerGestures.OnLongPressTimer(early);
+        Assert.AreEqual(0, scene.RightPresses, "not yet");
+        Assert.IsTrue(scene.Window.PointerGestures.IsLongPressArmed, "the timer waits out the rest of the hold");
+
+        scene.Window.PointerGestures.OnLongPressTimer(pressed + (long)(PointerGestureRecognizer.LONG_PRESS_MS * Stopwatch.Frequency / 1000));
+        contacts.Advance(PointerGestureRecognizer.LONG_PRESS_MS + 100);
+        contacts.Up(1, point);
+
+        Assert.AreEqual(1, scene.RightPresses);
+    }
+
+    [TestMethod]
+    public void Hold_OnAGridRowWithAContextMenu_LeavesTheMenuOpen()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("GDI backend is Windows-only.");
+            return;
+        }
+
+        var menu = new ContextMenu().Item("First").Item("Second");
+        var grid = new GridView()
+            .RowHeight(30)
+            .Columns(new GridViewColumn<string>().Header("Name").Width(200).Text(item => item))
+            .PrepareContainer<string>((row, _, _, _) => row.ContextMenu = menu);
+        grid.ItemsSource = ItemsView.Create(new[] { "One", "Two", "Three" });
+
+        var window = HeadlessWindow.Create(WIDTH, HEIGHT);
+        window.Content = grid;
+        window.PerformLayout();
+        var row = (GridViewRow?)VisualTree.Find(grid, element => element is GridViewRow);
+        Assert.IsNotNull(row);
+
+        var contacts = new Contacts(window);
+        var point = row.CenterOf();
+        contacts.Down(1, point);
+        contacts.Advance(PointerGestureRecognizer.LONG_PRESS_MS);
+        window.PointerGestures.Tick(contacts.Now);
+        window.PerformLayout();
+        Assert.IsTrue(window.TryGetPopupOwner(menu, out _), "the hold opened the menu");
+
+        contacts.Advance(300);
+        contacts.Up(1, point);
+        window.PerformLayout();
+        Assert.IsTrue(window.TryGetPopupOwner(menu, out _), "lifting the finger that opened it leaves the menu open");
+    }
+
+    [TestMethod]
     public void Hold_AfterMovingPastTheThreshold_DoesNotRightClick()
     {
         if (!OperatingSystem.IsWindows())

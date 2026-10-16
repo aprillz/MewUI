@@ -259,7 +259,7 @@ internal sealed class PointerGestureRecognizer
     /// <summary>Turns a held primary contact into a right click once it has rested long enough.</summary>
     internal void Tick(long timestamp)
     {
-        if (!_tracking || _panning || _longPressed || _primaryId == -1 || timestamp < _longPressDeadline)
+        if (!IsLongPressPending || timestamp < _longPressDeadline)
         {
             return;
         }
@@ -345,24 +345,42 @@ internal sealed class PointerGestureRecognizer
         return _window.CapturedElement is UIElement captured && captured is not CommandSourceControl;
     }
 
-    private void StartLongPressTimer()
+    private bool IsLongPressPending => _tracking && !_panning && !_longPressed && _primaryId != -1;
+
+    /// <summary>True while a timer is waiting to turn the held primary contact into a right click.</summary>
+    internal bool IsLongPressArmed => _longPressTimer?.IsEnabled == true;
+
+    private void StartLongPressTimer() => ArmLongPressTimer(LONG_PRESS_MS);
+
+    private void ArmLongPressTimer(double milliseconds)
     {
         if (_longPressTimer == null)
         {
             _longPressTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(LONG_PRESS_MS));
-            _longPressTimer.Tick += OnLongPressTimer;
+            _longPressTimer.Tick += () => OnLongPressTimer(Stopwatch.GetTimestamp());
         }
 
         _longPressTimer.Stop();
+        _longPressTimer.Interval = TimeSpan.FromMilliseconds(milliseconds);
         _longPressTimer.Start();
     }
 
     private void StopLongPress() => _longPressTimer?.Stop();
 
-    private void OnLongPressTimer()
+    /// <summary>Handles the long-press timer firing at <paramref name="timestamp"/>, in Stopwatch ticks.</summary>
+    internal void OnLongPressTimer(long timestamp)
     {
         _longPressTimer?.Stop();
-        Tick(Stopwatch.GetTimestamp());
+        Tick(timestamp);
+
+        // The timer starts when the press is handled and the deadline counts from when the contact was made,
+        // so a timer that fires a moment early on a host that delivers input with almost no delay would
+        // otherwise lose the hold for good. What is left is waited out.
+        if (IsLongPressPending && _longPressDeadline != long.MaxValue && timestamp < _longPressDeadline)
+        {
+            double remaining = Stopwatch.GetElapsedTime(timestamp, _longPressDeadline).TotalMilliseconds;
+            ArmLongPressTimer(Math.Clamp(remaining, 1, LONG_PRESS_MS));
+        }
     }
 
     private static uint ToMilliseconds(long timestamp)
