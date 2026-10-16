@@ -48,25 +48,51 @@ public static class BrowserPlatform
         return builder;
     }
 
-    /// <summary>Draws one frame; false means nothing changed and the caller may idle.</summary>
-    public static bool RenderFrame(double cssWidth, double cssHeight, double devicePixelRatio, int pixelWidth, int pixelHeight, double frameTimeMs)
-        => BrowserPlatformHost.Active?.RenderFrame(cssWidth, cssHeight, devicePixelRatio, pixelWidth, pixelHeight, frameTimeMs) == true;
+    /// <summary>
+    /// Draws one frame; false means nothing changed and the caller may idle. <paramref name="frameAgeMs"/>
+    /// is how long ago the frame's timestamp was, <c>performance.now() - frameTime</c>, so animation
+    /// advances to the time the frame is presented.
+    /// </summary>
+    public static bool RenderFrame(double cssWidth, double cssHeight, double devicePixelRatio, int pixelWidth, int pixelHeight, double frameAgeMs)
+        => BrowserPlatformHost.Active?.RenderFrame(cssWidth, cssHeight, devicePixelRatio, pixelWidth, pixelHeight, frameAgeMs) == true;
 
     /// <summary>Milliseconds until a scheduled timer needs the loop again, or -1 when nothing is due.</summary>
     public static int NextWakeDelayMs() => BrowserPlatformHost.Active?.NextWakeDelayMs() ?? -1;
 
-    /// <summary>Routes a pointer move; pointerType is 0 for a mouse, 1 for touch, 2 for a pen.</summary>
+    /// <summary>Routes a mouse move. Touch and pen go through the overload that takes a pointer id.</summary>
     public static bool PointerMove(double x, double y, double screenX, double screenY, int buttons, ModifierKeys modifiers, int pointerType)
         => BrowserPlatformHost.Active?.PointerMove(x, y, screenX, screenY, buttons, modifiers, MapPointerType(pointerType)) == true;
 
     /// <summary>
-    /// Routes a pointer press or release; pointerType is 0 for a mouse, 1 for touch, 2 for a pen.
-    /// Clicks are counted from the event time and position, since the DOM reports no click count.
+    /// Routes a mouse press or release. Clicks are counted from the event time and position, since the
+    /// DOM reports no click count. Touch and pen go through <see cref="PointerDown"/> and <see cref="PointerUp"/>.
     /// </summary>
     public static bool PointerButton(double x, double y, double screenX, double screenY, int button, int buttons,
         bool isDown, double timeStampMs, ModifierKeys modifiers, int pointerType)
         => BrowserPlatformHost.Active?.PointerButton(
             x, y, screenX, screenY, button, buttons, isDown, timeStampMs, modifiers, MapPointerType(pointerType)) == true;
+
+    /// <summary>
+    /// Routes a touch or pen contact going down; <paramref name="pointerType"/> is 1 for touch and 2 for
+    /// a pen, and <paramref name="eventAgeMs"/> is <c>performance.now() - event.timeStamp</c>. The core
+    /// reads taps, scrolls, holds and coasting from the contacts.
+    /// </summary>
+    public static void PointerDown(int pointerId, int pointerType, double x, double y, double screenX, double screenY,
+        double eventAgeMs, ModifierKeys modifiers)
+        => BrowserPlatformHost.Active?.PointerDown(pointerId, MapPointerType(pointerType), x, y, screenX, screenY, eventAgeMs, modifiers);
+
+    /// <summary>Routes a touch or pen contact moving, or a pen hovering in range.</summary>
+    public static void PointerMove(int pointerId, int pointerType, double x, double y, double screenX, double screenY,
+        double eventAgeMs, ModifierKeys modifiers)
+        => BrowserPlatformHost.Active?.PointerMove(pointerId, MapPointerType(pointerType), x, y, screenX, screenY, eventAgeMs, modifiers);
+
+    /// <summary>Routes a touch or pen contact lifting.</summary>
+    public static void PointerUp(int pointerId, int pointerType, double x, double y, double screenX, double screenY,
+        double eventAgeMs, ModifierKeys modifiers)
+        => BrowserPlatformHost.Active?.PointerUp(pointerId, MapPointerType(pointerType), x, y, screenX, screenY, eventAgeMs, modifiers);
+
+    /// <summary>Ends a touch or pen contact the page lost without seeing it lift.</summary>
+    public static void PointerCancel(int pointerId) => BrowserPlatformHost.Active?.PointerCancel(pointerId);
 
     private static PointerType MapPointerType(int pointerType)
         => pointerType switch { 1 => PointerType.Touch, 2 => PointerType.Pen, _ => PointerType.Mouse };
@@ -87,9 +113,6 @@ public static class BrowserPlatform
     /// </summary>
     public static void SetClipboardText(string text) => BrowserPlatformHost.Active?.SetClipboardText(text);
 
-    /// <summary>True while the captured element consumes pointer movement rather than tracking a press.</summary>
-    public static bool CaptureConsumesDrag() => BrowserPlatformHost.Active?.CaptureConsumesDrag() == true;
-
     /// <summary>True when the focused element consumes text input, so the host should present a text field.</summary>
     public static bool WantsTextInput() => BrowserPlatformHost.Active?.WantsTextInput() == true;
 
@@ -103,15 +126,8 @@ public static class BrowserPlatform
     /// <summary>Reports the caret through <see cref="CaretReporter"/>, if a text control holds one.</summary>
     public static void SyncTextCaret() => BrowserPlatformHost.Active?.SyncTextCaret();
 
-    /// <summary>Scrolls the element under the point by a finger delta in DIPs, tracking it one to one.</summary>
-    public static void PointerPan(double x, double y, double screenX, double screenY,
-        double deltaXDip, double deltaYDip, ModifierKeys modifiers, double timeStampMs)
-        => BrowserPlatformHost.Active?.PointerPan(x, y, screenX, screenY, deltaXDip, deltaYDip, modifiers, timeStampMs);
-
-    /// <summary>Lets a finished touch pan coast, from the speed the finger left it with.</summary>
-    public static void PointerPanRelease(double timeStampMs) => BrowserPlatformHost.Active?.PointerPanRelease(timeStampMs);
-
     public static void PointerLeave() => BrowserPlatformHost.Active?.PointerLeave();
+    /// <summary>Ends a mouse press the page lost without seeing it released.</summary>
     public static void PointerCancel() => BrowserPlatformHost.Active?.PointerCancel();
 
     public static bool KeyDown(string code, int platformKey, ModifierKeys modifiers, bool isRepeat)

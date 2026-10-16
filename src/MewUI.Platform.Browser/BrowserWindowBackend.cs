@@ -9,8 +9,6 @@ internal sealed class BrowserWindowBackend : IWindowBackend
     private bool _disposed;
     private bool _shown;
     private bool _mouseCaptured;
-    // Element that scrolled for the active touch pan, kept so the gesture cannot change owner.
-    private UIElement? _panTarget;
 
     // Stand-in line height for a text control that has not been laid out yet.
     private const double DEFAULT_CARET_HEIGHT_DIP = 16;
@@ -19,61 +17,9 @@ internal sealed class BrowserWindowBackend : IWindowBackend
     // is the natural unit for reconversion; the cap keeps a single long one off the DOM.
     private const int MIRROR_MAX_CHARS = 1024;
 
-    private double _panBankX;
-    private double _panBankY;
-
-    // Where the pan routes and what it carries, kept so coasting can keep sending after the finger
-    // is gone.
-    private Point _panPoint;
-    private Point _panScreenPoint;
-    private ModifierKeys _panModifiers;
-
-    // Coasting after the finger lifts. Speed decays as v0 * DECAY^seconds, and the distance covered
-    // by a given time has a closed form, so each frame sends the gap between that and what it has
-    // already sent; integrating per frame instead would make the travel depend on the frame
-    // interval. Total travel is v0 / -ln(DECAY), so squaring the 0.15 that Avalonia's
-    // ScrollGestureRecognizer and UIScrollView use halves the distance while the coast still leaves
-    // the finger at the speed the finger had.
-    private const double FLING_DECAY_PER_SECOND = 0.0225;
-    // Below one device pixel per frame the content moves every second or third frame instead of
-    // every one, so the coast ends where that would begin rather than ratcheting to a halt. A frame
-    // is what the page actually gets: 120Hz halves the step a given speed makes, 30Hz doubles it.
-    private const double FALLBACK_FRAME_INTERVAL_MS = 1000.0 / 60;
-    private const int FRAME_INTERVAL_SAMPLES = 9;
-    // Longer gaps are the loop waking from sleep, not the display's rhythm.
-    private const double MAX_FRAME_INTERVAL_MS = 50;
-    private const double FLING_MAX_SPEED_DIP = 4000;
-    private const double FLING_SAMPLE_WINDOW_SECONDS = 0.1;
-    private const int FLING_SAMPLE_CAPACITY = 8;
-
-    // One finger movement and the interval it covered. A single last delta is too noisy on a touch
-    // screen to read a throw from, so the release averages the trailing window of these.
-    private readonly record struct PanSample(double DeltaX, double DeltaY, double Seconds);
-
-    private readonly PanSample[] _panSamples = new PanSample[FLING_SAMPLE_CAPACITY];
-    private int _panSampleCount;
-    private int _panSampleNext;
-    private double _panSampleTimeMs = double.NaN;
-
-    private bool _flinging;
-    private double _flingSpeed;
-    private double _flingDirectionX;
-    private double _flingDirectionY;
-    private double _flingSentDistance;
-    private double _flingStartMs;
-    private bool _advancingFling;
-
-    private readonly double[] _frameIntervals = new double[FRAME_INTERVAL_SAMPLES];
-    private readonly double[] _frameIntervalScratch = new double[FRAME_INTERVAL_SAMPLES];
-    private int _frameIntervalCount;
-    private int _frameIntervalNext;
-    private double _lastFrameTimeMs = double.NaN;
-    private bool _swallowTouchRelease;
-
-    // Windows counts a double click inside 500ms and a few pixels; a finger is granted more room.
+    // Windows counts a double click inside 500ms and a few pixels.
     private const double MULTI_CLICK_WINDOW_MS = 500;
     private const double MULTI_CLICK_SLOP_DIP = 4;
-    private const double MULTI_CLICK_SLOP_TOUCH_DIP = 24;
 
     private double _lastPressMs = double.NegativeInfinity;
     private Point _lastPressPoint;
@@ -89,47 +35,6 @@ internal sealed class BrowserWindowBackend : IWindowBackend
     }
 
     internal Window Window { get; }
-
-    // One device pixel, the smallest movement that can change what is on screen. Movement under it
-    // is banked rather than sent, so a slow drag or a high refresh rate does not lose it a little
-    // at a time.
-    private double MinPanStepDip => 96.0 / Dpi;
-
-    private double FlingEndSpeedDip => MinPanStepDip * 1000.0 / FrameIntervalMs;
-
-    /// <summary>Records the timestamp of an animation frame, from which the frame interval is measured.</summary>
-    internal void NoteFrameTime(double frameTimeMs)
-    {
-        double interval = frameTimeMs - _lastFrameTimeMs;
-        _lastFrameTimeMs = frameTimeMs;
-        if (!(interval > 0 && interval <= MAX_FRAME_INTERVAL_MS))
-        {
-            return;
-        }
-
-        _frameIntervals[_frameIntervalNext] = interval;
-        _frameIntervalNext = (_frameIntervalNext + 1) % FRAME_INTERVAL_SAMPLES;
-        if (_frameIntervalCount < FRAME_INTERVAL_SAMPLES)
-        {
-            _frameIntervalCount++;
-        }
-    }
-
-    /// <summary>The median of the recent frame intervals, so one long frame does not move the estimate.</summary>
-    private double FrameIntervalMs
-    {
-        get
-        {
-            if (_frameIntervalCount == 0)
-            {
-                return FALLBACK_FRAME_INTERVAL_MS;
-            }
-
-            Array.Copy(_frameIntervals, _frameIntervalScratch, _frameIntervalCount);
-            Array.Sort(_frameIntervalScratch, 0, _frameIntervalCount);
-            return _frameIntervalScratch[_frameIntervalCount / 2];
-        }
-    }
 
     /// <summary>Set by invalidation, cleared once the frame is drawn.</summary>
     internal bool NeedsRender { get; private set; } = true;
@@ -235,33 +140,6 @@ internal sealed class BrowserWindowBackend : IWindowBackend
     {
         if (!_shown || _disposed) return false;
 
-        if (isDown)
-        {
-            if (_flinging)
-            {
-                // A press during coasting is spent stopping it. Letting the same tap through would
-                // also activate whatever it landed on, which no touch platform does.
-                StopFling();
-                _swallowTouchRelease = true;
-                // The tap was spent stopping the coast, so the next press starts a fresh click chain.
-                _lastPressMs = double.NegativeInfinity;
-                return false;
-            }
-
-            _swallowTouchRelease = false;
-        }
-        else if (_swallowTouchRelease)
-        {
-            // Its press never reached a control, so a release on its own would be read against
-            // whatever the previous gesture pressed.
-            _swallowTouchRelease = false;
-            return false;
-        }
-
-        _panTarget = null;
-        _panBankX = 0;
-        _panBankY = 0;
-        ClearPanSamples();
         var mappedButton = button switch
         {
             1 => MouseButton.Middle,
@@ -275,11 +153,10 @@ internal sealed class BrowserWindowBackend : IWindowBackend
         // enough in time and place chain up here, the way a platform message loop would report them.
         if (isDown)
         {
-            double slop = pointerType == PointerType.Touch ? MULTI_CLICK_SLOP_TOUCH_DIP : MULTI_CLICK_SLOP_DIP;
             bool chained = mappedButton == _lastPressButton
                 && timeStampMs - _lastPressMs <= MULTI_CLICK_WINDOW_MS
-                && Math.Abs(x - _lastPressPoint.X) <= slop
-                && Math.Abs(y - _lastPressPoint.Y) <= slop;
+                && Math.Abs(x - _lastPressPoint.X) <= MULTI_CLICK_SLOP_DIP
+                && Math.Abs(y - _lastPressPoint.Y) <= MULTI_CLICK_SLOP_DIP;
             _clickCount = chained ? _clickCount + 1 : 1;
             _lastPressMs = timeStampMs;
             _lastPressPoint = new Point(x, y);
@@ -315,17 +192,6 @@ internal sealed class BrowserWindowBackend : IWindowBackend
             modifiers);
     }
 
-    internal bool CaptureConsumesDrag()
-    {
-        if (!_shown || _disposed) return false;
-
-        // A command source captures only to decide whether the release counts as a click, so a
-        // touch drag may take the gesture away from it. Everything else that captures (sliders,
-        // scroll bars, splitters, text selection, drag and drop, popup dismiss watches) captures
-        // to consume the movement itself and has to keep it.
-        return _mouseCaptured && Window.CapturedElement is not CommandSourceControl;
-    }
-
     internal bool WantsTextInput()
         => _shown && !_disposed && Window.FocusManager.FocusedElement is Input.ITextInputClient;
 
@@ -351,243 +217,49 @@ internal sealed class BrowserWindowBackend : IWindowBackend
         return true;
     }
 
-    internal void PointerPan(double x, double y, double screenX, double screenY,
-        double deltaXDip, double deltaYDip, ModifierKeys modifiers, double timeStampMs)
-    {
-        if (!_shown || _disposed) return;
-
-        StopFling();
-        Window.SetScrollGestureActive(true);
-        _panPoint = new Point(x, y);
-        _panScreenPoint = new Point(screenX, screenY);
-        _panModifiers = modifiers;
-        RecordPanSample(deltaXDip, deltaYDip, timeStampMs);
-        SendPan(deltaXDip, deltaYDip);
-    }
-
-    /// <summary>Scrolls by a finger movement; false means nothing took it and there is no room left.</summary>
-    private bool SendPan(double deltaXDip, double deltaYDip)
-    {
-        double step = Application.Current.Theme.Metrics.ScrollWheelStep;
-        if (step <= 0) return false;
-
-        // Scrolling ignores a step worth less than half a DIP, so a slow drag or a high refresh rate
-        // would have most of its movement thrown away one event at a time. Movement is banked until
-        // it is worth forwarding, and only the part actually sent is taken out of the bank.
-        _panBankX += deltaXDip;
-        _panBankY += deltaYDip;
-        double sendX = Math.Abs(_panBankX) >= MinPanStepDip ? _panBankX : 0;
-        double sendY = Math.Abs(_panBankY) >= MinPanStepDip ? _panBankY : 0;
-        if (sendX == 0 && sendY == 0)
-        {
-            // Banked, not refused: the movement is still owed and the next call carries it.
-            return true;
-        }
-
-        _panBankX -= sendX;
-        _panBankY -= sendY;
-
-        // A notch is worth ScrollWheelStep DIPs, and notches may be fractional, so dividing the
-        // finger delta by the step makes the content track the finger one to one.
-        var delta = new Vector(sendX / step, sendY / step);
-
-        // The gesture stays with whatever first scrolled for it. Hit-testing the start point again
-        // every move would hand the gesture to any other scrollable that the scrolling brought under
-        // it. A pinned target that stops handling (it ran out of room, or it was virtualized away)
-        // falls back to the point, which is also how the gesture reaches an outer scrollable.
-        var handler = WindowInputRouter.MouseWheel(
-            Window, _panPoint, _panScreenPoint, delta, false, false, false, _panModifiers, _panTarget);
-        if (handler == null && _panTarget != null)
-        {
-            handler = WindowInputRouter.MouseWheel(
-                Window, _panPoint, _panScreenPoint, delta, false, false, false, _panModifiers, routeFrom: null);
-        }
-
-        if (handler != null)
-        {
-            _panTarget = handler;
-        }
-
-        return handler != null;
-    }
-
-    private void RecordPanSample(double deltaXDip, double deltaYDip, double timeStampMs)
-    {
-        double seconds = double.IsNaN(_panSampleTimeMs) ? 0 : Math.Max(0, timeStampMs - _panSampleTimeMs) / 1000.0;
-        _panSampleTimeMs = timeStampMs;
-        _panSamples[_panSampleNext] = new PanSample(deltaXDip, deltaYDip, seconds);
-        _panSampleNext = (_panSampleNext + 1) % FLING_SAMPLE_CAPACITY;
-        if (_panSampleCount < FLING_SAMPLE_CAPACITY)
-        {
-            _panSampleCount++;
-        }
-    }
-
-    private void ClearPanSamples()
-    {
-        _panSampleCount = 0;
-        _panSampleNext = 0;
-        _panSampleTimeMs = double.NaN;
-    }
-
-    /// <summary>True while a released pan is still coasting.</summary>
-    internal bool IsFlinging => _flinging;
-
-    /// <summary>Lets a finished pan coast, from the speed the finger left it with.</summary>
-    internal void StartFling(double nowMs)
-    {
-        if (!_shown || _disposed) return;
-
-        bool estimated = TryEstimateVelocity(nowMs, out double velocityX, out double velocityY);
-        ClearPanSamples();
-        if (!estimated)
-        {
-            Window.SetScrollGestureActive(false);
-            return;
-        }
-
-        double speed = Math.Sqrt((velocityX * velocityX) + (velocityY * velocityY));
-        if (speed < FlingEndSpeedDip)
-        {
-            Window.SetScrollGestureActive(false);
-            return;
-        }
-
-        _flinging = true;
-        _flingSpeed = Math.Min(speed, FLING_MAX_SPEED_DIP);
-        _flingDirectionX = velocityX / speed;
-        _flingDirectionY = velocityY / speed;
-        _flingSentDistance = 0;
-
-        // The release and the frame timestamps share one origin (DOMHighResTimeStamp), so the curve
-        // starts at the release itself and the first frame already moves. Stamping the first frame
-        // instead left the content parked for a frame or two after the finger lifted.
-        _flingStartMs = nowMs;
-        _host.RequestFrame();
-    }
-
-    private bool TryEstimateVelocity(double nowMs, out double velocityX, out double velocityY)
-    {
-        velocityX = 0;
-        velocityY = 0;
-        if (_panSampleCount < 2)
-        {
-            return false;
-        }
-
-        // A finger that came to rest before lifting leaves nothing but stale samples. That is a
-        // hold, and reading the earlier movement would throw content the user had already parked.
-        double idle = Math.Max(0, nowMs - _panSampleTimeMs) / 1000.0;
-        if (idle > FLING_SAMPLE_WINDOW_SECONDS)
-        {
-            return false;
-        }
-
-        double sumX = 0;
-        double sumY = 0;
-        double seconds = 0;
-        for (int i = 0; i < _panSampleCount && seconds < FLING_SAMPLE_WINDOW_SECONDS; i++)
-        {
-            int index = ((_panSampleNext - 1 - i) % FLING_SAMPLE_CAPACITY + FLING_SAMPLE_CAPACITY) % FLING_SAMPLE_CAPACITY;
-            var sample = _panSamples[index];
-            if (sample.Seconds <= 0)
-            {
-                break;
-            }
-
-            sumX += sample.DeltaX;
-            sumY += sample.DeltaY;
-            seconds += sample.Seconds;
-        }
-
-        if (seconds <= 0)
-        {
-            return false;
-        }
-
-        velocityX = sumX / seconds;
-        velocityY = sumY / seconds;
-        return true;
-    }
-
     /// <summary>
-    /// Moves an active coast on for this frame, timed by <paramref name="frameTimeMs"/>; false means
-    /// it is over. The frame clock is what the page will present, so reading a wall clock here
-    /// instead would let the step jitter with however long the frame took to reach this point.
+    /// Routes a touch or pen contact going down. <paramref name="eventAgeMs"/> is how long ago the page
+    /// received the event, which places it on the core's clock without assuming the two share an origin.
     /// </summary>
-    internal bool AdvanceFling(double frameTimeMs)
+    internal void PointerDown(int pointerId, PointerType pointerType, double x, double y, double screenX, double screenY,
+        double eventAgeMs, ModifierKeys modifiers)
     {
-        // Driving the scroll runs application code, and a frame started from inside that would read
-        // the distance already sent before this call finishes writing it.
-        if (!_flinging || _advancingFling) return false;
-        if (!_shown || _disposed)
-        {
-            StopFling();
-            return false;
-        }
-
-        _advancingFling = true;
-        try
-        {
-            return AdvanceFlingStep(frameTimeMs);
-        }
-        catch
-        {
-            // A throw out of the scroll would otherwise be repeated every frame for the rest of the
-            // coast, which turns one failure into a stuck loop.
-            StopFling();
-            throw;
-        }
-        finally
-        {
-            _advancingFling = false;
-        }
+        if (!_shown || _disposed) return;
+        WindowInputRouter.PointerDown(
+            Window, pointerId, pointerType, new Point(x, y), new Point(screenX, screenY), TimestampOf(eventAgeMs), modifiers);
     }
 
-    private bool AdvanceFlingStep(double frameTimeMs)
+    /// <summary>Routes a touch or pen contact moving, or a pen hovering in range.</summary>
+    internal void PointerMove(int pointerId, PointerType pointerType, double x, double y, double screenX, double screenY,
+        double eventAgeMs, ModifierKeys modifiers)
     {
-        double elapsed = Math.Max(0, frameTimeMs - _flingStartMs) / 1000.0;
-        double remaining = Math.Pow(FLING_DECAY_PER_SECOND, elapsed);
-        if (_flingSpeed * remaining < FlingEndSpeedDip)
-        {
-            StopFling();
-            return false;
-        }
-
-        // The integral of the decay curve, so a long frame and two short ones cover the same ground
-        // and a dropped frame loses no movement.
-        double travelled = _flingSpeed * (remaining - 1) / Math.Log(FLING_DECAY_PER_SECOND);
-        double step = travelled - _flingSentDistance;
-        _flingSentDistance = travelled;
-        if (BrowserFrameDiagnostics.Enabled)
-        {
-            BrowserFrameDiagnostics.NoteFlingStep(step);
-        }
-        if (step <= 0)
-        {
-            return true;
-        }
-
-        if (!SendPan(_flingDirectionX * step, _flingDirectionY * step))
-        {
-            // Nothing scrolled, so the content hit its end and there is nowhere left to coast.
-            StopFling();
-            return false;
-        }
-
-        return true;
+        if (!_shown || _disposed) return;
+        WindowInputRouter.PointerMove(
+            Window, pointerId, pointerType, new Point(x, y), new Point(screenX, screenY), TimestampOf(eventAgeMs), modifiers);
     }
 
-    private void StopFling()
+    /// <summary>Routes a touch or pen contact lifting.</summary>
+    internal void PointerUp(int pointerId, PointerType pointerType, double x, double y, double screenX, double screenY,
+        double eventAgeMs, ModifierKeys modifiers)
     {
-        if (!_flinging) return;
-
-        _flinging = false;
-        _flingSentDistance = 0;
-        _panBankX = 0;
-        _panBankY = 0;
-        Window.SetScrollGestureActive(false);
+        if (!_shown || _disposed) return;
+        WindowInputRouter.PointerUp(
+            Window, pointerId, pointerType, new Point(x, y), new Point(screenX, screenY), TimestampOf(eventAgeMs), modifiers);
     }
+
+    /// <summary>Routes a touch or pen contact that ended without lifting.</summary>
+    internal void PointerCancel(int pointerId)
+    {
+        if (_disposed) return;
+        WindowInputRouter.PointerCancel(Window, pointerId);
+    }
+
+    /// <summary>True while a released touch scroll is still moving the content.</summary>
+    internal bool IsScrollCoasting => Window.IsScrollCoasting;
+
+    internal static long TimestampOf(double ageMs)
+        => System.Diagnostics.Stopwatch.GetTimestamp()
+            - (long)(Math.Max(0, ageMs) * System.Diagnostics.Stopwatch.Frequency / 1000.0);
 
     internal void PointerLeave()
     {
@@ -600,15 +272,9 @@ internal sealed class BrowserWindowBackend : IWindowBackend
     internal void PointerCancel()
     {
         if (_disposed) return;
-        StopFling();
-        ClearPanSamples();
-        // A press that became a scroll is not part of a click chain.
+        // A cancelled press is not part of a click chain.
         _lastPressMs = double.NegativeInfinity;
         _mouseCaptured = false;
-        _panTarget = null;
-        _panBankX = 0;
-        _panBankY = 0;
-        Window.SetScrollGestureActive(false);
         WindowInputRouter.PointerCancel(Window);
     }
 

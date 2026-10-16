@@ -203,193 +203,111 @@ function clientPoint(event) {
     return { x: event.clientX - rect.left, y: event.clientY - rect.top };
 }
 
-// The canvas sets touch-action: none to keep the browser from zooming or panning it away, which
-// also means a finger drag over empty content would do nothing. Such a drag is turned into a
-// scroll instead. CaptureConsumesDrag decides who owns the gesture: a button captures the mouse
-// only to see whether the release counts as a click, so the scroll may take it over, while a
-// slider, scroll bar or splitter captures to consume the movement and keeps it.
-const TOUCH_PAN_THRESHOLD_PX = 8;
+// The canvas sets touch-action: none to keep the browser from zooming or panning it away. Touch and
+// pen contacts go to the app as they are; the app reads taps, scrolls, holds and coasting from them,
+// the same way it does for a touch screen on the desktop. The mouse keeps its own path.
+const POINTER_TOUCH = 1;
+const POINTER_PEN = 2;
 
-// A finger held still this long asks for the context menu, the way a platform long press maps to a
-// right click. Movement past the pan threshold or an early release calls it off.
-const LONG_PRESS_MS = 500;
-
-// Selection waits for the release on touch, so the press has to say which device sent it.
-function pointerTypeOf(event) {
-    if (event.pointerType === 'touch') {
-        return 1;
-    }
-
-    if (event.pointerType === 'pen') {
-        return 2;
-    }
-
-    return 0;
+function contactTypeOf(event) {
+    return event.pointerType === 'touch' ? POINTER_TOUCH : POINTER_PEN;
 }
 
-let touchGesture = null;
-const activePointers = new Set();
-
-function endTouchGesture(pointerId) {
-    if (touchGesture !== null && (pointerId === undefined || touchGesture.pointerId === pointerId)) {
-        clearTimeout(touchGesture.longPressTimer);
-        touchGesture = null;
-    }
+// How long ago the browser received the event, so the app can place it on its own clock without
+// assuming the two clocks share an origin.
+function ageOf(event) {
+    return Math.max(0, performance.now() - event.timeStamp);
 }
 
-// A gesture whose pointer is no longer down was stranded by a release the page never saw. Pointer
-// ids keep climbing, so without this the leftover would keep failing the "one finger at a time"
-// test and every later drag would be taken for a click.
-function dropStrandedTouchGesture() {
-    if (touchGesture !== null && !activePointers.has(touchGesture.pointerId)) {
-        touchGesture = null;
-    }
-}
+// Contacts the canvas saw go down and has not yet seen end.
+const activeContacts = new Set();
 
 canvas.addEventListener('pointermove', event => {
     wake();
     const point = clientPoint(event);
-    const gesture = touchGesture !== null && touchGesture.pointerId === event.pointerId ? touchGesture : null;
-
-    if (gesture !== null && gesture.panning) {
-        app.PointerPan(gesture.startX, gesture.startY, event.screenX, event.screenY,
-            point.x - gesture.lastX, point.y - gesture.lastY, modifiersOf(event), event.timeStamp);
-        gesture.lastX = point.x;
-        gesture.lastY = point.y;
+    if (event.pointerType === 'mouse') {
+        app.MouseMove(point.x, point.y, event.screenX, event.screenY, event.buttons, modifiersOf(event));
         return;
     }
 
-    if (gesture !== null) {
-        // The press already became a right click; the rest of this touch means nothing.
-        if (gesture.longPressed) {
-            return;
-        }
-
-        const travelX = point.x - gesture.startX;
-        const travelY = point.y - gesture.startY;
-        const travel = Math.hypot(travelX, travelY);
-        if (travel > TOUCH_PAN_THRESHOLD_PX) {
-            // Nothing took the press, so abandon it rather than leaving the control under the finger
-            // pressed, and spend the rest of the gesture scrolling. Only the threshold itself is
-            // given up: anchoring at the crossing point instead would drop this whole move, which
-            // is what made a gesture travel less than the finger did.
-            clearTimeout(gesture.longPressTimer);
-            const consumed = TOUCH_PAN_THRESHOLD_PX / travel;
-            gesture.panning = true;
-            gesture.lastX = gesture.startX + travelX * consumed;
-            gesture.lastY = gesture.startY + travelY * consumed;
-            app.PointerCancel();
-            app.PointerPan(gesture.startX, gesture.startY, event.screenX, event.screenY,
-                point.x - gesture.lastX, point.y - gesture.lastY, modifiersOf(event), event.timeStamp);
-            gesture.lastX = point.x;
-            gesture.lastY = point.y;
-            return;
-        }
-    }
-
-    app.PointerMove(point.x, point.y, event.screenX, event.screenY, event.buttons, modifiersOf(event), pointerTypeOf(event));
-    if (gesture !== null && app.CaptureConsumesDrag()) {
-        endTouchGesture(event.pointerId);
-    }
+    app.PointerMove(event.pointerId, contactTypeOf(event), point.x, point.y, event.screenX, event.screenY,
+        ageOf(event), modifiersOf(event));
 });
 
 canvas.addEventListener('pointerdown', event => {
     wake();
     const point = clientPoint(event);
-    activePointers.add(event.pointerId);
-    endTouchGesture(event.pointerId);
-    dropStrandedTouchGesture();
-    canvas.setPointerCapture(event.pointerId);
-    const captured = app.PointerButton(point.x, point.y, event.screenX, event.screenY,
-        event.button, event.buttons, true, event.timeStamp, modifiersOf(event), pointerTypeOf(event));
+    if (event.pointerType === 'mouse') {
+        canvas.setPointerCapture(event.pointerId);
+        const captured = app.MouseButton(point.x, point.y, event.screenX, event.screenY,
+            event.button, event.buttons, true, event.timeStamp, modifiersOf(event));
+        if (!captured) {
+            canvas.releasePointerCapture(event.pointerId);
+        }
+    } else {
+        // Keeping the capture is what makes the release land on the canvas even when the finger ends
+        // up over the status overlay or past the edge of the window.
+        activeContacts.add(event.pointerId);
+        canvas.setPointerCapture(event.pointerId);
+        app.PointerDown(event.pointerId, contactTypeOf(event), point.x, point.y, event.screenX, event.screenY,
+            ageOf(event), modifiersOf(event));
+    }
 
     // The press decides what has focus, so the text field follows it rather than the other way
     // round. This still runs inside the gesture, which is what lets a phone raise its keyboard.
     textInputBridge.sync();
-
-    // Only the first finger drives a scroll; a second one is left to the normal pointer path.
-    const tracksTouch = event.pointerType === 'touch' && !app.CaptureConsumesDrag() && touchGesture === null;
-    if (tracksTouch) {
-        const gesture = touchGesture = { pointerId: event.pointerId, startX: point.x, startY: point.y,
-            lastX: point.x, lastY: point.y, screenX: event.screenX, screenY: event.screenY,
-            panning: false, longPressed: false, longPressTimer: 0 };
-        gesture.longPressTimer = setTimeout(() => {
-            if (touchGesture !== gesture || gesture.panning) {
-                return;
-            }
-
-            // The left press is spent: what was pressed must let go before the right click lands,
-            // or the menu opens over a control still holding a touch press.
-            gesture.longPressed = true;
-            wake();
-            app.PointerCancel();
-            app.PointerButton(gesture.startX, gesture.startY, gesture.screenX, gesture.screenY,
-                2, 2, true, performance.now(), 0, 1);
-            app.PointerButton(gesture.startX, gesture.startY, gesture.screenX, gesture.screenY,
-                2, 0, false, performance.now(), 0, 1);
-        }, LONG_PRESS_MS);
-    }
-
-    // Keeping the capture is what makes the release land on the canvas even when the finger ends
-    // up over the status overlay or past the edge of the window. Letting it go there would strand
-    // the gesture, and every later drag would be taken for a click.
-    if (!captured && !tracksTouch) {
-        canvas.releasePointerCapture(event.pointerId);
-    }
-
     event.preventDefault();
 });
 
 canvas.addEventListener('pointerup', event => {
     wake();
-    const panned = touchGesture !== null && touchGesture.pointerId === event.pointerId && touchGesture.panning;
-    const longPressed = touchGesture !== null && touchGesture.pointerId === event.pointerId && touchGesture.longPressed;
-    endTouchGesture(event.pointerId);
-
-    // The press was already replaced by a right click, so this release has nothing left to say.
-    if (longPressed) {
-        if (canvas.hasPointerCapture(event.pointerId)) {
-            canvas.releasePointerCapture(event.pointerId);
-        }
-        return;
-    }
-
-    // The press was already cancelled when the scroll began, so releasing would report a click.
-    if (panned) {
-        // A finger let go mid-scroll leaves the content moving; the app reads the speed it was
-        // tracking and coasts from there.
-        app.PointerPanRelease(event.timeStamp);
-        if (canvas.hasPointerCapture(event.pointerId)) {
-            canvas.releasePointerCapture(event.pointerId);
-        }
-        return;
-    }
-
     const point = clientPoint(event);
-    const captured = app.PointerButton(point.x, point.y, event.screenX, event.screenY,
-        event.button, event.buttons, false, event.timeStamp, modifiersOf(event), pointerTypeOf(event));
-    if (!captured && canvas.hasPointerCapture(event.pointerId)) {
+    if (event.pointerType === 'mouse') {
+        const captured = app.MouseButton(point.x, point.y, event.screenX, event.screenY,
+            event.button, event.buttons, false, event.timeStamp, modifiersOf(event));
+        if (!captured && canvas.hasPointerCapture(event.pointerId)) {
+            canvas.releasePointerCapture(event.pointerId);
+        }
+        return;
+    }
+
+    activeContacts.delete(event.pointerId);
+    app.PointerUp(event.pointerId, contactTypeOf(event), point.x, point.y, event.screenX, event.screenY,
+        ageOf(event), modifiersOf(event));
+    if (canvas.hasPointerCapture(event.pointerId)) {
         canvas.releasePointerCapture(event.pointerId);
     }
 });
 
-canvas.addEventListener('pointercancel', event => { wake(); endTouchGesture(event.pointerId); app.PointerCancel(); });
+canvas.addEventListener('pointercancel', event => {
+    wake();
+    if (event.pointerType === 'mouse') {
+        app.MouseCancel();
+        return;
+    }
 
-// Last resort for a release the canvas never sees, so one stranded gesture cannot disable panning
-// for the rest of the session.
-function forgetPointer(pointerId) {
-    activePointers.delete(pointerId);
-    endTouchGesture(pointerId);
+    activeContacts.delete(event.pointerId);
+    app.PointerCancel(event.pointerId);
+});
+
+// Last resort for a contact the canvas never sees end, so the app does not keep a finger down that is
+// long gone and read every later touch as a second finger.
+function forgetContact(pointerId) {
+    if (activeContacts.delete(pointerId)) {
+        wake();
+        app.PointerCancel(pointerId);
+    }
 }
 
-window.addEventListener('pointerup', event => forgetPointer(event.pointerId));
-window.addEventListener('pointercancel', event => forgetPointer(event.pointerId));
+window.addEventListener('pointerup', event => forgetContact(event.pointerId));
+window.addEventListener('pointercancel', event => forgetContact(event.pointerId));
 
 // Leaving the page can end a touch without any release reaching it at all.
 document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
-        activePointers.clear();
-        endTouchGesture();
+        for (const pointerId of [...activeContacts]) {
+            forgetContact(pointerId);
+        }
     }
 });
 canvas.addEventListener('pointerleave', () => { wake(); app.PointerLeave(); });
@@ -548,7 +466,7 @@ function frame(frameTimeMs) {
             dpr,
             canvas.width,
             canvas.height,
-            frameTimeMs ?? performance.now());
+            frameTimeMs === undefined ? 0 : Math.max(0, performance.now() - frameTimeMs));
 
         if (metricsEnabled) {
             const frameAtMs = frameTimeMs ?? renderStartMs;

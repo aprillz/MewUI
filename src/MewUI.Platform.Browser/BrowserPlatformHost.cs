@@ -118,7 +118,7 @@ internal sealed class BrowserPlatformHost : IPlatformHost
 
         // A coast has no dispatcher timer behind it, so a frame that drew nothing would let the loop
         // sleep with nothing scheduled to bring it back and leave the content stopped mid-flight.
-        if (_window?.IsFlinging == true)
+        if (_window?.IsScrollCoasting == true)
         {
             return 0;
         }
@@ -129,9 +129,10 @@ internal sealed class BrowserPlatformHost : IPlatformHost
 
     /// <summary>
     /// Runs one animation frame. Returns false when nothing needed drawing, so the host page can
-    /// stop scheduling frames until something asks for one.
+    /// stop scheduling frames until something asks for one. <paramref name="frameAgeMs"/> is how long
+    /// before this call the frame's timestamp lies; animation advances to that time.
     /// </summary>
-    internal bool RenderFrame(double cssWidth, double cssHeight, double devicePixelRatio, int pixelWidth, int pixelHeight, double frameTimeMs)
+    internal bool RenderFrame(double cssWidth, double cssHeight, double devicePixelRatio, int pixelWidth, int pixelHeight, double frameAgeMs)
     {
         if (!_running || _window == null)
         {
@@ -147,25 +148,21 @@ internal sealed class BrowserPlatformHost : IPlatformHost
                 BrowserFrameDiagnostics.BeginFrame();
             }
 
+            // The frame's timestamp is the one it will be presented at. Anything animating off a clock
+            // read inside the frame instead moves by however long the frame took to get here.
+            long frameTimestamp = BrowserWindowBackend.TimestampOf(frameAgeMs);
             _dispatcher?.ClearWakeRequest();
             _dispatcher?.ProcessWorkItems();
-            _window.NoteFrameTime(frameTimeMs);
             if (diagnose)
             {
                 BrowserFrameDiagnostics.NoteDispatcher(BrowserFrameDiagnostics.Since(phase));
-                phase = BrowserFrameDiagnostics.Now();
             }
 
-            // A coasting scroll has to move before the frame is drawn, and it keeps the loop awake
-            // for as long as it lasts: a step small enough to be banked draws nothing by itself.
-            if (_window.AdvanceFling(frameTimeMs))
+            // A coasting scroll moves in the pulse and keeps the loop awake for as long as it lasts: a
+            // step small enough to be banked draws nothing by itself.
+            if (_window.IsScrollCoasting)
             {
                 _framePending = true;
-            }
-
-            if (diagnose)
-            {
-                BrowserFrameDiagnostics.NoteFling(BrowserFrameDiagnostics.Since(phase));
             }
 
             // Sizing the drawing buffer discards its contents, so a frame that resized it must
@@ -191,7 +188,7 @@ internal sealed class BrowserPlatformHost : IPlatformHost
             // move and animated properties stay at their first value.
             var app = Application.Current;
             phase = diagnose ? BrowserFrameDiagnostics.Now() : 0;
-            using var pulse = AnimationManager.Instance.BeginPulse(app.RenderLoopSettings);
+            using var pulse = AnimationManager.Instance.BeginPulse(app.RenderLoopSettings, frameTimestamp);
             bool wanted = _framePending || pulse.ShouldRender(_window.Window, _window.NeedsRender);
             _framePending = false;
             if (diagnose)
@@ -240,17 +237,33 @@ internal sealed class BrowserPlatformHost : IPlatformHost
             return false;
         });
 
-    internal bool CaptureConsumesDrag() => _window?.CaptureConsumesDrag() == true;
-
     internal bool WantsTextInput() => _window?.WantsTextInput() == true;
 
-    internal void PointerPan(double x, double y, double screenX, double screenY,
-        double deltaXDip, double deltaYDip, ModifierKeys modifiers, double timeStampMs)
+    internal void PointerDown(int pointerId, PointerType pointerType, double x, double y, double screenX, double screenY,
+        double eventAgeMs, ModifierKeys modifiers)
         => RoutePointer(() =>
         {
-            _window?.PointerPan(x, y, screenX, screenY, deltaXDip, deltaYDip, modifiers, timeStampMs);
+            _window?.PointerDown(pointerId, pointerType, x, y, screenX, screenY, eventAgeMs, modifiers);
             return false;
         });
+
+    internal void PointerMove(int pointerId, PointerType pointerType, double x, double y, double screenX, double screenY,
+        double eventAgeMs, ModifierKeys modifiers)
+        => RoutePointer(() =>
+        {
+            _window?.PointerMove(pointerId, pointerType, x, y, screenX, screenY, eventAgeMs, modifiers);
+            return false;
+        });
+
+    internal void PointerUp(int pointerId, PointerType pointerType, double x, double y, double screenX, double screenY,
+        double eventAgeMs, ModifierKeys modifiers)
+        => RoutePointer(() =>
+        {
+            _window?.PointerUp(pointerId, pointerType, x, y, screenX, screenY, eventAgeMs, modifiers);
+            return false;
+        });
+
+    internal void PointerCancel(int pointerId) => RoutePointer(() => { _window?.PointerCancel(pointerId); return false; });
 
     internal void SyncTextCaret()
     {
@@ -259,8 +272,6 @@ internal sealed class BrowserPlatformHost : IPlatformHost
             BrowserPlatform.CaretReporter?.Invoke(x, y, height);
         }
     }
-
-    internal void PointerPanRelease(double timeStampMs) => RoutePointer(() => { _window?.StartFling(timeStampMs); return false; });
 
     internal void PointerLeave() => RoutePointer(() => { _window?.PointerLeave(); return false; });
     internal void PointerCancel() => RoutePointer(() => { _window?.PointerCancel(); return false; });
