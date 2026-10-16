@@ -12,6 +12,8 @@ public sealed partial class MewVGMacOSGraphicsFactory
 
 #elif MEWUI_MEWVG_X11
 public sealed partial class MewVGX11GraphicsFactory 
+#elif MEWUI_MEWVG_FRAMEBUFFER
+public sealed partial class MewVGFramebufferGraphicsFactory
 
 #else
 public sealed partial class MewVGWin32GraphicsFactory 
@@ -35,6 +37,8 @@ public sealed partial class MewVGWin32GraphicsFactory
     internal MewVGMacOSGraphicsFactory() { }
 #elif MEWUI_MEWVG_X11
     internal MewVGX11GraphicsFactory() { }
+#elif MEWUI_MEWVG_FRAMEBUFFER
+    internal MewVGFramebufferGraphicsFactory() { }
 #else
     internal MewVGWin32GraphicsFactory() { }
 #endif
@@ -264,6 +268,8 @@ public sealed partial class MewVGWin32GraphicsFactory
         MewVGMacOSGraphicsContext.TrimSharedGeometryCache();
 #elif MEWUI_MEWVG_X11
         MewVGX11GraphicsContext.TrimSharedGeometryCache();
+#elif MEWUI_MEWVG_FRAMEBUFFER
+        MewVGFramebufferGraphicsContext.TrimSharedGeometryCache();
 #else
         MewVGWin32GraphicsContext.TrimSharedGeometryCache();
 #endif

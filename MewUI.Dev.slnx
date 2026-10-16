@@ -35,11 +35,13 @@
     <Project Path="src/MewUI.Backend.Gdi/MewUI.Backend.Gdi.csproj" />
     <Project Path="src/MewUI.Backend.MewVG.Browser/MewUI.Backend.MewVG.Browser.csproj" />
     <Project Path="src/MewUI.Backend.MewVG.MacOS/MewUI.Backend.MewVG.MacOS.csproj" />
+    <Project Path="src/MewUI.Backend.MewVG.Framebuffer/MewUI.Backend.MewVG.Framebuffer.csproj" />
     <Project Path="src/MewUI.Backend.MewVG.Win32/MewUI.Backend.MewVG.Win32.csproj" />
     <Project Path="src/MewUI.Backend.MewVG.X11/MewUI.Backend.MewVG.X11.csproj" />
     <Project Path="src/MewUI.Generators/MewUI.Generators.csproj" />
     <Project Path="src/MewUI.Platform.Browser/MewUI.Platform.Browser.csproj" />
     <Project Path="src/MewUI.Platform.MacOS/MewUI.Platform.MacOS.csproj" />
+    <Project Path="src/MewUI.Platform.Framebuffer/MewUI.Platform.Framebuffer.csproj" />
     <Project Path="src/MewUI.Platform.Win32/MewUI.Platform.Win32.csproj" />
     <Project Path="src/MewUI.Platform.X11/MewUI.Platform.X11.csproj" />
     <Project Path="src/MewUI.Preview/MewUI.Preview.csproj" />

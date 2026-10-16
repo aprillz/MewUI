@@ -27,6 +27,9 @@
     <ProjectReference Include="..\..\src\MewUI.Backend.MewVG.MacOS\MewUI.Backend.MewVG.MacOS.csproj"
                       Aliases="MewVGMacOS" />
     <ProjectReference Include="..\..\src\MewUI.Platform.X11\MewUI.Platform.X11.csproj" />
+    <!-- Aliased: it links some Linux platform sources that the X11 platform also carries. -->
+    <ProjectReference Include="..\..\src\MewUI.Platform.Framebuffer\MewUI.Platform.Framebuffer.csproj"
+                      Aliases="Framebuffer" />
     <ProjectReference Include="..\..\src\MewUI.Platform.Win32\MewUI.Platform.Win32.csproj" />
     <ProjectReference Include="..\..\src\MewUI.Preview\MewUI.Preview.csproj" />
   </ItemGroup>

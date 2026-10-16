@@ -2,9 +2,8 @@ using System.Runtime.InteropServices;
 
 namespace Aprillz.MewUI.Native;
 
-// Linux EGL entrypoints, used by the optional EGL rendering path on X11 (EglOpenGLWindowResources
-// / EglVisualChooser). Desktop GL is requested via eglBindAPI(EGL_OPENGL_API) so the existing
-// NanoVG GL3 path runs unchanged; the EGL context is what enables dma_buf/EGLImage zero-copy.
+// Linux EGL entrypoints: the optional EGL path on X11 (dma_buf/EGLImage zero-copy) and the
+// framebuffer backend (GBM window surfaces, surfaceless offscreen contexts).
 internal static partial class LibEgl
 {
     private const string LibraryName = "libEGL.so.1";
@@ -23,6 +22,16 @@ internal static partial class LibEgl
     public const int EGL_DEPTH_SIZE = 0x3025;
     public const int EGL_STENCIL_SIZE = 0x3026;
     public const int EGL_NATIVE_VISUAL_ID = 0x302E;
+
+    public const uint EGL_OPENGL_ES_API = 0x30A0;
+    public const int EGL_OPENGL_ES3_BIT = 0x0040;
+    public const int EGL_CONTEXT_CLIENT_VERSION = 0x3098;
+    public const int EGL_WIDTH = 0x3057;
+    public const int EGL_HEIGHT = 0x3056;
+    public const int EGL_EXTENSIONS = 0x3055;
+    public const int EGL_PLATFORM_GBM_KHR = 0x31D7;
+    public const int EGL_PLATFORM_SURFACELESS_MESA = 0x31DD;
+    public const int EGL_BUFFER_AGE_EXT = 0x313D;
 
     public static readonly nint EGL_DEFAULT_DISPLAY = 0;
     public static readonly nint EGL_NO_DISPLAY = 0;
@@ -87,4 +96,51 @@ internal static partial class LibEgl
 
     [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
     public static partial nint eglGetProcAddress(string procName);
+
+    [LibraryImport(LibraryName)]
+    public static partial nint eglQueryString(nint dpy, int name);
+
+    [LibraryImport(LibraryName)]
+    public static partial nint eglCreatePbufferSurface(nint dpy, nint config, [MarshalAs(UnmanagedType.LPArray)] int[] attribList);
+
+    [LibraryImport(LibraryName)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool eglTerminate(nint dpy);
+
+    [LibraryImport(LibraryName)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool eglQuerySurface(nint dpy, nint surface, int attribute, out int value);
+
+    /// <summary>Returns the EGL display for a native platform (eglGetPlatformDisplayEXT), or 0 when the extension is missing.</summary>
+    public static unsafe nint GetPlatformDisplay(int platform, nint nativeDisplay)
+    {
+        nint proc = eglGetProcAddress("eglGetPlatformDisplayEXT");
+        if (proc == 0)
+        {
+            return 0;
+        }
+
+        var getPlatformDisplay = (delegate* unmanaged<int, nint, int*, nint>)proc;
+        return getPlatformDisplay(platform, nativeDisplay, null);
+    }
+
+    /// <summary>True when <paramref name="extension"/> appears in the space-separated EGL extension string of <paramref name="dpy"/>.</summary>
+    public static bool HasExtension(nint dpy, string extension)
+    {
+        string? extensions = Marshal.PtrToStringAnsi(eglQueryString(dpy, EGL_EXTENSIONS));
+        if (string.IsNullOrEmpty(extensions))
+        {
+            return false;
+        }
+
+        foreach (var token in extensions.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (token == extension)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }

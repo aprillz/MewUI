@@ -116,6 +116,8 @@ internal static unsafe class OpenGLPboExt
         catch { /* swallow - fall back to glXGetProcAddress */ }
 
         return LibGL.glXGetProcAddress(name);
+#elif MEWUI_OPENGL_EGL
+        return EglGLLoader.Resolve(name);
 #else
         // No GL backend compiled in (Metal, GDI-only). PboFenceUploader.IsSupported
         // returns false and the caller falls back to the sync upload path.
@@ -141,6 +143,8 @@ internal static unsafe class OpenGLPboExt
         OpenGL32.glGenTextures(n, out *textures);
 #elif MEWUI_OPENGL_X11
         LibGL.glGenTextures(n, out *textures);
+#elif MEWUI_OPENGL_EGL
+        GLNative.GenTextures(n, out *textures);
 #endif
     }
 
@@ -150,6 +154,8 @@ internal static unsafe class OpenGLPboExt
         OpenGL32.glDeleteTextures(n, ref *textures);
 #elif MEWUI_OPENGL_X11
         LibGL.glDeleteTextures(n, ref *textures);
+#elif MEWUI_OPENGL_EGL
+        GLNative.DeleteTextures(n, ref *textures);
 #endif
     }
 
@@ -159,6 +165,8 @@ internal static unsafe class OpenGLPboExt
         OpenGL32.glBindTexture(target, texture);
 #elif MEWUI_OPENGL_X11
         LibGL.glBindTexture(target, texture);
+#elif MEWUI_OPENGL_EGL
+        GLNative.BindTexture(target, texture);
 #endif
     }
 
@@ -168,6 +176,8 @@ internal static unsafe class OpenGLPboExt
         OpenGL32.glTexImage2D(target, level, internalFormat, width, height, border, format, type, (nint)pixels);
 #elif MEWUI_OPENGL_X11
         LibGL.glTexImage2D(target, level, internalFormat, width, height, border, format, type, (nint)pixels);
+#elif MEWUI_OPENGL_EGL
+        GLNative.TexImage2D(target, level, internalFormat, width, height, border, format, type, (nint)pixels);
 #endif
     }
 
@@ -177,6 +187,8 @@ internal static unsafe class OpenGLPboExt
         OpenGL32.glTexParameteri(target, pname, param);
 #elif MEWUI_OPENGL_X11
         LibGL.glTexParameteri(target, pname, param);
+#elif MEWUI_OPENGL_EGL
+        GLNative.TexParameteri(target, pname, param);
 #endif
     }
 
@@ -186,6 +198,8 @@ internal static unsafe class OpenGLPboExt
         OpenGL32.glPixelStorei(pname, param);
 #elif MEWUI_OPENGL_X11
         LibGL.glPixelStorei(pname, param);
+#elif MEWUI_OPENGL_EGL
+        GLNative.PixelStorei(pname, param);
 #endif
     }
 }

@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="..\..\build\MewUI.Common.props" />
+
+  <PropertyGroup>
+    <AssemblyName>$(MewUITitle).Platform.Framebuffer</AssemblyName>
+    <PackageId>$(MewUITitle).Platform.Framebuffer</PackageId>
+    <Description>Linux framebuffer platform host (DRM/KMS or fbdev, libinput) for $(MewUITitle)</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MewUI\MewUI.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\MewUI\Shared\Platform\Linux\LinuxDispatcher.cs" LinkBase="Platform\Linux" />
+    <Compile Include="..\MewUI\Shared\Platform\Linux\LinuxFontDefaults.cs" LinkBase="Platform\Linux" />
+    <Compile Include="..\MewUI\Shared\Platform\Linux\LinuxProcessMemory.cs" LinkBase="Platform\Linux" />
+    <Compile Include="..\MewUI\Shared\Platform\Linux\MountedVolumeProvider.Linux.cs" LinkBase="Platform\Linux" />
+    <Compile Include="..\MewUI\Shared\Platform\Linux\PlacesProvider.Linux.cs" LinkBase="Platform\Linux" />
+    <Compile Include="..\MewUI\Shared\Platform\Linux\X11\X11KeyMap.cs" LinkBase="Platform\Linux" />
+    <Compile Include="..\MewUI\Shared\Native\Linux\LibC.cs" LinkBase="Native" />
+    <Compile Include="..\MewUI\Shared\Native\Linux\Drm\*.cs" LinkBase="Native\Drm" />
+    <Compile Include="..\MewUI\Shared\Native\Linux\Gbm\*.cs" LinkBase="Native\Gbm" />
+    <Compile Include="..\MewUI\Shared\Native\Linux\Fbdev\*.cs" LinkBase="Native\Fbdev" />
+    <Compile Include="..\MewUI\Shared\Native\Linux\LibInput\*.cs" LinkBase="Native\LibInput" />
+    <Compile Include="..\MewUI\Shared\Native\Linux\Xkb\*.cs" LinkBase="Native\Xkb" />
+  </ItemGroup>
+
+</Project>

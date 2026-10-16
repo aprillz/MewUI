@@ -9,6 +9,8 @@ namespace Aprillz.MewUI.Rendering.MewVG;
 internal sealed partial class MewVGMacOSGraphicsContext : GraphicsContextBase, ITransparentDirtyRectContext, IOpaqueDirtyRectContext
 #elif MEWUI_MEWVG_X11
 internal sealed partial class MewVGX11GraphicsContext : GraphicsContextBase, ITransparentDirtyRectContext, IOpaqueDirtyRectContext, ISurfaceCopyContext
+#elif MEWUI_MEWVG_FRAMEBUFFER
+internal sealed partial class MewVGFramebufferGraphicsContext : GraphicsContextBase, ITransparentDirtyRectContext, IOpaqueDirtyRectContext, ISurfaceCopyContext
 #else
 internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, ITransparentDirtyRectContext, IOpaqueDirtyRectContext, ISurfaceCopyContext
 #endif
@@ -435,6 +437,13 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
             return false;
         }
 
+        bool copied = false;
+        BeforeSurfaceCopy(source, area, ref copied);
+        if (copied)
+        {
+            return true;
+        }
+
         // A multisampled target rejects the blit: a browser canvas whose context the page made first
         // keeps the page's antialias setting.
         BindFrameTarget();
@@ -529,6 +538,12 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
 
     /// <summary>Performs the clear a platform defers from the start of a frame to its first write, if one is pending.</summary>
     partial void ApplyPendingFrameClear();
+
+    /// <summary>
+    /// Runs before a surface is copied onto the target, so a platform can first restore what its target lacks or copy
+    /// the area itself; setting <paramref name="copied"/> skips the copy here.
+    /// </summary>
+    partial void BeforeSurfaceCopy(IRenderSurface source, Rect area, ref bool copied);
 
     /// <summary>Drops a deferred frame clear because the first write replaces the whole target anyway.</summary>
     partial void DiscardPendingFrameClear();

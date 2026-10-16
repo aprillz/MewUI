@@ -340,6 +340,8 @@ void main() {
         return OpenGL32.wglGetCurrentContext();
 #elif MEWUI_OPENGL_X11
         return X11GLBackendRegistry.Current?.GetCurrentContext() ?? 0;
+#elif MEWUI_OPENGL_EGL
+        return LibEgl.eglGetCurrentContext();
 #else
         return 0;
 #endif
