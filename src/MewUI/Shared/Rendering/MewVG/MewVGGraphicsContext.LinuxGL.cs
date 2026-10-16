@@ -1,0 +1,587 @@
+using Aprillz.MewUI.Native;
+using Aprillz.MewUI.Rendering.FreeType;
+using Aprillz.MewUI.Rendering.OpenGL;
+using Aprillz.MewUI.Text;
+using Aprillz.MewVG;
+
+#if MEWUI_MEWVG_FRAMEBUFFER
+using LinuxGLGraphicsContext = Aprillz.MewUI.Rendering.MewVG.MewVGFramebufferGraphicsContext;
+#else
+using LinuxGLGraphicsContext = Aprillz.MewUI.Rendering.MewVG.MewVGX11GraphicsContext;
+#endif
+
+namespace Aprillz.MewUI.Rendering.MewVG;
+
+// GL + FreeType body shared by the Linux GL contexts; window frame sessions and the current-context
+// lookup are supplied by the X11 and framebuffer halves.
+#if MEWUI_MEWVG_FRAMEBUFFER
+internal sealed partial class MewVGFramebufferGraphicsContext
+#else
+internal sealed partial class MewVGX11GraphicsContext
+#endif
+{
+    private readonly IFrameSession _frameSession;
+    private readonly MewVGTextCache _textCache;
+    private readonly Action<GpuInteropInvalidatedEventArgs>? _gpuInteropInvalidated;
+    private readonly HashSet<GpuDeviceIdentity> _reportedExternalMismatches = new();
+
+    internal static LinuxGLGraphicsContext CreateForOffscreen(
+        MewVGGLOffscreenSurface offscreen,
+        IMewVGOffscreenSurfaceProvider offscreenProvider,
+        OpenGLPixelRenderSurface pixelSurface)
+        => new(new OffscreenFrameSession(offscreen, offscreenProvider, pixelSurface), gpuInteropInvalidated: null);
+
+    // Set at the start of a window frame and consumed by the first write to its target.
+    private bool _frameClearPending;
+
+    partial void ApplyPendingFrameClear()
+    {
+        if (!_frameClearPending)
+        {
+            return;
+        }
+
+        _frameClearPending = false;
+        // A flush can leave colour writes masked, and a masked clear leaves the alpha behind.
+        GL.Disable(GL.GL_SCISSOR_TEST);
+        GL.ColorMask(true, true, true, true);
+        GL.ClearColor(0f, 0f, 0f, 0f);
+        GL.Clear(GL.GL_COLOR_BUFFER_BIT);
+    }
+
+    partial void DiscardPendingFrameClear() => _frameClearPending = false;
+
+    partial void BeginFramePlatform()
+    {
+        try
+        {
+            _frameSession.BeginFrame();
+
+            _frameSession.PixelSurfaceTarget?.SetContentSize(_viewportWidthPx, _viewportHeightPx);
+            GL.Viewport(0, 0, _viewportWidthPx, _viewportHeightPx);
+
+            // The window back buffer is zeroed (alpha included) before anything lands on it: on a transparent
+            // window a buffer that some drivers preserve across swaps would otherwise build up the alpha of
+            // every earlier frame. The clear waits for the first write so a frame that starts by copying over
+            // the whole target skips it. An offscreen target is prepared by its session instead.
+            _frameClearPending = _frameSession.ClearsTargetBeforeFirstWrite;
+
+            _vg.BeginFrame((float)_viewportWidthDip, (float)_viewportHeightDip, (float)DpiScale);
+            _vg.ResetTransform();
+            _vg.ResetScissor();
+        }
+        catch
+        {
+            _frameSession.AbortFrame();
+            throw;
+        }
+    }
+
+            // Flushed lazily by Lock/CopyPixels/GetPixelSpan. See Win32 EndFrame
+            // comment for the rationale (folds N per-element sync barriers into 0–1).
+    partial void EndFramePlatform()
+    {
+        try
+        {
+            _frameSession.BindFrameTarget();
+            GL.Viewport(0, 0, _viewportWidthPx, _viewportHeightPx);
+            ApplyPendingFrameClear();
+
+            _vg.EndFrame();
+            _frameSession.EndFrame();
+        }
+        catch
+        {
+            _frameSession.AbortFrame();
+            throw;
+        }
+    }
+
+    /// <summary>Binds the framebuffer this frame draws into.</summary>
+    private void BindFrameTarget() => _frameSession.BindFrameTarget();
+
+    partial void DestroyPlatform()
+    {
+        _frameSession.DisposeContext(this);
+    }
+
+    #region Text Rendering
+
+    private Size MeasureTextCore(ReadOnlySpan<char> text, IFont font)
+    {
+        if (font is FreeTypeFont ftFont)
+        {
+            var px = FreeTypeText.Measure(text, ftFont);
+            return new Size(px.Width / DpiScale, px.Height / DpiScale);
+        }
+
+        using var fallback = new OpenGLMeasurementContext((uint)Math.Round(DpiScale * 96.0));
+        return fallback.MeasureText(text, font);
+    }
+
+    private Size MeasureTextCore(ReadOnlySpan<char> text, IFont font, double maxWidth)
+    {
+        if (font is FreeTypeFont ftFont)
+        {
+            int maxWidthPx = maxWidth <= 0
+                ? 0
+                : Math.Max(1, RenderingUtil.CeilToPixelInt(maxWidth, DpiScale));
+            var px = FreeTypeText.Measure(text, ftFont, maxWidthPx, TextWrapping.Wrap);
+            return new Size(px.Width / DpiScale, px.Height / DpiScale);
+        }
+
+        using var fallback = new OpenGLMeasurementContext((uint)Math.Round(DpiScale * 96.0));
+        return fallback.MeasureText(text, font, maxWidth);
+    }
+
+    protected override TextInkOverhang MeasureRunInkOverhang(ReadOnlySpan<char> text, IFont font, BackendTextLayout layout)
+        => font is FreeTypeFont ftFont ? ftFont.GetRunInkOverhang(text) : TextInkOverhang.None;
+
+    public override Size MeasureText(ReadOnlySpan<char> text, IFont font)
+        => MeasureTextCore(text, font);
+
+    public override Size MeasureText(ReadOnlySpan<char> text, IFont font, double maxWidth)
+        => MeasureTextCore(text, font, maxWidth);
+
+    public override BackendTextLayout CreateBackendTextLayout(ReadOnlySpan<char> text,
+        BackendTextFormat format, in BackendTextLayoutConstraints constraints)
+    {
+        var bounds = constraints.Bounds;
+        var safeBounds = new Rect(bounds.X, bounds.Y,
+            double.IsPositiveInfinity(bounds.Width) ? 0 : bounds.Width,
+            double.IsPositiveInfinity(bounds.Height) ? 0 : bounds.Height);
+
+        Size measured;
+        if (format.Wrapping == TextWrapping.NoWrap)
+        {
+            measured = MeasureTextCore(text, format.Font);
+        }
+        else
+        {
+            double maxWidth = safeBounds.Width > 0 ? safeBounds.Width : MeasureTextCore(text, format.Font).Width;
+            measured = MeasureTextCore(text, format.Font, maxWidth);
+        }
+
+        var boundsPx = ToPixelRect(safeBounds);
+        int widthPx = boundsPx.Width;
+        int heightPx = boundsPx.Height;
+
+        if (widthPx <= 0 || heightPx <= 0)
+        {
+            widthPx = Math.Max(1, RenderingUtil.CeilToPixelInt(measured.Width, DpiScale));
+            heightPx = Math.Max(1, RenderingUtil.CeilToPixelInt(measured.Height, DpiScale));
+        }
+
+        double effectiveMaxWidth = safeBounds.Width > 0 ? safeBounds.Width : measured.Width;
+        var effectiveBounds = new Rect(safeBounds.X, safeBounds.Y,
+            widthPx / DpiScale, heightPx / DpiScale);
+
+        return new BackendTextLayout
+        {
+            MeasuredSize = measured,
+            EffectiveBounds = effectiveBounds,
+            EffectiveMaxWidth = effectiveMaxWidth,
+            ContentHeight = measured.Height
+        };
+    }
+
+    // Set while a transient run is drawn: text that changes every frame goes through the cache's
+    // per-frame scratch textures instead of its keyed entries.
+    private bool _transientText;
+
+    public override void DrawBackendTextLayout(ReadOnlySpan<char> text,
+        BackendTextFormat format, BackendTextLayout layout, Color color, object? owner)
+    {
+        _transientText = ReferenceEquals(owner, Aprillz.MewUI.Text.TransientText.Owner);
+        try
+        {
+            DrawBackendTextLayout(text, format, layout, color);
+        }
+        finally
+        {
+            _transientText = false;
+        }
+    }
+
+    public override void DrawBackendTextLayout(ReadOnlySpan<char> text,
+        BackendTextFormat format, BackendTextLayout layout, Color color)
+    {
+        if (text.IsEmpty) return;
+        if (format.Font is not FreeTypeFont ftFont) return;
+
+        var bounds = layout.EffectiveBounds;
+        var boundsPx = ToPixelRect(bounds);
+        int widthPx = boundsPx.Width;
+        int heightPx = boundsPx.Height;
+
+        if (widthPx <= 0 || heightPx <= 0) return;
+
+        // A text-engine run rasterizes into a bitmap grown by its ink overhang plus one antialiasing
+        // pixel per side, with the run box inset inside it, so ink past the box is kept.
+        var inkInset = TextInkInsetPx.FromOverhang(layout.InkOverhang, DpiScale);
+        if (inkInset.HasInset)
+        {
+            widthPx += inkInset.Left + inkInset.Right;
+            heightPx += inkInset.Top + inkInset.Bottom;
+            boundsPx = new PixelRect(boundsPx.Left - inkInset.Left, boundsPx.Top - inkInset.Top, widthPx, heightPx);
+        }
+        double insetLeftDip = inkInset.Left / DpiScale;
+        double insetTopDip = inkInset.Top / DpiScale;
+
+        widthPx = ClampTextRasterExtent(widthPx, boundsPx, axis: 0);
+        heightPx = ClampTextRasterExtent(heightPx, boundsPx, axis: 1);
+        boundsPx = new PixelRect(boundsPx.Left, boundsPx.Top, widthPx, heightPx);
+
+        if (_clipBoundsWorld.HasValue)
+        {
+            var c = _clipBoundsWorld.Value;
+            var textWorld = TransformRectToWorldAABB(new Rect(
+                bounds.X - insetLeftDip, bounds.Y - insetTopDip, widthPx / DpiScale, heightPx / DpiScale));
+            if (textWorld.Right <= c.X || textWorld.X >= c.Right || textWorld.Bottom <= c.Y || textWorld.Y >= c.Bottom)
+                return;
+        }
+
+        // FreeType bakes alignment into the rasterized bitmap.
+        double drawX = boundsPx.Left / DpiScale;
+        double drawY = boundsPx.Top / DpiScale;
+        if (_textPixelSnap)
+        {
+            var snappedOrigin = RenderingUtil.SnapTextOriginToDevice(new Point(bounds.X, bounds.Y), _transform, DpiScale);
+            drawX = snappedOrigin.X - insetLeftDip;
+            drawY = snappedOrigin.Y - insetTopDip;
+        }
+        double widthDip = widthPx / DpiScale;
+        double heightDip = heightPx / DpiScale;
+
+        var key = new MewVGTextCacheKey(new TextCacheKey(
+            string.GetHashCode(text),
+            0,
+            ftFont.FontPath,
+            ftFont.PixelHeight,
+            color.ToArgb(),
+            widthPx,
+            heightPx,
+            (int)format.HorizontalAlignment,
+            (int)format.VerticalAlignment,
+            (int)format.Wrapping,
+            (int)format.Trimming,
+            inkInset.Left,
+            inkInset.Top));
+
+        MewVGTextEntry entry;
+        if (_transientText)
+        {
+            var bmp = FreeTypeText.Rasterize(
+                text,
+                ftFont,
+                widthPx,
+                heightPx,
+                color,
+                format.HorizontalAlignment,
+                format.VerticalAlignment,
+                format.Wrapping,
+                format.Trimming,
+                inkInset.Left,
+                inkInset.Top);
+            entry = _textCache.UseTransient(bmp.Data.AsSpan(0, bmp.WidthPx * bmp.HeightPx * 4), bmp.WidthPx, bmp.HeightPx, linear: false);
+        }
+        else if (!_textCache.TryGet(key, text, out entry))
+        {
+            var bmp = FreeTypeText.Rasterize(
+                text,
+                ftFont,
+                widthPx,
+                heightPx,
+                color,
+                format.HorizontalAlignment,
+                format.VerticalAlignment,
+                format.Wrapping,
+                format.Trimming,
+                inkInset.Left,
+                inkInset.Top);
+            entry = _textCache.CreateImage(key, text, ref bmp);
+        }
+
+        if (entry.ImageId == 0) return;
+
+        var drawRect = new Rect(drawX, drawY, widthDip, heightDip);
+        var srcRect = new Rect(entry.X, entry.Y, entry.WidthPx, entry.HeightPx);
+        DrawImagePattern(entry.ImageId, drawRect, alpha: 1f, sourceRect: srcRect, entry.AtlasWidthPx, entry.AtlasHeightPx);
+    }
+
+    #endregion
+
+    #region Image Rendering
+
+    public override void DrawImage(IImage image, Point location)
+    {
+        ArgumentNullException.ThrowIfNull(image);
+        // Size from the logical image: a pooled surface behind it can be larger than the
+        // content, and the backend image reports that whole allocation.
+        var dest = new Rect(location.X, location.Y, image.PixelWidth, image.PixelHeight);
+        DrawImageCore(ImageResource.ResolveBackendImage(image), dest, new Rect(0, 0, dest.Width, dest.Height));
+    }
+
+    protected override void DrawImageCore(IImage image, Rect destRect)
+    {
+        ArgumentNullException.ThrowIfNull(image);
+
+        if (image is MewVGExternalRasterImage extImage)
+        {
+            var lease = EnsureExternalAcquired(extImage.Source);
+            if (!IsExternalRasterLeaseCompatible(lease))
+            {
+                return;
+            }
+
+            int extImageId = extImage.GetOrCreateImageId(_vg, lease, GetImageFlags());
+            if (extImageId == 0) return;
+            DrawImagePattern(extImageId, destRect, alpha: 1f, sourceRect: null,
+                image.PixelWidth, image.PixelHeight);
+            return;
+        }
+
+        if (image is not MewVGImage vgImage)
+        {
+            throw new ArgumentException("Image must be a MewVGImage.", nameof(image));
+        }
+
+        int imageId = vgImage.GetOrCreateImageId(_vg, GetImageFlags());
+        if (imageId == 0)
+        {
+            return;
+        }
+
+        DrawImagePattern(imageId, destRect, alpha: 1f, AdjustSourceRectForContent(vgImage, null), vgImage.PixelWidth, vgImage.PixelHeight);
+    }
+
+    protected override void DrawImageCore(IImage image, Rect destRect, Rect sourceRect)
+    {
+        ArgumentNullException.ThrowIfNull(image);
+
+        if (image is MewVGExternalRasterImage extImage)
+        {
+            var lease = EnsureExternalAcquired(extImage.Source);
+            if (!IsExternalRasterLeaseCompatible(lease))
+            {
+                return;
+            }
+
+            int extImageId = extImage.GetOrCreateImageId(_vg, lease, GetImageFlags());
+            if (extImageId == 0) return;
+            DrawImagePattern(extImageId, destRect, alpha: 1f, sourceRect: sourceRect,
+                image.PixelWidth, image.PixelHeight);
+            return;
+        }
+
+        if (image is not MewVGImage vgImage)
+        {
+            throw new ArgumentException("Image must be a MewVGImage.", nameof(image));
+        }
+
+        int imageId = vgImage.GetOrCreateImageId(_vg, GetImageFlags());
+        if (imageId == 0)
+        {
+            return;
+        }
+
+        DrawImagePattern(imageId, destRect, alpha: 1f, AdjustSourceRectForContent(vgImage, sourceRect), vgImage.PixelWidth, vgImage.PixelHeight);
+    }
+
+    /// <summary>
+    /// Maps a content-space source rect to the sampled image space of a pooled FBO surface.
+    /// </summary>
+    private static Rect? AdjustSourceRectForContent(MewVGImage vgImage, Rect? sourceRect)
+    {
+        if (vgImage.Source is not OpenGLPixelRenderSurface surface || !surface.IsFboInitialized)
+        {
+            return sourceRect;
+        }
+
+        int contentWidth = surface.ContentWidthPx;
+        int contentHeight = surface.ContentHeightPx;
+        int offsetY = surface.PixelHeight - contentHeight;
+        if (offsetY == 0 && contentWidth == surface.PixelWidth)
+        {
+            return sourceRect;
+        }
+
+        // FlipY sampling anchors the FBO's rendered content at the bottom of the image space,
+        // so on a pooled allocation taller than the content the crop must shift down by the
+        // unrendered band or it samples cleared texels above the content.
+        var src = sourceRect ?? new Rect(0, 0, contentWidth, contentHeight);
+        return new Rect(src.X, src.Y + offsetY, src.Width, src.Height);
+    }
+
+    private bool IsExternalRasterLeaseCompatible(IExternalRasterLease lease)
+    {
+        // No-opinion bail-outs: nothing to compare against. The share-group equality check below
+        // is the real signal - cross-API pointer collisions don't happen in practice, so a
+        // typed-backend discriminator isn't needed.
+        if (lease is not IGpuResourceAffinityProvider affinityProvider ||
+            affinityProvider.Affinity?.Device is not { } sourceDevice ||
+            sourceDevice.IsEmpty)
+        {
+            return true;
+        }
+
+        nint currentContext = GetCurrentNativeContext();
+        nint targetShareGroup = _frameSession.OpenGLShareGroup;
+        if (currentContext == 0 ||
+            sourceDevice.NativeHandle == currentContext ||
+            (targetShareGroup != 0 && sourceDevice.NativeHandle == targetShareGroup))
+        {
+            return true;
+        }
+
+        if (_reportedExternalMismatches.Add(sourceDevice))
+        {
+            _gpuInteropInvalidated?.Invoke(new GpuInteropInvalidatedEventArgs(
+                GpuInteropInvalidationReason.ExternalResourceMismatch,
+                renderTargetDeviceChanged: true,
+                externalResourceMismatch: true));
+        }
+
+        return false;
+    }
+
+    #endregion
+
+    private int ClampTextRasterExtent(int extentPx, PixelRect boundsPx, int axis)
+    {
+        int viewport = axis == 0 ? _viewportWidthPx : _viewportHeightPx;
+        if (extentPx <= 0)
+        {
+            return 1;
+        }
+
+        int hardMax = Math.Max(256, viewport * 4);
+        if (extentPx <= hardMax)
+        {
+            return extentPx;
+        }
+
+        // boundsPx.Left/Top is in this context's LOCAL space; viewport is in world (FBO) space.
+        // When rendering into an offscreen cache the context is translated by -elementOrigin, so the
+        // local position must be shifted by the transform to find the true start within the viewport.
+        // Without this, an element at a non-zero layout X clamps the raster extent as if the text
+        // started that far into a viewport that is only element-sized → text truncated (only works at
+        // X=0 where translate==local). The window path has an identity transform, so it is unchanged.
+        int translatePx = RenderingUtil.RoundToPixelInt(axis == 0 ? _transform.M31 : _transform.M32, DpiScale);
+        int worldStart = (axis == 0 ? boundsPx.Left : boundsPx.Top) + translatePx;
+        int remaining = Math.Max(1, viewport - worldStart);
+        return Math.Clamp(remaining, 1, hardMax);
+    }
+
+    private PixelRect ToPixelRect(Rect rect)
+    {
+        int left = RenderingUtil.RoundToPixelInt(rect.X, DpiScale);
+        int top = RenderingUtil.RoundToPixelInt(rect.Y, DpiScale);
+        int width = RenderingUtil.RoundToPixelInt(rect.Width, DpiScale);
+        int height = RenderingUtil.RoundToPixelInt(rect.Height, DpiScale);
+        return new PixelRect(left, top, Math.Max(0, width), Math.Max(0, height));
+    }
+
+    private readonly record struct PixelRect(int Left, int Top, int Width, int Height);
+
+    private interface IFrameSession
+    {
+        MewVGGL Vg { get; }
+        MewVGTextCache TextCache { get; }
+        nint OpenGLShareGroup { get; }
+        OpenGLPixelRenderSurface? PixelSurfaceTarget { get; }
+        bool ClearsTargetBeforeFirstWrite { get; }
+        void BeginFrame();
+        void BindFrameTarget();
+        void EndFrame();
+        void AbortFrame();
+        void DisposeContext(LinuxGLGraphicsContext context);
+    }
+
+    private sealed class OffscreenFrameSession : IFrameSession
+    {
+        private readonly MewVGGLOffscreenSurface _offscreen;
+        private readonly IMewVGOffscreenSurfaceProvider _offscreenProvider;
+        private readonly OpenGLPixelRenderSurface _pixelSurface;
+
+        public OffscreenFrameSession(
+            MewVGGLOffscreenSurface offscreen,
+            IMewVGOffscreenSurfaceProvider offscreenProvider,
+            OpenGLPixelRenderSurface pixelSurface)
+        {
+            _offscreen = offscreen;
+            _offscreenProvider = offscreenProvider;
+            _pixelSurface = pixelSurface;
+        }
+
+        public MewVGGL Vg => _offscreen.Vg;
+
+        public MewVGTextCache TextCache => _offscreen.TextCache;
+
+        public nint OpenGLShareGroup => _pixelSurface.CreationContext;
+
+        public OpenGLPixelRenderSurface? PixelSurfaceTarget => _pixelSurface;
+
+        public bool ClearsTargetBeforeFirstWrite => false;
+
+        public void BeginFrame()
+        {
+            _offscreenProvider.EnterSession();
+            PreparePixelSurface(_offscreenProvider, _pixelSurface);
+        }
+
+        public void BindFrameTarget()
+            => OpenGLExt.BindFramebuffer(OpenGLExt.GL_FRAMEBUFFER, _pixelSurface.Fbo);
+
+        public void EndFrame()
+        {
+            _pixelSurface.RequestDeferredReadback();
+            OpenGLExt.BindFramebuffer(OpenGLExt.GL_FRAMEBUFFER, 0);
+            // Per-NVG drain - only this offscreen NVG's pending image-id deletions, on its
+            // own thread inside its EndFrame. Avoids racing the window NVG mid-frame.
+            _offscreenProvider.ReleasePendingImagesForVg(_offscreen.Vg);
+            NvgStrokeHelper.ReleasePendingGradientLutDeletes(_offscreen.Vg);
+            if (_offscreenProvider.ExitSession())
+            {
+                _offscreenProvider.ReleasePendingTargetsUnderCurrentContext();
+            }
+        }
+
+        public void AbortFrame()
+        {
+            _offscreenProvider.ExitSession();
+            OpenGLExt.BindFramebuffer(OpenGLExt.GL_FRAMEBUFFER, 0);
+        }
+
+        public void DisposeContext(LinuxGLGraphicsContext context)
+            => _offscreenProvider.ReturnSurface(_offscreen);
+    }
+
+    private static void PreparePixelSurface(IMewVGOffscreenSurfaceProvider offscreenProvider, OpenGLPixelRenderSurface pixelSurface)
+    {
+        // Don't drain pending target disposals here - see Win32 PreparePixelSurface for
+        // the rationale. Drain happens at the outermost session's EndFrame instead.
+        pixelSurface.InitializeFbo();
+        if (!pixelSurface.IsFboInitialized || pixelSurface.Fbo == 0)
+        {
+            throw new PlatformNotSupportedException("OpenGL FBOs are required for pixel-surface rendering.");
+        }
+
+        // Record the GL context that owns the FBO/RB handles - see Win32 path for
+        // rationale (FBOs are not shared between contexts, only textures).
+        pixelSurface.RecordCreationContext(GetCurrentNativeContext());
+
+        OpenGLExt.BindFramebuffer(OpenGLExt.GL_FRAMEBUFFER, pixelSurface.Fbo);
+
+        // Force colormask to "all writes enabled" before clear: if a flush leaves color
+        // writes masked, the next glClear leaves alpha untouched (= undefined / 0xFF on a
+        // fresh texture), producing opaque-black filter results in transparent regions.
+        // See Win32 PreparePixelSurface.
+        GL.ColorMask(true, true, true, true);
+        if (!pixelSurface.PreserveContentsOnBeginFrame)
+        {
+            GL.ClearColor(0f, 0f, 0f, 0f);
+            GL.Clear(GL.GL_COLOR_BUFFER_BIT);
+        }
+    }
+}
