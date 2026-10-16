@@ -26,6 +26,7 @@ At build time each property is written into `runtimeconfig.json` as an `AppConte
 | `MewUIDevTools` | `true`, `false` | `true` in Debug, `false` in Release | `Aprillz.MewUI.DevTools.Enabled` | yes |
 | `MewUIHotReload` | `true`, `false` | `true` | `Aprillz.MewUI.HotReload.Enabled` | no |
 | `MewUIEnvironmentDebugLogging` | `true`, `false` | `true` in Debug, `false` in Release | `Aprillz.MewUI.EnvironmentDebugLogging.Enabled` | yes |
+| `MewUITouch` | `true`, `false` | `true` | `Aprillz.MewUI.Touch.Enabled` | yes |
 
 Set the MSBuild property rather than the runtime switch. A switch changed by hand in `runtimeconfig.json` or with `AppContext.SetSwitch` does not reach the trimmer, so in a trimmed publish the code it asks for may already be gone.
 
@@ -95,3 +96,11 @@ Set a variable to `1` or `true` before starting the app. The lines go to standar
 | `MEWUI_ICON_DEBUG` | shell icon lookup on Linux |
 | `MEWUI_MACOS_DEBUG` | macOS window class registration |
 | `MEWUI_INTEROP_DEBUG` | macOS native interop |
+
+---
+
+## 8. MewUITouch
+
+On Windows, on Linux (X11) and in the browser MewUI reads touch input itself, and pen input on Windows and in the browser. A tap clicks. Dragging a finger more than a few pixels scrolls the content under it, and the content keeps moving for a moment when the finger lifts while still moving. Holding a finger still for half a second right-clicks, which opens a context menu. Only the first finger down takes part; a second finger is ignored. A pen behaves like a mouse: it hovers, clicks and drags. On X11, while a popup such as a drop-down is open, touches arrive as mouse input, so a finger can tap items and drag the scroll bar but does not scroll the list.
+
+Setting the property to `false` removes this from a trimmed or NativeAOT publish, which saves about 21 KB on Windows. Touch and pen then arrive the way the operating system or X server turns them into mouse input: a tap still clicks, but a drag selects or drags instead of scrolling, and on Windows the system's own press-and-hold supplies the right click.
