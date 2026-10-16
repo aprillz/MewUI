@@ -57,7 +57,7 @@
 
     <Compile Include="..\MewUI\Shared\Native\Linux\X11\X11.cs" LinkBase="Native" />
     <Compile Include="..\MewUI\Shared\Native\Linux\X11\LibGL.cs" LinkBase="Native" />
-    <Compile Include="..\MewUI\Shared\Native\Linux\X11\LibEgl.X11.cs" LinkBase="Native" />
+    <Compile Include="..\MewUI\Shared\Native\Linux\Egl\LibEgl.cs" LinkBase="Native" />
     <Compile Include="..\MewUI\Shared\Native\Linux\X11\GL.X11.cs" LinkBase="Native" />
     <Compile Include="..\MewUI\Shared\Native\Linux\X11\OpenGLExt.X11.cs" LinkBase="Native" />
     <Compile Include="..\MewUI\Shared\Native\Linux\FreeType\**\*.cs" LinkBase="Native\FreeType" />
