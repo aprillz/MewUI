@@ -333,8 +333,7 @@ static void Startup()
     MacOSPlatform.Register();
     MewVGMacOSBackend.Register();
 #elif MEWUI_GALLERY_LINUX
-    X11Platform.Register();
-    MewVGX11Backend.Register();
+    RegisterLinux(args);
 #else
     if (OperatingSystem.IsWindows())
     {
@@ -360,8 +359,7 @@ static void Startup()
     }
     else if (OperatingSystem.IsLinux())
     {
-        X11Platform.Register();
-        MewVGX11Backend.Register();
+        RegisterLinux(args);
     }
 #endif
 
@@ -378,3 +376,24 @@ static void Startup()
         e.Handled = true;
     };
 }
+
+#if MEWUI_GALLERY_ALL || MEWUI_GALLERY_LINUX
+// --framebuffer draws straight to the screen with no display server (DRM/KMS, else fbdev); --fbdev forces fbdev.
+static void RegisterLinux(string[] args)
+{
+    bool fbdev = args.Any(a => a is "--fbdev");
+    if (fbdev || args.Any(a => a is "--framebuffer"))
+    {
+        FramebufferPlatform.Register(new FramebufferPlatformOptions
+        {
+            Output = fbdev ? FramebufferOutputKind.Fbdev : FramebufferOutputKind.Auto,
+            ShowCursor = !args.Any(a => a is "--no-cursor"),
+        });
+        MewVGFramebufferBackend.Register();
+        return;
+    }
+
+    X11Platform.Register();
+    MewVGX11Backend.Register();
+}
+#endif
