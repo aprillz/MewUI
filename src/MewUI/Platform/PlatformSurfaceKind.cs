@@ -11,4 +11,5 @@ internal enum PlatformSurfaceKind
     X11,
     MacOS,
     Browser,
+    Framebuffer,
 }

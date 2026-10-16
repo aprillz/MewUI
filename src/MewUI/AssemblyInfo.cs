@@ -11,6 +11,8 @@ using System.Runtime.CompilerServices;
 [assembly: InternalsVisibleTo("Aprillz.MewUI.Platform.MacOS")]
 [assembly: InternalsVisibleTo("Aprillz.MewUI.Platform.Browser")]
 [assembly: InternalsVisibleTo("Aprillz.MewUI.Backend.MewVG.Browser")]
+[assembly: InternalsVisibleTo("Aprillz.MewUI.Platform.Framebuffer")]
+[assembly: InternalsVisibleTo("Aprillz.MewUI.Backend.MewVG.Framebuffer")]
 [assembly: InternalsVisibleTo("Aprillz.MewUI.Test")]
 [assembly: InternalsVisibleTo("Aprillz.MewUI.Svg.Test")]
 [assembly: InternalsVisibleTo("Aprillz.MewUI.Markdown.Test")]
