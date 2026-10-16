@@ -415,6 +415,29 @@ internal static partial class User32
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool TrackMouseEvent(ref TRACKMOUSEEVENT lpEventTrack);
 
+    [LibraryImport(LibraryName)]
+    public static partial nint GetMessageExtraInfo();
+
+    #endregion
+
+    #region Pointer
+
+    [LibraryImport(LibraryName, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool GetPointerType(uint pointerId, out uint pointerType);
+
+    [LibraryImport(LibraryName, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool GetPointerInfo(uint pointerId, out POINTER_INFO pointerInfo);
+
+    [LibraryImport(LibraryName, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static unsafe partial bool GetPointerInfoHistory(uint pointerId, ref uint entriesCount, POINTER_INFO* pointerInfo);
+
+    [LibraryImport(LibraryName, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static unsafe partial bool SetWindowFeedbackSetting(nint hwnd, int feedback, uint flags, uint size, void* configuration);
+
     #endregion
 
     #region Window hierarchy

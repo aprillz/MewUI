@@ -166,6 +166,15 @@ internal static class WindowMessages
     public const uint WM_POWERBROADCAST = 0x0218;
     public const uint WM_DEVICECHANGE = 0x0219;
 
+    public const uint WM_POINTERUPDATE = 0x0245;
+    public const uint WM_POINTERDOWN = 0x0246;
+    public const uint WM_POINTERUP = 0x0247;
+    public const uint WM_POINTERENTER = 0x0249;
+    public const uint WM_POINTERLEAVE = 0x024A;
+    public const uint WM_POINTERCAPTURECHANGED = 0x024C;
+
+    public const uint WM_TABLET_QUERYSYSTEMGESTURESTATUS = 0x02CC;
+
     public const uint WM_ENTERSIZEMOVE = 0x0231;
     public const uint WM_EXITSIZEMOVE = 0x0232;
     public const uint WM_DROPFILES = 0x0233;

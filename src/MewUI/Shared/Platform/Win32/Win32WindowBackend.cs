@@ -860,6 +860,37 @@ internal sealed class Win32WindowBackend : IWindowBackend
                 }
                 return User32.DefWindowProc(Handle, msg, wParam, lParam);
 
+            case WindowMessages.WM_POINTERDOWN:
+            case WindowMessages.WM_POINTERUPDATE:
+            case WindowMessages.WM_POINTERUP:
+                // Touch and pen are taken here and not passed on, so the system generates no mouse
+                // messages for them. Everything else, the mouse included, keeps arriving as WM_MOUSE*.
+                return HandlePointer(msg, wParam) ? 0 : User32.DefWindowProc(Handle, msg, wParam, lParam);
+
+            case WindowMessages.WM_POINTERCAPTURECHANGED:
+                if (TouchInputGate.IsSupported)
+                {
+                    WindowInputRouter.PointerCancel(Window, PointerIdOf(wParam));
+                }
+                return User32.DefWindowProc(Handle, msg, wParam, lParam);
+
+            case WindowMessages.WM_POINTERLEAVE:
+                if (TouchInputGate.IsSupported
+                    && User32.GetPointerType((uint)PointerIdOf(wParam), out uint leavingType)
+                    && leavingType == POINTER_INFO.PT_PEN)
+                {
+                    // A pen hovers like a mouse, so leaving range ends its hover.
+                    WindowInputRouter.UpdateMouseOver(Window, null);
+                }
+                return User32.DefWindowProc(Handle, msg, wParam, lParam);
+
+            case WindowMessages.WM_TABLET_QUERYSYSTEMGESTURESTATUS:
+                // The system's own hold-for-right-click delays every press and fires a second right click
+                // after the one the gesture layer raises.
+                return TouchInputGate.IsSupported
+                    ? TABLET_DISABLE_PRESSANDHOLD | TABLET_DISABLE_PENTAPFEEDBACK | TABLET_DISABLE_PENBARRELFEEDBACK | TABLET_DISABLE_FLICKS
+                    : User32.DefWindowProc(Handle, msg, wParam, lParam);
+
             case WindowMessages.WM_LBUTTONDOWN:
                 return HandleMouseButton(lParam, MouseButton.Left, isDown: true, isDoubleClickMessage: false);
 
@@ -1012,6 +1043,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
         }
 
         _titleBarThemeSync.Initialize(Handle);
+        DisableTouchFeedback();
         _host.RegisterWindow(Handle, this);
         Window.AttachBackend(this);
         // AttachBackend calls SetAllowDrop(true) automatically if Window.AllowDrop was already set,
@@ -2190,6 +2222,11 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
     private nint HandleMouseMove(nint lParam)
     {
+        if (IsMouseMessageFromPointer())
+        {
+            return 0;
+        }
+
         EnsureMouseLeaveTracking();
 
         // Dismiss watch: while a popup surface holds capture, moves land here regardless of pointer
@@ -2288,6 +2325,11 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
     private nint HandleMouseButton(nint lParam, MouseButton button, bool isDown, bool isDoubleClickMessage)
     {
+        if (IsMouseMessageFromPointer())
+        {
+            return 0;
+        }
+
         int xPx = (short)(lParam.ToInt64() & 0xFFFF);
         int yPx = (short)((lParam.ToInt64() >> 16) & 0xFFFF);
 
@@ -2466,6 +2508,135 @@ internal sealed class Win32WindowBackend : IWindowBackend
         }
 
         return HTCLIENT;
+    }
+
+    private const nint TABLET_DISABLE_PRESSANDHOLD = 0x00000001;
+    private const nint TABLET_DISABLE_PENTAPFEEDBACK = 0x00000008;
+    private const nint TABLET_DISABLE_PENBARRELFEEDBACK = 0x00000010;
+    private const nint TABLET_DISABLE_FLICKS = 0x00010000;
+
+    private const int FEEDBACK_TOUCH_PRESSANDHOLD = 9;
+    private const int FEEDBACK_TOUCH_RIGHTTAP = 10;
+
+    // Mouse messages the system made up from a touch or pen contact carry this in their extra info.
+    private const uint MOUSE_FROM_POINTER_MASK = 0xFFFFFF00;
+    private const uint MOUSE_FROM_POINTER_SIGNATURE = 0xFF515700;
+
+    // Enough to cover the samples a busy frame can merge into one update.
+    private const int MAX_POINTER_HISTORY = 32;
+
+    private static int PointerIdOf(nint wParam) => (int)(wParam.ToInt64() & 0xFFFF);
+
+    /// <summary>
+    /// True for a mouse message the system made up from a touch or pen contact. Those contacts already
+    /// arrived through WM_POINTER*, so routing the copy would press everything twice.
+    /// </summary>
+    private static bool IsMouseMessageFromPointer()
+        => TouchInputGate.IsSupported
+            && (unchecked((uint)User32.GetMessageExtraInfo()) & MOUSE_FROM_POINTER_MASK) == MOUSE_FROM_POINTER_SIGNATURE;
+
+    private unsafe void DisableTouchFeedback()
+    {
+        if (!TouchInputGate.IsSupported)
+        {
+            return;
+        }
+
+        // The circle the system draws while a finger is held would sit under the menu the hold opens.
+        int off = 0;
+        _ = User32.SetWindowFeedbackSetting(Handle, FEEDBACK_TOUCH_PRESSANDHOLD, 0, sizeof(int), &off);
+        _ = User32.SetWindowFeedbackSetting(Handle, FEEDBACK_TOUCH_RIGHTTAP, 0, sizeof(int), &off);
+    }
+
+    /// <summary>Routes a touch or pen WM_POINTER message; false leaves it to the system.</summary>
+    private unsafe bool HandlePointer(uint msg, nint wParam)
+    {
+        if (!TouchInputGate.IsSupported)
+        {
+            return false;
+        }
+
+        uint pointerId = (uint)PointerIdOf(wParam);
+        if (!User32.GetPointerInfo(pointerId, out var info))
+        {
+            return false;
+        }
+
+        PointerType pointerType;
+        if (info.pointerType == POINTER_INFO.PT_TOUCH)
+        {
+            pointerType = PointerType.Touch;
+        }
+        else if (info.pointerType == POINTER_INFO.PT_PEN)
+        {
+            pointerType = PointerType.Pen;
+        }
+        else
+        {
+            return false;
+        }
+
+        int id = (int)pointerId;
+        var modifiers = GetModifierKeys();
+        if ((info.pointerFlags & POINTER_INFO.POINTER_FLAG_CANCELED) != 0)
+        {
+            WindowInputRouter.PointerCancel(Window, id);
+            return true;
+        }
+
+        switch (msg)
+        {
+            case WindowMessages.WM_POINTERDOWN:
+                WindowInputRouter.PointerDown(Window, id, pointerType, PointerPosition(info), PointerScreenPosition(info),
+                    PointerTimestamp(info), modifiers);
+                break;
+
+            case WindowMessages.WM_POINTERUP:
+                WindowInputRouter.PointerUp(Window, id, pointerType, PointerPosition(info), PointerScreenPosition(info),
+                    PointerTimestamp(info), modifiers);
+                break;
+
+            default:
+                // One update can carry several samples the system merged. Speed is read from the spacing
+                // of samples in time, so each one is delivered, oldest first, with its own time.
+                if (info.historyCount > 1)
+                {
+                    uint count = Math.Min(info.historyCount, MAX_POINTER_HISTORY);
+                    var history = stackalloc POINTER_INFO[(int)count];
+                    if (User32.GetPointerInfoHistory(pointerId, ref count, history))
+                    {
+                        for (int index = (int)count - 1; index >= 1; index--)
+                        {
+                            var sample = history[index];
+                            WindowInputRouter.PointerMove(Window, id, pointerType, PointerPosition(sample),
+                                PointerScreenPosition(sample), PointerTimestamp(sample), modifiers);
+                        }
+                    }
+                }
+
+                WindowInputRouter.PointerMove(Window, id, pointerType, PointerPosition(info), PointerScreenPosition(info),
+                    PointerTimestamp(info), modifiers);
+                break;
+        }
+
+        return true;
+    }
+
+    private Point PointerPosition(in POINTER_INFO info)
+    {
+        var point = info.ptPixelLocation;
+        User32.ScreenToClient(Handle, ref point);
+        return new Point(point.x / Window.DpiScale, point.y / Window.DpiScale);
+    }
+
+    private Point PointerScreenPosition(in POINTER_INFO info) => ClientToScreen(PointerPosition(info));
+
+    /// <summary>When the contact sample was generated, in Stopwatch ticks.</summary>
+    private static long PointerTimestamp(in POINTER_INFO info)
+    {
+        // The performance count is the QPC value at generation, the clock Stopwatch reads on Windows. A
+        // device that does not report it gets the time the message is handled.
+        return info.performanceCount != 0 ? unchecked((long)info.performanceCount) : System.Diagnostics.Stopwatch.GetTimestamp();
     }
 
     private ModifierKeys GetModifierKeys()
