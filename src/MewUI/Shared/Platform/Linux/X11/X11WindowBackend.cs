@@ -101,6 +101,10 @@ internal sealed class X11WindowBackend : IWindowBackend
     // True when at least one master pointer has a scroll axis cached - only then is XI_Motion
     // guaranteed to deliver high-res scroll, so only then should legacy core wheel be suppressed.
     private bool _xi2MasterHasScrollAxis;
+    // Touch IDs of the sequences in progress on this window. XInput2 has no cancel, so the backend cancels them.
+    private List<int>? _activeTouches;
+
+    private bool HasActiveTouches => TouchInputGate.IsSupported && _activeTouches != null && _activeTouches.Count > 0;
 
     private sealed class XI2ScrollAxis
     {
@@ -200,6 +204,11 @@ internal sealed class X11WindowBackend : IWindowBackend
 
     public void Hide()
     {
+        if (TouchInputGate.IsSupported)
+        {
+            CancelActiveTouches();
+        }
+
         if (Display != 0 && Handle != 0)
         {
             NativeX11.XUnmapWindow(Display, Handle);
@@ -611,6 +620,13 @@ internal sealed class X11WindowBackend : IWindowBackend
             return;
         }
 
+        // A touch sequence already follows its window everywhere. A grab would instead turn every touch
+        // that starts meanwhile into a made-up pointer delivered to the grab.
+        if (HasActiveTouches)
+        {
+            return;
+        }
+
         // owner_events=true keeps normal in-window delivery; the grab only redirects motion/release/press
         // that would otherwise leave the window, so drags keep flowing through HandleMotion/HandleButton.
         // ButtonPressMask makes outside presses arrive here too (SetCapture parity), which the popup
@@ -907,7 +923,8 @@ internal sealed class X11WindowBackend : IWindowBackend
             if (!NativeX11.XQueryExtension(Display, "XInputExtension", out int opcode, out _, out _))
                 return;
 
-            int major = 2, minor = 1;
+            // Touch events reach only clients that announce 2.2; with touch off the request stays where it was.
+            int major = 2, minor = TouchInputGate.IsSupported ? 2 : 1;
             if (XI2.XIQueryVersion(Display, ref major, ref minor) != 0)
                 return;
 
@@ -937,13 +954,41 @@ internal sealed class X11WindowBackend : IWindowBackend
                 }
             }
 
+            bool touch = TouchInputGate.IsSupported && (major > 2 || minor >= 2) && TrySelectXI2Touch();
+
             CacheXI2ScrollAxes();
             _xi2Opcode = opcode;
             _xi2Enabled = true;
-            XI2Logger.Write($"XInput2 enabled: opcode={opcode} scrollAxes={_scrollAxes.Count}");
+            XI2Logger.Write($"XInput2 enabled: opcode={opcode} version={major}.{minor} scrollAxes={_scrollAxes.Count} touch={touch}");
         }
         catch (DllNotFoundException) { }
         catch (EntryPointNotFoundException) { }
+    }
+
+    /// <summary>
+    /// Selects touch sequences on master devices so a touch arrives as touch rather than as the pointer
+    /// the server would make up from it.
+    /// </summary>
+    private unsafe bool TrySelectXI2Touch()
+    {
+        // A separate request from the motion mask: a server that refuses touch must not cost the scroll
+        // selection. Begin, update and end are only accepted together, and on XIAllDevices every touch
+        // would arrive twice (slave and master).
+        const int evtypeBits = 8;
+        const int maskBytes = (XI2.XI_TouchEnd / evtypeBits) + 1;
+        byte* maskBuffer = stackalloc byte[maskBytes];
+        new Span<byte>(maskBuffer, maskBytes).Clear();
+        maskBuffer[XI2.XI_TouchBegin / evtypeBits] |= (byte)(1 << (XI2.XI_TouchBegin % evtypeBits));
+        maskBuffer[XI2.XI_TouchUpdate / evtypeBits] |= (byte)(1 << (XI2.XI_TouchUpdate % evtypeBits));
+        maskBuffer[XI2.XI_TouchEnd / evtypeBits] |= (byte)(1 << (XI2.XI_TouchEnd % evtypeBits));
+
+        var maskInfo = new XIEventMask
+        {
+            deviceid = XI2.XIAllMasterDevices,
+            mask_len = maskBytes,
+            mask = (nint)maskBuffer,
+        };
+        return XI2.XISelectEvents(Display, Handle, [maskInfo], 1) == 0;
     }
 
     /// <summary>
@@ -1006,6 +1051,69 @@ internal sealed class X11WindowBackend : IWindowBackend
         if (ev.xcookie.data == 0) return;
         if (ev.xcookie.evtype == XI2.XI_Motion)
             HandleXI2Motion(ev.xcookie.data);
+        else if (TouchInputGate.IsSupported)
+            HandleXI2Touch(ev.xcookie.evtype, ev.xcookie.data);
+    }
+
+    /// <summary>Routes one touch sample to the gesture layer.</summary>
+    private void HandleXI2Touch(int evtype, nint dataPtr)
+    {
+        var dev = Marshal.PtrToStructure<XIDeviceEvent>(dataPtr);
+        int pointerId = dev.detail;
+        var pos = new Point(dev.event_x / Window.DpiScale, dev.event_y / Window.DpiScale);
+        var screenPos = ClientToScreen(pos);
+        long timestamp = _host.EventClock.ToTimestamp(dev.time);
+        var modifiers = GetModifiers((uint)dev.mods.effective);
+
+        switch (evtype)
+        {
+            case XI2.XI_TouchBegin:
+                _activeTouches ??= new List<int>();
+                if (!_activeTouches.Contains(pointerId))
+                {
+                    _activeTouches.Add(pointerId);
+                }
+
+                if (!Window.IsActive)
+                {
+                    SetWindowActive(true);
+                }
+
+                WindowInputRouter.PointerDown(Window, pointerId, PointerType.Touch, pos, screenPos, timestamp, modifiers);
+                break;
+
+            case XI2.XI_TouchUpdate:
+                // An update for a sequence cancelled here (hide, modal disable) must not revive it.
+                if (_activeTouches != null && _activeTouches.Contains(pointerId))
+                {
+                    WindowInputRouter.PointerMove(Window, pointerId, PointerType.Touch, pos, screenPos, timestamp, modifiers);
+                }
+
+                break;
+
+            case XI2.XI_TouchEnd:
+                if (_activeTouches != null && _activeTouches.Remove(pointerId))
+                {
+                    WindowInputRouter.PointerUp(Window, pointerId, PointerType.Touch, pos, screenPos, timestamp, modifiers);
+                }
+
+                break;
+        }
+    }
+
+    private void CancelActiveTouches()
+    {
+        if (_activeTouches == null || _activeTouches.Count == 0)
+        {
+            return;
+        }
+
+        var pointerIds = _activeTouches.ToArray();
+        _activeTouches.Clear();
+        foreach (int pointerId in pointerIds)
+        {
+            WindowInputRouter.PointerCancel(Window, pointerId);
+        }
     }
 
     // XISelectEvents(XI_Motion) suppresses core MotionNotify on this window, so this handler
@@ -1019,6 +1127,10 @@ internal sealed class X11WindowBackend : IWindowBackend
         // XIAllDevices delivers each physical motion twice - once via the slave
         // (deviceid==sourceid) and once via the master mirror. Skip slaves.
         if (dev.deviceid == dev.sourceid)
+            return;
+
+        // The pointer the server made up from a touch this window already receives as touch.
+        if (HasActiveTouches && (dev.flags & XI2.XIPointerEmulated) != 0)
             return;
 
         var pos = new Point(dev.event_x / Window.DpiScale, dev.event_y / Window.DpiScale);
@@ -1571,6 +1683,13 @@ internal sealed class X11WindowBackend : IWindowBackend
 
             case ButtonPress:
             case ButtonRelease:
+                // Core events carry no emulation mark, so while a touch is down any core pointer event may
+                // be the server's copy of it.
+                if (HasActiveTouches)
+                {
+                    break;
+                }
+
                 HandleButton(ev.xbutton, isDown: ev.type == ButtonPress);
                 if (ev.type == ButtonRelease)
                 {
@@ -1580,6 +1699,11 @@ internal sealed class X11WindowBackend : IWindowBackend
                 break;
 
             case MotionNotify:
+                if (HasActiveTouches)
+                {
+                    break;
+                }
+
                 HandleMotion(ev.xmotion);
                 break;
 
@@ -2661,6 +2785,10 @@ internal sealed class X11WindowBackend : IWindowBackend
         }
 
         _cleanupDone = true;
+        if (TouchInputGate.IsSupported)
+        {
+            _activeTouches?.Clear();
+        }
 
         if (handle == 0 || Display == 0)
         {
@@ -2906,6 +3034,11 @@ internal sealed class X11WindowBackend : IWindowBackend
         _enabled = enabled;
         if (!enabled)
         {
+            if (TouchInputGate.IsSupported)
+            {
+                CancelActiveTouches();
+            }
+
             Window.ClearMouseOverState();
         }
     }

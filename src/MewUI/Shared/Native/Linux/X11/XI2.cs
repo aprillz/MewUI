@@ -4,7 +4,7 @@ namespace Aprillz.MewUI.Native;
 
 /// <summary>
 /// Minimal XInput2 surface used to receive high-resolution scroll deltas from
-/// trackpads and modern mice. Falls back gracefully - callers must check
+/// trackpads and modern mice, and touch sequences (2.2). Falls back gracefully - callers must check
 /// <see cref="XIQueryVersion"/> before relying on these APIs.
 /// </summary>
 internal static partial class XI2
@@ -15,6 +15,12 @@ internal static partial class XI2
     public const int XI_ButtonPress = 4;
     public const int XI_ButtonRelease = 5;
     public const int XI_Motion = 6;
+    public const int XI_TouchBegin = 18;
+    public const int XI_TouchUpdate = 19;
+    public const int XI_TouchEnd = 20;
+
+    // XIDeviceEvent.flags on pointer events the server made up from a touch sequence.
+    public const int XIPointerEmulated = 1 << 16;
 
     // Special device IDs accepted by XISelectEvents / XIQueryDevice.
     public const int XIAllDevices = 0;

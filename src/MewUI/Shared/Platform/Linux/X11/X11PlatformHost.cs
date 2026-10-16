@@ -53,6 +53,10 @@ public sealed class X11PlatformHost : IPlatformHost
 
     internal const string SystemFontFamily = "sans-serif";
 
+    private X11EventClock? _eventClock;
+
+    internal X11EventClock EventClock => _eventClock ??= new();
+
     public string DefaultFontFamily => SystemFontFamily;
 
     public IReadOnlyList<string> DefaultFontFallbacks { get; } = BuildDefaultFontFallbacks();
