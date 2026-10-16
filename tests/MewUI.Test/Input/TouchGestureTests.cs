@@ -250,6 +250,43 @@ public sealed class TouchGestureTests
     }
 
     [TestMethod]
+    public void Drag_AfterCatchingACoast_ScrollsAgainWithoutClicking()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("GDI backend is Windows-only.");
+            return;
+        }
+
+        var scene = CreateScene();
+        var contacts = new Contacts(scene.Window);
+
+        contacts.FlickUp(1, new Point(200, 280), steps: 10, step: 10);
+        contacts.Advance(16);
+        Pulse(contacts.Now);
+        scene.Window.PerformLayout();
+
+        var point = new Point(200, 200);
+        contacts.Down(2, point);
+        Assert.IsFalse(scene.Window.IsScrollCoasting, "the press caught the coast");
+        double caught = scene.Viewer.VerticalOffset;
+
+        for (int step = 1; step <= 5; step++)
+        {
+            contacts.Advance(100);
+            contacts.Move(2, new Point(point.X, point.Y - step * 10));
+        }
+
+        contacts.Advance(200);
+        contacts.Up(2, new Point(point.X, point.Y - 50));
+        scene.Window.PerformLayout();
+
+        Assert.AreEqual(caught + 50 - PointerGestureRecognizer.PAN_THRESHOLD_DIP, scene.Viewer.VerticalOffset, 1.0,
+            "the finger that caught the coast scrolls on");
+        Assert.AreEqual(0, scene.Clicks, "the catching press reached no control");
+    }
+
+    [TestMethod]
     public void SecondFinger_IsNotRoutedAndCallsOffTheHold()
     {
         if (!OperatingSystem.IsWindows())

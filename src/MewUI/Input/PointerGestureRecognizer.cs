@@ -32,7 +32,8 @@ internal sealed class PointerGestureRecognizer
 
     private int _primaryId = -1;
 
-    // The press was spent stopping a coast, so nothing of its contact reaches a control.
+    // The press was spent stopping a coast, so no control sees it; the same finger may still drag on into
+    // a new scroll.
     private bool _swallowPrimary;
 
     // Whether the primary contact may still become a pan or a hold. False once something captured to
@@ -97,6 +98,14 @@ internal sealed class PointerGestureRecognizer
             _scroll.Stop();
             _swallowPrimary = true;
             _taps.Reset();
+
+            // Touch platforms let a finger that caught a coast keep scrolling, so the contact still tracks
+            // toward a pan; a hold has nothing to open a menu on.
+            _tracking = true;
+            _start = position;
+            _startScreen = screenPosition;
+            _last = position;
+            _longPressDeadline = long.MaxValue;
             return;
         }
 
@@ -135,15 +144,19 @@ internal sealed class PointerGestureRecognizer
             return;
         }
 
-        if (pointerId != _primaryId || _swallowPrimary || _longPressed)
+        if (pointerId != _primaryId || _longPressed)
         {
             return;
         }
 
         if (!_tracking)
         {
-            WindowInputRouter.MouseMove(_window, position, screenPosition, leftDown: true,
-                rightDown: false, middleDown: false, modifiers, PointerType.Touch);
+            if (!_swallowPrimary)
+            {
+                WindowInputRouter.MouseMove(_window, position, screenPosition, leftDown: true,
+                    rightDown: false, middleDown: false, modifiers, PointerType.Touch);
+            }
+
             return;
         }
 
@@ -166,6 +179,11 @@ internal sealed class PointerGestureRecognizer
         if (distance > PAN_THRESHOLD_DIP)
         {
             BeginPan(position, travel, distance, timestamp, modifiers);
+            return;
+        }
+
+        if (_swallowPrimary)
+        {
             return;
         }
 
@@ -196,15 +214,15 @@ internal sealed class PointerGestureRecognizer
         bool panning = _panning;
         EndPrimary();
 
-        if (swallowed || longPressed)
-        {
-            return;
-        }
-
         if (panning)
         {
             // The press was cancelled when the scroll began, so a release here would report a click.
             _scroll.Release(timestamp);
+            return;
+        }
+
+        if (swallowed || longPressed)
+        {
             return;
         }
 
@@ -264,7 +282,11 @@ internal sealed class PointerGestureRecognizer
         _panning = true;
 
         // Nothing took the press, so abandon it rather than leaving the control under the finger pressed.
-        WindowInputRouter.PointerCancel(_window);
+        // A press spent stopping a coast never reached a control.
+        if (!_swallowPrimary)
+        {
+            WindowInputRouter.PointerCancel(_window);
+        }
 
         // Only the threshold itself is given up: anchoring at the crossing point instead would drop this
         // whole move, which makes a gesture travel less than the finger did.
