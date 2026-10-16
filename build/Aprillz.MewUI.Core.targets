@@ -73,6 +73,20 @@
   </ItemGroup>
 
   <!--
+    Touch and pen gestures are included by default. Apps that never run on a touch screen can turn
+    them off; Trim="true" lets ILLink remove the gesture recognizer, the scroll coast, and the
+    platform pointer paths from trimmed and NativeAOT output, and touch then arrives the way the
+    platform promotes it to the mouse.
+  -->
+  <PropertyGroup>
+    <MewUITouch Condition="'$(MewUITouch)' == ''">true</MewUITouch>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Include="Aprillz.MewUI.Touch.Enabled" Value="$(MewUITouch)" Trim="true" />
+  </ItemGroup>
+
+  <!--
     Win32 text engine. Selects which of the two text paths the GDI and MewVG.Win32 backends keep:
     GDI (legacy family-name matching, no colour glyphs) or DirectWrite (typographic family matching,
     colour emoji). Trim="true" hands the value to the trimmer as well as the runtime, so a trimmed

@@ -427,6 +427,14 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
     internal void NoteLastPointerType(PointerType pointerType) => _lastPointerType = pointerType;
 
+    // Created on the first touch or pen contact, so a window that never sees one carries no recognizer.
+    private PointerGestureRecognizer? _pointerGestures;
+
+    internal PointerGestureRecognizer PointerGestures => _pointerGestures ??= new PointerGestureRecognizer(this);
+
+    /// <summary>True while a released touch scroll is still moving the content.</summary>
+    internal bool IsScrollCoasting => _pointerGestures?.IsCoasting == true;
+
     // Whether the left or right button was held at the most recent pointer event; a press in
     // progress keeps tooltips away (see PopupManager.ShowToolTip).
     private bool _isLeftOrRightButtonDown;

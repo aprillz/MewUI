@@ -29,6 +29,9 @@ public sealed class AnimationManager
     // mutation of the clock set or of a pause state refreshes it.
     private int _hasUnpausedClock;
 
+    /// <summary>The time, in <see cref="Stopwatch"/> ticks, that the current or last pulse advanced the clocks to.</summary>
+    internal long PulseTimestamp { get; private set; }
+
     /// <summary>
     /// Whether any registered clock is running and unpaused. The render loop pulls this each frame, so a
     /// clock registered before the application ran still starts pulsing once the loop begins.
@@ -79,12 +82,20 @@ public sealed class AnimationManager
     /// Disposing the lease releases any window references captured by the final animation frame.
     /// </summary>
     internal AnimationPulse BeginPulse(RenderLoopSettings settings)
+        => BeginPulse(settings, Stopwatch.GetTimestamp());
+
+    /// <summary>
+    /// Advances all clocks to <paramref name="timestamp"/>, in <see cref="Stopwatch"/> ticks. A host that
+    /// knows when the frame will be presented passes that time, so motion does not step with however long
+    /// the frame took to reach this point.
+    /// </summary>
+    internal AnimationPulse BeginPulse(RenderLoopSettings settings, long timestamp)
     {
         ArgumentNullException.ThrowIfNull(settings);
 
         try
         {
-            Update();
+            UpdateAt(timestamp);
             return new AnimationPulse(this, settings);
         }
         catch
@@ -153,6 +164,7 @@ public sealed class AnimationManager
         lock (_sync)
         {
             _pulseHasApplicationDemand = false;
+            PulseTimestamp = timestamp;
 
             if (_active.Count == 0 && _pendingAdd.Count == 0)
             {

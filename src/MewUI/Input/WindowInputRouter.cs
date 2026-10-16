@@ -49,6 +49,65 @@ internal static class WindowInputRouter
     }
 
     /// <summary>
+    /// Reports a touch or pen contact going down. Positions are window surface DIPs and
+    /// <paramref name="timestamp"/> is in <see cref="System.Diagnostics.Stopwatch"/> ticks, taken when the
+    /// platform generated the event. The mouse keeps arriving through <see cref="MouseButton(Window, Point, Point, MewUI.MouseButton, bool, bool, bool, bool, int, ModifierKeys)"/>.
+    /// </summary>
+    internal static void PointerDown(Window window, int pointerId, PointerType pointerType, Point position, Point screenPosition, long timestamp, ModifierKeys modifiers)
+    {
+        if (TouchInputGate.IsSupported)
+        {
+            window.PointerGestures.Down(pointerId, pointerType, position, screenPosition, timestamp, modifiers);
+        }
+        else
+        {
+            MouseButton(window, position, screenPosition, MewUI.MouseButton.Left, isDown: true,
+                leftDown: true, rightDown: false, middleDown: false, clickCount: 1, modifiers, PointerType.Mouse);
+        }
+    }
+
+    /// <summary>Reports a touch or pen contact moving, or a pen hovering in range.</summary>
+    internal static void PointerMove(Window window, int pointerId, PointerType pointerType, Point position, Point screenPosition, long timestamp, ModifierKeys modifiers)
+    {
+        if (TouchInputGate.IsSupported)
+        {
+            window.PointerGestures.Move(pointerId, pointerType, position, screenPosition, timestamp, modifiers);
+        }
+        else
+        {
+            MouseMove(window, position, screenPosition, leftDown: window.HasMouseCapture, rightDown: false,
+                middleDown: false, modifiers, PointerType.Mouse);
+        }
+    }
+
+    /// <summary>Reports a touch or pen contact lifting.</summary>
+    internal static void PointerUp(Window window, int pointerId, PointerType pointerType, Point position, Point screenPosition, long timestamp, ModifierKeys modifiers)
+    {
+        if (TouchInputGate.IsSupported)
+        {
+            window.PointerGestures.Up(pointerId, pointerType, position, screenPosition, timestamp, modifiers);
+        }
+        else
+        {
+            MouseButton(window, position, screenPosition, MewUI.MouseButton.Left, isDown: false,
+                leftDown: false, rightDown: false, middleDown: false, clickCount: 1, modifiers, PointerType.Mouse);
+        }
+    }
+
+    /// <summary>Reports a touch or pen contact the platform took away before it lifted.</summary>
+    internal static void PointerCancel(Window window, int pointerId)
+    {
+        if (TouchInputGate.IsSupported)
+        {
+            window.PointerGestures.Cancel(pointerId);
+        }
+        else
+        {
+            PointerCancel(window);
+        }
+    }
+
+    /// <summary>
     /// The element mouse-over follows for the element under the pointer: during an element capture only the
     /// captured element and its descendants count, so a drag lights up nothing it passes over.
     /// </summary>
