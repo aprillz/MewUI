@@ -77,6 +77,7 @@ public sealed class TouchInjectionTests
         var scene = Open(title);
         scene.Window.Show();
         scene.Window.MoveTo(200, 120);
+        TouchInjector.KeepOnTop(scene.Window);
         await Task.Delay(400);
         return scene;
     }
@@ -142,9 +143,7 @@ public sealed class TouchInjectionTests
         {
             using var scene = await ShowAsync("TouchHold");
             var point = Center(scene.Target);
-            await TouchInjector.DownAsync(scene.Window, point);
-            await Task.Delay(800);
-            await TouchInjector.UpAsync(scene.Window, point);
+            await TouchInjector.HoldAsync(scene.Window, point, durationMs: 800);
             await Task.Delay(SETTLE_MS);
 
             Assert.AreEqual(1, scene.TouchRightPresses, "the hold right-clicks once");
@@ -186,6 +185,7 @@ public sealed class TouchInjectionTests
             scene.Window.Show();
             MonitorProbe.SetWindowPos(scene.Window.Handle, 0,
                 monitor.PixelBounds.CenterX - 200, monitor.PixelBounds.CenterY - 200, 0, 0, MonitorProbe.MOVE_ONLY);
+            TouchInjector.KeepOnTop(scene.Window);
             await Task.Delay(400);
             Assert.AreEqual(monitor.Dpi, scene.Window.Dpi, $"the window must sit on {monitor.Label}");
 
@@ -380,6 +380,29 @@ internal static class TouchInjector
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool InitializeTouchInjection(uint maxCount, uint dwMode);
 
+    [DllImport("user32.dll")]
+    private static extern nint WindowFromPoint(POINT point);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetWindowPos(nint hwnd, nint insertAfter, int x, int y, int width, int height, uint flags);
+
+    private const nint HWND_TOPMOST = -1;
+    private const uint SWP_NOSIZE = 0x0001;
+    private const uint SWP_NOMOVE = 0x0002;
+    private const uint SWP_NOACTIVATE = 0x0010;
+
+    /// <summary>
+    /// Raises the window above everything on Windows. Injected touch lands on whatever window is on top at
+    /// the point, and the remote broker's console can sit above a window that is already active.
+    /// </summary>
+    public static void KeepOnTop(Window window)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            SetWindowPos(window.Handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        }
+    }
+
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool InjectTouchInput(uint count, [In] POINTER_TOUCH_INFO[] contacts);
 
@@ -416,6 +439,22 @@ internal static class TouchInjector
     {
         Inject(window, client, Phase.Up);
         await Task.Delay(30);
+    }
+
+    /// <summary>Presses, stays still for <paramref name="durationMs"/>, and lifts.</summary>
+    public static async Task HoldAsync(Window window, Point client, int durationMs)
+    {
+        // Windows cancels an injected contact that goes without input for a while (an 800 ms silence was
+        // enough), and the lift then fails with ERROR_TIMEOUT, so a held finger keeps reporting where it is.
+        Inject(window, client, Phase.Down);
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        while (watch.ElapsedMilliseconds < durationMs)
+        {
+            await Task.Delay(50);
+            Inject(window, client, Phase.Move);
+        }
+
+        await UpAsync(window, client);
     }
 
     public static async Task TapAsync(Window window, Point client)
@@ -465,6 +504,15 @@ internal static class TouchInjector
             }
 
             return;
+        }
+
+        if (phase == Phase.Down)
+        {
+            nint under = WindowFromPoint(new POINT { X = x, Y = y });
+            if (under != window.Handle)
+            {
+                Assert.Fail($"Window 0x{under:X} covers the contact point ({x}, {y}); the touch would not reach the test window.");
+            }
         }
 
         uint flags = phase switch
