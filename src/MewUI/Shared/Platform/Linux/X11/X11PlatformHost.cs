@@ -51,7 +51,7 @@ public sealed class X11PlatformHost : IPlatformHost
     private int _wakeWriteFd = -1;
     private bool _usePollWait;
 
-    internal const string SystemFontFamily = "sans-serif";
+    internal const string SystemFontFamily = LinuxFontDefaults.SystemFontFamily;
 
     private X11EventClock? _eventClock;
 
@@ -59,26 +59,7 @@ public sealed class X11PlatformHost : IPlatformHost
 
     public string DefaultFontFamily => SystemFontFamily;
 
-    public IReadOnlyList<string> DefaultFontFallbacks { get; } = BuildDefaultFontFallbacks();
-
-    private static string[] BuildDefaultFontFallbacks()
-    {
-        var locale = Rendering.FontFallback.ResolvedLocale;
-        var cjk = Rendering.FontFallback.OrderCjkByLocale(locale,
-            kr: "Noto Sans CJK KR", jp: "Noto Sans CJK JP",
-            sc: "Noto Sans CJK SC", tc: "Noto Sans CJK TC");
-
-        var chain = new List<string>(16) { "Noto Sans" };
-        chain.AddRange(cjk);
-        chain.AddRange([
-            "Noto Color Emoji",
-            "Noto Sans Arabic", "Noto Sans Hebrew",
-            "Noto Sans Devanagari", "Noto Sans Thai", "Noto Sans Bengali",
-            "DejaVu Sans", "Liberation Sans",
-            "Noto Sans Symbols", "Noto Sans Symbols 2", "Noto Sans Math",
-        ]);
-        return [.. chain];
-    }
+    public IReadOnlyList<string> DefaultFontFallbacks { get; } = LinuxFontDefaults.BuildFallbacks();
 
     public IMessageBoxService MessageBox { get; } = new X11MessageBoxService();
 
