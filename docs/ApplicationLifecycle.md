@@ -287,6 +287,8 @@ Application.Current.RenderLoopSettings.TargetFps = 0; // unlimited
 
 Windows shown with an owner (`Show(owner)` / `ShowDialogAsync(owner)`) close together when their owner closes.
 
+On macOS an owned window stays in front of its owner only while the application is active, as macOS windows do. A modal dialog drops back behind the active application's windows when the user switches away, and a window shown with `Show(owner)` hides until the application is active again. A window that must stay visible over other applications is shown without an owner and with `Topmost` set.
+
 #### Example: Confirm before closing
 ```csharp
 window.Closing += args =>

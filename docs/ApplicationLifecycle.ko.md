@@ -286,6 +286,8 @@ Application.Current.RenderLoopSettings.TargetFps = 0; // unlimited
 
 owner와 함께 표시한 창(`Show(owner)` / `ShowDialogAsync(owner)`)은 owner가 닫힐 때 함께 닫힌다.
 
+macOS에서는 macOS 창의 관례대로, 소유된 창은 앱이 활성일 때만 owner 앞에 놓인다. 사용자가 다른 앱으로 전환하면 모달 다이얼로그는 활성 앱의 창 뒤로 물러나고, `Show(owner)`로 표시한 창은 앱이 다시 활성이 될 때까지 숨는다. 다른 앱 위에도 계속 보여야 하는 창은 owner 없이 `Topmost`로 표시한다.
+
 #### 예제: 닫기 전 확인
 ```csharp
 window.Closing += args =>
