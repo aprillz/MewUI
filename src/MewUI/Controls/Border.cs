@@ -267,13 +267,26 @@ public sealed partial class Border : Control, IVisualTreeHost, ILogicalTreeHost
         if (metrics.IsSimple)
         {
             var borderThickness = metrics.UniformThickness;
-            clipRect = borderThickness > 0
-                ? new Rect(metrics.Bounds.X + borderThickness, metrics.Bounds.Y + borderThickness,
-                    Math.Max(0, metrics.Bounds.Width - borderThickness * 2),
-                    Math.Max(0, metrics.Bounds.Height - borderThickness * 2))
-                : metrics.Bounds;
+            if (borderThickness > 0 && BorderBrush.A > 0)
+            {
+                // The child stops at the stroke's centre line, where the background stops too. Clipped at the
+                // inner contour, its antialiased edge and the stroke's would fade over the same pixels and let
+                // the frame show through; the stroke is drawn after the child and covers its inner half.
+                double inset = borderThickness / 2;
+                clipRect = metrics.Bounds.Inflate(-inset, -inset);
+                radiusX = metrics.UniformRadius > 0 ? Math.Max(0, metrics.UniformRadius - inset) : 0;
+            }
+            else
+            {
+                clipRect = borderThickness > 0
+                    ? new Rect(metrics.Bounds.X + borderThickness, metrics.Bounds.Y + borderThickness,
+                        Math.Max(0, metrics.Bounds.Width - borderThickness * 2),
+                        Math.Max(0, metrics.Bounds.Height - borderThickness * 2))
+                    : metrics.Bounds;
+                radiusX = metrics.UniformRadius > 0 ? metrics.UniformInnerRadius : 0;
+            }
+
             clipRect = clipRect.Deflate(Padding);
-            radiusX = metrics.UniformRadius > 0 ? metrics.UniformInnerRadius : 0;
             radiusY = radiusX;
         }
         else
