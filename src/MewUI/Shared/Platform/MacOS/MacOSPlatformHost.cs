@@ -18,6 +18,7 @@ public sealed class MacOSPlatformHost : IPlatformHost
     private int _displayRefreshHz;
     private ThemeVariant _lastSystemTheme = ThemeVariant.Light;
     private nint _lastInputWindow;
+    private bool _applicationActive;
     private int _themeUpdateRequested;
     // 0 = the pump loop is active/running, 1 = it is blocked in WaitForNextEventDequeue.
     private int _parked;
@@ -144,6 +145,41 @@ public sealed class MacOSPlatformHost : IPlatformHost
         // prefer the frontmost MewUI popup under the pointer: non-key borderless popups can otherwise
         // leave subsequent mouseMoved events associated with their key owner.
         return capturedTarget ?? popupTarget ?? eventTarget;
+    }
+
+    internal bool TryGetBackend(nint nsWindow, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out MacOSWindowBackend? backend)
+    {
+        foreach (var candidate in _windows.Values)
+        {
+            if (candidate.NsWindow == nsWindow)
+            {
+                backend = candidate;
+                return true;
+            }
+        }
+
+        backend = null;
+        return false;
+    }
+
+    /// <summary>Re-applies every window's level for the application's current activation.</summary>
+    internal void ApplyWindowLevels()
+    {
+        bool active = MacOSInterop.IsApplicationActive();
+        _applicationActive = active;
+        foreach (var backend in _windows.Values.ToArray())
+        {
+            backend.ApplyWindowLevel(active);
+        }
+    }
+
+    /// <summary>Re-applies window levels when the application's activation changed; levels order windows across every application.</summary>
+    private void SyncApplicationActivation()
+    {
+        if (MacOSInterop.IsApplicationActive() != _applicationActive)
+        {
+            ApplyWindowLevels();
+        }
     }
 
     internal void UnregisterWindow(nint handle)
@@ -760,6 +796,8 @@ public sealed class MacOSPlatformHost : IPlatformHost
                 }
             }
         }
+
+        SyncApplicationActivation();
     }
 
     public void Dispose()
@@ -869,6 +907,8 @@ public sealed class MacOSPlatformHost : IPlatformHost
                 _windows.Values.FirstOrDefault()?.ProcessNSEvent(ev);
             }
         }
+
+        SyncApplicationActivation();
     }
 
     private void OnSystemThemeChanged()

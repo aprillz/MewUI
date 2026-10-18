@@ -64,7 +64,9 @@ internal static unsafe class MacOSWindowInterop
     private static nint SelSetDisplaySyncEnabled;
     private static nint SelSetContentMinSize;
     private static nint SelSetContentMaxSize;
-    private static nint SelSetParentWindow;
+    private static nint SelSetHidesOnDeactivate;
+    private static nint SelOrderWindowRelativeTo;
+    private static nint SelWindowNumber;
     private static nint SelSetLevel;
     private static nint SelLevel;
     private static nint SelMakeFirstResponder;
@@ -260,15 +262,36 @@ internal static unsafe class MacOSWindowInterop
         ObjC.MsgSend_void_nint_nint(window, SelMakeKeyAndOrderFront, 0);
     }
 
-    public static void SetOwnerWindow(nint window, nint ownerWindow)
+    public static bool IsWindowVisible(nint window)
     {
         EnsureInitialized();
-        if (window == 0 || SelSetParentWindow == 0)
+        return window != 0 && ObjC.MsgSend_bool(window, ObjC.Sel("isVisible"));
+    }
+
+    /// <summary>Whether AppKit hides the window while the application is inactive (an auxiliary panel's behavior).</summary>
+    public static void SetHidesOnDeactivate(nint window, bool value)
+    {
+        EnsureInitialized();
+        if (window == 0 || SelSetHidesOnDeactivate == 0)
         {
             return;
         }
 
-        ObjC.MsgSend_void_nint_nint(window, SelSetParentWindow, ownerWindow);
+        ObjC.MsgSend_void_nint_bool(window, SelSetHidesOnDeactivate, value);
+    }
+
+    /// <summary>Orders <paramref name="window"/> directly above <paramref name="relativeTo"/> within their shared level.</summary>
+    public static void OrderAbove(nint window, nint relativeTo)
+    {
+        EnsureInitialized();
+        if (window == 0 || relativeTo == 0 || SelOrderWindowRelativeTo == 0 || SelWindowNumber == 0)
+        {
+            return;
+        }
+
+        const long NSWindowAbove = 1;
+        long relativeNumber = ObjC.MsgSend_long(relativeTo, SelWindowNumber);
+        ObjC.MsgSend_void_nint_long_long(window, SelOrderWindowRelativeTo, NSWindowAbove, relativeNumber);
     }
 
     public static long GetWindowLevel(nint window)
@@ -1208,7 +1231,9 @@ internal static unsafe class MacOSWindowInterop
         SelSetDisplaySyncEnabled = ObjC.Sel("setDisplaySyncEnabled:");
         SelSetContentMinSize = ObjC.Sel("setContentMinSize:");
         SelSetContentMaxSize = ObjC.Sel("setContentMaxSize:");
-        SelSetParentWindow = ObjC.Sel("setParentWindow:");
+        SelSetHidesOnDeactivate = ObjC.Sel("setHidesOnDeactivate:");
+        SelOrderWindowRelativeTo = ObjC.Sel("orderWindow:relativeTo:");
+        SelWindowNumber = ObjC.Sel("windowNumber");
         SelSetLevel = ObjC.Sel("setLevel:");
         SelLevel = ObjC.Sel("level");
         SelMakeFirstResponder = ObjC.Sel("makeFirstResponder:");

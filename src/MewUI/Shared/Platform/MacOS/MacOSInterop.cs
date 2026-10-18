@@ -1346,6 +1346,9 @@ internal static unsafe partial class ObjC
     private static partial void objc_msgSend_void_nint(nint receiver, nint selector, nint a0);
 
     [LibraryImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")]
+    private static partial void objc_msgSend_void_long_long(nint receiver, nint selector, long a0, long a1);
+
+    [LibraryImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")]
     private static partial void objc_msgSend_void_intPtr_int(nint receiver, nint selector, int* value, int parameter);
 
     [LibraryImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")]
@@ -1597,6 +1600,9 @@ internal static unsafe partial class ObjC
     {
         objc_msgSend_void_nint(receiver, selector, a0);
     }
+
+    public static void MsgSend_void_nint_long_long(nint receiver, nint selector, long a0, long a1)
+        => objc_msgSend_void_long_long(receiver, selector, a0, a1);
 
     public static bool MsgSend_bool_nint_nint(nint receiver, nint selector, nint a0, nint a1)
         => objc_msgSend_byte_nint_nint(receiver, selector, a0, a1) != 0;

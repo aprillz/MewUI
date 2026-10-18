@@ -65,6 +65,15 @@ internal sealed class MacOSWindowBackend : IWindowBackend
     private readonly int[] _lastPressClickCounts = new int[5];
     private int _reshapeRendering;
     private long _defaultWindowLevel;
+
+    // AppKit window levels (NSWindowLevel) for the kinds of window MewUI places.
+    private const long FLOATING_WINDOW_LEVEL = 3;
+    private const long MODAL_PANEL_WINDOW_LEVEL = 8;
+    private const long POPUP_MENU_WINDOW_LEVEL = 101;
+
+    // The owner's NSWindow; it decides this window's level and order, since AppKit has no owned-window relation.
+    private nint _ownerNsWindow;
+    private bool _topmost;
     private ulong _defaultStyleMask;
     private bool _isManuallyMaximized;
     // Set when a borderless window was temporarily promoted to titled to allow native fullscreen.
@@ -230,6 +239,7 @@ internal sealed class MacOSWindowBackend : IWindowBackend
         }
 
         ApplyPendingOwner();
+        ApplyWindowLevel(MacOSInterop.IsApplicationActive());
 
         if (_window.IsDialogWindow)
         {
@@ -302,8 +312,8 @@ internal sealed class MacOSWindowBackend : IWindowBackend
         {
             return;
         }
-        // NSFloatingWindowLevel = 3, NSNormalWindowLevel = 0
-        ObjC.MsgSend_void_nint_int(_nsWindow, ObjC.Sel("setLevel:"), value ? 3 : 0);
+        _topmost = value;
+        _host.ApplyWindowLevels();
     }
 
     public void SetCanMinimize(bool value)
@@ -769,15 +779,73 @@ internal sealed class MacOSWindowBackend : IWindowBackend
             ownerWindow = ownerHandle;
         }
 
-        MacOSWindowInterop.SetOwnerWindow(_nsWindow, ownerWindow);
-        if (ownerWindow != 0)
+        _ownerNsWindow = ownerWindow;
+        ApplyWindowLevel(MacOSInterop.IsApplicationActive());
+    }
+
+    internal nint NsWindow => _nsWindow;
+
+    /// <summary>
+    /// The level AppKit gives this kind of window. Window levels order windows across every application, so
+    /// only an active application's windows may sit above the normal level, except a window the app keeps on top.
+    /// </summary>
+    internal long ResolveWindowLevel(bool applicationActive)
+    {
+        if (_window.Kind == Controls.WindowKind.Overlay)
         {
-            long ownerLevel = MacOSWindowInterop.GetWindowLevel(ownerWindow);
-            MacOSWindowInterop.SetWindowLevel(_nsWindow, ownerLevel + 1);
+            return MacOSWindowInterop.GetWindowLevel(_nsWindow);
+        }
+
+        long level;
+        if (_window.Kind == Controls.WindowKind.Popup)
+        {
+            // A popup closes when its owner deactivates, so it never floats over another application.
+            level = POPUP_MENU_WINDOW_LEVEL;
+        }
+        else if (_window.IsDialogWindow)
+        {
+            level = applicationActive ? MODAL_PANEL_WINDOW_LEVEL : _defaultWindowLevel;
+        }
+        else if (_ownerNsWindow != 0 || _window.Kind == Controls.WindowKind.Tool)
+        {
+            // An auxiliary panel: it floats over the application's windows and hides while the application is inactive.
+            level = FLOATING_WINDOW_LEVEL;
         }
         else
         {
-            MacOSWindowInterop.SetWindowLevel(_nsWindow, _defaultWindowLevel);
+            level = _defaultWindowLevel;
+        }
+
+        if (_topmost)
+        {
+            level = Math.Max(level, FLOATING_WINDOW_LEVEL);
+        }
+
+        // Never below an owner the application keeps higher, or the window would disappear behind it.
+        if (_ownerNsWindow != 0 && _host.TryGetBackend(_ownerNsWindow, out var owner))
+        {
+            level = Math.Max(level, owner.ResolveWindowLevel(applicationActive));
+        }
+
+        return level;
+    }
+
+    /// <summary>Applies <see cref="ResolveWindowLevel"/>, and keeps a dialog in its owner's level ordered above it.</summary>
+    internal void ApplyWindowLevel(bool applicationActive)
+    {
+        if (_nsWindow == 0 || !_shown || _window.Kind == Controls.WindowKind.Overlay)
+        {
+            return;
+        }
+
+        MacOSWindowInterop.SetWindowLevel(_nsWindow, ResolveWindowLevel(applicationActive));
+        bool auxiliary = (_ownerNsWindow != 0 && !_window.IsDialogWindow && _window.Kind != Controls.WindowKind.Popup)
+            || _window.Kind == Controls.WindowKind.Tool;
+        MacOSWindowInterop.SetHidesOnDeactivate(_nsWindow, auxiliary && !_topmost);
+
+        if (_ownerNsWindow != 0 && _window.IsDialogWindow && MacOSWindowInterop.IsWindowVisible(_nsWindow))
+        {
+            MacOSWindowInterop.OrderAbove(_nsWindow, _ownerNsWindow);
         }
     }
 

@@ -53,14 +53,14 @@ public sealed class OwnedWindowTests
 
     [TestMethod]
     [OSCondition(OperatingSystems.OSX)]
-    public Task OnMacOS_TheDialogIsAChildOfTheOwnerAndSitsOnAHigherLevel() => RunOwnedDialogAsync((owner, dialog) =>
+    public Task OnMacOS_TheDialogStaysAboveTheOwner() => RunOwnedDialogAsync((owner, dialog) =>
     {
         nint ownerWindow = MacOS.WindowOfView(owner.Handle);
         nint dialogWindow = MacOS.WindowOfView(dialog.Handle);
         Assert.AreNotEqual((nint)0, dialogWindow, "the dialog view has no window");
 
-        Assert.AreEqual(ownerWindow, MacOS.ParentWindow(dialogWindow), "the dialog was not attached to the window it was shown for");
-        Assert.IsGreaterThan(MacOS.Level(ownerWindow), MacOS.Level(dialogWindow), "the dialog did not sit above its owner's level");
+        // AppKit has no owned-window relation; the dialog's level and order keep it in front of the owner.
+        Assert.IsTrue(MacOS.IsInFront(dialogWindow, ownerWindow), "the owner covered the dialog");
 
         return Task.CompletedTask;
     });
@@ -193,14 +193,53 @@ public sealed class OwnedWindowTests
     {
         private const string OBJC = "/usr/lib/libobjc.dylib";
 
+        private const string CORE_GRAPHICS = "/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics";
+        private const string CORE_FOUNDATION = "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation";
+        private const uint ON_SCREEN_ONLY = 1;
+        private const int NUMBER_SINT64 = 4;
+        private const uint UTF8 = 0x08000100;
+
         public static nint WindowOfView(nint view) => view == 0 ? 0 : Send(view, sel_registerName("window"));
 
-        public static nint ParentWindow(nint window) => window == 0 ? 0 : Send(window, sel_registerName("parentWindow"));
+        /// <summary>Whether <paramref name="window"/> comes before <paramref name="other"/> in the window server's front-to-back order.</summary>
+        public static bool IsInFront(nint window, nint other)
+        {
+            long windowNumber = SendLong(window, sel_registerName("windowNumber"));
+            long otherNumber = SendLong(other, sel_registerName("windowNumber"));
+            nint list = CGWindowListCopyWindowInfo(ON_SCREEN_ONLY, 0);
+            nint key = CFStringCreateWithCString(0, "kCGWindowNumber", UTF8);
+            bool inFront = false;
+            long count = CFArrayGetCount(list);
+            for (long index = 0; index < count; index++)
+            {
+                long number = 0;
+                CFNumberGetValue(CFDictionaryGetValue(CFArrayGetValueAtIndex(list, index), key), NUMBER_SINT64, ref number);
+                if (number == windowNumber)
+                {
+                    inFront = true;
+                    break;
+                }
 
-        public static long Level(nint window) => window == 0 ? 0 : SendLong(window, sel_registerName("level"));
+                if (number == otherNumber)
+                {
+                    break;
+                }
+            }
+
+            CFRelease(key);
+            CFRelease(list);
+            return inFront;
+        }
 
         [DllImport(OBJC)] private static extern nint sel_registerName(string name);
         [DllImport(OBJC, EntryPoint = "objc_msgSend")] private static extern nint Send(nint receiver, nint selector);
         [DllImport(OBJC, EntryPoint = "objc_msgSend")] private static extern long SendLong(nint receiver, nint selector);
+        [DllImport(CORE_GRAPHICS)] private static extern nint CGWindowListCopyWindowInfo(uint option, uint relativeToWindow);
+        [DllImport(CORE_FOUNDATION)] private static extern long CFArrayGetCount(nint array);
+        [DllImport(CORE_FOUNDATION)] private static extern nint CFArrayGetValueAtIndex(nint array, long index);
+        [DllImport(CORE_FOUNDATION)] private static extern nint CFDictionaryGetValue(nint dictionary, nint key);
+        [DllImport(CORE_FOUNDATION)] [return: MarshalAs(UnmanagedType.I1)] private static extern bool CFNumberGetValue(nint number, int type, ref long value);
+        [DllImport(CORE_FOUNDATION)] private static extern nint CFStringCreateWithCString(nint allocator, string text, uint encoding);
+        [DllImport(CORE_FOUNDATION)] private static extern void CFRelease(nint value);
     }
 }
