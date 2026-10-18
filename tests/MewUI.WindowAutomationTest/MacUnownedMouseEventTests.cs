@@ -98,8 +98,7 @@ public sealed class MacUnownedMouseEventTests
         };
 
         // Away from the screen's bottom-left, where a misread screen point would land inside the client.
-        var screens = MacScreens.All();
-        var reference = MacScreens.Frame(screens[0]);
+        var reference = MainScreenFrame();
         window.Show();
         window.MoveTo(reference.Width - 420, 80);
         window.Activate();
@@ -133,9 +132,21 @@ public sealed class MacUnownedMouseEventTests
     private static CocoaPoint ScreenPointOf(Window window, Point client)
     {
         var screenPx = window.ClientToScreen(client);
-        double scale = MacScreens.ReferenceScale();
-        var reference = MacScreens.Frame(MacScreens.All()[0]);
+        double scale = MainScreenScale();
+        var reference = MainScreenFrame();
         return new CocoaPoint(screenPx.X / scale, reference.Y + reference.Height - screenPx.Y / scale);
+    }
+
+    /// <summary>The first screen, whose bottom-left corner is the origin of Cocoa screen coordinates.</summary>
+    private static nint MainScreen()
+        => SendIndex(Send(objc_getClass("NSScreen"), Sel("screens")), Sel("objectAtIndex:"), 0);
+
+    private static NSRect MainScreenFrame() => SendRect(MainScreen(), Sel("frame"));
+
+    private static double MainScreenScale()
+    {
+        double scale = SendDouble(MainScreen(), Sel("backingScaleFactor"));
+        return scale > 0 ? scale : 1.0;
     }
 
     private static Rect WindowFrame(Window window)
@@ -182,10 +193,21 @@ public sealed class MacUnownedMouseEventTests
     [StructLayout(LayoutKind.Sequential)]
     private readonly record struct CocoaPoint(double X, double Y);
 
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NSRect
+    {
+        public double X;
+        public double Y;
+        public double Width;
+        public double Height;
+    }
+
     [DllImport(OBJC)] private static extern nint objc_getClass(string name);
     [DllImport(OBJC)] private static extern nint sel_registerName(string name);
     [DllImport(OBJC, EntryPoint = "objc_msgSend")] private static extern nint Send(nint receiver, nint selector);
-    [DllImport(OBJC, EntryPoint = "objc_msgSend")] private static extern MacScreens.NSRect SendRect(nint receiver, nint selector);
+    [DllImport(OBJC, EntryPoint = "objc_msgSend")] private static extern NSRect SendRect(nint receiver, nint selector);
+    [DllImport(OBJC, EntryPoint = "objc_msgSend")] private static extern nint SendIndex(nint receiver, nint selector, nuint index);
+    [DllImport(OBJC, EntryPoint = "objc_msgSend")] private static extern double SendDouble(nint receiver, nint selector);
 
     [DllImport(OBJC, EntryPoint = "objc_msgSend")]
     private static extern nint SendMouseEvent(nint receiver, nint selector, nuint type, CocoaPoint location, nuint modifierFlags,
