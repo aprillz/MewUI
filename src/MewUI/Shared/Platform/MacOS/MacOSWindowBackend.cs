@@ -1367,6 +1367,13 @@ internal sealed class MacOSWindowBackend : IWindowBackend
         _ = UpdateClientSizeIfNeeded();
 
         var loc = MacOSInterop.GetEventLocationInWindow(ev);
+        if (MacOSInterop.GetEventWindow(ev) == 0)
+        {
+            // AppKit hands an event with no window its location in screen coordinates, which read as a window
+            // position would land on whatever control happens to sit at those numbers.
+            loc = MacOSWindowInterop.WindowConvertPointFromScreen(_nsWindow, loc);
+        }
+
         var client = _window.ClientSize;
         var pos = new Point(loc.x, client.Height - loc.y);
 
