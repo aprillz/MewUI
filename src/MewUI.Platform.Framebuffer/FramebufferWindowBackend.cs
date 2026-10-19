@@ -397,7 +397,7 @@ internal sealed class FramebufferWindowBackend : IWindowBackend
 
     public void SetAllowsTransparency(bool allowsTransparency) { }
 
-    public void SetCursor(CursorType cursorType) => _host.SetCursorVisible(cursorType != CursorType.None);
+    public void SetCursor(CursorType cursorType) => _host.SetCursor(cursorType);
 
     public void SetImeMode(ImeMode mode) { }
 

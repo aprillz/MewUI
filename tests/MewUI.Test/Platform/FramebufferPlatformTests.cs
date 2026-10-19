@@ -3,6 +3,8 @@ extern alias Framebuffer;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
+using Aprillz.MewUI;
+
 using Framebuffer::Aprillz.MewUI.Native;
 using Framebuffer::Aprillz.MewUI.Platform.Linux.Framebuffer;
 
@@ -77,18 +79,62 @@ public sealed class FramebufferPlatformTests
     }
 
     [TestMethod]
-    public void ArrowCursor_HasOpaqueHotSpotAndClearedRest()
+    public void ArrowCursor_HasAnOpaqueTipAndAntialiasedDiagonal()
     {
-        const int size = 64;
-        uint[] pixels = new uint[size * size];
-        Array.Fill(pixels, 0xDEADBEEFu);
+        var arrow = FramebufferCursorImage.Create(CursorType.Arrow, 1.0, 64);
 
-        FramebufferCursorImage.RenderArrow(pixels, size);
+        Assert.AreEqual(0xFFu, arrow.Pixels[arrow.HotY * arrow.Width + arrow.HotX] >> 24);
+        Assert.AreEqual(0xFF000000u, arrow.Pixels[(arrow.HotY + 4) * arrow.Width + arrow.HotX - 1]);
+        Assert.IsTrue(arrow.Pixels.Any(pixel => pixel >> 24 is > 0 and < 255));
+    }
 
-        Assert.AreEqual(0xFF000000u, pixels[0]);
-        Assert.AreEqual(0xFFFFFFFFu, pixels[2 * size + 1]);
-        Assert.AreEqual(0u, pixels[size - 1]);
-        Assert.AreEqual(0u, pixels[size * size - 1]);
+    [TestMethod]
+    public void RoundCursor_HasAntialiasedEdges()
+    {
+        var notAllowed = FramebufferCursorImage.Create(CursorType.No, 1.0, 64);
+
+        Assert.IsTrue(notAllowed.Pixels.Any(pixel => pixel >> 24 is > 0 and < 255));
+    }
+
+    [TestMethod]
+    public void Cursor_GrowsWithScaleWithinTheLimit()
+    {
+        var single = FramebufferCursorImage.Create(CursorType.Arrow, 1.0, 64);
+        var larger = FramebufferCursorImage.Create(CursorType.Arrow, 1.5, 64);
+        var limited = FramebufferCursorImage.Create(CursorType.Arrow, 8.0, 64);
+
+        Assert.IsTrue(larger.Width > single.Width && larger.Height > single.Height);
+        Assert.IsTrue(limited.Width <= 64 && limited.Height <= 64);
+    }
+
+    [TestMethod]
+    public void AxisAlignedCursors_StayOnWholePixelsAtFractionalScales()
+    {
+        foreach (var type in new[] { CursorType.IBeam, CursorType.Cross })
+        {
+            foreach (double scale in new[] { 1.0, 1.25, 1.5, 1.75, 2.0 })
+            {
+                var image = FramebufferCursorImage.Create(type, scale, 64);
+
+                Assert.IsTrue(image.Pixels.All(pixel => pixel is 0u or 0xFF000000u or 0xFFFFFFFFu), $"{type} at {scale}");
+            }
+        }
+    }
+
+    [TestMethod]
+    public void EveryCursorType_FitsTheCursorPlaneAsPremultipliedPixels()
+    {
+        foreach (var type in Enum.GetValues<CursorType>())
+        {
+            var image = FramebufferCursorImage.Create(type, 3.0, 64);
+
+            Assert.IsTrue(image.Width <= 64 && image.Height <= 64, type.ToString());
+            Assert.IsTrue(image.HotX >= 0 && image.HotX < image.Width, type.ToString());
+            Assert.IsTrue(image.HotY >= 0 && image.HotY < image.Height, type.ToString());
+            Assert.IsTrue(image.Pixels.Any(pixel => pixel == 0xFFFFFFFFu), type.ToString());
+            Assert.IsTrue(image.Pixels.Any(pixel => pixel == 0xFF000000u), type.ToString());
+            Assert.IsTrue(image.Pixels.All(pixel => (pixel & 0xFF) <= pixel >> 24), type.ToString());
+        }
     }
 
     [TestMethod]

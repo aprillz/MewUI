@@ -71,7 +71,10 @@ public sealed class FramebufferPlatformOptions
     /// <summary>Device pixels per DIP. Display size reports are not trusted, so this is not derived from them.</summary>
     public double DpiScale { get; set; } = 1.0;
 
-    /// <summary>Whether a mouse pointer is drawn (DRM cursor plane only). Off by default for touch kiosks.</summary>
+    /// <summary>
+    /// Whether a mouse pointer is drawn: on the DRM cursor plane, or by the CPU on fbdev. It appears once the mouse
+    /// first moves and hides on a touch until the mouse moves again. Off by default.
+    /// </summary>
     public bool ShowCursor { get; set; }
 
     /// <summary>libinput seat to read devices from.</summary>

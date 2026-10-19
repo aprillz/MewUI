@@ -31,9 +31,9 @@ internal interface IFramebufferOutput : IDisposable
     /// <summary>The window surface a graphics backend draws the single window into.</summary>
     IWindowSurface WindowSurface { get; }
 
-    /// <summary>Shows or hides the pointer; outputs without a cursor plane ignore it.</summary>
-    void SetCursorVisible(bool visible);
+    /// <summary>Shows the pointer with the image for <paramref name="shape"/>, or hides it for <see langword="null"/>.</summary>
+    void SetCursor(CursorType? shape);
 
-    /// <summary>Moves the pointer to a screen pixel.</summary>
+    /// <summary>Moves the pointer's hot spot to a screen pixel.</summary>
     void MoveCursor(int x, int y);
 }

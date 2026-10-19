@@ -44,7 +44,12 @@ internal sealed class FramebufferPlatformHost : IPlatformHost, IFramebufferInput
     private int _wakeWriteFd = -1;
     private double _pointerX;
     private double _pointerY;
-    private bool _cursorRequested = true;
+    private CursorType _cursorType = CursorType.Arrow;
+
+    // The pointer stays hidden until the mouse first moves, so a touch-only screen never shows it, and a touch
+    // hides it again until the mouse next moves.
+    private bool _cursorHidden = true;
+    private bool _cursorMoved;
     private uint _repeatingKey;
     private IDisposable? _keyRepeat;
     private long _nextFrameTimestamp;
@@ -182,11 +187,14 @@ internal sealed class FramebufferPlatformHost : IPlatformHost, IFramebufferInput
         }
     }
 
-    internal void SetCursorVisible(bool visible)
+    internal void SetCursor(CursorType cursorType)
     {
-        _cursorRequested = visible;
-        _output?.SetCursorVisible(visible && _options.ShowCursor);
+        _cursorType = cursorType;
+        _output?.SetCursor(ShownCursor);
     }
+
+    private CursorType? ShownCursor
+        => _options.ShowCursor && _cursorType != CursorType.None && !_cursorHidden ? _cursorType : null;
 
     private IFramebufferOutput EnsureOutput()
     {
@@ -231,7 +239,7 @@ internal sealed class FramebufferPlatformHost : IPlatformHost, IFramebufferInput
         _pointerX = output.PixelWidth / 2.0;
         _pointerY = output.PixelHeight / 2.0;
         output.MoveCursor((int)_pointerX, (int)_pointerY);
-        output.SetCursorVisible(_cursorRequested && _options.ShowCursor);
+        output.SetCursor(ShownCursor);
         Console.Error.WriteLine($"[MewUI.Framebuffer] output: {output.Description}, scale {DpiScale:0.##}");
         return output;
     }
@@ -454,6 +462,13 @@ internal sealed class FramebufferPlatformHost : IPlatformHost, IFramebufferInput
         }
 
         _input.Dispatch(this, output.PixelWidth, output.PixelHeight);
+
+        // A mouse reports up to a thousand motions a second; the pointer only has to land where the batch ended.
+        if (_cursorMoved)
+        {
+            _cursorMoved = false;
+            output.MoveCursor((int)_pointerX, (int)_pointerY);
+        }
     }
 
     private ModifierKeys CurrentModifiers => _keyboard?.CurrentModifiers ?? ModifierKeys.None;
@@ -473,7 +488,13 @@ internal sealed class FramebufferPlatformHost : IPlatformHost, IFramebufferInput
 
         _pointerX = Math.Clamp(x, 0, output.PixelWidth - 1);
         _pointerY = Math.Clamp(y, 0, output.PixelHeight - 1);
-        output.MoveCursor((int)_pointerX, (int)_pointerY);
+        _cursorMoved = true;
+        if (_cursorHidden)
+        {
+            _cursorHidden = false;
+            output.SetCursor(ShownCursor);
+        }
+
         _window?.RoutePointerMove(new Point(_pointerX, _pointerY), PointerType.Mouse, CurrentModifiers);
     }
 
@@ -507,6 +528,12 @@ internal sealed class FramebufferPlatformHost : IPlatformHost, IFramebufferInput
     void IFramebufferInputSink.OnTouch(int slot, TouchPhase phase, double x, double y, long timestamp)
     {
         Logger.Write($"touch {slot} {phase} at {x:0},{y:0} age={Stopwatch.GetElapsedTime(timestamp).TotalMilliseconds:0.000}ms");
+        if (phase == TouchPhase.Down && !_cursorHidden)
+        {
+            _cursorHidden = true;
+            _output?.SetCursor(null);
+        }
+
         _window?.RouteTouch(slot, phase, new Point(x, y), timestamp, CurrentModifiers);
     }
 

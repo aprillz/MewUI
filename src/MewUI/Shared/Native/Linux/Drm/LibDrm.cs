@@ -59,6 +59,9 @@ internal static unsafe partial class LibDrm
     public static partial int drmModeSetCursor(int fd, uint crtcId, uint boHandle, uint width, uint height);
 
     [LibraryImport(LIBRARY_NAME)]
+    public static partial int drmModeSetCursor2(int fd, uint crtcId, uint boHandle, uint width, uint height, int hotX, int hotY);
+
+    [LibraryImport(LIBRARY_NAME)]
     public static partial int drmModeMoveCursor(int fd, uint crtcId, int x, int y);
 
     /// <summary>Kernel connector name (HDMI-A-1, DSI-1, ...) built the way the kernel and modetest print it.</summary>

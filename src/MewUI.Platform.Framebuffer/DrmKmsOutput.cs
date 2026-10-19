@@ -35,8 +35,10 @@ internal sealed unsafe class DrmKmsOutput : IFramebufferOutput
     private uint _queuedFramebufferId;
     private bool _modeSet;
     private bool _disposed;
-    private nint _cursorBo;
-    private bool _cursorVisible;
+    private readonly double _dpiScale;
+    private readonly Dictionary<CursorType, CursorPlaneImage> _cursorImages = [];
+    private CursorType? _cursorShape;
+    private CursorPlaneImage? _shownCursor;
     private bool _cursorApplied;
     private int _cursorX;
     private int _cursorY;
@@ -64,6 +66,7 @@ internal sealed unsafe class DrmKmsOutput : IFramebufferOutput
         _gbmDevice = gbmDevice;
         _gbmSurface = gbmSurface;
         _cursorAllowed = cursorAllowed;
+        _dpiScale = dpiScale;
         _selfHandle = GCHandle.Alloc(this, GCHandleType.Normal);
         PixelWidth = mode.HDisplay;
         PixelHeight = mode.VDisplay;
@@ -449,15 +452,19 @@ internal sealed unsafe class DrmKmsOutput : IFramebufferOutput
         LibDrm.drmHandleEvent(_fd, &context);
     }
 
-    public void SetCursorVisible(bool visible)
+    public void SetCursor(CursorType? shape)
     {
-        visible &= _cursorAllowed;
-        if (_cursorVisible == visible && _cursorApplied)
+        if (!_cursorAllowed)
+        {
+            shape = null;
+        }
+
+        if (_cursorShape == shape && _cursorApplied)
         {
             return;
         }
 
-        _cursorVisible = visible;
+        _cursorShape = shape;
         _cursorApplied = false;
         if (_modeSet)
         {
@@ -469,64 +476,77 @@ internal sealed unsafe class DrmKmsOutput : IFramebufferOutput
     {
         _cursorX = x;
         _cursorY = y;
-        if (_modeSet && _cursorVisible)
+        var shown = _shownCursor;
+        if (_modeSet && shown != null)
         {
-            LibDrm.drmModeMoveCursor(_fd, _crtcId, x, y);
+            // The plane is placed by its top-left pixel; the hot spot handed to the driver only informs virtual
+            // display hosts that draw the pointer themselves.
+            LibDrm.drmModeMoveCursor(_fd, _crtcId, x - shown.HotX, y - shown.HotY);
         }
     }
 
     private void ApplyCursor()
     {
-        if (!_cursorVisible)
+        _cursorApplied = true;
+        var image = _cursorShape == null ? null : GetCursorImage(_cursorShape.Value);
+        if (image == null)
         {
             LibDrm.drmModeSetCursor(_fd, _crtcId, 0, 0, 0);
-            _cursorApplied = true;
+            _shownCursor = null;
             return;
         }
 
-        if (_cursorBo == 0)
-        {
-            _cursorBo = CreateArrowCursor();
-            if (_cursorBo == 0)
-            {
-                Logger.Write("cursor buffer creation failed; pointer stays hidden");
-                _cursorApplied = true;
-                return;
-            }
-        }
-
-        uint handle = (uint)LibGbm.gbm_bo_get_handle(_cursorBo);
-        if (LibDrm.drmModeSetCursor(_fd, _crtcId, handle, CURSOR_SIZE, CURSOR_SIZE) != 0)
+        uint handle = (uint)LibGbm.gbm_bo_get_handle(image.Buffer);
+        if (LibDrm.drmModeSetCursor2(_fd, _crtcId, handle, CURSOR_SIZE, CURSOR_SIZE, image.HotX, image.HotY) != 0
+            && LibDrm.drmModeSetCursor(_fd, _crtcId, handle, CURSOR_SIZE, CURSOR_SIZE) != 0)
         {
             Logger.Write("drmModeSetCursor failed; pointer stays hidden");
+            _shownCursor = null;
+            return;
         }
 
-        LibDrm.drmModeMoveCursor(_fd, _crtcId, _cursorX, _cursorY);
-        _cursorApplied = true;
+        _shownCursor = image;
+        MoveCursor(_cursorX, _cursorY);
     }
 
-    private nint CreateArrowCursor()
+    private CursorPlaneImage? GetCursorImage(CursorType shape)
     {
+        if (_cursorImages.TryGetValue(shape, out var cached))
+        {
+            return cached;
+        }
+
         nint bo = LibGbm.gbm_bo_create(_gbmDevice, CURSOR_SIZE, CURSOR_SIZE, LibGbm.GBM_FORMAT_ARGB8888,
             LibGbm.GBM_BO_USE_CURSOR | LibGbm.GBM_BO_USE_WRITE);
         if (bo == 0)
         {
-            return 0;
+            Logger.Write("cursor buffer creation failed; pointer stays hidden");
+            return null;
         }
 
+        var bitmap = FramebufferCursorImage.Create(shape, _dpiScale, CURSOR_SIZE);
         var pixels = new uint[CURSOR_SIZE * CURSOR_SIZE];
-        FramebufferCursorImage.RenderArrow(pixels, CURSOR_SIZE);
+        for (int row = 0; row < bitmap.Height; row++)
+        {
+            bitmap.Pixels.AsSpan(row * bitmap.Width, bitmap.Width).CopyTo(pixels.AsSpan(row * CURSOR_SIZE));
+        }
+
         fixed (uint* data = pixels)
         {
             if (LibGbm.gbm_bo_write(bo, data, (nuint)(pixels.Length * sizeof(uint))) != 0)
             {
                 LibGbm.gbm_bo_destroy(bo);
-                return 0;
+                Logger.Write("cursor buffer write failed; pointer stays hidden");
+                return null;
             }
         }
 
-        return bo;
+        var image = new CursorPlaneImage(bo, bitmap.HotX, bitmap.HotY);
+        _cursorImages[shape] = image;
+        return image;
     }
+
+    private sealed record CursorPlaneImage(nint Buffer, int HotX, int HotY);
 
     public void Dispose()
     {
@@ -549,11 +569,13 @@ internal sealed unsafe class DrmKmsOutput : IFramebufferOutput
             }
         }
 
-        if (_cursorBo != 0)
+        foreach (var image in _cursorImages.Values)
         {
-            LibGbm.gbm_bo_destroy(_cursorBo);
-            _cursorBo = 0;
+            LibGbm.gbm_bo_destroy(image.Buffer);
         }
+
+        _cursorImages.Clear();
+        _shownCursor = null;
 
         // The GBM device, surface and card fd stay open: the graphics backend's EGL display and surface are
         // built on them and may be torn down after the host. They go away with the process.
