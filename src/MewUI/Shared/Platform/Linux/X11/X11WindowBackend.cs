@@ -1625,6 +1625,9 @@ internal sealed class X11WindowBackend : IWindowBackend
                         // acknowledges earlier requests coalesced in the same event batch.
                         _pendingFrameSyncValue = ((long)client.data[3] << 32) | (uint)client.data[2];
                         _hasPendingFrameSyncValue = true;
+                        // The counter is raised after the next frame; without a size change nothing
+                        // else would schedule one, and the WM would wait on this window indefinitely.
+                        NeedsRender = true;
                         break;
                     }
 
