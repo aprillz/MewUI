@@ -358,13 +358,15 @@ internal sealed class WrapItemsPresenter : Control, IItemsPresenter
     private int ComputeColumns(double viewportWidth)
     {
         if (ItemWidth <= 0 || viewportWidth <= 0) return 1;
-        // Use rounding tolerance to avoid DPI-dependent column count differences.
-        // E.g. 400 DIP / 80 = 5.0 exactly, but pixel-snapped borders may reduce
-        // viewportWidth to 399.33, yielding 4.99 - which should still be 5 columns.
-        double raw = viewportWidth / ItemWidth;
-        int cols = (int)Math.Floor(raw);
-        if (raw - cols > 0.95) cols++;
-        return Math.Max(1, cols);
+
+        // Counted in whole device pixels from the same rounded item width the cells are laid out at, so a row
+        // neither passes the viewport nor leaves room for another cell. Rounding the viewport too keeps a
+        // fraction of a pixel lost to snapped borders from costing a column.
+        double dpiScale = GetDpi() / 96.0;
+        long itemPixels = (long)Math.Round(GetPixelAlignedItemWidth() * dpiScale);
+        long viewportPixels = (long)Math.Round(viewportWidth * dpiScale);
+        if (itemPixels <= 0) return 1;
+        return (int)Math.Max(1, viewportPixels / itemPixels);
     }
 
     private void RecomputeExtent()
