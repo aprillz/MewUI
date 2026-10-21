@@ -15,6 +15,7 @@
     <Project Path="samples/MewUI.Gallery/MewUI.Gallery.csproj" />
     <Project Path="samples/MewUI.Geometry.Sample/MewUI.Geometry.Sample.csproj" />
     <Project Path="samples/MewUI.Markdown.Sample/MewUI.Markdown.Sample.csproj" />
+    <Project Path="samples/MewUI.Terminal.Sample/MewUI.Terminal.Sample.csproj" />
     <Project Path="samples/MewUI.ImeTest/MewUI.ImeTest.csproj" />
     <Project Path="samples/MewUI.MewCharts.Sample/MewUI.MewCharts.Sample.csproj" />
     <Project Path="samples/MewUI.MewDock.Sample/MewUI.MewDock.Sample.csproj" />
@@ -60,6 +61,7 @@
     <Project Path="extensions/MewUI.Skia.Interop.MewVG.X11/MewUI.Skia.Interop.MewVG.X11.csproj" />
     <Project Path="extensions/MewUI.Skia/MewUI.Skia.csproj" />
     <Project Path="extensions/MewUI.Svg/MewUI.Svg.csproj" />
+    <Project Path="extensions/MewUI.Terminal/MewUI.Terminal.csproj" />
     <Project Path="extensions/MewUI.WebView2.Win32/MewUI.WebView2.Win32.csproj" />
   </Folder>
   <Folder Name="/extensions/tools/">
@@ -89,6 +91,7 @@
     <Project Path="tests/MewUI.MewDock.Test/MewUI.MewDock.Test.csproj" />
     <Project Path="tests/MewUI.MewvalonEdit.Test/MewUI.MewvalonEdit.Test.csproj" />
     <Project Path="tests/MewUI.Svg.Test/MewUI.Svg.Test.csproj" />
+    <Project Path="tests/MewUI.Terminal.Test/MewUI.Terminal.Test.csproj" />
     <Project Path="tests/MewUI.TextBoxPerformance/MewUI.TextBoxPerformance.csproj" />
     <Project Path="tests/MewUI.WindowAutomationTest/MewUI.WindowAutomationTest.csproj" />
   </Folder>

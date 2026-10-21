@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="..\..\build\MewUI.Common.props" />
+
+  <PropertyGroup>
+    <RootNamespace>Aprillz.MewUI.Terminal</RootNamespace>
+    <AssemblyName>$(MewUITitle).Terminal</AssemblyName>
+    <PackageId>$(MewUITitle).Terminal</PackageId>
+    <Description>Terminal emulator control for MewUI, with the VT parser, buffer and input encoding ported from Windows Terminal.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\MewUI\MewUI.csproj" />
+    <InternalsVisibleTo Include="Aprillz.MewUI.Terminal.Test" />
+    <None Include="LICENSE.WindowsTerminal" Pack="true" PackagePath="licenses\" />
+  </ItemGroup>
+
+</Project>
