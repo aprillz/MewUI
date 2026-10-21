@@ -362,6 +362,15 @@ internal static partial class User32
     [LibraryImport(LibraryName)]
     public static partial short GetAsyncKeyState(int vKey);
 
+    [LibraryImport(LibraryName)]
+    public static partial nint GetKeyboardLayout(uint idThread);
+
+    [LibraryImport(LibraryName, EntryPoint = "MapVirtualKeyExW")]
+    public static partial uint MapVirtualKeyEx(uint uCode, uint uMapType, nint dwhkl);
+
+    [LibraryImport(LibraryName)]
+    public static unsafe partial int ToUnicodeEx(uint wVirtKey, uint wScanCode, byte* lpKeyState, char* pwszBuff, int cchBuff, uint wFlags, nint dwhkl);
+
     #endregion
 
     #region Clipboard
