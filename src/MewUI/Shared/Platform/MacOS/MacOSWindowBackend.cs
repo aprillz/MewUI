@@ -51,15 +51,15 @@ internal sealed class MacOSWindowBackend : IWindowBackend
         Committed = 3,
     }
 
-    // winit-style IME state tracking:
-    // - keyDown first goes through interpretKeyEvents (NSTextInputClient).
-    // - if that produced IME activity (preedit/commit), we suppress the app KeyDown for that key.
-    // - if AppKit calls doCommandBySelector:, it means the key wasn't handled as "text" and should
-    //   be forwarded to the app.
+    // While a composition is open (marked text) a keyDown goes to the input method first, and the app sees the key
+    // only when the input method hands it back through doCommandBySelector:. Otherwise the app's KeyDown comes first
+    // and only a key it leaves unhandled reaches the input method.
     private ImeState _imeState = ImeState.Ground;
 
+    // Set by doCommandBySelector: while a keyDown is interpreted, so a key handed back during a composition is raised.
     private bool _forwardKeyToAppThisKeyDown;
-    private readonly HashSet<int> _forceKeyUps = new();
+    // The key codes whose KeyDown was raised, with the Key it carried, so KeyUp reports the same key.
+    private readonly Dictionary<int, Key> _raisedKeyDowns = new();
     private bool _enabled = true;
     private bool _closedRaised;
     private readonly int[] _lastPressClickCounts = new int[5];
@@ -97,9 +97,6 @@ internal sealed class MacOSWindowBackend : IWindowBackend
         _imeHasMarkedText || (_imeMode != ImeMode.Disabled && _window.FocusManager.FocusedElement is ITextInputClient);
 
     private bool _isHandlingKeyDown;
-    // Text insertText produced during the current keyDown, held until KeyDown routing decides its fate.
-    private string? _pendingKeyDownTextInput;
-    private NSRange _pendingKeyDownReplacementRange;
 
     private void UpdateMetalLayerDisplaySyncIfNeeded()
     {
@@ -1727,10 +1724,7 @@ internal sealed class MacOSWindowBackend : IWindowBackend
         int platformKey = MacOSInterop.GetEventKeyCode(ev);
         var modifiers = GetModifierKeys(ev);
         var key = MapKey(ev, platformKey);
-
-        var oldImeState = _imeState;
         _forwardKeyToAppThisKeyDown = false;
-        _pendingKeyDownTextInput = null;
 
         _isHandlingKeyDown = true;
         try
@@ -1738,116 +1732,117 @@ internal sealed class MacOSWindowBackend : IWindowBackend
             // Route through NSTextInputClient only while a real text input target is focused. The NSView itself is
             // always capable of NSTextInputClient, but waking AppKit text services globally makes macOS show IME UI
             // (for example the "(A)" input indicator) even over non-text controls.
-            bool routeThroughTextInputClient = AcceptsImeTextInput;
-            if (_nsWindow != 0 && _nsView != 0)
+            bool routeThroughTextInputClient = AcceptsImeTextInput && _nsWindow != 0 && _nsView != 0;
+            if (_imeHasMarkedText && routeThroughTextInputClient)
             {
-                if (routeThroughTextInputClient)
-                {
-                    MacOSWindowInterop.SetFirstResponder(_nsWindow, _nsView);
-                    MacOSWindowInterop.InterpretKeyEvent(_nsView, ev);
-                    ImeLogger.Write($"InterpretKeyEvent view=0x{_nsView:x} window=0x{_nsWindow:x} imeHasMarked={_imeHasMarkedText} imeState={_imeState}");
-                }
-                else
-                {
-                    MacOSWindowInterop.SetFirstResponder(_nsWindow, 0);
-                    ImeLogger.Write($"InterpretKeyEvent skipped (no text input focus) view=0x{_nsView:x} window=0x{_nsWindow:x}");
-                }
+                HandleKeyDownDuringComposition(ev, key, platformKey, modifiers);
             }
-
-            // Shortcuts (Ctrl/Cmd chords) must be routed as key events even while IME is composing.
-            // Otherwise, common shortcuts like Ctrl+Z/C/V will stop working during preedit.
-            // This mirrors typical Cocoa behavior: text services should not "eat" modifier chords that
-            // don't represent text input.
-            bool isShortcutChord = (modifiers.HasFlag(ModifierKeys.Control) || modifiers.HasFlag(ModifierKeys.Meta)) &&
-                                   key != Key.None;
-            if (isShortcutChord)
+            else
             {
-                _forwardKeyToAppThisKeyDown = true;
-                _forceKeyUps.Add(platformKey);
-            }
-
-            bool hadImeInput = _imeState switch
-            {
-                ImeState.Committed => true,
-                ImeState.Preedit => true,
-                _ => oldImeState != _imeState,
-            };
-
-            // Allow normal key processing after commit, but still treat this keyDown as IME-related.
-            if (_imeState == ImeState.Committed)
-            {
-                _imeState = ImeState.Ground;
-            }
-
-            // winit behavior: only forward KeyDown when IME didn't handle it, OR when doCommandBySelector requested it.
-            if (hadImeInput && !_forwardKeyToAppThisKeyDown)
-            {
-                ImeLogger.Write($"KeyDown suppressed (IME handled). oldImeState={oldImeState} imeState={_imeState}");
-                return;
-            }
-
-            var args = new KeyEventArgs(key, platformKey, modifiers, isRepeat: false);
-            _window.RaisePreviewKeyDown(args);
-
-            ImeLogger.Write($"KeyDown ev=0x{ev:x} keyCode=0x{platformKey:x} key={key} mods={modifiers} handled(preview)={args.Handled} focused={_window.FocusManager.FocusedElement?.GetType().Name ?? "null"} imeState={_imeState} forwardToApp={_forwardKeyToAppThisKeyDown}");
-
-            if (args.Handled)
-            {
-                return;
-            }
-
-            WindowInputRouter.KeyDown(_window, args);
-            _window.ProcessAccessKeyDown(args);
-
-            // WPF-like Tab behavior:
-            // - Always let the focused element see KeyDown first.
-            // - Only perform focus navigation if the key is still unhandled.
-            //
-            // When IME composition is active, many IMEs use Tab to navigate candidates,
-            // so we must not steal it.
-            if (!args.Handled && args.Key == Key.Tab && !_imeHasMarkedText)
-            {
-                if (modifiers.HasFlag(ModifierKeys.Shift))
-                {
-                    _window.FocusManager.MoveFocusPrevious();
-                }
-                else
-                {
-                    _window.FocusManager.MoveFocusNext();
-                }
-
-                _pendingKeyDownTextInput = null;
-                return;
-            }
-
-            // A handled KeyDown owns the keystroke: whatever text it would have typed is dropped.
-            if (args.Handled)
-            {
-                if (_pendingKeyDownTextInput != null)
-                {
-                    ImeLogger.Write($"  pending insertText suppressed by handled KeyDown. pending='{Truncate(_pendingKeyDownTextInput)}'");
-                }
-                return;
-            }
-
-            if (!routeThroughTextInputClient)
-            {
-                DispatchTextInputFromEventCharacters(ev, modifiers);
-            }
-
-            // insertText ran inside interpretKeyEvents, before KeyDown routing; emit its text now so
-            // KeyDown handlers see the document before the insertion, as on the other platforms.
-            if (_pendingKeyDownTextInput != null)
-            {
-                EmitInsertedText(_pendingKeyDownTextInput, _pendingKeyDownReplacementRange);
+                HandleKeyDownOutsideComposition(ev, key, platformKey, modifiers, routeThroughTextInputClient);
             }
         }
         finally
         {
             SyncAppKitTextInputActivation();
             _isHandlingKeyDown = false;
-            _pendingKeyDownTextInput = null;
         }
+    }
+
+    /// <summary>
+    /// A key while a composition is open goes to the input method first. It composes, commits, and hands the key back
+    /// (doCommandBySelector:) when the key is not its own, as a Korean input method does with an arrow or Enter after
+    /// committing; only then does the app see the key, so a shortcut acts on committed text.
+    /// </summary>
+    private void HandleKeyDownDuringComposition(nint ev, Key key, int keyCode, ModifierKeys modifiers)
+    {
+        InterpretKeyEvent(ev);
+        if (_imeState == ImeState.Committed)
+        {
+            _imeState = ImeState.Ground;
+        }
+
+        // A shortcut chord is the app's even from an input method that takes it without handing it back.
+        bool isShortcutChord = (modifiers.HasFlag(ModifierKeys.Control) || modifiers.HasFlag(ModifierKeys.Meta)) && key != Key.None;
+        if (!_forwardKeyToAppThisKeyDown && !isShortcutChord)
+        {
+            ImeLogger.Write($"KeyDown kept by the input method keyCode=0x{keyCode:x} imeState={_imeState}");
+            return;
+        }
+
+        RouteKeyDown(CreateKeyEventArgs(ev, key, keyCode, modifiers, maskForInputMethod: false), keyCode, modifiers);
+    }
+
+    /// <summary>
+    /// A key outside a composition reaches the app first; only a key the app leaves unhandled goes on to the input
+    /// method, which types it or starts a composition with it. While a composing input method is selected, the keys
+    /// that type text are reported as <see cref="Key.None"/>, as Windows reports the keys its input method takes, so they
+    /// match no gesture.
+    /// </summary>
+    private void HandleKeyDownOutsideComposition(nint ev, Key key, int keyCode, ModifierKeys modifiers, bool routeThroughTextInputClient)
+    {
+        if (!routeThroughTextInputClient && _nsWindow != 0)
+        {
+            MacOSWindowInterop.SetFirstResponder(_nsWindow, 0);
+        }
+
+        var args = CreateKeyEventArgs(ev, key, keyCode, modifiers, maskForInputMethod: routeThroughTextInputClient);
+        if (RouteKeyDown(args, keyCode, modifiers))
+        {
+            // A handled KeyDown owns the keystroke: the input method never sees it, so it types nothing.
+            return;
+        }
+
+        if (routeThroughTextInputClient)
+        {
+            InterpretKeyEvent(ev);
+        }
+        else
+        {
+            DispatchTextInputFromEventCharacters(ev, modifiers);
+        }
+    }
+
+    /// <summary>
+    /// Raises KeyDown as every platform does: preview, bubbling, access keys, then Tab navigation for an unhandled Tab.
+    /// True when the key is used up.
+    /// </summary>
+    private bool RouteKeyDown(KeyEventArgs args, int keyCode, ModifierKeys modifiers)
+    {
+        _raisedKeyDowns[keyCode] = args.Key;
+        _window.RaisePreviewKeyDown(args);
+        ImeLogger.Write($"KeyDown keyCode=0x{keyCode:x} key={args.Key} mods={modifiers} handled(preview)={args.Handled} focused={_window.FocusManager.FocusedElement?.GetType().Name ?? "null"} imeState={_imeState} forwardToApp={_forwardKeyToAppThisKeyDown}");
+        if (args.Handled)
+        {
+            return true;
+        }
+
+        WindowInputRouter.KeyDown(_window, args);
+        _window.ProcessAccessKeyDown(args);
+
+        // When IME composition is active, many IMEs use Tab to navigate candidates, so we must not steal it.
+        if (!args.Handled && args.Key == Key.Tab && !_imeHasMarkedText)
+        {
+            if (modifiers.HasFlag(ModifierKeys.Shift))
+            {
+                _window.FocusManager.MoveFocusPrevious();
+            }
+            else
+            {
+                _window.FocusManager.MoveFocusNext();
+            }
+
+            return true;
+        }
+
+        return args.Handled;
+    }
+
+    private void InterpretKeyEvent(nint ev)
+    {
+        MacOSWindowInterop.SetFirstResponder(_nsWindow, _nsView);
+        MacOSWindowInterop.InterpretKeyEvent(_nsView, ev);
+        ImeLogger.Write($"InterpretKeyEvent view=0x{_nsView:x} window=0x{_nsWindow:x} imeHasMarked={_imeHasMarkedText} imeState={_imeState}");
     }
 
     private void SyncAppKitTextInputActivation()
@@ -1896,16 +1891,16 @@ internal sealed class MacOSWindowBackend : IWindowBackend
     private void HandleKeyUp(nint ev)
     {
         int platformKey = MacOSInterop.GetEventKeyCode(ev);
-        if (!_forceKeyUps.Remove(platformKey) && _imeState is not (ImeState.Ground or ImeState.Disabled))
+
+        // A key the input method kept had no KeyDown, so it has no KeyUp either.
+        if (!_raisedKeyDowns.Remove(platformKey, out var key))
         {
             ImeLogger.Write($"KeyUp suppressed keyCode=0x{platformKey:x} imeState={_imeState}");
             return;
         }
 
         var modifiers = GetModifierKeys(ev);
-        var key = MapKey(ev, platformKey);
-
-        var args = new KeyEventArgs(key, platformKey, modifiers, isRepeat: false);
+        var args = CreateKeyEventArgs(ev, key, platformKey, modifiers, maskForInputMethod: false);
         _window.RaisePreviewKeyUp(args);
         if (args.Handled)
         {
@@ -2068,20 +2063,24 @@ internal sealed class MacOSWindowBackend : IWindowBackend
             return;
         }
 
-        // Cocoa routes plain typing through insertText inside interpretKeyEvents, before the app's KeyDown.
-        // Hold it so a handled KeyDown can drop it; text arriving outside a keyDown (dictation, the character
-        // palette) is not a keystroke's and goes straight through.
-        if (_isHandlingKeyDown && !_imeHasMarkedText && _imeState == ImeState.Ground)
+        // A composition client that is not an editor (a terminal) shows the composition itself and takes the committed
+        // text as text input, as on the other platforms; the composition still has to end, or it stays open.
+        if (_imeHasMarkedText)
         {
-            if (_pendingKeyDownTextInput == null)
+            var endArgs = new TextCompositionEventArgs(text);
+            _window.RaisePreviewTextCompositionEnd(endArgs);
+            if (!endArgs.Handled && _window.FocusManager.FocusedElement is ITextCompositionClient endClient)
             {
-                _pendingKeyDownReplacementRange = replacementRange;
+                endClient.HandleTextCompositionEnd(endArgs);
             }
-            _pendingKeyDownTextInput += text;
-            ImeLogger.Write($"  insertText buffered for post-KeyDown dispatch. pending='{Truncate(_pendingKeyDownTextInput)}'");
-            return;
+
+            _imeHasMarkedText = false;
+            _imeMarkedText = string.Empty;
+            _imeState = ImeState.Committed;
         }
 
+        // The key's KeyDown has already run and was left unhandled (a handled key never reaches the input method),
+        // so the text follows it as on the other platforms.
         EmitInsertedText(text, replacementRange);
     }
 
@@ -2120,15 +2119,9 @@ internal sealed class MacOSWindowBackend : IWindowBackend
 
     internal void ImeDoCommandBySelector(nint selector)
     {
-        // winit:
-        // - if the text was just committed, ignore the command selector to avoid double-send (notably Enter/Space).
-        // - otherwise forward key to app for this keyDown.
-        if (_imeState == ImeState.Committed)
-        {
-            return;
-        }
-
-        _forwardKeyToAppThisKeyDown = true;
+        // During a composition this is the input method handing the key back, also after it committed: a Korean input
+        // method commits on an arrow or Enter and then hands the key back. Outside one the KeyDown already ran.
+        _forwardKeyToAppThisKeyDown = _isHandlingKeyDown;
 
         // If we are in preedit (setMarkedText path), commit the current composition so the editor
         // undo stack stays consistent, then reset IME state for key-up reporting.
@@ -2189,6 +2182,26 @@ internal sealed class MacOSWindowBackend : IWindowBackend
 
     private static Key MapKey(nint ev, int keyCode)
         => MacOSKeyMap.Resolve(keyCode, MacOSInterop.GetEventCharactersIgnoringModifiers(ev));
+
+    /// <summary>
+    /// Key event arguments carrying the event's layout texts. With <paramref name="maskForInputMethod"/>, a key that types
+    /// text while a composing input method is selected is reported as <see cref="Key.None"/>: the input method takes it.
+    /// </summary>
+    private static KeyEventArgs CreateKeyEventArgs(nint ev, Key key, int keyCode, ModifierKeys modifiers, bool maskForInputMethod)
+    {
+        var (keySymbol, baseKeySymbol) = MacOSKeyboardLayout.Symbols(keyCode, MacOSInterop.GetEventModifierFlags(ev),
+            MacOSInterop.GetEventCharacters(ev), MacOSInterop.GetEventCharactersIgnoringModifiers(ev));
+
+        // Option is not masked: a Korean input method types Option+A as a plain a and starts no composition.
+        bool typesText = keySymbol != null && !char.IsControl(keySymbol[0]);
+        bool chord = (modifiers & (ModifierKeys.Control | ModifierKeys.Meta | ModifierKeys.Alt)) != 0;
+        bool masked = maskForInputMethod && typesText && !chord && MacOSKeyboardLayout.IsComposingInputMethodSelected();
+        return new KeyEventArgs(masked ? Key.None : key, keyCode, modifiers, isRepeat: false)
+        {
+            KeySymbol = keySymbol,
+            BaseKeySymbol = baseKeySymbol,
+        };
+    }
 
     internal bool NeedsRender
     {
