@@ -1882,7 +1882,10 @@ internal sealed class X11WindowBackend : IWindowBackend
         }
 
         var ks = NativeX11.XLookupKeysym(ref e, 0).ToInt64();
-        var key = X11KeyMap.Resolve(ks, (int)e.keycode, Display, _keysymOfGroup);
+
+        // A keypad key types a digit or moves by Num Lock, so it is named by the keysym the lock state gives it.
+        long namingKeysym = X11KeyMap.IsKeypadKeysym(ks) ? X11KeyTranslation.TranslatedKeysym(e) : ks;
+        var key = X11KeyMap.Resolve(namingKeysym, (int)e.keycode, Display, _keysymOfGroup);
         var args = new KeyEventArgs(key, platformKey: (int)ks, modifiers: GetModifiers(e.state), isRepeat: false);
 
         if (isDown)

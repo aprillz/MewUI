@@ -81,11 +81,14 @@ internal static class X11KeyMap
             0xFFAA => Key.Multiply,
             0xFFAB => Key.Add,
             0xFFAD => Key.Subtract,
-            0xFFAE => Key.Decimal,
+            0xFFAC or 0xFFAE => Key.Decimal,
             0xFFAF => Key.Divide,
             _ => Key.None
         };
     }
+
+    /// <summary>Whether a keysym is one of the keypad's (XK_KP_*), whose meaning follows Num Lock.</summary>
+    public static bool IsKeypadKeysym(long keysym) => keysym is >= 0xFF80 and <= 0xFFBD;
 
     /// <summary>The key a US layout has at a keycode's position, for the letter, digit and punctuation keys only.</summary>
     public static Key FromPosition(int keycode)

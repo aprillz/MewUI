@@ -83,8 +83,22 @@ public sealed class KeyMappingTests
     [DataRow(0x7AL, Key.Z)]
     [DataRow(0xFF67L, Key.ContextMenu)]
     [DataRow(KEYSYM_CYRILLIC_YA, Key.None)]
+    [DataRow(0xFFB1L, Key.NumPad1)]
+    [DataRow(0xFF9CL, Key.End)]
+    [DataRow(0xFFAEL, Key.Decimal)]
+    [DataRow(0xFFACL, Key.Decimal)]
+    [DataRow(0xFF9DL, Key.None)]
     public void AnX11KeysymMapsToItsKey(long keysym, Key expected)
         => Assert.AreEqual(expected, X11KeyMap.FromKeysym(keysym));
+
+    [TestMethod]
+    [DataRow(0xFF9CL, true)]
+    [DataRow(0xFFB1L, true)]
+    [DataRow(0xFF8DL, true)]
+    [DataRow(0xFF57L, false)]
+    [DataRow(0x31L, false)]
+    public void KeypadKeysymsAreTheOnesNumLockChanges(long keysym, bool expected)
+        => Assert.AreEqual(expected, X11KeyMap.IsKeypadKeysym(keysym));
 
     [TestMethod]
     public void AKeyTypingNoLatinLetterIsNamedByItsPosition()
