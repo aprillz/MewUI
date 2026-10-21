@@ -785,6 +785,9 @@ public sealed class X11PlatformHost : IPlatformHost
 
         InstallXErrorHandler();   // log async X protocol errors instead of the default print-and-exit
 
+        // A held key then repeats as KeyPress events alone, which lets the window backends report repeats (GDK does the same).
+        _ = NativeX11.XkbSetDetectableAutoRepeat(Display, 1, out _);
+
         int screen = NativeX11.XDefaultScreen(Display);
         _rootWindow = NativeX11.XRootWindow(Display, screen);
 

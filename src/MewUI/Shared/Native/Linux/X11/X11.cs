@@ -233,6 +233,10 @@ internal static partial class X11
     [LibraryImport(LibraryName)]
     public static partial nint XkbKeycodeToKeysym(nint display, byte keycode, int group, int level);
 
+    // With detectable auto-repeat a held key sends repeated KeyPress events and one KeyRelease, not Release/Press pairs.
+    [LibraryImport(LibraryName)]
+    public static partial int XkbSetDetectableAutoRepeat(nint display, int detectable, out int supported);
+
     [LibraryImport(LibraryName)]
     public static unsafe partial int XLookupString(
         ref XKeyEvent event_struct,
