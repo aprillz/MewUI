@@ -53,6 +53,28 @@ public class KeyEventArgs
     public bool IsRepeat { get; }
 
     /// <summary>
+    /// Gets the text the key types in the current keyboard layout with Shift, Caps Lock and the layout's third level
+    /// (AltGr, Option) applied, or null when it types nothing, starts a dead key, or the platform does not report it.
+    /// </summary>
+    /// <remarks>
+    /// Control, Meta and Alt on its own do not change the value: Ctrl+A gives "a". Where the third level is reached with
+    /// Ctrl and Alt together, that combination applies it. A key an input method takes for a composition may report no
+    /// value.
+    /// </remarks>
+    public string? KeySymbol { get; init; }
+
+    /// <summary>
+    /// Gets the text the key types in the current keyboard layout with only Shift and Caps Lock applied, or null when it
+    /// types nothing or the platform does not report it.
+    /// </summary>
+    /// <remarks>
+    /// A dead key gives its spacing character. Where an input method types its own script over a keyboard layout, this
+    /// is the layout's text. When <see cref="KeySymbol"/> is set and differs from this value, the key typed a third-level
+    /// character.
+    /// </remarks>
+    public string? BaseKeySymbol { get; init; }
+
+    /// <summary>
     /// Gets or sets whether the event has been handled.
     /// </summary>
     public bool Handled { get; set; }
