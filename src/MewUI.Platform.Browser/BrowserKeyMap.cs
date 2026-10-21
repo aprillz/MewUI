@@ -90,6 +90,56 @@ internal static class BrowserKeyMap
         };
     }
 
+    /// <summary>
+    /// The layout texts of a DOM key event: <c>KeyboardEvent.key</c> when it is one character, and, since the browser
+    /// reports no text without the Alt (Option) level, the US text of the key's position while Alt is down.
+    /// </summary>
+    internal static (string? KeySymbol, string? BaseKeySymbol) Symbols(string code, string? key, ModifierKeys modifiers)
+    {
+        // Named keys ("Enter", "Dead", "ArrowLeft") are words; a typed character is one code point.
+        bool isCharacter = key != null && (key.Length == 1 || (key.Length == 2 && char.IsSurrogatePair(key[0], key[1])));
+        string? keySymbol = isCharacter && !(key!.Length == 1 && (key[0] < 0x20 || key[0] == 0x7F)) ? key : null;
+
+        string? baseKeySymbol = (modifiers & ModifierKeys.Alt) != 0
+            ? UsText(code, (modifiers & ModifierKeys.Shift) != 0)
+            : keySymbol;
+        return (keySymbol, baseKeySymbol);
+    }
+
+    /// <summary>The text a key types at its position on a US layout, with or without Shift.</summary>
+    internal static string? UsText(string code, bool shift)
+    {
+        if (code.Length == 4 && code.StartsWith("Key", StringComparison.Ordinal) && code[3] is >= 'A' and <= 'Z')
+        {
+            return (shift ? code[3] : char.ToLowerInvariant(code[3])).ToString();
+        }
+
+        if (code.Length == 6 && code.StartsWith("Digit", StringComparison.Ordinal) && code[5] is >= '0' and <= '9')
+        {
+            const string SHIFTED_DIGITS = ")!@#$%^&*(";
+            return (shift ? SHIFTED_DIGITS[code[5] - '0'] : code[5]).ToString();
+        }
+
+        var (unshifted, shifted) = code switch
+        {
+            "Space" => (' ', ' '),
+            "Backquote" => ('`', '~'),
+            "Minus" => ('-', '_'),
+            "Equal" => ('=', '+'),
+            "BracketLeft" => ('[', '{'),
+            "BracketRight" => (']', '}'),
+            "Backslash" => ('\\', '|'),
+            "Semicolon" => (';', ':'),
+            "Quote" => ('\'', '"'),
+            "Comma" => (',', '<'),
+            "Period" => ('.', '>'),
+            "Slash" => ('/', '?'),
+            _ => ('\0', '\0'),
+        };
+
+        return unshifted == '\0' ? null : (shift ? shifted : unshifted).ToString();
+    }
+
     private static Key MapFunctionKey(string code)
     {
         if (code.Length < 2 || code[0] != 'F' || !char.IsDigit(code[1]))

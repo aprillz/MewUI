@@ -281,7 +281,12 @@ internal sealed class BrowserWindowBackend : IWindowBackend
     internal bool KeyDown(string code, int platformKey, ModifierKeys modifiers, bool isRepeat, string? key)
     {
         if (!_shown || _disposed) return false;
-        var args = new KeyEventArgs(BrowserKeyMap.Map(code, key), platformKey, modifiers, isRepeat);
+        var (keySymbol, baseKeySymbol) = BrowserKeyMap.Symbols(code, key, modifiers);
+        var args = new KeyEventArgs(BrowserKeyMap.Map(code, key), platformKey, modifiers, isRepeat)
+        {
+            KeySymbol = keySymbol,
+            BaseKeySymbol = baseKeySymbol,
+        };
         WindowInputRouter.KeyDown(Window, args);
         return args.Handled;
     }
@@ -289,7 +294,12 @@ internal sealed class BrowserWindowBackend : IWindowBackend
     internal bool KeyUp(string code, int platformKey, ModifierKeys modifiers, string? key)
     {
         if (!_shown || _disposed) return false;
-        var args = new KeyEventArgs(BrowserKeyMap.Map(code, key), platformKey, modifiers);
+        var (keySymbol, baseKeySymbol) = BrowserKeyMap.Symbols(code, key, modifiers);
+        var args = new KeyEventArgs(BrowserKeyMap.Map(code, key), platformKey, modifiers)
+        {
+            KeySymbol = keySymbol,
+            BaseKeySymbol = baseKeySymbol,
+        };
         WindowInputRouter.KeyUp(Window, args);
         return args.Handled;
     }
