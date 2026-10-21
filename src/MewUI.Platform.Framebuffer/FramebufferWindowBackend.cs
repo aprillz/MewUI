@@ -311,7 +311,11 @@ internal sealed class FramebufferWindowBackend : IWindowBackend
             return;
         }
 
-        var args = new KeyEventArgs(stroke.Key, stroke.PlatformKey, stroke.Modifiers, isRepeat);
+        var args = new KeyEventArgs(stroke.Key, stroke.PlatformKey, stroke.Modifiers, isRepeat)
+        {
+            KeySymbol = stroke.KeySymbol,
+            BaseKeySymbol = stroke.BaseKeySymbol,
+        };
         if (!isDown)
         {
             Window.RaisePreviewKeyUp(args);

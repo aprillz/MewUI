@@ -31,6 +31,7 @@
     <Compile Include="..\MewUI\Shared\Native\Linux\X11\XSyncExt.cs" LinkBase="Native\XSyncExt.cs" />
     <Compile Include="..\MewUI\Shared\Native\Linux\X11\XRandrExt.cs" LinkBase="Native\XRandrExt.cs" />
     <Compile Include="..\MewUI\Shared\Native\Linux\X11\LibGL.cs" LinkBase="Native\LibGL.cs" />
+    <Compile Include="..\MewUI\Shared\Native\Linux\Xkb\*.cs" LinkBase="Native\Xkb" />
   </ItemGroup>
 
 </Project>

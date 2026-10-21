@@ -19,6 +19,7 @@
     <Compile Include="..\MewUI\Shared\Platform\Linux\MountedVolumeProvider.Linux.cs" LinkBase="Platform\Linux" />
     <Compile Include="..\MewUI\Shared\Platform\Linux\PlacesProvider.Linux.cs" LinkBase="Platform\Linux" />
     <Compile Include="..\MewUI\Shared\Platform\Linux\X11\X11KeyMap.cs" LinkBase="Platform\Linux" />
+    <Compile Include="..\MewUI\Shared\Platform\Linux\KeysymText.cs" LinkBase="Platform\Linux" />
     <Compile Include="..\MewUI\Shared\Native\Linux\LibC.cs" LinkBase="Native" />
     <Compile Include="..\MewUI\Shared\Native\Linux\Drm\*.cs" LinkBase="Native\Drm" />
     <Compile Include="..\MewUI\Shared\Native\Linux\Gbm\*.cs" LinkBase="Native\Gbm" />

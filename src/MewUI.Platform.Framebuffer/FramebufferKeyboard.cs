@@ -8,7 +8,14 @@ using Aprillz.MewUI.Platform.Linux.X11;
 namespace Aprillz.MewUI.Platform.Linux.Framebuffer;
 
 /// <summary>One key transition resolved against the keyboard layout.</summary>
-internal readonly record struct FramebufferKeyStroke(Key Key, int PlatformKey, ModifierKeys Modifiers, string? Text, bool Repeats);
+internal readonly record struct FramebufferKeyStroke(Key Key, int PlatformKey, ModifierKeys Modifiers, string? Text, bool Repeats)
+{
+    /// <summary>The text the key types with Shift, Caps Lock and the third level; null for none or a dead key.</summary>
+    public string? KeySymbol { get; init; }
+
+    /// <summary>The text the key types with Shift and Caps Lock only; a dead key's spacing form.</summary>
+    public string? BaseKeySymbol { get; init; }
+}
 
 /// <summary>
 /// Turns evdev key codes into keys, modifiers and text through xkbcommon. Without xkbcommon keys still resolve
@@ -117,7 +124,11 @@ internal sealed unsafe class FramebufferKeyboard : IDisposable
         uint layout = LibXkbCommon.xkb_state_key_get_layout(_state, keycode);
         long keysym = KeysymAt(_keymap, keycode, layout);
         var key = X11KeyMap.Resolve(keysym, (int)keycode, _keymap, _keysymOfLayout);
-        return new FramebufferKeyStroke(key, (int)keysym, ReadModifiers(), ReadText(keycode), Repeats: true);
+        return new FramebufferKeyStroke(key, (int)keysym, ReadModifiers(), ReadText(keycode), Repeats: true) with
+        {
+            KeySymbol = ReadKeySymbol(keycode),
+            BaseKeySymbol = ReadBaseKeySymbol(keycode, layout),
+        };
     }
 
     /// <summary>Resolves a key transition and advances the modifier state. Text is reported for presses only.</summary>
@@ -137,9 +148,15 @@ internal sealed unsafe class FramebufferKeyboard : IDisposable
         var key = X11KeyMap.Resolve(keysym, (int)keycode, _keymap, _keysymOfLayout);
 
         string? text = pressed ? ReadText(keycode) : null;
+        string? keySymbol = ReadKeySymbol(keycode);
+        string? baseKeySymbol = ReadBaseKeySymbol(keycode, layout);
         LibXkbCommon.xkb_state_update_key(_state, keycode, pressed ? LibXkbCommon.XKB_KEY_DOWN : LibXkbCommon.XKB_KEY_UP);
         bool repeats = LibXkbCommon.xkb_keymap_key_repeats(_keymap, keycode) != 0;
-        return new FramebufferKeyStroke(key, (int)keysym, modifiers, text, repeats);
+        return new FramebufferKeyStroke(key, (int)keysym, modifiers, text, repeats) with
+        {
+            KeySymbol = keySymbol,
+            BaseKeySymbol = baseKeySymbol,
+        };
     }
 
     private string? ReadText(uint keycode)
@@ -147,6 +164,33 @@ internal sealed unsafe class FramebufferKeyboard : IDisposable
         byte* buffer = stackalloc byte[UTF8_BUFFER_SIZE];
         int length = LibXkbCommon.xkb_state_key_get_utf8(_state, keycode, buffer, UTF8_BUFFER_SIZE);
         return length > 0 ? Encoding.UTF8.GetString(buffer, Math.Min(length, UTF8_BUFFER_SIZE - 1)) : null;
+    }
+
+    /// <summary>The key's text in the current state, which has Shift, the locks and the third level applied.</summary>
+    private string? ReadKeySymbol(uint keycode)
+    {
+        long keysym = LibXkbCommon.xkb_state_key_get_one_sym(_state, keycode);
+        return KeysymText.IsDeadKeysym(keysym) ? null : KeysymText.ToText(keysym);
+    }
+
+    /// <summary>The key's text at the Shift level of its layout, with Caps Lock applied to a letter.</summary>
+    private string? ReadBaseKeySymbol(uint keycode, uint layout)
+    {
+        bool shift = IsActive(LibXkbCommon.XKB_MOD_NAME_SHIFT);
+        long keysym = KeysymAtLevel(_keymap, keycode, layout, shift ? 1u : 0u);
+        if (keysym == 0)
+        {
+            keysym = KeysymAt(_keymap, keycode, layout);
+        }
+
+        string? text = KeysymText.ToText(keysym);
+        bool capsLock = IsActive(LibXkbCommon.XKB_MOD_NAME_CAPS);
+        if (text != null && capsLock && text.Length == 1 && char.IsLetter(text[0]))
+        {
+            text = char.IsUpper(text[0]) ? text.ToLowerInvariant() : text.ToUpperInvariant();
+        }
+
+        return text;
     }
 
     private ModifierKeys ReadModifiers()
@@ -181,10 +225,12 @@ internal sealed unsafe class FramebufferKeyboard : IDisposable
     private static long KeysymOfLayout(nint keymap, int keycode, int layout)
         => KeysymAt(keymap, (uint)keycode, (uint)layout);
 
-    private static long KeysymAt(nint keymap, uint keycode, uint layout)
+    private static long KeysymAt(nint keymap, uint keycode, uint layout) => KeysymAtLevel(keymap, keycode, layout, 0);
+
+    private static long KeysymAtLevel(nint keymap, uint keycode, uint layout, uint level)
     {
         uint* symbols = null;
-        int count = LibXkbCommon.xkb_keymap_key_get_syms_by_level(keymap, keycode, layout, 0, &symbols);
+        int count = LibXkbCommon.xkb_keymap_key_get_syms_by_level(keymap, keycode, layout, level, &symbols);
         return count > 0 && symbols != null ? symbols[0] : 0;
     }
 

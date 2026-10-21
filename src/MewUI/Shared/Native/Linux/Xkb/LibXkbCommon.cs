@@ -11,6 +11,7 @@ internal static unsafe partial class LibXkbCommon
     public const int XKB_KEY_DOWN = 1;
     public const int XKB_STATE_MODS_EFFECTIVE = 1 << 3;
     public const string XKB_MOD_NAME_SHIFT = "Shift";
+    public const string XKB_MOD_NAME_CAPS = "Lock";
     public const string XKB_MOD_NAME_CTRL = "Control";
     public const string XKB_MOD_NAME_ALT = "Mod1";
     public const string XKB_MOD_NAME_LOGO = "Mod4";
@@ -56,6 +57,10 @@ internal static unsafe partial class LibXkbCommon
 
     [LibraryImport(LIBRARY_NAME)]
     public static partial int xkb_keymap_key_get_syms_by_level(nint keymap, uint key, uint layout, uint level, uint** symsOut);
+
+    // The Unicode code point a keysym stands for, or 0 for one that stands for none (a function key, a modifier).
+    [LibraryImport(LIBRARY_NAME)]
+    public static partial uint xkb_keysym_to_utf32(uint keysym);
 }
 
 [StructLayout(LayoutKind.Sequential)]

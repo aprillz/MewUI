@@ -1906,7 +1906,12 @@ internal sealed class X11WindowBackend : IWindowBackend
         // A keypad key types a digit or moves by Num Lock, so it is named by the keysym the lock state gives it.
         long namingKeysym = X11KeyMap.IsKeypadKeysym(ks) ? X11KeyTranslation.TranslatedKeysym(e) : ks;
         var key = X11KeyMap.Resolve(namingKeysym, (int)e.keycode, Display, _keysymOfGroup);
-        var args = new KeyEventArgs(key, platformKey: (int)ks, modifiers: GetModifiers(e.state), isRepeat: isRepeat);
+        var (keySymbol, baseKeySymbol) = X11KeyTranslation.KeySymbols(e);
+        var args = new KeyEventArgs(key, platformKey: (int)ks, modifiers: GetModifiers(e.state), isRepeat: isRepeat)
+        {
+            KeySymbol = keySymbol,
+            BaseKeySymbol = baseKeySymbol,
+        };
 
         if (isDown)
         {
