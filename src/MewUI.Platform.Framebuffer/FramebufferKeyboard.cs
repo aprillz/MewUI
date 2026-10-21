@@ -123,7 +123,7 @@ internal sealed unsafe class FramebufferKeyboard : IDisposable
         uint keycode = evdevCode + LibXkbCommon.EVDEV_OFFSET;
         uint layout = LibXkbCommon.xkb_state_key_get_layout(_state, keycode);
         long keysym = KeysymAt(_keymap, keycode, layout);
-        var key = X11KeyMap.Resolve(keysym, (int)keycode, _keymap, _keysymOfLayout);
+        var key = X11KeyMap.Resolve(NamingKeysym(keycode, keysym), (int)keycode, _keymap, _keysymOfLayout);
         return new FramebufferKeyStroke(key, (int)keysym, ReadModifiers(), ReadText(keycode), Repeats: true) with
         {
             KeySymbol = ReadKeySymbol(keycode),
@@ -145,7 +145,7 @@ internal sealed unsafe class FramebufferKeyboard : IDisposable
         var modifiers = ReadModifiers();
         uint layout = LibXkbCommon.xkb_state_key_get_layout(_state, keycode);
         long keysym = KeysymAt(_keymap, keycode, layout);
-        var key = X11KeyMap.Resolve(keysym, (int)keycode, _keymap, _keysymOfLayout);
+        var key = X11KeyMap.Resolve(NamingKeysym(keycode, keysym), (int)keycode, _keymap, _keysymOfLayout);
 
         string? text = pressed ? ReadText(keycode) : null;
         string? keySymbol = ReadKeySymbol(keycode);
@@ -158,6 +158,13 @@ internal sealed unsafe class FramebufferKeyboard : IDisposable
             BaseKeySymbol = baseKeySymbol,
         };
     }
+
+    /// <summary>
+    /// The keysym that names a key: a keypad key's follows Num Lock (KP_1 or KP_End), as on X11, so it comes from the
+    /// state; any other key is named by its base level.
+    /// </summary>
+    private long NamingKeysym(uint keycode, long baseKeysym)
+        => X11KeyMap.IsKeypadKeysym(baseKeysym) ? LibXkbCommon.xkb_state_key_get_one_sym(_state, keycode) : baseKeysym;
 
     private string? ReadText(uint keycode)
     {
@@ -173,9 +180,15 @@ internal sealed unsafe class FramebufferKeyboard : IDisposable
         return KeysymText.IsDeadKeysym(keysym) ? null : KeysymText.ToText(keysym);
     }
 
-    /// <summary>The key's text at the Shift level of its layout, with Caps Lock applied to a letter.</summary>
+    /// <summary>The key's text at the Shift level of its layout, with Caps Lock applied to a letter and Num Lock to a keypad key.</summary>
     private string? ReadBaseKeySymbol(uint keycode, uint layout)
     {
+        // A keypad key's level follows Num Lock with Shift, which the state already combines.
+        if (X11KeyMap.IsKeypadKeysym(KeysymAt(_keymap, keycode, layout)))
+        {
+            return KeysymText.ToText(LibXkbCommon.xkb_state_key_get_one_sym(_state, keycode));
+        }
+
         bool shift = IsActive(LibXkbCommon.XKB_MOD_NAME_SHIFT);
         long keysym = KeysymAtLevel(_keymap, keycode, layout, shift ? 1u : 0u);
         if (keysym == 0)
