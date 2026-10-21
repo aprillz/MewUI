@@ -118,6 +118,24 @@ internal static class MacOSKeyMap
             0x6D => Key.F10,
             0x67 => Key.F11,
             0x6F => Key.F12,
+
+            // Keypad (kVK_ANSI_Keypad*); the Mac keypad has no Num Lock, its digits always type digits.
+            0x52 => Key.NumPad0,
+            0x53 => Key.NumPad1,
+            0x54 => Key.NumPad2,
+            0x55 => Key.NumPad3,
+            0x56 => Key.NumPad4,
+            0x57 => Key.NumPad5,
+            0x58 => Key.NumPad6,
+            0x59 => Key.NumPad7,
+            0x5B => Key.NumPad8,
+            0x5C => Key.NumPad9,
+            0x41 => Key.Decimal,
+            0x43 => Key.Multiply,
+            0x45 => Key.Add,
+            0x4B => Key.Divide,
+            0x4E => Key.Subtract,
+            0x4C => Key.Enter,
             _ => Key.None
         };
     }

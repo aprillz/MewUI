@@ -167,6 +167,11 @@ public sealed class KeyMappingTests
     [DataRow(0x06, Key.Z)]
     [DataRow(0x1A, Key.D7)]
     [DataRow(0x7F, Key.None)]
+    [DataRow(0x52, Key.NumPad0)]
+    [DataRow(0x53, Key.NumPad1)]
+    [DataRow(0x5C, Key.NumPad9)]
+    [DataRow(0x41, Key.Decimal)]
+    [DataRow(0x4C, Key.Enter)]
     public void AMacKeyCodeMapsToTheKeyAtItsPosition(int keyCode, Key expected)
         => Assert.AreEqual(expected, MacOSKeyMap.FromKeyCode(keyCode));
 
@@ -184,6 +189,7 @@ public sealed class KeyMappingTests
     [DataRow(MAC_KEYCODE_2, "é", Key.D2, "the digit row is always named by position")]
     [DataRow(MAC_KEYCODE_2, "@", Key.D2, "a shifted digit is still its digit key")]
     [DataRow(MAC_KEYCODE_UNLISTED, "x", Key.X, "a key code outside the table falls back to what it types")]
+    [DataRow(0x53, "1", Key.NumPad1, "a keypad digit is its keypad key, not the digit row's")]
     public void AMacKeyIsNamedByItsLatinLetterAndOtherwiseByItsPosition(int keyCode, string? characters, Key expected, string because)
         => Assert.AreEqual(expected, MacOSKeyMap.Resolve(keyCode, characters), because);
 }
