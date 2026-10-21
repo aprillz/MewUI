@@ -87,7 +87,8 @@ internal sealed class IBusInputMethod : IX11InputMethod
         DrainSignals();
 
         // Extract key info from XEvent
-        uint keyval = (uint)NativeX11.XLookupKeysym(ref ev.xkey, 0).ToInt64();
+        // IBus takes the keysym as GTK reports it, with Shift and the locks applied: Shift+/ is ?, the keypad's 1 is KP_1.
+        uint keyval = (uint)X11KeyTranslation.TranslatedKeysym(ev.xkey);
         uint keycode = ev.xkey.keycode - 8; // X11 keycode to hardware keycode (IBus expects evdev codes)
         uint state = ev.xkey.state;
         if (!isKeyDown)
