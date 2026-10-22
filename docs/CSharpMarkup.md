@@ -2,7 +2,7 @@
 
 MewUI's C# Markup is a Fluent API that allows you to declaratively build UI with pure C# code without XAML.
 It is compatible with Native AOT compilation and does not use Reflection.
-Method signatures in this guide follow the public extension methods in `src/MewUI/Markup`.
+This guide covers the concepts and naming rules. The per-receiver method tables are generated from the public extension methods in `src/MewUI/Markup` and the extension packages into `docs/markup`; see [Reference](#reference).
 
 ## Concept
 
@@ -15,12 +15,14 @@ Method signatures in this guide follow the public extension methods in `src/MewU
 
 ### Basic Pattern
 
+<!-- snippet:basic-pattern -->
 ```csharp
-new Button()
+var button = new Button()
     .Content("Click Me")
     .Width(100)
-    .OnClick(() => Console.WriteLine("Clicked!"))
+    .OnClick(() => Console.WriteLine("Clicked!"));
 ```
+<!-- /snippet -->
 
 All extension methods return `this` to enable method chaining.
 
@@ -37,8 +39,7 @@ All extension methods return `this` to enable method chaining.
 |---------|-------------|---------|
 | `OnEventName(handler)` | Register event handler | `.OnClick(...)`, `.OnTextChanged(...)` |
 
-Use `Command(...)`, rather than event extensions, for conditional execution and reusable actions. `BindCommand(...)`
-is a data binding for a dynamically supplied semantic Command.
+Use `Command(...)`, rather than event extensions, for conditional execution and reusable actions. `BindCommand(...)` is a data binding for a dynamically supplied semantic Command.
 
 Do not overload the same `On*` method solely by changing the handler delegate's parameter type. Untyped lambdas can match both overloads, including when one extension targets a base class and another targets a derived class. Use a distinct semantic name instead, such as `OnCheckStateChanged` or `OnLayoutSizeChanged`.
 
@@ -51,19 +52,30 @@ Do not overload the same `On*` method solely by changing the handler delegate's 
 
 Converter overloads are available for the `Bind*` convenience methods. For properties that bind two-way by default, omitting `convertBack` intentionally makes the converted binding one-way.
 
-`.BindText(source)` and `.BindIcon(source)` follow the same rule when their receiver is a `Command`: they create real
-one-way bindings to `Command.Presentation.AccessTextProperty` and `IconProperty`. An underscore in the text source is
-an access-key marker; consumers without mnemonic support can use normalized `Command.Text`.
+`.BindText(source)` and `.BindIcon(source)` follow the same rule when their receiver is a `Command`: they create real one-way bindings to `Command.Presentation.AccessTextProperty` and `IconProperty`. An underscore in the text source is an access-key marker; consumers without mnemonic support can use normalized `Command.Text`.
+
+<!-- snippet:binding -->
+```csharp
+var nameBox = new TextBox()
+    .BindText(viewModel.Name);
+var countLabel = new Label()
+    .BindText(viewModel.Count, count => $"{count} items");
+var levelSlider = new Slider()
+    .BindValue(viewModel.Level, level => (double)level, value => (int)value);
+```
+<!-- /snippet -->
 
 ### Property Name Aliases
 
 Fluent names follow the public concept rather than internal storage details. Composite values use overloads of the same public method:
 
+<!-- snippet:naming-aliases -->
 ```csharp
-new Border()
+var border = new Border()
     .BorderThickness(new Thickness(1, 2, 3, 4))
-    .CornerRadius(new CornerRadius(4, 8, 12, 16))
+    .CornerRadius(new CornerRadius(4, 8, 12, 16));
 ```
+<!-- /snippet -->
 
 ### Shortcut Methods
 Frequently used properties have concise shortcut methods:
@@ -71,916 +83,132 @@ Frequently used properties have concise shortcut methods:
 - `.Horizontal()` → `.Orientation(Orientation.Horizontal)`
 - `.Center()` → `.HorizontalAlignment(Center).VerticalAlignment(Center)`
 
----
+<!-- snippet:shortcuts -->
+```csharp
+var title = new Label().Text("Title").Bold();
+var row = new StackPanel().Horizontal();
+var okButton = new Button().Content("OK").Center();
+```
+<!-- /snippet -->
 
-## Common Extension Methods
+### Capturing a Reference
 
-### FluentExtensions (All Reference Types)
+`Ref(out field)` stores the receiver in a variable and returns it, so the chain continues while the element stays reachable for later updates:
 
-| Method | Description |
-|--------|-------------|
-| `Ref(out T field)` | Store reference in variable |
+<!-- snippet:ref -->
+```csharp
+var textBox = new TextBox()
+    .Ref(out var nameBox)
+    .Text("Hello");
+```
+<!-- /snippet -->
+
+### Delegate-Typed Properties
+
+A property whose type is a delegate (`Func<...>`, `Action<...>`) is itself invocable, so `element.Factory(value)` binds to the property and never reaches a same-name extension method. Such properties alone use the `With` prefix (`WithFactory(value)`), and the parameter declares `[FluentSetsMember(nameof(Owner.Factory))]` so the analyzers and the markup audit still connect the extension to the property. No other extension uses a `With` or `Set` prefix.
 
 ```csharp
-new TextBox()
-    .Ref(out var nameBox)  // Store reference in nameBox variable
-    .Text("Hello")
+public static T WithCodeBlockFactory<T>(this T control, [FluentSetsMember(nameof(MarkdownPresenter.CodeBlockFactory))] Func<string, string?, FrameworkElement?>? factory) where T : MarkdownPresenter
 ```
 
----
+### Hints for Extension Authors
 
-## Element Extension Methods
+Most extensions need no attribute: a same-name single-value setter (`Width(double)` sets `Width`), an `On` + event name subscription (`OnClick` subscribes `Click`), and `Bind*` methods are recognized by name and signature. Four attributes in `src/MewUI/Markup/Hints/FluentHintAttributes.cs` declare what a name cannot express. They are `internal` and read by metadata name, so an extension package compiles the same file into its own assembly.
 
-Base class for all UI elements.
-
-### DockPanel Attached Properties
-
-| Method | Description |
-|--------|-------------|
-| `DockTo(Dock dock)` | Set Dock position |
-| `DockLeft()` | Dock left |
-| `DockTop()` | Dock top |
-| `DockRight()` | Dock right |
-| `DockBottom()` | Dock bottom |
-
-### Grid Attached Properties
-
-| Method | Description |
-|--------|-------------|
-| `Row(int row)` | Grid row position |
-| `Column(int column)` | Grid column position |
-| `RowSpan(int rowSpan)` | Row span |
-| `ColumnSpan(int columnSpan)` | Column span |
-| `GridPosition(row, column)` | Set row/column together |
-| `GridPosition(row, column, rowSpan, columnSpan)` | Set full position |
-
-### Canvas Attached Properties
-
-| Method | Description |
-|--------|-------------|
-| `CanvasLeft(double left)` | Left offset |
-| `CanvasTop(double top)` | Top offset |
-| `CanvasRight(double right)` | Right offset |
-| `CanvasBottom(double bottom)` | Bottom offset |
-| `CanvasPosition(left, top)` | Set position |
-
----
-
-## FrameworkElement Extension Methods
-
-Base class for all layout-capable elements.
-
-### Size
-
-| Method | Description |
-|--------|-------------|
-| `Width(double)` | Width |
-| `Height(double)` | Height |
-| `Size(width, height)` | Set width/height together |
-| `Size(double)` | Square size |
-| `MinWidth(double)` | Minimum width |
-| `MinHeight(double)` | Minimum height |
-| `MaxWidth(double)` | Maximum width |
-| `MaxHeight(double)` | Maximum height |
-
-### Margin
-
-| Method | Description |
-|--------|-------------|
-| `Margin(uniform)` | Uniform margin |
-| `Margin(horizontal, vertical)` | Horizontal/vertical margin |
-| `Margin(left, top, right, bottom)` | Individual margin |
-| `Padding(uniform)` | Uniform padding |
-| `Padding(horizontal, vertical)` | Horizontal/vertical padding |
-| `Padding(left, top, right, bottom)` | Individual padding |
-
-### Alignment
-
-| Method | Description |
-|--------|-------------|
-| `HorizontalAlignment(alignment)` | Horizontal alignment |
-| `VerticalAlignment(alignment)` | Vertical alignment |
-| `Center()` | Center alignment (horizontal+vertical) |
-| `CenterHorizontal()` | Horizontal center |
-| `CenterVertical()` | Vertical center |
-| `Left()` | Left alignment |
-| `Right()` | Right alignment |
-| `Top()` | Top alignment |
-| `Bottom()` | Bottom alignment |
-| `StretchHorizontal()` | Horizontal stretch |
-| `StretchVertical()` | Vertical stretch |
-
----
-
-## UIElement Extension Methods
-
-Base class for all elements that handle input events.
-
-### Binding
-
-| Method | Description |
-|--------|-------------|
-| `BindIsVisible(ObservableValue<bool>)` | Visibility binding |
-| `BindIsVisible(source, convert)` | Converted visibility binding |
-| `BindIsEnabled(ObservableValue<bool>)` | Enabled binding |
-| `BindIsEnabled(source, convert)` | Converted enabled-state binding |
-
-### Input and Drag-and-Drop
-
-| Method | Description |
-|--------|-------------|
-| `IsHitTestVisible(bool)` | Hit-test participation |
-| `AllowDrop(bool)` | Accept drop operations |
-| `CanDrag(bool)` | Allow drag operations to start |
-| `OnDragEnter(...)`, `OnDragOver(...)`, `OnDragLeave(...)`, `OnDrop(...)` | Drop-target events |
-| `OnDragStarting(...)`, `OnDragCompleted(...)` | Drag-source events |
-
-### Focus Events
-
-| Method | Description |
-|--------|-------------|
-| `OnGotFocus(Action)` | Focus gained |
-| `OnLostFocus(Action)` | Focus lost |
-
-### Mouse Events
-
-| Method | Description |
-|--------|-------------|
-| `OnMouseEnter(Action)` | Mouse enter |
-| `OnMouseLeave(Action)` | Mouse leave |
-| `OnMouseDown(Action<MouseEventArgs>)` | Mouse button down |
-| `OnMouseUp(Action<MouseEventArgs>)` | Mouse button up |
-| `OnMouseMove(Action<MouseEventArgs>)` | Mouse move |
-| `OnMouseWheel(Action<MouseWheelEventArgs>)` | Mouse wheel |
-
-### Keyboard Events
-
-| Method | Description |
-|--------|-------------|
-| `OnKeyDown(Action<KeyEventArgs>)` | Key down |
-| `OnKeyUp(Action<KeyEventArgs>)` | Key up |
-| `OnTextInput(Action<TextInputEventArgs>)` | Text input |
-
----
-
-## Control Extension Methods
-
-Base class for all controls with visual styling.
-
-### Colors
-
-| Method | Description |
-|--------|-------------|
-| `Background(Color)` | Background color |
-| `Foreground(Color)` | Foreground color (text) |
-| `BorderBrush(Color)` | Border color |
-| `BorderThickness(double)` | Border thickness |
-| `BorderThickness(Thickness)` | Per-edge border thickness |
-| `CornerRadius(double)` | Uniform corner radius |
-| `CornerRadius(CornerRadius)` | Per-corner radius |
-
-### Font
-
-| Method | Description |
-|--------|-------------|
-| `FontFamily(string)` | Font name |
-| `FontSize(double)` | Font size |
-| `FontWeight(FontWeight)` | Font weight |
-| `Bold()` | Bold (shortcut) |
-
----
-
-## Individual Control Extension Methods
-
-### Window
+| Attribute | Placed on | Declares |
+|---|---|---|
+| `FluentSetsMember(memberName)` | Parameter | The argument replaces the assignment of that property, or subscribes that event when the parameter is a handler; parameter order is assignment order |
+| `FluentSetsConstant(memberName, value, order)` | Method | A parameterless shorthand assigns the constant to the property; `order` is contiguous from 0 across the constants of one method |
+| `FluentReplacesMember(memberName)` | Method | A `params` extension replaces calls to that instance method |
+| `FluentExcluded(reason)` | Property or event | The member intentionally has no fluent extension, so the audit does not count it as missing |
 
 ```csharp
-new Window()
-    .Title("My App")
-    .Resizable(800, 600)
-    .Content(...)
-    .OnLoaded(() => ...)
-    .OnClosed(() => ...)
+// FluentSetsMember: a differently named property, or one attribute per parameter of a composite setter
+public static Border BorderThickness(this Border border, [FluentSetsMember(nameof(Border.NonUniformBorderThickness))] Thickness thickness)
+
+// FluentSetsConstant: a shorthand that assigns fixed values
+[FluentSetsConstant(nameof(FrameworkElement.HorizontalAlignment), MewUI.HorizontalAlignment.Center, 0)]
+[FluentSetsConstant(nameof(FrameworkElement.VerticalAlignment), MewUI.VerticalAlignment.Center, 1)]
+public static T Center<T>(this T element) where T : FrameworkElement
+
+// FluentReplacesMember: a params extension standing in for instance calls
+[FluentReplacesMember(nameof(Panel.Add))]
+[FluentReplacesMember(nameof(Panel.AddRange))]
+public static T Children<T>(this T panel, params Element[] children) where T : Panel
+
+// FluentExcluded: a member that deliberately has no extension
+[FluentExcluded("Low-level platform interop event")]
+public event Action<NativeMessageEventArgs>? NativeMessage;
 ```
 
-| Method | Description |
-|--------|-------------|
-| `Title(string)` | Window title |
-| `Resizable(width, height)` | Resizable |
-| `Fixed(width, height)` | Fixed size |
-| `FitContentWidth(fixedHeight, maxWidth)` | Fit content (width) |
-| `FitContentHeight(fixedWidth, maxHeight)` | Fit content (height) |
-| `FitContentSize(maxWidth, maxHeight)` | Fit content |
-| `StartCenterScreen()` / `StartCenterOwner()` | Initial centered position |
-| `StartManualPosition(left, top)` | Initial manual position |
-| `Icon(IconSource?)` | Window icon |
-| `WindowState(WindowState)` | Window state |
-| `CanMinimize(bool)`, `CanMaximize(bool)`, `CanClose(bool)` | Caption capabilities |
-| `IsToolWindow(bool)`, `ShowInTaskbar(bool)` | Window presentation |
-| `Content(Element)` | Window content |
-| `OnLoaded(Action)` | Load completed |
-| `OnClosed(Action)` | Window closed |
-| `OnActivated(Action)` | Window activated |
-| `OnDeactivated(Action)` | Window deactivated |
-| `OnSizeChanged(Action<Size>)` | Size changed |
-| `OnDpiChanged(Action<uint, uint>)` | DPI changed |
-| `OnThemeChanged(Action<Theme, Theme>)` | Theme changed |
-| `OnFirstFrameRendered(Action)` | First frame rendered |
-| `OnPreviewKeyDown(Action<KeyEventArgs>)` | Key down (preview) |
-| `OnPreviewKeyUp(Action<KeyEventArgs>)` | Key up (preview) |
-| `OnPreviewTextInput(Action<TextInputEventArgs>)` | Text input (preview) |
+The markup audit (`tools/MewUI.MarkupAudit`, run by `tests/MewUI.Test/Markup/FluentExtensionAuditTests.cs`) checks that every public settable property and event of each concrete control is covered by a convention, a hint, or an exclusion, and that each hint names an existing member of a compatible type.
 
-`Width`, `Height`, `Size`, `MinWidth`, `MinHeight`, `MaxWidth`, and `MaxHeight` are intentionally unavailable for `Window`. Use `Resizable`, `Fixed`, or a `FitContent*` method so the window sizing mode is explicit.
+### Generated Extensions
 
-### Label
+The same-name setters and the `On*` event subscriptions of the core controls are not written by hand: the `Aprillz.MewUI.Generators` source generator, which ships inside the `Aprillz.MewUI.Core` package, emits them at build time into one `<Owner>MarkupExtensions` class per control (`ButtonMarkupExtensions`, `UIElementMarkupExtensions`), placed in the control's own namespace. Every public settable property gets `Prop(value)` (`bool` properties default the argument to `true`), every public event gets `OnEvent(handler)`, and a delegate-typed property gets `WithProp(value)` with the `FluentSetsMember` hint. Members marked `[FluentExcluded]` or `[Obsolete]` are left out. The hand-written files keep only what a convention cannot express: composites, constant shorthands, aliases, collection builders, `Bind*` methods, helpers, and setters whose body does more than assign the value.
 
-```csharp
-new Label()
-    .Text("Hello World")
-    .Bold()
-    .FontSize(16)
+A project that declares its own controls enables the generator for them with the `MewUIGenerateFluentExtensions` build property; it needs Roslyn 4.12 or later (.NET SDK 9 or later), and the generator emits the hint attributes into the project when they are not visible to it:
+
+```xml
+<PropertyGroup>
+  <MewUIGenerateFluentExtensions>true</MewUIGenerateFluentExtensions>
+</PropertyGroup>
 ```
 
-| Method | Description |
-|--------|-------------|
-| `Text(string)` | Text content |
-| `TextAlignment(TextAlignment)` | Horizontal text alignment |
-| `VerticalTextAlignment(TextAlignment)` | Vertical text alignment |
-| `TextWrapping(TextWrapping)` | Text wrapping |
-| `BindText(ObservableValue<string>)` | Text binding |
-| `BindText(source, converter)` | Conversion binding |
+Hand-written extensions in the project take precedence: the generator skips a member when an extension with the same name and value type already applies to the receiver, when a `FluentSetsMember` hint already names the member, when a same-shaped `On*` delegate overload would make lambdas ambiguous, or when an instance method has that name. Each skip is reported as an informational `MEWG101` to `MEWG104` diagnostic and listed at the top of the generated file. `MewUIFluentExtensionsNamespace` moves every generated class into one namespace instead of the owner's namespace.
 
-### Button
+### IDE Conversion Tools
 
-```csharp
-new Button()
-    .Command(submitCommand, presentation: CommandPresentationMode.TextAndIcon)
-```
-
-| Method | Description |
-|--------|-------------|
-| `Content(string)` | Button text |
-| `OnClick(Action)` | Click handler |
-| `Command(Command, CommandPresentationMode)` | Semantic command and optional generated command text/icon content |
-| `BindCommand(ObservableValue<Command?>, CommandPresentationMode)` | Semantic Command binding and presentation mode |
-| `BindContent(ObservableValue<string>)` | Content binding |
-| `BindContent(source, convert)` | Converted text or element content binding |
-
-### Drop-down buttons
-
-```csharp
-new DropDownButton()
-    .DropDownMenu(new Menu().Item(exportPdf).Item(print))
-    .Content("_More");
-
-new SplitButton
-{
-    Command = save,
-}
-    .DropDownMenu(new Menu().Item(saveAs).Item(saveAll))
-    .Content("Save");
-```
-
-| Method | Description |
-|--------|-------------|
-| `Content(string)` | Text label; `_` marks the access key unless `accessKey: false` |
-| `BindContent(ObservableValue<string>)` | Text label binding |
-| `BindContent(source, convert)` | Converted text label binding |
-| `DropDownMenu` | Menu opened by the drop-down face |
-| `IsDropDownOpen` | Read or change the open state |
-| `MaxDropDownHeight` | Maximum menu height before scrolling |
-| `OnDropDownOpening(Action)` | Add a handler immediately before opening; suitable for rebuilding items |
-| `OnDropDownClosed(Action)` | Add a handler after the menu closes |
-
-`DropDownButton` always opens its menu and has no primary Command. `SplitButton` executes its
-inherited Button Command from the primary face; a false `CanExecute` disables only that face and
-keeps the menu available.
-
-### ButtonGroup segments
-
-```csharp
-new ButtonGroup()
-    .Items(commands, command => command.Text)
-    .PrepareContainer<Command>((segment, command, _) =>
-        segment.Command(command))
-```
-
-| Method | Description |
-|--------|-------------|
-| `PrepareContainer<T>(Action<SegmentButton, T, int>)` | Configure each item container |
-| `SegmentButton.Command(Command)` | Set the semantic Command executed by the segment |
-| `SegmentButton.BindCommand(ObservableValue<Command?>)` | Bind the segment's Command property |
-
-`SegmentedControl` is a selection control rather than a Command consumer. Assign Commands to the individual
-`SegmentButton` containers in a `ButtonGroup` for independent actions; bind a single selected value through the
-selection API of `SegmentedControl`.
-
-### TextBox
-
-```csharp
-new TextBox()
-    .Placeholder("Enter name...")
-    .BindText(vm.Name)
-```
-
-| Method | Description |
-|--------|-------------|
-| `Text(string)` | Text content |
-| `Placeholder(string)` | Placeholder |
-| `IsReadOnly(bool)` | Read only |
-| `AcceptTab(bool)` | Accept tab key |
-| `CaretPosition(int)` | Caret position |
-| `ImeMode(ImeMode)` | Input method editor mode |
-| `MaxLength(int)` | Maximum text length |
-| `OnTextChanged(Action<string>)` | Text changed handler |
-| `BindText(ObservableValue<string>)` | Text binding (two-way) |
-| `BindText(source, convert, convertBack?)` | Converted text binding |
-
-### MultiLineTextBox
-
-```csharp
-new MultiLineTextBox()
-    .Placeholder("Enter notes...")
-    .Wrap(true)
-    .Height(100)
-```
-
-| Method | Description |
-|--------|-------------|
-| `Text(string)` | Text content |
-| `Placeholder(string)` | Placeholder |
-| `IsReadOnly(bool)` | Read only |
-| `AcceptTab(bool)` | Accept tab key |
-| `Wrap(bool)` | Word wrap |
-| `OnWrapChanged(Action<bool>)` | Wrap changed handler |
-| `OnTextChanged(Action<string>)` | Text changed handler |
-| `BindText(ObservableValue<string>)` | Text binding |
-| `BindText(source, convert, convertBack?)` | Converted text binding |
-
-### CheckBox
-
-```csharp
-new CheckBox()
-    .Content("Enable feature")
-    .BindIsChecked(vm.IsEnabled)
-```
-
-| Method | Description |
-|--------|-------------|
-| `Content(string)` | Label text |
-| `IsChecked(bool?)` | Checked state |
-| `Check()` / `Uncheck()` | Checked/unchecked shortcut |
-| `Indeterminate()` | Set indeterminate state |
-| `ThreeState()` | Enable three-state mode |
-| `OnCheckedChanged(Action<bool>)` | Checked changed handler |
-| `BindIsChecked(ObservableValue<bool>)` | Checked binding |
-| `BindIsChecked(ObservableValue<bool?>)` | Nullable checked binding |
-| `BindIsChecked(source, convert, convertBack?)` | Converted checked-state binding |
-| `OnCheckStateChanged(Action<bool?>)` | Three-state change handler |
-
-### RadioButton
-
-```csharp
-new RadioButton()
-    .Content("Option A")
-    .GroupName("options")
-    .IsChecked(true)
-```
-
-| Method | Description |
-|--------|-------------|
-| `Content(string)` | Label text |
-| `GroupName(string?)` | Group name (only one selected in same group) |
-| `IsChecked(bool)` | Selected state |
-| `OnCheckedChanged(Action<bool>)` | Selection changed handler |
-| `BindIsChecked(ObservableValue<bool>)` | Selection binding |
-| `BindIsChecked(source, convert, convertBack?)` | Converted selection binding |
-
-### ToggleSwitch
-
-```csharp
-new ToggleSwitch()
-    .Content("Dark Mode")
-    .BindIsChecked(vm.IsDarkMode)
-```
-
-| Method | Description |
-|--------|-------------|
-| `Content(string)` | Label text |
-| `IsChecked(bool)` | Toggle state |
-| `OnCheckedChanged(Action<bool>)` | Toggle changed handler |
-| `BindIsChecked(ObservableValue<bool>)` | Toggle binding |
-| `BindIsChecked(source, convert, convertBack?)` | Converted toggle binding |
-
-### ListBox
-
-```csharp
-new ListBox()
-    .Items("Apple", "Banana", "Cherry")
-    .SelectedIndex(0)
-    .Height(120)
-```
-
-| Method | Description |
-|--------|-------------|
-| `Items(params string[])` | Item list |
-| `ItemHeight(double)` | Item height |
-| `ItemPadding(Thickness)` | Item padding |
-| `SelectedIndex(int)` | Selected index |
-| `OnSelectionChanged(Action<object?>)` | Selection changed handler |
-| `BindSelectedIndex(ObservableValue<int>)` | Selection binding |
-| `BindSelectedIndex(source, convert, convertBack?)` | Converted selection binding |
-
-### ComboBox
-
-```csharp
-new ComboBox()
-    .Items("Small", "Medium", "Large")
-    .Placeholder("Select size...")
-    .SelectedIndex(1)
-```
-
-| Method | Description |
-|--------|-------------|
-| `Items(params string[])` | Item list |
-| `SelectedIndex(int)` | Selected index |
-| `Placeholder(string)` | Placeholder |
-| `OnSelectionChanged(Action<object?>)` | Selection changed handler |
-| `BindSelectedIndex(ObservableValue<int>)` | Selection binding |
-| `BindSelectedIndex(source, convert, convertBack?)` | Converted selection binding |
-
-### GridView
-
-| Method | Description |
-|--------|-------------|
-| `RowHeight(double)` | Row height |
-| `HeaderHeight(double)` | Header height |
-| `CellPadding(Thickness)` | Cell padding |
-| `ZebraStriping(bool)` | Alternate row backgrounds |
-| `ShowGridLines(bool)` | Show grid lines |
-| `Columns<TItem>(params GridViewColumn<TItem>[])` | Column definitions |
-| `ItemsSource<TItem>(IReadOnlyList<TItem>)` | Item source |
-| `ItemsSource<TItem>(ItemsView<TItem>)` | Items view source |
-| `FixedHeightPresenter()` | Fixed-height virtualization |
-| `VariableHeightPresenter()` | Variable-height virtualization |
-
-Grid view columns support `Header(string)`, `Width(double)`, `MinWidth(double)`, and `Resizable(bool)`.
-
-### TreeView
-
-| Method | Description |
-|--------|-------------|
-| `ItemsSource(IReadOnlyList<TreeViewNode>)` | Root nodes |
-| `ItemsSource(ITreeItemsView)` | Tree items view |
-| `SelectedNode(TreeViewNode?)` | Selected node |
-| `ItemHeight(double)` | Item height |
-| `ItemPadding(Thickness)` | Item padding |
-| `ItemTemplate(IDataTemplate)` | Item template |
-| `Indent(double)` | Child indentation |
-| `ExpandTrigger(TreeViewExpandTrigger)` | Expansion trigger |
-| `Expand(TreeViewNode)` / `Collapse(TreeViewNode)` | Change expansion state |
-| `Toggle(TreeViewNode)` | Toggle expansion state |
-| `OnSelectionChanged(Action<object?>)` | Selection changed handler |
-| `OnSelectedNodeChanged(Action<TreeViewNode?>)` | Selected node changed handler |
-
-### Slider
-
-```csharp
-new Slider()
-    .Minimum(0)
-    .Maximum(100)
-    .BindValue(vm.Volume)
-```
-
-| Method | Description |
-|--------|-------------|
-| `Minimum(double)` | Minimum value |
-| `Maximum(double)` | Maximum value |
-| `Value(double)` | Current value |
-| `SmallChange(double)` | Small change unit |
-| `OnValueChanged(Action<double>)` | Value changed handler |
-| `BindValue(ObservableValue<double>)` | Value binding |
-| `BindValue(source, convert, convertBack?)` | Converted value binding |
-
-### ProgressBar
-
-```csharp
-new ProgressBar()
-    .Minimum(0)
-    .Maximum(100)
-    .BindValue(vm.Progress)
-```
-
-| Method | Description |
-|--------|-------------|
-| `Minimum(double)` | Minimum value |
-| `Maximum(double)` | Maximum value |
-| `Value(double)` | Current value |
-| `BindValue(ObservableValue<double>)` | Value binding |
-| `BindValue(source, convert)` | Converted one-way value binding |
-
-### ProgressRing
-
-A ring-shaped `ProgressBar`: the arc fills clockwise from the top, and `IsIndeterminate` shows a spinning arc instead of the value.
-
-```csharp
-new ProgressRing()
-    .Width(48)
-    .Height(48)
-    .BindValue(vm.Progress)
-
-new ProgressRing().IsIndeterminate()
-```
-
-| Method | Description |
-|--------|-------------|
-| `Minimum(double)` | Minimum value |
-| `Maximum(double)` | Maximum value |
-| `Value(double)` | Current value |
-| `IsIndeterminate(bool)` | Show the spinning arc instead of the value |
-| `BindValue(ObservableValue<double>)` | Value binding |
-| `BindValue(source, convert)` | Converted one-way value binding |
-| `BindIsIndeterminate(ObservableValue<bool>)` | Indeterminate state binding |
-
-### Calendar
-
-| Method | Description |
-|--------|-------------|
-| `SelectedDate(DateTime?)` | Selected date |
-| `DisplayDate(DateTime)` | Displayed date |
-| `DisplayMode(CalendarMode)` | Calendar display mode |
-| `FirstDayOfWeek(DayOfWeek)` | First day of week |
-| `IsTodayHighlighted(bool)` | Highlight today |
-| `OnSelectedDateChanged(Action<DateTime?>)` | Selected date changed handler |
-| `BindSelectedDate(ObservableValue<DateTime?>)` | Selected date binding |
-| `BindSelectedDate(source, convert, convertBack?)` | Converted selected date binding |
-
-### DatePicker
-
-| Method | Description |
-|--------|-------------|
-| `SelectedDate(DateTime?)` | Selected date |
-| `Placeholder(string)` | Placeholder |
-| `DateFormat(string)` | Date format |
-| `FirstDayOfWeek(DayOfWeek)` | First day of week |
-| `OnSelectedDateChanged(Action<DateTime?>)` | Selected date changed handler |
-| `BindSelectedDate(ObservableValue<DateTime?>)` | Selected date binding |
-| `BindSelectedDate(source, convert, convertBack?)` | Converted selected date binding |
-
-### ColorPicker
-
-| Method | Description |
-|--------|-------------|
-| `SelectedColor(Color)` | Selected color |
-| `OnSelectedColorChanged(Action<Color>)` | Selected color changed handler |
-| `Kind(ColorPickerKind)` | Picker presentation |
-| `ShowAlpha(bool)` | Show alpha controls |
-
-### Image
-
-```csharp
-new Image()
-    .SourceFile("logo.png")
-    .Size(64, 64)
-    .StretchMode(Stretch.Uniform)
-```
-
-| Method | Description |
-|--------|-------------|
-| `Source(IImageSource?)` | Image source |
-| `SourceFile(string path)` | Load from file |
-| `SourceResource(Assembly, string)` | Load from resource |
-| `SourceResource<TAnchor>(string)` | Load from resource (generic) |
-| `StretchMode(Stretch)` | Stretch mode |
-| `ImageScaleQuality(ImageScaleQuality)` | Scaling quality |
-| `ViewBox(Rect?, ImageViewBoxUnits)` | Source view box |
-| `ViewBoxPixels(Rect?)` | Pixel-based source view box |
-| `ViewBoxRelative(Rect?)` | Relative source view box |
-| `AlignmentX(ImageAlignmentX)` | Horizontal image alignment |
-| `AlignmentY(ImageAlignmentY)` | Vertical image alignment |
-
-### TabControl
-
-```csharp
-new TabControl()
-    .TabItems(
-        new TabItem().Header("Home").Content(...),
-        new TabItem().Header("Settings").Content(...)
-    )
-```
-
-| Method | Description |
-|--------|-------------|
-| `TabItems(params TabItem[])` | Tab item list |
-| `Tab(header, content)` | Add tab (string header) |
-| `Tab(Element header, content)` | Add tab (element header) |
-| `SelectedIndex(int)` | Selected tab index |
-| `TabPlacement(TabPlacement)` | Tab header placement |
-| `OnSelectionChanged(Action<object?>)` | Tab changed handler |
-
-### TabItem
-
-```csharp
-new TabItem()
-    .Header("Settings")
-    .Content(new StackPanel().Children(...))
-    .IsEnabled(true)
-```
-
-| Method | Description |
-|--------|-------------|
-| `Header(string)` | Header text |
-| `Header(Element)` | Header element |
-| `Content(Element)` | Tab content |
-| `IsEnabled(bool)` | Enabled state |
-
-### GroupBox (HeaderedContentControl)
-
-```csharp
-new GroupBox()
-    .Header("Options")
-    .Content(new StackPanel().Children(...))
-```
-
-| Method | Description |
-|--------|-------------|
-| `Header(string)` | Header text (Bold style) |
-| `Header(Element)` | Header element |
-| `HeaderSpacing(double)` | Header-content spacing |
-| `Content(Element)` | Group content |
-
-### ScrollViewer
-
-```csharp
-new ScrollViewer()
-    .AutoVerticalScroll()
-    .NoHorizontalScroll()
-    .Content(...)
-```
-
-| Method | Description |
-|--------|-------------|
-| `VerticalScroll(ScrollMode)` | Vertical scroll mode |
-| `HorizontalScroll(ScrollMode)` | Horizontal scroll mode |
-| `Scroll(vertical, horizontal)` | Set scroll modes together |
-| `NoVerticalScroll()` | Disable vertical scroll |
-| `AutoVerticalScroll()` | Auto vertical scroll |
-| `ShowVerticalScroll()` | Always show vertical scroll |
-| `NoHorizontalScroll()` | Disable horizontal scroll |
-| `AutoHorizontalScroll()` | Auto horizontal scroll |
-| `ShowHorizontalScroll()` | Always show horizontal scroll |
-| `Content(Element)` | Content to scroll |
-
----
-
-## Panel Extension Methods
-
-### Panel (Common)
-
-| Method | Description |
-|--------|-------------|
-| `Children(params Element[])` | Add child elements |
-| `Padding(Thickness)` | Panel padding |
-| `Padding(uniform)` | Uniform panel padding |
-| `Padding(horizontal, vertical)` | Horizontal/vertical panel padding |
-| `Padding(left, top, right, bottom)` | Individual panel padding |
-
-### StackPanel
-
-```csharp
-new StackPanel()
-    .Vertical()
-    .Spacing(8)
-    .Children(
-        new Label().Text("First"),
-        new Label().Text("Second")
-    )
-```
-
-| Method | Description |
-|--------|-------------|
-| `Orientation(Orientation)` | Direction |
-| `Horizontal()` | Horizontal direction (shortcut) |
-| `Vertical()` | Vertical direction (shortcut) |
-| `Spacing(double)` | Spacing between elements |
-
-### Grid
-
-```csharp
-new Grid()
-    .Rows("Auto,*,Auto")
-    .Columns("100,*")
-    .Spacing(8)
-    .AutoIndexing()
-    .Children(
-        new Label().Text("Name:"),
-        new TextBox()
-    )
-```
-
-| Method | Description |
-|--------|-------------|
-| `Rows(params GridLength[])` | Row definitions |
-| `Columns(params GridLength[])` | Column definitions |
-| `Rows(string)` | Row definitions (string: "Auto,*,2*,100") |
-| `Columns(string)` | Column definitions (string) |
-| `Spacing(double)` | Cell spacing |
-| `AutoIndexing(bool)` | Auto indexing (Row/Column auto-increment) |
-| `ShowGridLine(bool)` | Show layout grid lines |
-| `ShareStarSize(bool)` | Share star sizing across nested grids |
-
-**GridLength String Syntax:**
-- `Auto` - Fit to content
-- `*` - 1 star ratio
-- `2*` - 2 star ratio
-- `100` - 100 pixels
-
-### SplitPanel
-
-```csharp
-new SplitPanel()
-    .Horizontal()
-    .FirstLength(new GridLength(1, GridUnitType.Star))
-    .SecondLength(new GridLength(2, GridUnitType.Star))
-    .SplitterThickness(6)
-    .First(leftPane)
-    .Second(rightPane)
-```
-
-| Method | Description |
-|--------|-------------|
-| `Orientation(Orientation)` | Split direction |
-| `Horizontal()` | Horizontal split |
-| `Vertical()` | Vertical split |
-| `SplitterThickness(double)` | Splitter thickness |
-| `FirstLength(GridLength)` | First pane length |
-| `SecondLength(GridLength)` | Second pane length |
-| `MinFirst(double)` / `MaxFirst(double)` | First pane size limits |
-| `MinSecond(double)` / `MaxSecond(double)` | Second pane size limits |
-| `First(UIElement?)` | First pane content |
-| `Second(UIElement?)` | Second pane content |
-
-### UniformGrid
-
-```csharp
-new UniformGrid()
-    .Columns(3)
-    .Spacing(8)
-    .Children(
-        new Button().Content("1"),
-        new Button().Content("2"),
-        new Button().Content("3")
-    )
-```
-
-| Method | Description |
-|--------|-------------|
-| `Rows(int)` | Row count |
-| `Columns(int)` | Column count |
-| `Spacing(double)` | Cell spacing |
-
-### WrapPanel
-
-```csharp
-new WrapPanel()
-    .Orientation(Orientation.Horizontal)
-    .Spacing(8)
-    .ItemWidth(100)
-    .ItemHeight(100)
-    .Children(...)
-```
-
-| Method | Description |
-|--------|-------------|
-| `Orientation(Orientation)` | Direction |
-| `Horizontal()` | Horizontal direction |
-| `Vertical()` | Vertical direction |
-| `Spacing(double)` | Spacing between elements |
-| `ItemWidth(double)` | Item width |
-| `ItemHeight(double)` | Item height |
-
-### DockPanel
-
-```csharp
-new DockPanel()
-    .LastChildFill()
-    .Spacing(8)
-    .Children(
-        new Label().Text("Header").DockTop(),
-        new Label().Text("Footer").DockBottom(),
-        new Label().Text("Content")  // Fills remaining space
-    )
-```
-
-| Method | Description |
-|--------|-------------|
-| `LastChildFill(bool)` | Last child fills remaining space |
-| `Spacing(double)` | Spacing between elements |
-
----
-
-## Additional Extension API
-
-The tables below index the remaining public markup extensions. Some methods have multiple overloads; use IntelliSense or the XML API documentation for complete parameter details.
-
-### Common Element and Control
-
-| Methods | Purpose |
-|---------|---------|
-| `Apply(...)`, `Register(...)`, `Template(...)` | Custom initialization and templates |
-| `Bind(...)` | Generic property binding |
-| `IsVisible(...)`, `Enable()`, `Disable()` | Visibility and enabled state |
-| `ClipToBounds(...)`, `Cursor(...)`, `Opacity(...)`, `Rotation(...)` | Visual and input properties |
-| `CacheMode(...)`, `Cached()` | Rendering cache configuration |
-| `StyleName(...)`, `WithTheme(...)` | Style and theme selection |
-| `ToolTip(...)`, `ContextMenu(...)` | Auxiliary UI |
-| `Child(...)` | Decorator child content |
-| `AccessKeyTarget(...)` | Access-key target |
-| `SemiBold()` | Semibold font shortcut |
-| `TextTrimming(...)` | Text trimming |
-
-### Input and Composition Events
-
-| Methods | Purpose |
-|---------|---------|
-| `OnDoubleClick(...)`, `OnMouseDoubleClick(...)` | Double-click handlers |
-| `OnTextCompositionStart(...)`, `OnTextCompositionUpdate(...)`, `OnTextCompositionEnd(...)` | Text composition handlers |
-| `OnPreviewTextCompositionStart(...)`, `OnPreviewTextCompositionUpdate(...)`, `OnPreviewTextCompositionEnd(...)` | Preview text composition handlers |
-
-### Window and Services
-
-| Methods | Purpose |
-|---------|---------|
-| `Icon(...)`, `Build(...)`, `OnClosing(...)`, `OnFrameRendered(...)` | Window configuration and lifecycle |
-| `OnWindowStateChanged(...)`, `Minimized()`, `Maximized()`, `Topmost(...)` | Window state |
-| `StartCenterScreen()`, `StartCenterOwner()`, `StartManualPosition(...)` | Initial window position |
-| `ShowToast(...)`, `CreateBusyIndicator(...)` | Window services |
-
-### Items and Selection
-
-| Methods | Purpose |
-|---------|---------|
-| `AddColumn(...)` | Add a GridView column |
-| `StackPresenter()`, `WrapPresenter(...)` | Items presenter selection |
-| `ChangeOnWheel(...)` | Mouse-wheel value/selection changes |
-| `MaxMenuHeight(...)` | Context menu height limit |
-| `IsExpanded(...)`, `BindIsExpanded(...)`, `OnExpandedChanged(...)` | Expanded state |
-| `IsActive(...)`, `BindIsActive(...)` | ProgressIndicator activity |
-
-### Input Controls
-
-| Methods | Purpose |
-|---------|---------|
-| `Password(...)`, `BindPassword(...)` | PasswordBox value and binding |
-| `Range(...)`, `Step(...)`, `Format(...)`, `IsInteger(...)` | Numeric input configuration |
-| `OnChecked(...)`, `OnUnchecked(...)`, `IsThreeState(...)` | Check/toggle state |
-
-### Menus
-
-| Methods | Purpose |
-|---------|---------|
-| `Add(...)`, `Item(...)`, `SubMenu(...)`, `Separator()` | Build menus |
-| `Item(Command)` | Use the Command's normalized default text and access key |
-| `Item(string, Command)`, `Text(string)` | Override MenuItem text and access key together with `_` markers |
-| `Menu(...)`, `Command(...)`, `Icon(...)` | Menu item submenu, command, and icon placement override |
-| `BindText(...)`, `BindCommand(...)`, `BindIcon(...)`, `BindIsEnabled(...)` | Real bindings to MenuItem MewProperties |
-| `IsCheckable(...)`, `IsChecked(...)`, `BindIsChecked(...)` | Check slot of a menu item and whether the check is shown |
-
-`MenuItem.Text` and `Icon` inherit the Command defaults only while they have no value source. Explicit empty text and
-a null icon suppress those defaults. An `IsEnabled` binding is preserved and ANDed with `CanExecute` for the effective
-state.
-
-### Shapes and Glyphs
-
-| Methods | Purpose |
-|---------|---------|
-| `Fill(...)`, `Stroke(...)`, `StrokeStyle(...)`, `Stretch(...)` | Shape appearance |
-| `Data(...)`, `Points(...)`, `CornerRadius(...)` | Shape geometry |
-| `GlyphSize(...)`, `StrokeThickness(...)` | Glyph appearance |
-
-### Timer and Styles
-
-| Methods | Purpose |
-|---------|---------|
-| `Interval(...)`, `IntervalMs(...)`, `OnTick(...)`, `Start()`, `Stop()` | DispatcherTimer configuration |
-| `With(...)` | Add styles to a StyleSheet |
-| `HeaderInset(...)` | Header layout inset |
-
----
+The `Aprillz.MewUI.Analyzers` package converts object initializers and configuration statements into fluent chains and back. The rules (`MEW1101` to `MEW1106`) and the hint contract are documented in [src/MewUI.Analyzers/README.md](../src/MewUI.Analyzers/README.md).
 
 ## Apply Pattern
 
-Use the `Apply` pattern for complex initialization or unsupported property settings:
+`Apply(action)` runs an action on the receiver and returns it, for initialization that has no dedicated extension:
 
+<!-- snippet:apply -->
 ```csharp
-public static T Apply<T>(this T obj, Action<T> action)
-{
-    action(obj);
-    return obj;
-}
-
-// Usage example
-new TextBox()
+var textBox = new TextBox()
     .OnTextChanged(text => Console.WriteLine(text))
-    .Apply(tb => tb.MaxLength = 100)
+    .Apply(box => box.MaxLength = 100);
 ```
+<!-- /snippet -->
+
+## Reference
+
+The method tables below are generated from the compiled assemblies into `docs/markup` and checked against the committed files by `MarkupReferenceDocsTests`. After changing an extension, regenerate with `dotnet run --project tools/MewUI.MarkupAudit/MewUI.MarkupAudit -- src/MewUI/bin/Debug/net10.0/Aprillz.MewUI.dll <the Debug build output of every extension package listed below> --docs docs/markup` and commit the result. Each row lists the method signature without the receiver, the members it sets (`event X` for a subscription, `bind X` for a binding, `X = value` for a shorthand), and the XML summary.
+
+| File | Covers |
+|---|---|
+| [Element.md](markup/Element.md) | `Element`, `UIElement`, `FrameworkElement`, `Control`: size, margin, alignment, visibility, focus, mouse, keyboard, and drag events, Grid/Canvas/DockPanel attached properties, colors and fonts |
+| [Content.md](markup/Content.md) | Content controls, `Border`, `Expander`, `GroupBox`, `TabControl`, `ScrollViewer`, `Popup`, and decorators |
+| [Window.md](markup/Window.md) | `Window` sizing modes, placement, lifecycle events, and services |
+| [Button.md](markup/Button.md) | `Button`, `DropDownButton`, `SplitButton`, `ToggleButton`, `CheckBox`, `RadioButton`, `ToggleSwitch`, `ButtonGroup`, `SegmentedControl` |
+| [TextBox.md](markup/TextBox.md) | `TextBox`, `MultiLineTextBox`, `PasswordBox` |
+| [Input.md](markup/Input.md) | `Slider`, `ProgressBar`, `ProgressRing`, `NumericUpDown`, `Calendar`, `DatePicker`, `ColorPicker` |
+| [ListBox.md](markup/ListBox.md) | `ItemsControl`, `ListBox`, `ComboBox`, `NavigationList`, `NavigationView` |
+| [GridView.md](markup/GridView.md) | `GridView` and `GridViewColumn<TItem>` |
+| [TreeView.md](markup/TreeView.md) | `TreeView` |
+| [Menu.md](markup/Menu.md) | `Menu`, `MenuBar`, `MenuItem`, `ContextMenu` |
+| [ToolBar.md](markup/ToolBar.md) | `ToolBar` bands, groups, and items |
+| [Panel.md](markup/Panel.md) | `StackPanel`, `Grid`, `DockPanel`, `WrapPanel`, `UniformGrid`, `SplitPanel` |
+| [Shape.md](markup/Shape.md) | `Shape`, `Line`, `Rectangle`, `PathShape`, `GlyphElement` |
+| [Image.md](markup/Image.md) | `Image` |
+| [Text.md](markup/Text.md) | `TextBlock`, `Run`, `MarkupTextBlock`, `Label` |
+| [Binding.md](markup/Binding.md) | Generic `Bind` overloads and `BindingPath` builders |
+| [Misc.md](markup/Misc.md) | `DispatcherTimer`, `StyleSheet`, `Command`, `ApplicationBuilder`, design-time size, `Ref`, `Apply` |
+| [MewDock.md](markup/MewDock.md) | Extensions of the `Aprillz.MewUI.MewDock` package |
+| [Markdown.md](markup/Markdown.md) | Extensions of the `Aprillz.MewUI.Markdown` package |
+| [Terminal.md](markup/Terminal.md) | Extensions of the `Aprillz.MewUI.Terminal` package |
+| [MewvalonEdit.md](markup/MewvalonEdit.md) | Extensions of the `Aprillz.MewUI.MewvalonEdit` package |
+| [Skia.md](markup/Skia.md) | Extensions of the `Aprillz.MewUI.Skia` package |
+| [WebView2.Win32.md](markup/WebView2.Win32.md) | Extensions of the `Aprillz.MewUI.WebView2.Win32` package |
+| [MewCharts.md](markup/MewCharts.md) | Extensions of the `Aprillz.MewUI.MewCharts` package |
+
+### Notes
+
+- `Window`: `Width`, `Height`, `Size`, `MinWidth`, `MinHeight`, `MaxWidth`, and `MaxHeight` are intentionally unavailable. Use `Resizable`, `Fixed`, or a `FitContent*` method so the window sizing mode is explicit.
+- Drop-down buttons: `DropDownButton` always opens its menu and has no primary Command. `SplitButton` executes its inherited Button Command from the primary face; a false `CanExecute` disables only that face and keeps the menu available.
+- `SegmentedControl` is a selection control rather than a Command consumer. Assign Commands to the individual `SegmentButton` containers in a `ButtonGroup` for independent actions; bind a single selected value through the selection API of `SegmentedControl`.
+- `ProgressRing` is a ring-shaped `ProgressBar`: the arc fills clockwise from the top, and `IsIndeterminate` shows a spinning arc instead of the value.
+- `Grid.Rows(string)` and `Grid.Columns(string)` take a comma-separated `GridLength` list: `Auto` fits the content, `*` is one star share, `2*` is two shares, and `100` is 100 pixels.
+- Menus: `Add`, `Item`, `SubMenu`, and `Separator` build a menu by appending; `Items(...)` replaces the items of a `ContextMenu` or `MenuBar`. `Item(Command)` uses the Command's normalized default text and access key; `Item(string, Command)` and `Text(string)` override the MenuItem text and access key together with `_` markers. `MenuItem.Text` and `Icon` inherit the Command defaults only while they have no value source; explicit empty text and a null icon suppress those defaults. An `IsEnabled` binding is preserved and ANDed with `CanExecute` for the effective state.
