@@ -24,7 +24,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
-          fetch-depth: 0
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -61,33 +60,6 @@ jobs:
           dotnet test tests/MewUI.MewDock.Test/MewUI.MewDock.Test.csproj -f net10.0 /nr:false
           dotnet test tests/MewUI.Terminal.Test/MewUI.Terminal.Test.csproj -f net10.0 /nr:false
           dotnet test tests/MewUI.MewvalonEdit.Test/MewUI.MewvalonEdit.Test.csproj -f net10.0 /nr:false
-
-      - name: Restore xmldocmd
-        working-directory: tools/docs
-        run: dotnet tool restore
-
-      # Dry run of the API reference for the core: xmldocmd fails on broken cref targets and
-      # malformed XML. Nothing is uploaded; pages.yml publishes.
-      - name: API reference dry run
-        shell: cmd
-        run: tools\docs\build_api_docs.cmd MewUI
-
-      # Input for the documentation review (plan 7.5): the public members declared in files that
-      # changed against main, with their summaries and fluent counterparts side by side.
-      - name: Extract changed members for review
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force .artifacts | Out-Null
-          dotnet run --project tools/MewUI.MarkupAudit/MewUI.MarkupAudit -c Release --no-build -- src/MewUI/bin/Release/net10.0/Aprillz.MewUI.dll --doc-review Aprillz.MewUI --changed-since origin/main > .artifacts/doc-review-changed.md
-          dotnet run --project tools/MewUI.MarkupAudit/MewUI.MarkupAudit -c Release --no-build -- src/MewUI/bin/Release/net10.0/Aprillz.MewUI.dll --doc-review Aprillz.MewUI.Controls --changed-since origin/main >> .artifacts/doc-review-changed.md
-        continue-on-error: true
-
-      - name: Upload review extract
-        uses: actions/upload-artifact@v4
-        with:
-          name: doc-review-changed
-          path: .artifacts/doc-review-changed.md
-          if-no-files-found: ignore
 
   # The documentation site must build from the committed docs, and every internal link it renders
   # must resolve. The API tree is absent here, so links into it are skipped by the checker.
