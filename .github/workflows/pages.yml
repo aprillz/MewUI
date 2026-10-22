@@ -85,7 +85,9 @@ jobs:
           path: .artifacts/api
           if-no-files-found: error
 
-  # Pages replaces the whole site per deploy, so both outputs are staged into one artifact.
+  # Pages replaces the whole site per deploy, so the docs site, the API reference and the Gallery
+  # are staged into one artifact: website/dist is the site root, the API pages are built into it
+  # by Starlight, and the Gallery is copied to site/Gallery untouched.
   deploy:
     needs: [gallery, api-docs]
     runs-on: ubuntu-latest
@@ -93,25 +95,44 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Download Gallery
-        uses: actions/download-artifact@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
-          name: gallery
-          path: site/Gallery
+          node-version: 22
+          cache: npm
+          cache-dependency-path: website/package-lock.json
 
       - name: Download API reference
         uses: actions/download-artifact@v4
         with:
           name: api
-          path: site/api
+          path: website/src/content/docs/api
+
+      - name: Build the docs site
+        working-directory: website
+        run: |
+          npm ci
+          npm run build
+          npm run check-links
+
+      - name: Download Gallery
+        uses: actions/download-artifact@v4
+        with:
+          name: gallery
+          path: website/dist/Gallery
 
       - name: Stage the site
         run: |
+          mkdir -p site
+          cp -R website/dist/. site/
           # Pages runs Jekyll by default, which drops the _framework folder.
           touch site/.nojekyll
-          printf '<!doctype html><meta http-equiv="refresh" content="0; url=./Gallery/">\n' > site/index.html
           grep -q 'main.js?v=' site/Gallery/index.html
-          test -f site/api/version.txt
+          test -f site/api/index.html
+          test -f site/index.html
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
