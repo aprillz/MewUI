@@ -4,9 +4,14 @@
     <AssemblyName>$(MewUITitle).Markdown</AssemblyName>
     <PackageId>$(MewUITitle).Markdown</PackageId>
     <Description>Native Markdown controls for MewUI using Markdig.</Description>
+    <!-- Same-name setters and On* subscriptions of the Markdown controls come from the generator. -->
+    <MewUIGenerateFluentExtensions>true</MewUIGenerateFluentExtensions>
+    <InterceptorsNamespaces>$(InterceptorsNamespaces);Aprillz.MewUI.Generated</InterceptorsNamespaces>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\MewUI\MewUI.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Generators\MewUI.Generators.csproj"
+                      ReferenceOutputAssembly="false" PrivateAssets="all" OutputItemType="Analyzer" />
     <PackageReference Include="Markdig" Version="1.3.2" />
     <InternalsVisibleTo Include="Aprillz.MewUI.Markdown.Test" />
   </ItemGroup>
@@ -14,5 +19,8 @@
   <ItemGroup>
     <Compile Include="..\..\src\MewUI\Text\TextLayoutLimits.cs" Link="Shared\TextLayoutLimits.cs" />
     <Compile Include="..\..\src\MewUI\Text\TextMarkupConstants.cs" Link="Shared\TextMarkupConstants.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)..\..\src\MewUI\Markup\Hints\FluentHintAttributes.cs" Link="Markup\FluentHintAttributes.cs" />
   </ItemGroup>
 </Project>

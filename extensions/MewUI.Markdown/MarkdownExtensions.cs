@@ -1,32 +1,12 @@
 namespace Aprillz.MewUI.Markdown;
 
 /// <summary>Provides fluent configuration for Markdown controls.</summary>
+/// <remarks>
+/// A delegate-typed property is invocable, so <c>presenter.CodeBlockFactory(x)</c> binds to the property and never reaches an
+/// extension; such properties use the <c>With</c> prefix.
+/// </remarks>
 public static class MarkdownExtensions
 {
-    /// <summary>Sets the Markdown source.</summary>
-    public static T Markdown<T>(this T control, string markdown) where T : MarkdownPresenter { control.Markdown = markdown; return control; }
-    /// <summary>Sets immutable parsing options.</summary>
-    public static T Options<T>(this T control, MarkdownOptions options) where T : MarkdownPresenter { control.Options = options; return control; }
-    /// <summary>Sets document metrics and color overrides.</summary>
-    public static T MarkdownTheme<T>(this T control, MarkdownTheme theme) where T : MarkdownPresenter { control.MarkdownTheme = theme; return control; }
-    /// <summary>Sets the URI resolution base.</summary>
-    public static T BaseUri<T>(this T control, Uri? baseUri) where T : MarkdownPresenter { control.BaseUri = baseUri; return control; }
-    /// <summary>Sets the host-authorized image resolver.</summary>
-    public static T ImageResolver<T>(this T control, IMarkdownImageResolver? resolver) where T : MarkdownPresenter { control.ImageResolver = resolver; return control; }
-    /// <summary>Sets the optional owned code block presentation factory.</summary>
-    public static T CodeBlockFactory<T>(this T control, Func<string, string?, Controls.FrameworkElement?>? factory) where T : MarkdownPresenter { control.CodeBlockFactory = factory; return control; }
-    /// <summary>Subscribes to host-handled link requests.</summary>
-    public static T OnLinkRequested<T>(this T control, Action<MarkdownLinkRequestedEventArgs> handler) where T : MarkdownPresenter { control.LinkRequested += handler; return control; }
-    /// <summary>Sets the custom renderer registry.</summary>
-    public static T Renderers<T>(this T control, MarkdownRenderers? renderers) where T : MarkdownPresenter { control.Renderers = renderers; return control; }
-    /// <summary>Sets the background parse delay; zero parses synchronously.</summary>
-    public static T ParseDelay<T>(this T control, TimeSpan delay) where T : MarkdownPresenter { control.ParseDelay = delay; return control; }
-    /// <summary>Sets whether text can be selected.</summary>
-    public static T IsSelectionEnabled<T>(this T control, bool enabled) where T : MarkdownPresenter { control.IsSelectionEnabled = enabled; return control; }
-    /// <summary>Subscribes to selection changes.</summary>
-    public static T OnSelectionChanged<T>(this T control, Action handler) where T : MarkdownPresenter { control.SelectionChanged += handler; return control; }
-    /// <summary>Subscribes to pending copies of the selection.</summary>
-    public static T OnCopying<T>(this T control, Action<MarkdownCopyingEventArgs> handler) where T : MarkdownPresenter { control.Copying += handler; return control; }
-    /// <summary>Subscribes to background parse failures.</summary>
-    public static T OnParseFailed<T>(this T control, Action<Exception> handler) where T : MarkdownPresenter { control.ParseFailed += handler; return control; }
+    /// <summary>Sets <see cref="MarkdownPresenter.CodeBlockFactory"/> and returns the control.</summary>
+    public static T WithCodeBlockFactory<T>(this T control, [FluentSetsMember(nameof(MarkdownPresenter.CodeBlockFactory))] Func<string, string?, Controls.FrameworkElement?>? factory) where T : MarkdownPresenter { control.CodeBlockFactory = factory; return control; }
 }
