@@ -18,7 +18,6 @@ const guides = [
   'localization',
   'textviewextensions',
   'windowlayers',
-  'browserbootstrap',
 ];
 const architecture = [
   'applicationlifecycle',
