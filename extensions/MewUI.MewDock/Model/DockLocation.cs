@@ -6,16 +6,26 @@ namespace Aprillz.MewUI.MewDock.Model;
 /// </summary>
 public enum DockLocation
 {
+    /// <summary>Above the target, splitting it vertically.</summary>
     Top,
+
+    /// <summary>Below the target, splitting it vertically.</summary>
     Bottom,
+
+    /// <summary>Left of the target, splitting it horizontally.</summary>
     Left,
+
+    /// <summary>Right of the target, splitting it horizontally.</summary>
     Right,
+
+    /// <summary>Into the target, as a tab.</summary>
     Center,
 }
 
 /// <summary>Geometry and (de)serialization helpers for <see cref="DockLocation"/>.</summary>
 public static class DockLocationExtensions
 {
+    /// <summary>Returns the orientation of the split this location makes: horizontal for left and right, vertical otherwise.</summary>
     public static Orientation GetOrientation(this DockLocation location) => location switch
     {
         DockLocation.Left or DockLocation.Right => Orientation.Horizontal,
@@ -26,6 +36,7 @@ public static class DockLocationExtensions
     internal static int IndexPlus(this DockLocation location) =>
         location is DockLocation.Bottom or DockLocation.Right ? 1 : 0;
 
+    /// <summary>Returns the serialized name of the location (top, bottom, left, right or center).</summary>
     public static string GetName(this DockLocation location) => location switch
     {
         DockLocation.Top => "top",

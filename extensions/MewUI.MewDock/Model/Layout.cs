@@ -1,12 +1,18 @@
 namespace Aprillz.MewUI.MewDock.Model;
 
-/// <summary>The kind of space a <see cref="Layout"/> occupies (port of ILayoutType). <see cref="Dock"/> is set only
-/// by the feature layer's Layout subclass (an edge-pinned sub-layout); the base model never creates one.</summary>
+/// <summary>The kind of space a <see cref="Layout"/> occupies (port of ILayoutType).</summary>
 public enum LayoutType
 {
+    /// <summary>The main window, or a popped-out window.</summary>
     Window,
+
+    /// <summary>A floating layout.</summary>
     Float,
+
+    /// <summary>A sub-layout hosted inside a tab.</summary>
     Tab,
+
+    /// <summary>An edge-pinned tool dock.</summary>
     Dock,
 }
 

@@ -12,7 +12,7 @@ namespace Aprillz.MewUI.MewDock;
 /// </summary>
 public sealed class DockPane : MewObject
 {
-    /// <summary>The pane title. Binds two-way by default; writes rename the tab.</summary>
+    /// <summary>The pane title shown by the default header; binds two-way by default, and a write renames the tab.</summary>
     public static readonly MewProperty<string?> TitleProperty =
         MewProperty<string?>.Register<DockPane>(nameof(Title), null, MewPropertyOptions.BindsTwoWayByDefault,
             static (pane, _, title) => pane.OnTitleChanged(title));
@@ -32,7 +32,7 @@ public sealed class DockPane : MewObject
     private static readonly MewPropertyKey<DockEdge?> EdgePropertyKey =
         MewProperty<DockEdge?>.RegisterReadOnly<DockPane>(nameof(Edge), null);
 
-    /// <summary>The edge this pane is docked or auto-hidden on, or null for a document / floating pane.</summary>
+    /// <summary>The edge this pane is docked or auto-hidden on, or null for a document or floating pane.</summary>
     public static readonly MewProperty<DockEdge?> EdgeProperty = EdgePropertyKey.Property;
 
     private readonly DockingManager _manager;
@@ -49,33 +49,34 @@ public sealed class DockPane : MewObject
 
     internal string Id => Node.GetId();
 
-    /// <summary>The pane title shown by the default header. Setting a new non-null title renames the tab through the
-    /// reducer; null is ignored.</summary>
+    /// <summary>Gets or sets the pane title shown by the default header; a new non-null title renames the tab, and null
+    /// is ignored.</summary>
     public string? Title
     {
         get => GetValue(TitleProperty);
         set => SetValue(TitleProperty, value);
     }
 
-    /// <summary>The serialized component key (used by <see cref="DockingManager.ContentFactory"/> to restore content).</summary>
+    /// <summary>Gets the serialized component key <see cref="DockingManager.ContentFactory"/> uses to restore content, or null.</summary>
     public string? Component => Node.Component;
 
-    /// <summary>Document pane (top tabs, maximize) vs plain pane (edge dock / auto-hide).</summary>
+    /// <summary>Gets whether this is a document pane (top tabs, maximize) rather than a tool pane (edge dock, auto-hide).</summary>
     public bool IsDocument => Node.IsDocument;
 
-    /// <summary>The group (tabset) this pane lives in, or null when it is auto-hidden in a border.</summary>
+    /// <summary>Gets the group (tabset) this pane lives in, or null when it is auto-hidden in a border.</summary>
     public DockGroup? Group => GetValue(GroupProperty);
 
-    /// <summary>The edge this pane is docked or auto-hidden on, or null for a document / floating pane.</summary>
+    /// <summary>Gets the edge this pane is docked or auto-hidden on, or null for a document or floating pane.</summary>
     public DockEdge? Edge => GetValue(EdgeProperty);
 
-    /// <summary>Whether this is the active pane (the selected pane of the focused group).</summary>
+    /// <summary>Gets whether this is the active pane (the selected pane of the focused group).</summary>
     public bool IsActive => GetValue(IsActiveProperty);
 
-    /// <summary>The content given to AddDocumentPane/AddPane, if any (factory-restored panes return null).</summary>
+    /// <summary>Gets the content given to <see cref="DockingManager.AddDocumentPane"/>, <see cref="DockingManager.AddToolPane"/>
+    /// or <see cref="DockGroup.AddPane"/>, or null for a pane whose content <see cref="DockingManager.ContentFactory"/> built.</summary>
     public UIElement? Content => _detached ? null : _manager.GetExplicitContent(Id);
 
-    /// <summary>Makes this the active pane and gives its content the keyboard focus. A revealed auto-hide tool stays
+    /// <summary>Makes this the active pane and gives its content the keyboard focus; a revealed auto-hide tool stays
     /// revealed.</summary>
     public void Activate()
     {
@@ -91,6 +92,7 @@ public sealed class DockPane : MewObject
         _manager.FocusContent(Node);
     }
 
+    /// <summary>Closes the pane without raising <see cref="DockingManager.PaneClosing"/>.</summary>
     public void Close() => Perform(DockAction.DeleteTab(Id));
 
     /// <summary>Pops the pane out into its own window.</summary>
@@ -105,8 +107,8 @@ public sealed class DockPane : MewObject
         }
     }
 
-    /// <summary>Splits this pane off its current group toward <paramref name="edge"/> of that group. No-op when the
-    /// pane is alone in its group (nothing to split from).</summary>
+    /// <summary>Splits this pane off its current group toward <paramref name="edge"/> of that group; no-op when the
+    /// pane is alone in its group.</summary>
     public void SplitOff(DockEdge edge)
     {
         if (Node.Parent is TabSetNode tabSet && tabSet.Children.Count > 1)
@@ -123,7 +125,7 @@ public sealed class DockPane : MewObject
     public void DockInto(DockGroup group, DockEdge edge) =>
         Perform(DockAction.MoveNode(Id, group.Node.GetId(), DockingManager.ToDockLocation(edge), -1));
 
-    /// <summary>Pins an auto-hide pane into a docked group on its edge. No-op when not auto-hidden.</summary>
+    /// <summary>Pins an auto-hide pane into a docked group on its edge; no-op when the pane is not auto-hidden.</summary>
     public void Pin()
     {
         if (Node.Parent is BorderNode)
@@ -132,7 +134,7 @@ public sealed class DockPane : MewObject
         }
     }
 
-    /// <summary>Unpins the pane's docked group back to the auto-hide edge. No-op when not docked.</summary>
+    /// <summary>Unpins the pane's docked group back to the auto-hide edge; no-op when the pane is not docked.</summary>
     public void Unpin()
     {
         if (Node.Parent is TabSetNode tabSet)

@@ -22,7 +22,7 @@ public sealed class DockGroup : MewObject
     private static readonly MewPropertyKey<DockEdge?> EdgePropertyKey =
         MewProperty<DockEdge?>.RegisterReadOnly<DockGroup>(nameof(Edge), null);
 
-    /// <summary>The edge this group is docked to, or null for a document / floating group.</summary>
+    /// <summary>The edge this group is docked to, or null for a document or floating group.</summary>
     public static readonly MewProperty<DockEdge?> EdgeProperty = EdgePropertyKey.Property;
 
     private static readonly MewPropertyKey<DockPane?> ActivePanePropertyKey =
@@ -42,17 +42,18 @@ public sealed class DockGroup : MewObject
 
     internal TabSetNode Node { get; }
 
-    /// <summary>Document group (top tabs, maximize) vs tool group (caption + edge dock).</summary>
+    /// <summary>Gets whether this is a document group (top tabs, maximize) rather than a tool group (caption, edge dock).</summary>
     public bool IsDocument => Node.IsDocument;
 
-    /// <summary>True when this group is currently maximized.</summary>
+    /// <summary>Gets whether this group is currently maximized.</summary>
     public bool IsMaximized => GetValue(IsMaximizedProperty);
 
-    /// <summary>The edge this group is docked to, or null for a document / floating group.</summary>
+    /// <summary>Gets the edge this group is docked to, or null for a document or floating group.</summary>
     public DockEdge? Edge => GetValue(EdgeProperty);
 
-    /// <summary>Add a tab to this group. The new pane's kind (document / tool) follows the group. Throws when the
-    /// handle is detached.</summary>
+    /// <summary>Adds a pane holding <paramref name="content"/> to this group, of the group's kind (document or tool),
+    /// and selects it.</summary>
+    /// <exception cref="InvalidOperationException">The handle is detached.</exception>
     public DockPane AddPane(string title, UIElement content, string? component = null)
     {
         if (_detached)
@@ -63,7 +64,7 @@ public sealed class DockGroup : MewObject
         return _manager.AddExplicitTab(json, Node.GetId(), DockLocation.Center, select: true, content);
     }
 
-    /// <summary>The tabs in this group at the time of the call.</summary>
+    /// <summary>Gets the panes in this group at the time of the call.</summary>
     public IReadOnlyList<DockPane> Panes
     {
         get
@@ -84,19 +85,19 @@ public sealed class DockGroup : MewObject
         }
     }
 
-    /// <summary>The selected pane, or null when the group is empty.</summary>
+    /// <summary>Gets the selected pane, or null when the group is empty.</summary>
     public DockPane? ActivePane => GetValue(ActivePaneProperty);
 
-    /// <summary>Make this the focused group.</summary>
+    /// <summary>Makes this the focused group.</summary>
     public void Activate() => Perform(DockAction.SetActiveTabset(Node.GetId(), Node.LayoutId));
 
-    /// <summary>Close the whole group and every tab in it.</summary>
+    /// <summary>Closes the whole group and every pane in it.</summary>
     public void Close() => Perform(DockAction.DeleteTabset(Node.GetId()));
 
-    /// <summary>Pop the whole group out into its own window.</summary>
+    /// <summary>Pops the whole group out into its own window.</summary>
     public void Float() => Perform(DockAction.PopoutTabset(Node.GetId()));
 
-    /// <summary>Toggle maximized/normal. No-op for a tool group (only document groups maximize).</summary>
+    /// <summary>Toggles this group between maximized and normal; no-op for a tool group, since only document groups maximize.</summary>
     public void ToggleMaximize()
     {
         if (IsDocument)
@@ -105,7 +106,7 @@ public sealed class DockGroup : MewObject
         }
     }
 
-    /// <summary>Unpin a docked tool group back to its auto-hide edge. No-op for a document group.</summary>
+    /// <summary>Unpins a docked tool group back to its auto-hide edge; no-op for a document group.</summary>
     public void Unpin()
     {
         if (!IsDocument)

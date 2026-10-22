@@ -13,16 +13,22 @@ namespace Aprillz.MewUI.MewDock;
 /// </summary>
 public enum DockEdge
 {
+    /// <summary>The left edge of the document area.</summary>
     Left,
+
+    /// <summary>The top edge of the document area.</summary>
     Top,
+
+    /// <summary>The right edge of the document area.</summary>
     Right,
+
+    /// <summary>The bottom edge of the document area.</summary>
     Bottom,
 }
 
 /// <summary>
-/// The docking facade: one control the host puts in a window. Wraps the model + layout view,
-/// exposes panes as lightweight <see cref="DockPane"/> handles, and
-/// keeps <see cref="PerformAction"/> as the escape hatch to the full reducer.
+/// The docking control a host puts in a window: it owns the layout and exposes its panes and groups as
+/// <see cref="DockPane"/> and <see cref="DockGroup"/> handles.
 /// </summary>
 public sealed class DockingManager : Panel
 {
@@ -37,36 +43,44 @@ public sealed class DockingManager : Panel
     private DockPane? _activePane;
     private UIElement? _centerContent;
 
-    /// <summary>Builds a pane's content, once per pane: the dock keeps it for as long as the pane is in the layout and
-    /// gives it back (out of the window) when the pane is closed. Panes added with explicit content bypass it.</summary>
+    /// <summary>Gets or sets the callback that builds the content of a pane restored by <see cref="LoadLayout"/>, called
+    /// once per pane; panes added with explicit content bypass it.</summary>
+    /// <remarks>The dock keeps the content for as long as the pane is in the layout and gives it back (out of the window)
+    /// when the pane is closed.</remarks>
     public Func<DockPane, UIElement?>? ContentFactory { get; set; }
 
-    /// <summary>Builds custom tab-header content, once per pane; null falls back to the default header (title + close).
-    /// The header is kept while the pane moves between groups, so it should bind to the pane's properties.</summary>
+    /// <summary>Gets or sets the callback that builds a pane's tab header content, called once per pane; null uses the
+    /// default header (title and close button).</summary>
+    /// <remarks>The header is kept while the pane moves between groups, so it should bind to the pane's properties.</remarks>
     public Func<DockPane, UIElement?>? HeaderFactory { get; set; }
 
     internal DockModel? Model => _model;
 
+    /// <summary>Gets the active pane (the selected pane of the focused group), or null when there is none.</summary>
     public DockPane? ActivePane => _activePane;
 
+    /// <summary>Occurs when <see cref="ActivePane"/> changes, with the new pane or null.</summary>
     public event EventHandler<DockPane?>? ActivePaneChanged;
 
-    /// <summary>Raised each time a tab's right-click menu opens, after the default items are added. Handlers add app
-    /// commands to <see cref="DockTabMenuEventArgs.Menu"/>.</summary>
+    /// <summary>Occurs each time a tab's right-click menu opens, after the default items are added; handlers add
+    /// application commands to <see cref="DockTabMenuEventArgs.Menu"/>.</summary>
     public event EventHandler<DockTabMenuEventArgs>? TabMenuOpening;
 
-    /// <summary>Raised each time a group's (tab strip) right-click menu opens, after the default items.</summary>
+    /// <summary>Occurs each time a group's tab strip right-click menu opens, after the default items are added; handlers
+    /// add application commands to <see cref="DockGroupMenuEventArgs.Menu"/>.</summary>
     public event EventHandler<DockGroupMenuEventArgs>? GroupMenuOpening;
 
-    /// <summary>Raised after any change to the layout (a user gesture or a handle verb), once the change is complete.</summary>
+    /// <summary>Occurs after any change to the layout (a user gesture or a handle verb), once the change is complete.</summary>
     public event EventHandler? Changed;
 
-    /// <summary>Raised before the user closes a pane from the dock's own controls (a tab's close button or middle click, a
-    /// caption's close button, the Close menu items). Setting <see cref="DockPaneClosingEventArgs.Cancel"/> keeps the pane
-    /// where it is. <see cref="DockPane.Close"/> called from code closes without asking.</summary>
+    /// <summary>Occurs before the user closes a pane from the dock's own controls (a tab's close button or middle click, a
+    /// caption's close button, the Close menu items); setting <see cref="DockPaneClosingEventArgs.Cancel"/> keeps the pane
+    /// where it is.</summary>
+    /// <remarks><see cref="DockPane.Close"/> called from code closes without raising this event.</remarks>
     public event EventHandler<DockPaneClosingEventArgs>? PaneClosing;
 
-    /// <summary>Optional custom centre element replacing the document host (panes still dock around it).</summary>
+    /// <summary>Gets or sets the element shown in place of the document host, which panes still dock around; null shows
+    /// the document host.</summary>
     public UIElement? CenterContent
     {
         get => _centerContent;
@@ -80,11 +94,13 @@ public sealed class DockingManager : Panel
         }
     }
 
+    /// <summary>Gets every document pane in the layout, as handles.</summary>
     public IReadOnlyList<DockPane> DocumentPanes => CollectPanes(documents: true);
 
+    /// <summary>Gets every tool pane in the layout, as handles.</summary>
     public IReadOnlyList<DockPane> Panes => CollectPanes(documents: false);
 
-    /// <summary>Every tab group (tabset) in the layout, as handles. Auto-hide borders are not groups.</summary>
+    /// <summary>Gets every tab group (tabset) in the layout, as handles; auto-hide borders are not groups.</summary>
     public IReadOnlyList<DockGroup> Groups
     {
         get
@@ -101,9 +117,11 @@ public sealed class DockingManager : Panel
         }
     }
 
-    /// <summary>The focused group, or null when nothing is focused.</summary>
+    /// <summary>Gets the focused group, or null when nothing is focused.</summary>
     public DockGroup? ActiveGroup => _model?.FocusedTabSet is TabSetNode tabSet ? GetOrCreateGroup(tabSet) : null;
 
+    /// <summary>Replaces the layout with one read from <paramref name="json"/>, the form <see cref="SaveLayout"/> writes;
+    /// existing handles detach, and a pane the new layout still has by id keeps its content.</summary>
     public void LoadLayout(string json)
     {
         if (_model is DockModel previous)
@@ -128,8 +146,11 @@ public sealed class DockingManager : Panel
         InvalidateMeasure();
     }
 
+    /// <summary>Returns the layout as JSON that <see cref="LoadLayout"/> accepts.</summary>
     public string SaveLayout() => _model?.ToJsonString() ?? EmptyLayoutJson;
 
+    /// <summary>Adds a document pane holding <paramref name="content"/> to the document group and selects it;
+    /// <paramref name="component"/> is the key saved in the layout for <see cref="ContentFactory"/>.</summary>
     public DockPane AddDocumentPane(string title, UIElement content, string? component = null)
     {
         var model = RequireModel();
@@ -147,6 +168,9 @@ public sealed class DockingManager : Panel
         return GetOrCreatePane(node);
     }
 
+    /// <summary>Adds a tool pane holding <paramref name="content"/>, docked on <paramref name="edge"/>;
+    /// <paramref name="component"/> is the key saved in the layout for <see cref="ContentFactory"/>.</summary>
+    /// <remarks>The pane starts pinned as a docked group; <see cref="DockPane.Unpin"/> sends it to the auto-hide edge.</remarks>
     public DockPane AddToolPane(string title, UIElement content, DockEdge edge = DockEdge.Left, string? component = null)
     {
         var model = RequireModel();
@@ -488,7 +512,7 @@ public sealed class DockingManager : Panel
 }
 
 /// <summary>
-/// Args for <see cref="DockingManager.PaneClosing"/>: the pane the user is closing, and whether to keep it.
+/// Provides data for the <see cref="DockingManager.PaneClosing"/> event: the pane the user is closing, and whether to keep it.
 /// </summary>
 public sealed class DockPaneClosingEventArgs : EventArgs
 {
@@ -497,16 +521,16 @@ public sealed class DockPaneClosingEventArgs : EventArgs
         Pane = pane;
     }
 
-    /// <summary>The pane being closed.</summary>
+    /// <summary>Gets the pane being closed.</summary>
     public DockPane Pane { get; }
 
-    /// <summary>Set to keep the pane open.</summary>
+    /// <summary>Gets or sets whether the pane stays open.</summary>
     public bool Cancel { get; set; }
 }
 
 /// <summary>
-/// Args for <see cref="DockingManager.TabMenuOpening"/>: the pane and its right-click menu (already populated with
-/// the default items) for handlers to augment. Raised each time the menu opens.
+/// Provides data for the <see cref="DockingManager.TabMenuOpening"/> event: the pane and its right-click menu, already
+/// holding the default items, for handlers to extend.
 /// </summary>
 public sealed class DockTabMenuEventArgs : EventArgs
 {
@@ -517,8 +541,10 @@ public sealed class DockTabMenuEventArgs : EventArgs
         Commands = commands;
     }
 
+    /// <summary>Gets the pane whose menu is opening.</summary>
     public DockPane Pane { get; }
 
+    /// <summary>Gets the context menu, already holding the default items, for handlers to extend.</summary>
     public ContextMenu Menu { get; }
 
     /// <summary>Gets the command scope targeted by this menu.</summary>
@@ -526,8 +552,8 @@ public sealed class DockTabMenuEventArgs : EventArgs
 }
 
 /// <summary>
-/// Args for <see cref="DockingManager.GroupMenuOpening"/>: the group and its right-click menu (already populated
-/// with the default items) for handlers to augment. Raised each time the menu opens.
+/// Provides data for the <see cref="DockingManager.GroupMenuOpening"/> event: the group and its right-click menu, already
+/// holding the default items, for handlers to extend.
 /// </summary>
 public sealed class DockGroupMenuEventArgs : EventArgs
 {
@@ -538,8 +564,10 @@ public sealed class DockGroupMenuEventArgs : EventArgs
         Commands = commands;
     }
 
+    /// <summary>Gets the group whose menu is opening.</summary>
     public DockGroup Group { get; }
 
+    /// <summary>Gets the context menu, already holding the default items, for handlers to extend.</summary>
     public ContextMenu Menu { get; }
 
     /// <summary>Gets the command scope targeted by this menu.</summary>
