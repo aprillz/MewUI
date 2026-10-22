@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>MewUI.MarkupAudit</AssemblyName>
+    <RootNamespace>Aprillz.MewUI.MarkupAudit.Cli</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\MewUI.MarkupAudit.Core\MewUI.MarkupAudit.Core.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>MewUI.MarkupAudit.Core</AssemblyName>
+    <RootNamespace>Aprillz.MewUI.MarkupAudit</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="System.Reflection.MetadataLoadContext" Version="10.0.13" />
+  </ItemGroup>
+</Project>
