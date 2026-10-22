@@ -10,15 +10,27 @@ using Aprillz.MewUI.Text;
 
 namespace Aprillz.MewUI.Rendering.Direct2D;
 
+/// <summary>
+/// Direct2D graphics factory: draws windows and offscreen surfaces through Direct2D on a D3D11 device and
+/// shapes text with DirectWrite.
+/// </summary>
+/// <remarks>
+/// Transparent windows are presented through a DirectComposition swap chain where DirectComposition is
+/// available, and through a layered window (<see cref="Win32TransparencyMode.Bitmap"/>) otherwise.
+/// </remarks>
 public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, ITextBackendFactory, IRenderDevice, IGpuInteropInvalidationSource, IWindowResourceReleaser, IWin32TransparencyCapabilities, IWindowSurfacePresenter,
     IBackendRenderCacheMaintenance, IPersistentFrameGraphicsFactory, IDisposable
 {
+    /// <summary>The identifier the backend registers under.</summary>
     public const string BackendIdentifier = "Direct2D";
 
+    /// <inheritdoc/>
     public string Backend => BackendIdentifier;
 
+    /// <inheritdoc/>
     public ITextEngine TextEngine => TextServices.GetEngine(this);
 
+    /// <inheritdoc/>
     public event EventHandler<GpuInteropInvalidatedEventArgs>? GpuInteropInvalidated;
 
     bool IPersistentFrameGraphicsFactory.IsPersistentFrameRenderingVerified => true;
@@ -59,6 +71,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
     private readonly RenderResourceCache _renderResourceCache = new();
     private readonly ulong _renderDeviceId = RenderDeviceIdentity.AllocateDeviceId();
 
+    /// <inheritdoc/>
     public RenderDeviceIdentity RenderIdentity => new(_renderDeviceId, unchecked((uint)_gpuDeviceGeneration));
     // Opaque windows use ID2D1HwndRenderTarget by default. Windows that render external
     // DXGI images are promoted to a device-context swap-chain target because those
@@ -101,6 +114,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
         }
     }
 
+    /// <summary>Releases the device chain, every window target and the resource cache.</summary>
     public void Dispose()
     {
         ImageSource.RetireRealizationsForFactory(this);
@@ -342,12 +356,14 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
         _ => D2D1_LINE_JOIN.MITER_OR_BEVEL, // auto-bevel when miter limit is exceeded
     };
 
+    /// <inheritdoc/>
     public IFont CreateFont(string family, double size, FontWeight weight = FontWeight.Normal, bool italic = false, bool underline = false, bool strikethrough = false)
     {
         EnsureInitialized();
         return _fontFactory.CreateFont(family, size, weight, italic, underline, strikethrough);
     }
 
+    /// <inheritdoc/>
     public IFont CreateFont(string family, double size, uint dpi, FontWeight weight = FontWeight.Normal, bool italic = false, bool underline = false, bool strikethrough = false)
     {
         EnsureInitialized();
@@ -408,6 +424,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
     public IImage CreateImageFromNativeBitmap(nint nativeBitmap, int pixelWidth, int pixelHeight)
         => new Direct2DNativeBitmapImage(nativeBitmap, pixelWidth, pixelHeight);
 
+    /// <inheritdoc/>
     public IGraphicsContext CreateContext(IRenderTarget target)
     {
         ArgumentNullException.ThrowIfNull(target);
@@ -564,10 +581,13 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
         return new Direct2DPixelRenderSurface(pixelWidth, pixelHeight, dpiScale, hasAlpha);
     }
 
+    /// <inheritdoc/>
     public IRenderResourceCache? ResourceCache => _renderResourceCache;
 
+    /// <inheritdoc/>
     public IRenderEffectDevice? Effects => null;
 
+    /// <inheritdoc/>
     public IRenderSurface CreateSurface(RenderSurfaceDescriptor descriptor)
     {
         var target = RenderDeviceFactoryHelpers.RequiresCpuPixels(descriptor)
@@ -585,6 +605,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
         return target;
     }
 
+    /// <inheritdoc/>
     public IGraphicsContext CreateContext(IRenderSurface surface)
     {
         surface = RenderSurfaceResource.ResolveBackendSurface(surface);
@@ -594,6 +615,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
                 $"{GetType().Name} can only create contexts for renderable surfaces.");
     }
 
+    /// <inheritdoc/>
     public IImage CreateImageView(IRenderSurface surface)
     {
         int logicalWidth = surface.PixelWidth;
@@ -630,9 +652,11 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
             $"{GetType().Name} can only create image views for pixel-backed or externally-rastered surfaces.");
     }
 
+    /// <inheritdoc/>
     public IImage CreateImageView(IPixelBufferSource source)
         => new Direct2DImage(source);
 
+    /// <inheritdoc/>
     public IImage CreateImageView(IExternalRasterSource source)
         => CreateImageView(source, dpiScale: 1.0);
 
@@ -681,17 +705,22 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
         }
     }
 
+    /// <inheritdoc/>
     public bool TryReadPixels(IRenderSurface source, Span<byte> destination, int destinationStrideBytes)
         => RenderDeviceFactoryHelpers.TryReadPixels(source, destination, destinationStrideBytes);
 
+    /// <inheritdoc/>
     public IRenderOperation RequestReadback(IRenderSurface source)
         => RenderDeviceFactoryHelpers.RequestReadback(source);
 
+    /// <inheritdoc/>
     public IRenderOperation FlushAsyncWork() => RenderOperation.Completed;
 
+    /// <inheritdoc/>
     public Filters.IImageFilterExecutor CreateImageFilterExecutor()
         => new Direct2DImageFilterExecutor(this);
 
+    /// <inheritdoc/>
     public void ReleaseWindowResources(nint windowHandle)
     {
         lock (_rtLock)

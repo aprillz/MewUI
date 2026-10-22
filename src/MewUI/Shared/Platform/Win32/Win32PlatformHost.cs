@@ -10,8 +10,13 @@ using Microsoft.Win32;
 
 namespace Aprillz.MewUI.Platform.Win32;
 
+/// <summary>
+/// Win32 platform host: owns the window class, the message loop and the per-process services (clipboard,
+/// dialogs, shell icons).
+/// </summary>
 public sealed class Win32PlatformHost : IPlatformHost
 {
+    /// <summary>The identifier the platform registers under.</summary>
     public const string PlatformIdentifier = "Win32";
 
     internal const string WindowClassName = "AprillzMewUIWindow";
@@ -46,8 +51,10 @@ public sealed class Win32PlatformHost : IPlatformHost
     /// </summary>
     internal static string SystemFontFamily { get; } = QuerySystemFontFamily();
 
+    /// <summary>Gets the platform's default font family name.</summary>
     public string DefaultFontFamily => SystemFontFamily;
 
+    /// <summary>Gets the platform's default font fallback chain, tried in order when a glyph is missing from the primary font.</summary>
     public IReadOnlyList<string> DefaultFontFallbacks { get; } = BuildDefaultFontFallbacks();
 
     private static string[] BuildDefaultFontFallbacks()
@@ -102,30 +109,43 @@ public sealed class Win32PlatformHost : IPlatformHost
         return "Segoe UI";
     }
 
+    /// <summary>Gets the platform message box service.</summary>
     public IMessageBoxService MessageBox { get; } = new Win32MessageBoxService();
 
+    /// <summary>Gets the platform file dialog service.</summary>
     public IFileDialogService FileDialog { get; } = new Win32FileDialogService();
 
+    /// <summary>Gets the shell icon provider.</summary>
     public IShellIconProvider ShellIconProvider { get; } = new WindowsShellIconProvider();
 
+    /// <summary>Gets the mounted volume enumerator.</summary>
     public IMountedVolumeProvider MountedVolumeProvider { get; } = new WindowsMountedVolumeProvider();
 
+    /// <summary>Gets the provider of the file dialog's sidebar places.</summary>
     public IPlacesProvider PlacesProvider { get; } = new WindowsPlacesProvider();
 
+    /// <summary>Gets the platform clipboard service.</summary>
     public IClipboardService Clipboard { get; } = new Win32ClipboardService();
 
+    /// <summary>Creates a window backend for <paramref name="window"/>.</summary>
     public IWindowBackend CreateWindowBackend(Window window) => new Win32WindowBackend(this, window);
 
+    /// <summary>Creates a UI dispatcher associated with <paramref name="windowHandle"/>.</summary>
     public IDispatcher CreateDispatcher(nint windowHandle) => new Win32Dispatcher(windowHandle);
 
+    /// <summary>Gets the system DPI used when no window handle is available.</summary>
     public uint GetSystemDpi() => Win32DpiApiResolver.GetSystemDpi();
 
+    /// <summary>Gets the current system theme variant.</summary>
     public ThemeVariant GetSystemThemeVariant() => GetSystemThemeVariantFromRegistry();
 
+    /// <summary>Gets the DPI of the window <paramref name="hwnd"/>.</summary>
     public uint GetDpiForWindow(nint hwnd) => Win32DpiApiResolver.GetDpiForWindow(hwnd);
 
+    /// <summary>Enables per-monitor DPI awareness; returns whether the process is now per-monitor aware.</summary>
     public bool EnablePerMonitorDpiAwareness() => Win32DpiApiResolver.EnablePerMonitorDpiAwareness();
 
+    /// <summary>Returns the system metric <paramref name="nIndex"/> scaled for <paramref name="dpi"/>.</summary>
     public int GetSystemMetricsForDpi(int nIndex, uint dpi) => Win32DpiApiResolver.GetSystemMetricsForDpi(nIndex, dpi);
 
     private static ThemeVariant GetSystemThemeVariantFromRegistry()
@@ -169,6 +189,7 @@ public sealed class Win32PlatformHost : IPlatformHost
         _windows.Remove(hwnd);
     }
 
+    /// <summary>Runs the message loop until the application quits; <paramref name="mainWindow"/> is shown first, or no window when <see langword="null"/>.</summary>
     public void Run(Application app, Window? mainWindow)
     {
         try
@@ -280,6 +301,10 @@ public sealed class Win32PlatformHost : IPlatformHost
         }
     }
 
+    /// <summary>
+    /// Runs a nested message loop that pumps events and rendering until <paramref name="keepRunning"/> returns
+    /// <see langword="false"/> or the application quits; does nothing when the main loop is not running.
+    /// </summary>
     public void RunNestedLoop(Func<bool> keepRunning)
     {
         ArgumentNullException.ThrowIfNull(keepRunning);
@@ -304,6 +329,7 @@ public sealed class Win32PlatformHost : IPlatformHost
         return false;
     }
 
+    /// <summary>Requests that the message loop terminates; marshalled to the UI thread when called from another thread.</summary>
     public void Quit(Application app)
     {
         var dispatcher = _dispatcher;
@@ -319,11 +345,13 @@ public sealed class Win32PlatformHost : IPlatformHost
         User32.PostQuitMessage(0);
     }
 
+    /// <summary>Gets the cursor position in screen pixels.</summary>
     public Point GetCursorScreenPosition()
     {
         return User32.GetCursorPos(out var pt) ? new Point(pt.x, pt.y) : default;
     }
 
+    /// <summary>Gets the DPI of the monitor containing <paramref name="screenPositionPx"/>, or the system DPI when none does.</summary>
     public uint GetDpiForPoint(Point screenPositionPx)
     {
         const uint MonitorDefaultToNearest = 2;
@@ -340,6 +368,7 @@ public sealed class Win32PlatformHost : IPlatformHost
         return GetSystemDpi();
     }
 
+    /// <summary>Gets the work area, in screen pixels, of the monitor containing <paramref name="screenPositionPx"/>; empty when none does.</summary>
     public Rect GetWorkAreaForPoint(Point screenPositionPx)
     {
         const uint MonitorDefaultToNearest = 2;
@@ -358,8 +387,13 @@ public sealed class Win32PlatformHost : IPlatformHost
     }
 
     // WS_EX_TRANSPARENT | WS_EX_LAYERED | WS_EX_NOACTIVATE provide a click-through, non-activating overlay.
+    /// <summary>Gets whether a click-through, non-activating, transparent overlay window can be composited; always <see langword="true"/> here.</summary>
     public bool SupportsTransparentOverlay => true;
 
+    /// <summary>
+    /// Processes pending messages without entering a full message loop; obsolete, await asynchronous work, use
+    /// the dispatcher, or run an explicit nested loop via <see cref="RunNestedLoop"/> instead.
+    /// </summary>
     public void DoEvents()
     {
         MSG msg;
@@ -908,5 +942,6 @@ public sealed class Win32PlatformHost : IPlatformHost
         }
     }
 
+    /// <summary>Does nothing; the host releases its native resources when the message loop ends.</summary>
     public void Dispose() { }
 }

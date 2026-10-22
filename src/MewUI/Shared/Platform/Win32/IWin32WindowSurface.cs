@@ -5,6 +5,7 @@ namespace Aprillz.MewUI.Platform.Win32;
 /// </summary>
 public interface IWin32WindowSurface : IWindowSurface
 {
+    /// <summary>Gets the window handle (HWND).</summary>
     nint Hwnd { get; }
 
     /// <summary>
@@ -20,6 +21,7 @@ public interface IWin32WindowSurface : IWindowSurface
 /// </summary>
 public interface IWin32HdcWindowSurface : IWin32WindowSurface
 {
+    /// <summary>Gets the device context (HDC) valid for the current render pass.</summary>
     nint Hdc { get; }
 }
 

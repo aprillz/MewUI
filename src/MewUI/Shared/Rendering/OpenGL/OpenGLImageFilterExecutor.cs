@@ -22,11 +22,16 @@ public sealed class OpenGLImageFilterExecutor : IImageFilterExecutor
 {
     private readonly IImageFilterExecutor _fallback;
 
+    /// <summary>
+    /// Creates an executor that delegates unsupported nodes to <paramref name="fallback"/>, or to a new
+    /// <see cref="CpuImageFilterExecutor"/> when <see langword="null"/>.
+    /// </summary>
     public OpenGLImageFilterExecutor(IImageFilterExecutor? fallback = null)
     {
         _fallback = fallback ?? new CpuImageFilterExecutor();
     }
 
+    /// <inheritdoc/>
     public FilterResult Execute(ImageFilter filter, IImageFilterContext context)
     {
         switch (filter)

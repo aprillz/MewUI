@@ -47,20 +47,27 @@ public sealed unsafe class WglDxInteropTexture : IExternalRasterSource
     private bool _locked;
     private bool _disposed;
 
+    /// <inheritdoc/>
     public int PixelWidth { get; }
+    /// <inheritdoc/>
     public int PixelHeight { get; }
+    /// <inheritdoc/>
     public int Version => 0;
+    /// <inheritdoc/>
     public RenderPixelFormat Format => AlphaMode == BitmapAlphaMode.Premultiplied
         ? RenderPixelFormat.Bgra8888Premultiplied
         : RenderPixelFormat.Bgra8888;
 
+    /// <inheritdoc/>
     public BitmapAlphaMode AlphaMode { get; }
 
     /// <summary>D3D11 textures are top-down (row 0 = top), unlike GL FBOs.
     /// MewVGExternalRasterImage adds <c>NVG_IMAGE_FLIPY</c> when this is
     /// <see langword="true"/>; for D3D11 sources we report <see langword="false"/>.</summary>
     public bool YFlipped => false;
+    /// <summary>Gets the device affinity derived from the D3D11 device, or <see langword="null"/> when it could not be determined.</summary>
     public GpuResourceAffinity? Affinity => _affinity;
+    /// <inheritdoc/>
     public SurfaceCapabilities Capabilities =>
         SurfaceCapabilities.ExternalHandle |
         SurfaceCapabilities.ExternallySynchronized |
@@ -68,6 +75,7 @@ public sealed unsafe class WglDxInteropTexture : IExternalRasterSource
         SurfaceCapabilities.Alpha |
         (AlphaMode == BitmapAlphaMode.Premultiplied ? SurfaceCapabilities.Premultiplied : SurfaceCapabilities.None);
 
+    /// <inheritdoc/>
     public IReadOnlyList<ExternalRasterPlane> Planes =>
     [
         new ExternalRasterPlane(0, (nint)_glTextureId, PixelWidth, PixelHeight, 0, Format)
@@ -78,6 +86,10 @@ public sealed unsafe class WglDxInteropTexture : IExternalRasterSource
     /// extension isn't available.</summary>
     public static bool IsAvailable => WglDxInterop.TryLoad();
 
+    /// <summary>
+    /// Registers <paramref name="d3d11Texture"/> of <paramref name="d3d11Device"/> for GL reads; throws when a
+    /// handle is 0, a dimension is not positive, or the interop extension is unavailable.
+    /// </summary>
     public WglDxInteropTexture(nint d3d11Device, nint d3d11Texture, int pixelWidth, int pixelHeight,
         BitmapAlphaMode alphaMode = BitmapAlphaMode.Premultiplied)
     {
@@ -136,6 +148,7 @@ public sealed unsafe class WglDxInteropTexture : IExternalRasterSource
         }
     }
 
+    /// <inheritdoc/>
     public IExternalRasterLease Acquire()
     {
         Lock();
@@ -179,6 +192,7 @@ public sealed unsafe class WglDxInteropTexture : IExternalRasterSource
         }
     }
 
+    /// <summary>Unregisters the texture and releases the GL texture and the shared interop device.</summary>
     public void Dispose()
     {
         if (_disposed) return;

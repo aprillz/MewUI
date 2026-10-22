@@ -13,8 +13,13 @@ using Aprillz.MewUI.Text;
 
 namespace Aprillz.MewUI.Rendering.MewVG;
 
+/// <summary>
+/// MewVG graphics factory for Win32: renders through OpenGL (WGL), with a shared worker context for
+/// offscreen work and a layered-window presenter for per-pixel-transparent windows.
+/// </summary>
 public sealed partial class MewVGWin32GraphicsFactory : IPersistentFrameGraphicsFactory
 {
+    /// <summary>The identifier the backend registers under.</summary>
     public const string BackendIdentifier = "MewVG.Win32";
 
     private readonly IMewVGOffscreenSurfaceProvider _offscreenProvider =
@@ -36,6 +41,7 @@ public sealed partial class MewVGWin32GraphicsFactory : IPersistentFrameGraphics
     /// </summary>
     private readonly ThreadLocal<OpenGLPixelRenderSurface?> _pixelSurfacePresentTarget = new();
 
+    /// <inheritdoc/>
     public string Backend => BackendIdentifier;
 
     private MewVGWin32LayeredPresenter LayeredPresenter => _layeredPresenterField ??= new MewVGWin32LayeredPresenter(_offscreenProvider, () => SharedWorkerContext, MakeCurrentOnWorkerDc);
@@ -563,14 +569,10 @@ public sealed partial class MewVGWin32GraphicsFactory : IPersistentFrameGraphics
         }
     }
 
-    /// <summary>Cross-backend entrypoint for <see cref="IGraphicsFactory.AcquireConcurrentRenderUnit"/>.
-    /// No-op on the MewVG GL backend: UI ↔ worker serialization is no longer enforced at
-    /// the frame-bracket level (the previous broad mutex was removed). The remaining
-    /// concurrent-access concern - scratch surface pool reuse mid-flight - is handled in
-    /// <c>DefaultFilterContext.AcquireScratch</c> via <c>IImage.TrySetPostReleaseCallback</c>,
-    /// which defers pool return until the consumer's NVG draw queue has flushed.
-    /// Worker-vs-worker MakeCurrent serialization still happens inside the worker context
-    /// scope (<c>_workerActivationLock</c> in <c>AcquireBackgroundRenderScopeCore</c>).</summary>
+    /// <summary>
+    /// Returns a no-op scope: this backend does not serialize UI and worker rendering at the frame level, and
+    /// scratch-surface reuse is deferred through <see cref="IImage.TrySetPostReleaseCallback"/> instead.
+    /// </summary>
     public IDisposable AcquireConcurrentRenderUnit() => MewVGNoOpRenderScope.Instance;
 
     private readonly PboFenceUploaderPool _pboPool = new(OpenGL32.wglGetCurrentContext);

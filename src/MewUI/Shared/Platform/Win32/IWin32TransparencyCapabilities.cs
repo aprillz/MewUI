@@ -37,5 +37,6 @@ public enum Win32TransparencyMode
 /// </summary>
 public interface IWin32TransparencyCapabilities
 {
+    /// <summary>Gets the transparency presentation strategy the backend wants the platform to use.</summary>
     Win32TransparencyMode TransparencyMode { get; }
 }

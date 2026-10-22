@@ -21,8 +21,10 @@ public sealed partial class MewVGWin32GraphicsFactory
     : IGraphicsFactory, ITextBackendFactory, IRenderDevice, IGpuInteropInvalidationSource, IWindowResourceReleaser, IWindowSurfacePresenter,
       IBackendRenderCacheMaintenance
 {
+    /// <inheritdoc/>
     public event EventHandler<GpuInteropInvalidatedEventArgs>? GpuInteropInvalidated;
 
+    /// <inheritdoc/>
     public ITextEngine TextEngine => TextServices.GetEngine(this);
 
     internal void RaiseGpuInteropInvalidated(GpuInteropInvalidatedEventArgs e)
@@ -48,6 +50,7 @@ public sealed partial class MewVGWin32GraphicsFactory
     private readonly ulong _renderDeviceId = RenderDeviceIdentity.AllocateDeviceId();
     private uint _renderDeviceGeneration;
 
+    /// <inheritdoc/>
     public RenderDeviceIdentity RenderIdentity => new(_renderDeviceId, _renderDeviceGeneration);
 
 
@@ -74,10 +77,12 @@ public sealed partial class MewVGWin32GraphicsFactory
     /// </remarks>
     internal bool UseAsyncPboUpload { get; set; } = true;
 
+    /// <inheritdoc/>
     public IFont CreateFont(string family, double size, FontWeight weight = FontWeight.Normal,
         bool italic = false, bool underline = false, bool strikethrough = false)
         => CreateFontCore(family, size, weight, italic, underline, strikethrough);
 
+    /// <inheritdoc/>
     public IFont CreateFont(string family, double size, uint dpi, FontWeight weight = FontWeight.Normal,
         bool italic = false, bool underline = false, bool strikethrough = false)
         => CreateFontCore(family, size, dpi, weight, italic, underline, strikethrough);
@@ -86,6 +91,7 @@ public sealed partial class MewVGWin32GraphicsFactory
 
     private partial IFont CreateFontCore(string family, double size, uint dpi, FontWeight weight, bool italic, bool underline, bool strikethrough);
 
+    /// <inheritdoc/>
     public IImage CreateImageView(IPixelBufferSource source)
     {
         if (UseAsyncPboUpload && QualifiesForPboUpload(source))
@@ -124,6 +130,7 @@ public sealed partial class MewVGWin32GraphicsFactory
     private IImage CreateExternalRasterImage(IExternalRasterSource source)
         => new MewVGExternalRasterImage(source);
 
+    /// <inheritdoc/>
     public IImageFilterExecutor CreateImageFilterExecutor()
     {
         IImageFilterExecutor? executor = null;
@@ -145,6 +152,7 @@ public sealed partial class MewVGWin32GraphicsFactory
         return handler;
     }
 
+    /// <inheritdoc/>
     public IGraphicsContext CreateContext(IRenderTarget target)
     {
         ArgumentNullException.ThrowIfNull(target);
@@ -206,10 +214,13 @@ public sealed partial class MewVGWin32GraphicsFactory
         throw new NotSupportedException("MewVG backend does not support pixel render surfaces on this platform.");
     }
 
+    /// <inheritdoc/>
     public IRenderResourceCache? ResourceCache => _renderResourceCache;
 
+    /// <inheritdoc/>
     public IRenderEffectDevice? Effects => null;
 
+    /// <inheritdoc/>
     public IRenderSurface CreateSurface(RenderSurfaceDescriptor descriptor)
     {
         var surface = CreatePixelSurface(
@@ -224,6 +235,7 @@ public sealed partial class MewVGWin32GraphicsFactory
     /// <summary>Lets a platform tune a surface to what its descriptor says it is for.</summary>
     partial void ConfigureDescribedSurface(IRenderSurface surface, RenderSurfaceDescriptor descriptor);
 
+    /// <inheritdoc/>
     public IGraphicsContext CreateContext(IRenderSurface surface)
     {
         surface = RenderSurfaceResource.ResolveBackendSurface(surface);
@@ -233,6 +245,7 @@ public sealed partial class MewVGWin32GraphicsFactory
                 $"{GetType().Name} can only create contexts for renderable surfaces.");
     }
 
+    /// <inheritdoc/>
     public IImage CreateImageView(IRenderSurface surface)
     {
         int logicalWidth = surface.PixelWidth;
@@ -251,15 +264,19 @@ public sealed partial class MewVGWin32GraphicsFactory
         return ImageResource.WrapLogical(image, logicalWidth, logicalHeight);
     }
 
+    /// <inheritdoc/>
     public IImage CreateImageView(IExternalRasterSource source)
         => CreateExternalRasterImage(source);
 
+    /// <inheritdoc/>
     public bool TryReadPixels(IRenderSurface source, Span<byte> destination, int destinationStrideBytes)
         => RenderDeviceFactoryHelpers.TryReadPixels(source, destination, destinationStrideBytes);
 
+    /// <inheritdoc/>
     public IRenderOperation RequestReadback(IRenderSurface source)
         => RenderDeviceFactoryHelpers.RequestReadback(source);
 
+    /// <inheritdoc/>
     public IRenderOperation FlushAsyncWork() => RenderOperation.Completed;
 
     void IBackendRenderCacheMaintenance.TrimBackendCaches(RenderCacheTrimReason reason)
@@ -299,6 +316,7 @@ public sealed partial class MewVGWin32GraphicsFactory
         }
     }
 
+    /// <summary>Releases every window's resources, the resource cache and the platform rendering context.</summary>
     public void Dispose()
     {
         ImageSource.RetireRealizationsForFactory(this);
@@ -311,6 +329,7 @@ public sealed partial class MewVGWin32GraphicsFactory
         DisposePlatformResources();
     }
 
+    /// <inheritdoc/>
     public void ReleaseWindowResources(nint windowHandle)
     {
         if (windowHandle == 0)
@@ -340,6 +359,7 @@ public sealed partial class MewVGWin32GraphicsFactory
 
     partial void DisposePlatformResources();
 
+    /// <inheritdoc/>
     public bool Present(Window window, IWindowSurface surface, double opacity)
     {
         bool handled = false;
@@ -351,11 +371,10 @@ public sealed partial class MewVGWin32GraphicsFactory
     partial void TryPresentWindowSurface(Window window, IWindowSurface surface, double opacity, ref bool handled, ref bool result);
 
     /// <summary>
-    /// Activates the platform-specific worker rendering context on the calling thread
-    /// (Win32/X11: shared GL HGLRC; macOS Metal: no-op since MTLDevice is thread-free).
-    /// Returns an <see cref="IDisposable"/> that releases the activation when disposed.
-    /// Required wrapper for any worker thread that intends to call <see cref="IRenderDevice.CreateSurface"/>
-    /// or <see cref="IRenderDevice.CreateContext(IRenderSurface)"/>.
+    /// Activates the platform-specific worker rendering context on the calling thread (a shared GL context
+    /// on Win32 and X11; a no-op on Metal, whose device is not thread-affine) and returns the scope that
+    /// releases it; required around <see cref="IRenderDevice.CreateSurface"/> and
+    /// <see cref="IRenderDevice.CreateContext(IRenderSurface)"/> on a worker thread.
     /// </summary>
     public IDisposable AcquireBackgroundRenderScope() => AcquireBackgroundRenderScopeCore();
 

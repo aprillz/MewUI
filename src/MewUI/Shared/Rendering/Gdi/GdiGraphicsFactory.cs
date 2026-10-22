@@ -13,15 +13,19 @@ using Aprillz.MewUI.Text;
 namespace Aprillz.MewUI.Rendering.Gdi;
 
 /// <summary>
-/// GDI+ graphics factory implementation.
+/// GDI graphics factory: CPU rasterization into per-window back buffers and pixel surfaces, with text shaped
+/// by DirectWrite.
 /// </summary>
 public sealed class GdiGraphicsFactory : IGraphicsFactory, ITextBackendFactory, IRenderDevice, IWindowResourceReleaser, IWindowSurfacePresenter,
     IBackendRenderCacheMaintenance, IPersistentFrameGraphicsFactory, IDisposable
 {
+    /// <summary>The identifier the backend registers under.</summary>
     public const string BackendIdentifier = "Gdi";
 
+    /// <inheritdoc/>
     public string Backend => BackendIdentifier;
 
+    /// <inheritdoc/>
     public ITextEngine TextEngine => TextServices.GetEngine(this);
 
     internal GdiGraphicsFactory() { }
@@ -29,6 +33,7 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, ITextBackendFactory, 
     private readonly RenderResourceCache _renderResourceCache = new();
     private readonly ulong _renderDeviceId = RenderDeviceIdentity.AllocateDeviceId();
 
+    /// <inheritdoc/>
     public RenderDeviceIdentity RenderIdentity => new(_renderDeviceId, 0);
 
     bool IPersistentFrameGraphicsFactory.IsPersistentFrameRenderingVerified => true;
@@ -43,20 +48,26 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, ITextBackendFactory, 
     IDisposable IPersistentFrameGraphicsFactory.AcquirePersistentFrameRenderScope()
         => PersistentFrameRenderScope.Instance;
 
+    /// <summary>Gets or sets whether windows are drawn through a per-window back buffer; the default is <see langword="true"/>.</summary>
     public bool IsDoubleBuffered { get; set; } = true;
 
+    /// <summary>Gets or sets the anti-aliasing quality for curves; the default is <see cref="GdiCurveQuality.Supersample2x"/>.</summary>
     public GdiCurveQuality CurveQuality { get; set; } = GdiCurveQuality.Supersample2x;
 
     // Keep backend default aligned with other backends: Default => Linear unless the app explicitly overrides.
+    /// <summary>
+    /// Gets or sets the image interpolation used when a context asks for
+    /// <see cref="Aprillz.MewUI.ImageScaleQuality.Default"/>; the default is
+    /// <see cref="Aprillz.MewUI.ImageScaleQuality.Normal"/>.
+    /// </summary>
     public ImageScaleQuality ImageScaleQuality { get; set; } = ImageScaleQuality.Normal;
 
+    /// <inheritdoc/>
     public IFont CreateFont(string family, double size, FontWeight weight = FontWeight.Normal,
         bool italic = false, bool underline = false, bool strikethrough = false)
         => CreateFontCore(family, size, DpiHelper.GetSystemDpi(), weight, italic, underline, strikethrough);
 
-    /// <summary>
-    /// Creates a font with a specific DPI.
-    /// </summary>
+    /// <inheritdoc/>
     public IFont CreateFont(string family, double size, uint dpi, FontWeight weight = FontWeight.Normal,
         bool italic = false, bool underline = false, bool strikethrough = false)
         => CreateFontCore(family, size, dpi, weight, italic, underline, strikethrough);
@@ -117,6 +128,7 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, ITextBackendFactory, 
     /// </summary>
     public IImage CreateImage(int width, int height, byte[] pixelData) => new GdiImage(width, height, pixelData);
 
+    /// <inheritdoc/>
     public IGraphicsContext CreateContext(IRenderTarget target)
     {
         ArgumentNullException.ThrowIfNull(target);
@@ -177,10 +189,13 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, ITextBackendFactory, 
     private IRenderSurface CreatePixelSurface(int pixelWidth, int pixelHeight, double dpiScale, bool hasAlpha)
         => new GdiPixelRenderSurface(pixelWidth, pixelHeight, dpiScale, hasAlpha: hasAlpha);
 
+    /// <inheritdoc/>
     public IRenderResourceCache? ResourceCache => _renderResourceCache;
 
+    /// <inheritdoc/>
     public IRenderEffectDevice? Effects => null;
 
+    /// <inheritdoc/>
     public IRenderSurface CreateSurface(RenderSurfaceDescriptor descriptor)
         => CreatePixelSurface(
             descriptor.PixelWidth,
@@ -188,6 +203,7 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, ITextBackendFactory, 
             descriptor.DpiScale,
             descriptor.RequiredCapabilities.HasFlag(SurfaceCapabilities.Alpha));
 
+    /// <inheritdoc/>
     public IGraphicsContext CreateContext(IRenderSurface surface)
     {
         surface = RenderSurfaceResource.ResolveBackendSurface(surface);
@@ -197,6 +213,7 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, ITextBackendFactory, 
                 $"{GetType().Name} can only create contexts for renderable surfaces.");
     }
 
+    /// <inheritdoc/>
     public IImage CreateImageView(IRenderSurface surface)
     {
         int logicalWidth = surface.PixelWidth;
@@ -215,9 +232,11 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, ITextBackendFactory, 
         return ImageResource.WrapLogical(image, logicalWidth, logicalHeight);
     }
 
+    /// <inheritdoc/>
     public IImage CreateImageView(IPixelBufferSource source)
         => new GdiImage(source);
 
+    /// <inheritdoc/>
     public IImage CreateImageView(IExternalRasterSource source)
         => throw new NotSupportedException(
             $"{GetType().Name} does not support external raster sources of type {source.GetType().Name}.");
@@ -238,12 +257,15 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, ITextBackendFactory, 
         if (image is GdiImage gdi) gdi.IsOpaque = opaque;
     }
 
+    /// <inheritdoc/>
     public bool TryReadPixels(IRenderSurface source, Span<byte> destination, int destinationStrideBytes)
         => RenderDeviceFactoryHelpers.TryReadPixels(source, destination, destinationStrideBytes);
 
+    /// <inheritdoc/>
     public IRenderOperation RequestReadback(IRenderSurface source)
         => RenderDeviceFactoryHelpers.RequestReadback(source);
 
+    /// <inheritdoc/>
     public IRenderOperation FlushAsyncWork() => RenderOperation.Completed;
 
     void IBackendRenderCacheMaintenance.TrimBackendCaches(RenderCacheTrimReason reason)
@@ -260,6 +282,7 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, ITextBackendFactory, 
         }
     }
 
+    /// <summary>Releases every window's back buffer and the resource cache.</summary>
     public void Dispose()
     {
         ImageSource.RetireRealizationsForFactory(this);
@@ -284,6 +307,7 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, ITextBackendFactory, 
         GdiPlusGraphicsContext.ReleaseAllBackBuffers();
     }
 
+    /// <inheritdoc/>
     public void ReleaseWindowResources(nint windowHandle)
     {
         if (windowHandle == 0)
@@ -311,6 +335,7 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, ITextBackendFactory, 
     private readonly Dictionary<nint, GdiPixelRenderSurface> _layeredTargets = new();
     private readonly Dictionary<nint, Win32LayeredBitmap> _layeredStagingTargets = new();
 
+    /// <inheritdoc/>
     public bool Present(Window window, IWindowSurface surface, double opacity)
     {
         if (surface is not IWin32WindowSurface win32Surface || win32Surface.Hwnd == 0)

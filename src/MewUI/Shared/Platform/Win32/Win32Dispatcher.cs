@@ -3,6 +3,10 @@ using Aprillz.MewUI.Native.Constants;
 
 namespace Aprillz.MewUI.Platform.Win32;
 
+/// <summary>
+/// Dispatcher for the Win32 message loop: work is marshalled to the UI thread through a window message
+/// and timers run on the window's timer queue.
+/// </summary>
 public sealed class Win32Dispatcher : SynchronizationContext, IDispatcher, IDispatcherCore
 {
     private readonly DispatcherQueue _queue = new();
@@ -20,8 +24,10 @@ public sealed class Win32Dispatcher : SynchronizationContext, IDispatcher, IDisp
         _mainThreadId = Environment.CurrentManagedThreadId;
     }
 
+    /// <inheritdoc/>
     public bool IsOnUIThread => Environment.CurrentManagedThreadId == _mainThreadId;
 
+    /// <inheritdoc/>
     public override void Post(SendOrPostCallback d, object? state)
     {
         ArgumentNullException.ThrowIfNull(d);
@@ -29,6 +35,7 @@ public sealed class Win32Dispatcher : SynchronizationContext, IDispatcher, IDisp
         RequestInvoke();
     }
 
+    /// <inheritdoc/>
     public override void Send(SendOrPostCallback d, object? state)
     {
         ArgumentNullException.ThrowIfNull(d);
@@ -45,9 +52,11 @@ public sealed class Win32Dispatcher : SynchronizationContext, IDispatcher, IDisp
         signal.Wait();
     }
 
+    /// <inheritdoc/>
     public DispatcherOperation BeginInvoke(Action action)
         => BeginInvoke(DispatcherPriority.Normal, action);
 
+    /// <inheritdoc/>
     public DispatcherOperation BeginInvoke(DispatcherPriority priority, Action action)
     {
         ArgumentNullException.ThrowIfNull(action);
@@ -56,6 +65,10 @@ public sealed class Win32Dispatcher : SynchronizationContext, IDispatcher, IDisp
         return op;
     }
 
+    /// <summary>
+    /// Posts <paramref name="action"/> to the UI thread unless an item with the same <paramref name="mergeKey"/>
+    /// is already pending; returns whether it was enqueued.
+    /// </summary>
     public bool PostMerged(DispatcherMergeKey mergeKey, Action action, DispatcherPriority priority)
     {
         if (!_queue.EnqueueMerged(priority, mergeKey, action))
@@ -67,12 +80,14 @@ public sealed class Win32Dispatcher : SynchronizationContext, IDispatcher, IDisp
         return true;
     }
 
+    /// <inheritdoc/>
     public void Invoke(Action action)
     {
         ArgumentNullException.ThrowIfNull(action);
         Send(_ => action(), null);
     }
 
+    /// <summary>Schedules <paramref name="action"/> on the UI thread after <paramref name="dueTime"/>; disposing the result cancels it.</summary>
     public IDisposable Schedule(TimeSpan dueTime, Action action)
     {
         ArgumentNullException.ThrowIfNull(action);
@@ -144,6 +159,7 @@ public sealed class Win32Dispatcher : SynchronizationContext, IDispatcher, IDisp
         }
     }
 
+    /// <summary>Processes a batch of queued work items on the UI thread.</summary>
     public void ProcessWorkItems()
     {
         _queue.Process();

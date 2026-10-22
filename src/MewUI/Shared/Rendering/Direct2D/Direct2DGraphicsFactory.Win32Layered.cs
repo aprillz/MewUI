@@ -5,13 +5,6 @@ using Aprillz.MewUI.Platform.Win32;
 
 namespace Aprillz.MewUI.Rendering.Direct2D;
 
-/// <summary>
-/// Layered-window (Bitmap) transparency present path, used when DirectComposition is
-/// unavailable (Windows 7). The window content is rendered into a DIB-backed
-/// <see cref="Direct2DPixelRenderSurface"/> via an <c>ID2D1DCRenderTarget</c>, then handed to
-/// <c>UpdateLayeredWindow</c> for per-pixel-alpha composition by DWM. On Win8+ the factory
-/// reports <see cref="Win32TransparencyMode.Surface"/> and this path is not exercised.
-/// </summary>
 public sealed unsafe partial class Direct2DGraphicsFactory
 {
     private const uint ULW_ALPHA = 0x00000002;
@@ -19,6 +12,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory
     private readonly object _layeredLock = new();
     private readonly Dictionary<nint, Direct2DPixelRenderSurface> _layeredTargets = new();
 
+    /// <inheritdoc/>
     public bool Present(Window window, IWindowSurface surface, double opacity)
     {
         if (surface is not IWin32WindowSurface win32Surface || win32Surface.Hwnd == 0)
