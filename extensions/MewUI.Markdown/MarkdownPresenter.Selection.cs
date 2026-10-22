@@ -6,16 +6,16 @@ namespace Aprillz.MewUI.Markdown;
 /// <summary>Document-level text selection: one range across blocks, addressed by text unit and character offset.</summary>
 public partial class MarkdownPresenter
 {
-    /// <summary>Identifies the selection enable property.</summary>
+    /// <summary>Whether text can be selected with the mouse and keyboard.</summary>
     public static readonly MewProperty<bool> IsSelectionEnabledProperty = MewProperty<bool>.Register<MarkdownPresenter>(
         nameof(IsSelectionEnabled), true, changed: static (self, _, enabled) => self.OnSelectionEnabledChanged(enabled));
     private static readonly MewPropertyKey<bool> HasSelectionPropertyKey =
         MewProperty<bool>.RegisterReadOnly<MarkdownPresenter>(nameof(HasSelection), false);
-    /// <summary>Identifies the read-only selection presence property.</summary>
+    /// <summary>Whether a non-empty selection exists.</summary>
     public static readonly MewProperty<bool> HasSelectionProperty = HasSelectionPropertyKey.Property;
     private static readonly MewPropertyKey<string> SelectedTextPropertyKey =
         MewProperty<string>.RegisterReadOnly<MarkdownPresenter>(nameof(SelectedText), string.Empty);
-    /// <summary>Identifies the read-only selected text property.</summary>
+    /// <summary>The selected text as plain text.</summary>
     public static readonly MewProperty<string> SelectedTextProperty = SelectedTextPropertyKey.Property;
 
     private (int Unit, int Offset)? _selectionAnchor;
@@ -29,9 +29,9 @@ public partial class MarkdownPresenter
     public bool HasSelection => GetValue(HasSelectionProperty);
     /// <summary>Gets the selected text as plain text; blocks and list items are separated by line breaks, table cells by tabs, and a list item that starts inside the selection is preceded by its marker and a tab.</summary>
     public string SelectedText => GetValue(SelectedTextProperty);
-    /// <summary>Raised when the selection changes, including when it is cleared.</summary>
+    /// <summary>Occurs when the selection changes, including when it is cleared.</summary>
     public event Action? SelectionChanged;
-    /// <summary>Raised before the selected text is written to the clipboard; a handler may replace the text or cancel the copy.</summary>
+    /// <summary>Occurs before the selected text is written to the clipboard; a handler may replace the text or cancel the copy.</summary>
     public event Action<MarkdownCopyingEventArgs>? Copying;
 
     /// <summary>Selects the whole document.</summary>

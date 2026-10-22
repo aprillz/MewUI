@@ -8,6 +8,10 @@ public interface IMarkdownImageResolver
 }
 
 /// <summary>Describes an image without implicitly authorizing file or network access.</summary>
+/// <param name="Url">The URL as written in the Markdown.</param>
+/// <param name="ResolvedUri">The absolute URI resolved against the base URI, or null when resolution is unavailable.</param>
+/// <param name="AlternativeText">The alternative text.</param>
+/// <param name="Title">The optional Markdown title.</param>
 public sealed record MarkdownImageRequest(string Url, Uri? ResolvedUri, string AlternativeText, string? Title);
 
 /// <summary>Leases a source until disposal; release may return a shared source to a cache instead of destroying it.</summary>

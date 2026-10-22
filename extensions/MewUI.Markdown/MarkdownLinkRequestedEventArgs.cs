@@ -18,8 +18,8 @@ public sealed class MarkdownLinkRequestedEventArgs : EventArgs
     public Uri? ResolvedUri { get; }
     /// <summary>Gets the optional Markdown title.</summary>
     public string? Title { get; }
-    /// <summary>Gets the UTF-16 source start, or -1 when unavailable.</summary>
+    /// <summary>Gets the start of the link in the Markdown source in UTF-16 code units, or -1 when unavailable.</summary>
     public int SourceStart { get; }
-    /// <summary>Gets the UTF-16 source length.</summary>
+    /// <summary>Gets the length of the link in the Markdown source in UTF-16 code units.</summary>
     public int SourceLength { get; }
 }

@@ -11,29 +11,29 @@ public partial class MarkdownPresenter : Control, ISubtreeInvalidationHost, ILog
 {
     private const double LIST_MARKER_SPACING = 8;
 
-    /// <summary>Identifies the document source property.</summary>
+    /// <summary>The Markdown source.</summary>
     public static readonly MewProperty<string> MarkdownProperty = MewProperty<string>.Register<MarkdownPresenter>(
         nameof(Markdown), string.Empty, MewPropertyOptions.AffectsLayout, static (self, _, _) => self.InvalidateDocument(true));
-    /// <summary>Identifies the immutable parsing options property.</summary>
+    /// <summary>The immutable parsing options.</summary>
     public static readonly MewProperty<MarkdownOptions> OptionsProperty = MewProperty<MarkdownOptions>.Register<MarkdownPresenter>(
         nameof(Options), new MarkdownOptions(), MewPropertyOptions.AffectsLayout, static (self, _, _) => self.InvalidateDocument(true));
-    /// <summary>Identifies the document theme property.</summary>
+    /// <summary>The document metrics and color overrides.</summary>
     public static readonly MewProperty<MarkdownTheme> MarkdownThemeProperty = MewProperty<MarkdownTheme>.Register<MarkdownPresenter>(
         nameof(MarkdownTheme), new MarkdownTheme(), MewPropertyOptions.AffectsLayout, static (self, _, _) => self.InvalidateDocument(false));
-    /// <summary>Identifies the URI resolution base property.</summary>
+    /// <summary>The base URI for relative resources, or null.</summary>
     public static readonly MewProperty<Uri?> BaseUriProperty = MewProperty<Uri?>.Register<MarkdownPresenter>(
         nameof(BaseUri), null, MewPropertyOptions.AffectsLayout, static (self, _, _) => self.InvalidateDocument(false));
-    /// <summary>Identifies the host-authorized image resolver property.</summary>
+    /// <summary>The host-authorized image resolver, or null to display alternative text.</summary>
     public static readonly MewProperty<IMarkdownImageResolver?> ImageResolverProperty = MewProperty<IMarkdownImageResolver?>.Register<MarkdownPresenter>(
         nameof(ImageResolver), null, MewPropertyOptions.AffectsLayout, static (self, _, _) => self.InvalidateDocument(false));
-    /// <summary>Identifies the optional code block presentation factory.</summary>
+    /// <summary>The code block factory, or null for plain text.</summary>
     public static readonly MewProperty<Func<string, string?, FrameworkElement?>?> CodeBlockFactoryProperty = MewProperty<Func<string, string?, FrameworkElement?>?>.Register<MarkdownPresenter>(
         nameof(CodeBlockFactory), null, MewPropertyOptions.AffectsLayout, static (self, _, _) => self.InvalidateDocument(false));
-    /// <summary>Identifies the custom renderer registry property.</summary>
+    /// <summary>The custom renderers consulted before the default presentation, or null.</summary>
     public static readonly MewProperty<MarkdownRenderers?> RenderersProperty = MewProperty<MarkdownRenderers?>.Register<MarkdownPresenter>(
         nameof(Renderers), null, MewPropertyOptions.AffectsLayout,
         static (self, oldValue, newValue) => self.OnRenderersChanged(oldValue, newValue));
-    /// <summary>Identifies the background parse delay property.</summary>
+    /// <summary>The debounce delay before source changes parse on a worker thread; zero parses synchronously.</summary>
     public static readonly MewProperty<TimeSpan> ParseDelayProperty = MewProperty<TimeSpan>.Register<MarkdownPresenter>(
         nameof(ParseDelay), TimeSpan.Zero);
 
@@ -75,9 +75,9 @@ public partial class MarkdownPresenter : Control, ISubtreeInvalidationHost, ILog
     public MarkdownRenderers? Renderers { get => GetValue(RenderersProperty); set => SetValue(RenderersProperty, value); }
     /// <summary>Gets or sets the debounce delay after which source changes parse on a worker thread; zero parses synchronously on the UI thread.</summary>
     public TimeSpan ParseDelay { get => GetValue(ParseDelayProperty); set => SetValue(ParseDelayProperty, value < TimeSpan.Zero ? TimeSpan.Zero : value); }
-    /// <summary>Requests host handling of a link; no external navigation occurs automatically.</summary>
+    /// <summary>Occurs when a link is activated, for the host to handle; no external navigation occurs automatically.</summary>
     public event Action<MarkdownLinkRequestedEventArgs>? LinkRequested;
-    /// <summary>Reports a failed background parse; the previous document stays displayed.</summary>
+    /// <summary>Occurs when a background parse fails; the previous document stays displayed.</summary>
     public event Action<Exception>? ParseFailed;
 
     internal ParsedMarkdown Document => _document ??= MarkdownParser.ParseDocument(Markdown, Options, GetMappingProfile());
