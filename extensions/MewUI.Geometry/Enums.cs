@@ -3,7 +3,7 @@ namespace Aprillz.MewUI.Geometry;
 /// <summary>Specifies how a geometry-operation tolerance is interpreted.</summary>
 public enum ToleranceType
 {
-    /// <summary>The tolerance is measured in device-independent pixels.</summary>
+    /// <summary>The tolerance is measured in DIPs.</summary>
     Absolute,
 
     /// <summary>The tolerance is a fraction of the geometry's largest bounds dimension.</summary>
