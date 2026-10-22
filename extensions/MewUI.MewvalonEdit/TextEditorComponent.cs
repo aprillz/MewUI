@@ -8,16 +8,18 @@ namespace Aprillz.MewUI.MewvalonEdit;
 /// </summary>
 public interface ITextEditorComponent
 {
-    /// <summary>The registered service, or null when neither this component nor the document has it.</summary>
+    /// <summary>Gets the registered service, or null when neither this component nor the document has it.</summary>
     TService? GetService<TService>() where TService : class;
 
+    /// <summary>Gets the document being edited.</summary>
     TextDocument Document { get; }
 
-    /// <summary>Raised when the document is replaced, not when its content changes.</summary>
+    /// <summary>Occurs when the document was replaced, not when its content changed.</summary>
     event EventHandler? DocumentChanged;
 
+    /// <summary>Gets the editing and display options.</summary>
     TextEditorOptions Options { get; }
 
-    /// <summary>Raised when an option changed, carrying the option that did.</summary>
+    /// <summary>Occurs when an option changed, carrying the option that did.</summary>
     event EventHandler<MewProperty>? OptionChanged;
 }

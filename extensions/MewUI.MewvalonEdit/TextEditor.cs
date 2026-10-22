@@ -11,6 +11,10 @@ using Aprillz.MewUI.Text;
 
 namespace Aprillz.MewUI.MewvalonEdit;
 
+/// <summary>
+/// A source code editor control over a <see cref="TextDocument"/>, with syntax highlighting,
+/// margins and an undo history.
+/// </summary>
 public class TextEditor : Control, ITextEditorComponent
 {
     private const string PART_MARGIN_HOST = "PART_MarginHost";
@@ -46,6 +50,7 @@ public class TextEditor : Control, ITextEditorComponent
     private MailLinkElementGenerator? _mailLinkGenerator;
     private readonly BackgroundRendererRegistry _backgroundRenderers;
 
+    /// <summary>Initializes a new editor with an empty document and default <see cref="Options"/>.</summary>
     public TextEditor()
     {
         Options = new TextEditorOptions();
@@ -225,9 +230,12 @@ public class TextEditor : Control, ITextEditorComponent
 
     /// <summary>
     /// Puts an element over the margins and the text, above the overlays shown before it, such as
-    /// the search panel. It is drawn inside the editor's border and kept until
-    /// <see cref="HideOverlay"/>, also when it arrives before the template is applied.
+    /// the search panel.
     /// </summary>
+    /// <remarks>
+    /// The element is drawn inside the editor's border and kept until <see cref="HideOverlay"/>,
+    /// also when it arrives before the template is applied.
+    /// </remarks>
     public void ShowOverlay(FrameworkElement element)
     {
         ArgumentNullException.ThrowIfNull(element);
@@ -238,7 +246,7 @@ public class TextEditor : Control, ITextEditorComponent
         AttachOverlay(element);
     }
 
-    /// <summary>Takes away an element <see cref="ShowOverlay"/> put over the editor.</summary>
+    /// <summary>Removes an element <see cref="ShowOverlay"/> put over the editor.</summary>
     public void HideOverlay(FrameworkElement element)
     {
         ArgumentNullException.ThrowIfNull(element);
@@ -317,13 +325,18 @@ public class TextEditor : Control, ITextEditorComponent
         _surface.Column(_leftMargins.Count);
     }
 
+    /// <summary>The document being edited.</summary>
     public static readonly MewProperty<TextDocument?> DocumentProperty =
         MewProperty<TextDocument?>.Register<TextEditor>(nameof(Document), null,
             MewPropertyOptions.AffectsLayout,
             static (self, oldValue, newValue) => self.OnDocumentPropertyChanged(oldValue, newValue),
             validate: static (_, value) => ArgumentNullException.ThrowIfNull(value));
 
-    /// <summary>Document being edited. Never null; the editor creates one for itself.</summary>
+    /// <summary>Gets or sets the document being edited; never null.</summary>
+    /// <remarks>
+    /// The editor creates a document for itself, and assigning null throws
+    /// <see cref="ArgumentNullException"/>.
+    /// </remarks>
     public TextDocument Document
     {
         get => GetValue(DocumentProperty)!;
@@ -355,9 +368,10 @@ public class TextEditor : Control, ITextEditorComponent
     private static readonly MewPropertyKey<int> LineCountPropertyKey =
         MewProperty<int>.RegisterReadOnly<TextEditor>(nameof(LineCount), 1);
 
+    /// <summary>The number of lines in the document.</summary>
     public static readonly MewProperty<int> LineCountProperty = LineCountPropertyKey.Property;
 
-    /// <summary>Number of lines in the document.</summary>
+    /// <summary>Gets the number of lines in the document.</summary>
     public int LineCount => GetValue(LineCountProperty);
 
     /// <summary>
@@ -370,14 +384,22 @@ public class TextEditor : Control, ITextEditorComponent
         _lineNumberMargin?.SyncWidthToLineCount();
     }
 
+    /// <summary>Gets the editing and display options.</summary>
     public TextEditorOptions Options { get; }
+    /// <summary>Gets the text area, which holds the caret, the selection and the text view.</summary>
     public TextArea TextArea { get; }
+    /// <summary>
+    /// Gets or sets the strategy that indents a new line and reindents lines for
+    /// <see cref="IndentSelection"/>; null disables both, and the default is
+    /// <see cref="DefaultIndentationStrategy"/>.
+    /// </summary>
     public IIndentationStrategy? IndentationStrategy { get; set; }
 
-    /// <summary>
-    /// The document text. Assigning it starts over: the caret returns to the beginning and the undo
-    /// history is dropped, so the text that was there cannot be brought back.
-    /// </summary>
+    /// <summary>Gets or sets the document text.</summary>
+    /// <remarks>
+    /// Assigning it starts over: the caret returns to the beginning and the undo history is
+    /// dropped, so the text that was there cannot be brought back.
+    /// </remarks>
     public string Text
     {
         get => Document.Text;
@@ -399,28 +421,33 @@ public class TextEditor : Control, ITextEditorComponent
         }
     }
 
+    /// <summary>The highlighting definition that colors the text, or null for plain text.</summary>
     public static readonly MewProperty<IHighlightingDefinition?> SyntaxHighlightingProperty =
         MewProperty<IHighlightingDefinition?>.Register<TextEditor>(nameof(SyntaxHighlighting), null,
             MewPropertyOptions.AffectsRender,
             static (self, _, _) => self.ApplyHighlighting());
 
+    /// <summary>Gets or sets the highlighting definition that colors the text; null shows plain text.</summary>
     public IHighlightingDefinition? SyntaxHighlighting
     {
         get => GetValue(SyntaxHighlightingProperty);
         set => SetValue(SyntaxHighlightingProperty, value);
     }
 
+    /// <summary>Whether lines wrap at the viewport width; the default is false.</summary>
     public static readonly MewProperty<bool> WordWrapProperty =
         MewProperty<bool>.Register<TextEditor>(nameof(WordWrap), false,
             MewPropertyOptions.AffectsLayout,
             static (self, _, newValue) => self._surface.Wrap = newValue);
 
+    /// <summary>Gets or sets whether lines wrap at the viewport width; the default is false.</summary>
     public bool WordWrap
     {
         get => GetValue(WordWrapProperty);
         set => SetValue(WordWrapProperty, value);
     }
 
+    /// <summary>When the vertical scrollbar is shown; the default is <see cref="ScrollBarVisibility.Auto"/>.</summary>
     public static readonly MewProperty<ScrollBarVisibility> VerticalScrollBarVisibilityProperty =
         MewProperty<ScrollBarVisibility>.Register<TextEditor>(nameof(VerticalScrollBarVisibility), ScrollBarVisibility.Auto,
             MewPropertyOptions.None,
@@ -430,7 +457,10 @@ public class TextEditor : Control, ITextEditorComponent
                 self._surface.Padding = self.GetTextPadding(self.Theme);
             });
 
-    /// <summary>When the vertical scroll bar is shown; the text scrolls either way.</summary>
+    /// <summary>
+    /// Gets or sets when the vertical scrollbar is shown; the default is
+    /// <see cref="ScrollBarVisibility.Auto"/>, and the text scrolls either way.
+    /// </summary>
     public ScrollBarVisibility VerticalScrollBarVisibility
     {
         get => GetValue(VerticalScrollBarVisibilityProperty);
@@ -446,34 +476,39 @@ public class TextEditor : Control, ITextEditorComponent
             ? new Thickness(TEXT_PADDING_X, TEXT_PADDING_Y, TEXT_PADDING_X + theme.Metrics.ScrollBarHitThickness, TEXT_PADDING_Y)
             : new Thickness(TEXT_PADDING_X, TEXT_PADDING_Y, TEXT_PADDING_X, TEXT_PADDING_Y);
 
+    /// <summary>Whether the text is read-only; the default is false.</summary>
     public static readonly MewProperty<bool> IsReadOnlyProperty =
         MewProperty<bool>.Register<TextEditor>(nameof(IsReadOnly), false,
             MewPropertyOptions.None,
             static (self, _, newValue) => self._surface.IsReadOnly = newValue);
 
+    /// <summary>Gets or sets whether the text is read-only; the default is false.</summary>
     public bool IsReadOnly
     {
         get => GetValue(IsReadOnlyProperty);
         set => SetValue(IsReadOnlyProperty, value);
     }
 
+    /// <summary>Whether the line number margin is shown; the default is false.</summary>
     public static readonly MewProperty<bool> ShowLineNumbersProperty =
         MewProperty<bool>.Register<TextEditor>(nameof(ShowLineNumbers), false,
             MewPropertyOptions.AffectsLayout,
             static (self, _, newValue) => self._lineNumberMargin.IsVisible = newValue);
 
+    /// <summary>Gets or sets whether the line number margin is shown; the default is false.</summary>
     public bool ShowLineNumbers
     {
         get => GetValue(ShowLineNumbersProperty);
         set => SetValue(ShowLineNumbersProperty, value);
     }
 
+    /// <summary>The color of the line numbers, or null to follow the theme.</summary>
     public static readonly MewProperty<Color?> LineNumbersForegroundProperty =
         MewProperty<Color?>.Register<TextEditor>(nameof(LineNumbersForeground), null,
             MewPropertyOptions.AffectsRender,
             static (self, _, newValue) => self.ApplyLineNumbersForeground(newValue));
 
-    /// <summary>Colour of the line numbers. Null follows the theme.</summary>
+    /// <summary>Gets or sets the color of the line numbers; null follows the theme.</summary>
     public Color? LineNumbersForeground
     {
         get => GetValue(LineNumbersForegroundProperty);
@@ -486,33 +521,42 @@ public class TextEditor : Control, ITextEditorComponent
         _lineNumberMargin.Foreground = value ?? Theme.Palette.PlaceholderText;
     }
 
+    /// <summary>Gets or sets the caret position as a character index into the document.</summary>
     public int CaretOffset
     {
         get => _surface.CaretPosition;
         set => _surface.CaretPosition = value;
     }
 
+    /// <summary>Gets the selection start as a character index.</summary>
     public int SelectionStart => _surface.SelectionStart;
+    /// <summary>Gets the selection length in UTF-16 code units.</summary>
     public int SelectionLength => _surface.SelectionLength;
+    /// <summary>Gets the selected text.</summary>
     public string SelectedText => _surface.SelectedText;
+    /// <summary>Gets whether an edit can be undone.</summary>
     public bool CanUndo => _surface.CanUndo;
+    /// <summary>Gets whether an undone edit can be redone.</summary>
     public bool CanRedo => _surface.CanRedo;
+    /// <summary>Gets the vertical scroll offset in DIPs.</summary>
     public double VerticalOffset => _surface.VerticalOffset;
+    /// <summary>Gets the horizontal scroll offset in DIPs.</summary>
     public double HorizontalOffset => _surface.HorizontalOffset;
 
-    /// <summary>Height of the whole document.</summary>
+    /// <summary>Gets the height of the whole document in DIPs.</summary>
     public double ExtentHeight => _surface.ExtentHeight;
 
-    /// <summary>
-    /// Width of the widest line laid out so far. Lines not reached yet count as empty, so the value
-    /// grows while the document is scrolled through.
-    /// </summary>
+    /// <summary>Gets the width of the widest line laid out so far, in DIPs.</summary>
+    /// <remarks>
+    /// Lines not reached yet count as empty, so the value grows while the document is scrolled
+    /// through.
+    /// </remarks>
     public double ExtentWidth => _surface.ExtentWidth;
 
-    /// <summary>Width of the viewport the text is shown in.</summary>
+    /// <summary>Gets the width of the viewport the text is shown in, in DIPs.</summary>
     public double ViewportWidth => _surface.TextViewportBounds.Width;
 
-    /// <summary>Height of the viewport the text is shown in.</summary>
+    /// <summary>Gets the height of the viewport the text is shown in, in DIPs.</summary>
     public double ViewportHeight => _surface.TextViewportBounds.Height;
 
     /// <summary>Scrolls to the vertical position, as far as the document allows.</summary>
@@ -552,15 +596,18 @@ public class TextEditor : Control, ITextEditorComponent
     public void PageRight() => ScrollToHorizontalOffset(HorizontalOffset + ViewportWidth);
 
     /// <summary>
-    /// Scrolls the line into view, centred vertically. Requires the editor to have been laid out.
+    /// Scrolls the line into view, centered vertically; requires the editor to have been laid out.
     /// </summary>
     public void ScrollToLine(int line) => ScrollTo(line, -1);
 
     /// <summary>
-    /// Scrolls the line and column into view, the line centred vertically. Requires the editor to
-    /// have been laid out. A move shorter than a third of the viewport is skipped, so repeatedly
-    /// asking for a position already near the middle does not shift the view.
+    /// Scrolls the line and column into view, the line centered vertically; requires the editor to
+    /// have been laid out.
     /// </summary>
+    /// <remarks>
+    /// A move shorter than a third of the viewport is skipped, so repeatedly asking for a position
+    /// already near the middle does not shift the view.
+    /// </remarks>
     public void ScrollTo(int line, int column)
     {
         const double MINIMUM_SCROLL_FRACTION = 0.3;
@@ -568,7 +615,7 @@ public class TextEditor : Control, ITextEditorComponent
     }
 
     /// <summary>
-    /// Scrolls the line and column into view. Requires the editor to have been laid out.
+    /// Scrolls the line and column into view; requires the editor to have been laid out.
     /// </summary>
     /// <param name="line">Line to scroll to.</param>
     /// <param name="column">Column to scroll to. Zero or less scrolls vertically only.</param>
@@ -615,8 +662,8 @@ public class TextEditor : Control, ITextEditorComponent
     }
 
     /// <summary>
-    /// Position at a point relative to the top left of this editor, or null when the point is not
-    /// over the text.
+    /// Gets the position at a point relative to the top left of this editor, or null when the point
+    /// is not over the text.
     /// </summary>
     public TextViewPosition? GetPositionFromPoint(Point point)
     {
@@ -668,25 +715,36 @@ public class TextEditor : Control, ITextEditorComponent
     internal IList<IVisualLineTransformer> LineTransformers => _lineTransformers.Transformers;
     internal IList<VisualLineElementGenerator> ElementGenerators => _elementGenerators.Generators;
 
+    /// <summary>Occurs when the document text changed, including when the document was replaced.</summary>
     public event EventHandler? TextChanged;
+    /// <summary>Occurs when <see cref="Document"/> was replaced, not when its content changed.</summary>
     public event EventHandler? DocumentChanged;
 
-    /// <summary>Raised when an option changed.</summary>
+    /// <summary>Occurs when an option changed, carrying the option that did.</summary>
     public event EventHandler<MewProperty>? OptionChanged;
 
-    /// <summary>The requested service, looked up on the text view and then on the document.</summary>
+    /// <summary>
+    /// Gets the requested service, looked up on the text view and then on the document, or null
+    /// when neither has it.
+    /// </summary>
     public TService? GetService<TService>() where TService : class => TextArea.GetService<TService>();
 
+    /// <summary>The encoding <see cref="Save(Stream)"/> writes with, or null for UTF-8 without a byte order mark.</summary>
     public static readonly MewProperty<System.Text.Encoding?> EncodingProperty =
         MewProperty<System.Text.Encoding?>.Register<TextEditor>(nameof(Encoding), null);
 
-    /// <summary>Encoding used by <see cref="Save(Stream)"/>. <see cref="Load(Stream)"/> stores what it detected.</summary>
+    /// <summary>
+    /// Gets or sets the encoding <see cref="Save(Stream)"/> writes with; null means UTF-8 without a
+    /// byte order mark.
+    /// </summary>
+    /// <remarks><see cref="Load(Stream)"/> stores the encoding it detected.</remarks>
     public System.Text.Encoding? Encoding
     {
         get => GetValue(EncodingProperty);
         set => SetValue(EncodingProperty, value);
     }
 
+    /// <summary>Reads the file as the document text, as <see cref="Load(Stream)"/> does.</summary>
     public void Load(string fileName)
     {
         using var stream = File.OpenRead(fileName);
@@ -694,10 +752,13 @@ public class TextEditor : Control, ITextEditorComponent
     }
 
     /// <summary>
-    /// Reads the whole stream as the document text. A byte order mark decides the encoding; without
-    /// one the current <see cref="Encoding"/> is used, so a caller that knows the file's encoding
-    /// sets it first. <see cref="Encoding"/> ends up at whatever was actually read.
+    /// Reads the whole stream as the document text and clears <see cref="IsModified"/>, taking the
+    /// encoding from a byte order mark or else from <see cref="Encoding"/>.
     /// </summary>
+    /// <remarks>
+    /// A caller that knows the file's encoding sets <see cref="Encoding"/> first; afterwards it
+    /// holds the encoding that was actually read.
+    /// </remarks>
     public void Load(Stream stream)
     {
         ArgumentNullException.ThrowIfNull(stream);
@@ -711,12 +772,20 @@ public class TextEditor : Control, ITextEditorComponent
         IsModified = false;
     }
 
+    /// <summary>
+    /// Writes the document text to the file, creating or replacing it, as <see cref="Save(Stream)"/>
+    /// does.
+    /// </summary>
     public void Save(string fileName)
     {
         using var stream = File.Create(fileName);
         Save(stream);
     }
 
+    /// <summary>
+    /// Writes the document text to the stream in <see cref="Encoding"/>, or UTF-8 without a byte
+    /// order mark when that is null, and leaves the stream open.
+    /// </summary>
     public void Save(Stream stream)
     {
         ArgumentNullException.ThrowIfNull(stream);
@@ -725,16 +794,20 @@ public class TextEditor : Control, ITextEditorComponent
         writer.Flush();
     }
 
+    /// <summary>Selects the range of the document starting at <paramref name="start"/>, leaving the caret at its end.</summary>
     public void Select(int start, int length) => _surface.Select(start, length);
 
-    /// <summary>
-    /// Moves the caret, keeping the selection anchor where it is when extending. Extending is how a
-    /// selection whose caret sits at its start is made; <see cref="Select"/> leaves it at the end.
-    /// </summary>
+    /// <summary>Moves the caret, keeping the selection anchor where it is when extending.</summary>
+    /// <remarks>
+    /// Extending is how a selection whose caret sits at its start is made; <see cref="Select"/>
+    /// leaves it at the end.
+    /// </remarks>
     public void MoveCaret(int position, bool extendSelection)
         => _surface.MoveCaret(position, extendSelection);
 
+    /// <summary>Selects the whole document.</summary>
     public void SelectAll() => _surface.SelectAll();
+    /// <summary>Appends text at the end of the document and scrolls the caret into view; null or empty appends nothing.</summary>
     public void AppendText(string? text) => _surface.AppendText(text, scrollToCaret: true);
     /// <summary>
     /// Copies the selection, or the caret's whole line when nothing is selected and
@@ -748,7 +821,10 @@ public class TextEditor : Control, ITextEditorComponent
         }
     }
 
-    /// <inheritdoc cref="Copy"/>
+    /// <summary>
+    /// Cuts the selection, or the caret's whole line when nothing is selected and
+    /// <see cref="TextEditorOptions.CutCopyWholeLine"/> allows it.
+    /// </summary>
     public void Cut()
     {
         if (!TryCutCopyWholeLine(cut: true))
@@ -757,24 +833,29 @@ public class TextEditor : Control, ITextEditorComponent
         }
     }
 
+    /// <summary>
+    /// Inserts the clipboard text at the caret, replacing the selection; does nothing when the
+    /// editor is read-only or the clipboard holds no text.
+    /// </summary>
     public void Paste() => _surface.Paste();
 
     /// <summary>
     /// Opens an undo group; every edit until the matching <see cref="EndChange"/> undoes as one
-    /// step. Nesting extends the outermost group.
+    /// step.
     /// </summary>
+    /// <remarks>Nesting extends the outermost group.</remarks>
     public void BeginChange() => Document.UndoStack.StartUndoGroup();
 
     /// <summary>Closes the group opened by <see cref="BeginChange"/>.</summary>
     public void EndChange() => Document.UndoStack.EndUndoGroup();
 
-    /// <summary>
-    /// An undo group that closes when the returned object is disposed, which is the shape a caller
-    /// wants when the edits are made inside one scope.
-    /// </summary>
+    /// <summary>Opens an undo group that closes when the returned object is disposed.</summary>
     public IDisposable DeclareChangeBlock() => Document.UndoStack.OpenUndoGroup();
 
-    /// <summary>Undoes the most recent command. False when there was nothing to undo.</summary>
+    /// <summary>
+    /// Undoes the most recent command, returning false when there was nothing to undo or the editor
+    /// is read-only.
+    /// </summary>
     public bool Undo()
     {
         if (IsReadOnly)
@@ -785,7 +866,10 @@ public class TextEditor : Control, ITextEditorComponent
         return Document.UndoStack.Undo();
     }
 
-    /// <summary>Redoes the most recently undone command. False when there was nothing to redo.</summary>
+    /// <summary>
+    /// Redoes the most recently undone command, returning false when there was nothing to redo or
+    /// the editor is read-only.
+    /// </summary>
     public bool Redo()
     {
         if (IsReadOnly)
@@ -795,11 +879,12 @@ public class TextEditor : Control, ITextEditorComponent
         return Document.UndoStack.Redo();
     }
 
-    /// <summary>
-    /// Whether the document has changed since it was last marked unmodified. Undoing back to that
-    /// state clears it again. Assigning false marks the current state, which is what saving does;
-    /// assigning true drops the marker, so nothing counts as unmodified until one is set again.
-    /// </summary>
+    /// <summary>Gets or sets whether the document has changed since it was last marked unmodified.</summary>
+    /// <remarks>
+    /// Undoing back to that state clears it again. Assigning false marks the current state as
+    /// unmodified; assigning true drops the marker, so nothing counts as unmodified until one is set
+    /// again.
+    /// </remarks>
     public bool IsModified
     {
         get => !Document.UndoStack.IsOriginalFile;
@@ -816,12 +901,16 @@ public class TextEditor : Control, ITextEditorComponent
         }
     }
 
-    /// <summary>Raised after <see cref="IsModified"/> changed.</summary>
+    /// <summary>Occurs after <see cref="IsModified"/> changed.</summary>
     public event EventHandler? IsModifiedChanged
     {
         add => Document.UndoStack.IsOriginalFileChanged += value;
         remove => Document.UndoStack.IsOriginalFileChanged -= value;
     }
+    /// <summary>
+    /// Invalidates the text view so the visual lines are rebuilt with the current transformers,
+    /// generators and renderers.
+    /// </summary>
     public void InvalidateTextView() => _surface.InvalidateTextView();
 
     protected override void OnDispose()
@@ -906,9 +995,12 @@ public class TextEditor : Control, ITextEditorComponent
 
     /// <summary>
     /// Runs <see cref="IndentationStrategy"/> over the selected lines, or the whole document when
-    /// nothing is selected, as one undo step. The default strategy reindents nothing, so this does
-    /// something only where a host supplied one that reads the language.
+    /// nothing is selected, as one undo step.
     /// </summary>
+    /// <remarks>
+    /// The default strategy reindents nothing, so this does something only where a host supplied
+    /// one that reads the language.
+    /// </remarks>
     public void IndentSelection()
     {
         if (IndentationStrategy is not IIndentationStrategy strategy || IsReadOnly)

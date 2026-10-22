@@ -14,28 +14,34 @@ namespace Aprillz.MewUI.MewvalonEdit;
 public readonly record struct TextViewPosition(int Line, int Column, int VisualColumn, bool IsAtEndOfLine)
     : IComparable<TextViewPosition>
 {
+    /// <summary>Initializes a position at a line and column with a known visual column.</summary>
     public TextViewPosition(int line, int column, int visualColumn)
         : this(line, column, visualColumn, false)
     {
     }
 
+    /// <summary>Initializes a position at a line and column; the visual column is unknown (-1).</summary>
     public TextViewPosition(int line, int column)
         : this(line, column, -1, false)
     {
     }
 
+    /// <summary>Initializes a position at a document location with a known visual column.</summary>
     public TextViewPosition(TextLocation location, int visualColumn)
         : this(location.Line, location.Column, visualColumn, false)
     {
     }
 
+    /// <summary>Initializes a position at a document location; the visual column is unknown (-1).</summary>
     public TextViewPosition(TextLocation location)
         : this(location, -1)
     {
     }
 
+    /// <summary>Gets the line and column as a <see cref="TextLocation"/>.</summary>
     public TextLocation Location => new(Line, Column);
 
+    /// <inheritdoc/>
     public override string ToString()
         => $"[TextViewPosition Line={Line} Column={Column} VisualColumn={VisualColumn} IsAtEndOfLine={IsAtEndOfLine}]";
 
