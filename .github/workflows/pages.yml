@@ -1,4 +1,4 @@
-name: Deploy browser Gallery (GitHub Pages)
+name: Deploy site (GitHub Pages)
 
 on:
   workflow_dispatch:
@@ -13,11 +13,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  deploy:
+  gallery:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -38,18 +35,83 @@ jobs:
           -p:MewUITargetFrameworks=net10.0
 
       # Served from a subfolder, so the app is reachable at <pages root>/Gallery.
-      - name: Stage the site
+      - name: Stage the Gallery
         run: |
           mkdir -p site/Gallery
           cp -r samples/MewUI.Gallery.Browser/bin/Release/net10.0/publish/wwwroot/. site/Gallery/
-          # Pages runs Jekyll by default, which drops the _framework folder.
-          touch site/.nojekyll
-          printf '<!doctype html><meta http-equiv="refresh" content="0; url=./Gallery/">\n' > site/index.html
           # The .NET assets carry a content hash in their file names, but main.js does not, and
           # Pages serves it with a four hour max-age. Stamping the commit gives it a fresh URL
           # per deploy, so a cached loader can never pair with newly published assets.
           sed -i "s|\./main\.js|./main.js?v=${GITHUB_SHA::8}|" site/Gallery/index.html
           grep -q 'main.js?v=' site/Gallery/index.html
+
+      - name: Upload Gallery artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gallery
+          path: site/Gallery
+          if-no-files-found: error
+
+  # Windows: the pack script runs there and the package list has Windows-only projects.
+  api-docs:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Restore xmldocmd
+        working-directory: tools/docs
+        run: dotnet tool restore
+
+      # Generates every package under .artifacts/api-build and stages the assemblies listed in
+      # tools/docs/publish-scope.json under .artifacts/api with version.txt (MewUIVersion + commit).
+      - name: Build API reference
+        shell: cmd
+        run: tools\docs\build_api_docs.cmd
+
+      - name: Upload API artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: api
+          path: .artifacts/api
+          if-no-files-found: error
+
+  # Pages replaces the whole site per deploy, so both outputs are staged into one artifact.
+  deploy:
+    needs: [gallery, api-docs]
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Download Gallery
+        uses: actions/download-artifact@v4
+        with:
+          name: gallery
+          path: site/Gallery
+
+      - name: Download API reference
+        uses: actions/download-artifact@v4
+        with:
+          name: api
+          path: site/api
+
+      - name: Stage the site
+        run: |
+          # Pages runs Jekyll by default, which drops the _framework folder.
+          touch site/.nojekyll
+          printf '<!doctype html><meta http-equiv="refresh" content="0; url=./Gallery/">\n' > site/index.html
+          grep -q 'main.js?v=' site/Gallery/index.html
+          test -f site/api/version.txt
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
