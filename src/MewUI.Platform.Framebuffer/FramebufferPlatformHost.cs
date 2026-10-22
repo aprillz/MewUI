@@ -309,9 +309,7 @@ internal sealed class FramebufferPlatformHost : IPlatformHost, IFramebufferInput
         }
 
         _heartbeatTimestamp = now;
-        var retained = _window?.Window.RetainedFrames;
-        Logger.Write($"loop passes={_loopPasses} flipPending={_output?.FlipPending} canTake={_output?.CanTakeFrame} needsRender={_window?.NeedsRender} poll={_lastPollResult}/{_lastPollTimeout}ms retained whole={retained?.Whole} partial={retained?.Partial} untouched={retained?.Untouched} presented={_window?.Window.PresentCounts.Presented} skipped={_window?.Window.PresentCounts.Skipped}");
-        _window?.Window.ResetRetainedFrameCounts();
+        Logger.Write($"loop passes={_loopPasses} flipPending={_output?.FlipPending} canTake={_output?.CanTakeFrame} needsRender={_window?.NeedsRender} poll={_lastPollResult}/{_lastPollTimeout}ms");
         _loopPasses = 0;
     }
 
