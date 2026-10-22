@@ -1,13 +1,17 @@
 @echo off
-setlocal EnableExtensions
+setlocal EnableExtensions EnableDelayedExpansion
 
-REM Packs all MewUI NuGet packages under .artifacts\nuget.
+REM Packs all MewUI NuGet packages under .artifacts\nuget, then runs the fluent coverage gate
+REM over the packed UI assemblies; a gate failure fails the script so the packages are not released.
 REM Usage: pack_mewui.cmd [version]
 
 set ROOT=%~dp0..\..
 set OUT=%ROOT%\.artifacts\nuget
 set VERSION=%~1
 set FAILED=0
+set AUDIT_PROJECT=%ROOT%\tools\MewUI.MarkupAudit\MewUI.MarkupAudit\MewUI.MarkupAudit.csproj
+set AUDIT_DLL=%ROOT%\tools\MewUI.MarkupAudit\MewUI.MarkupAudit\bin\Release\net10.0\MewUI.MarkupAudit.dll
+set AUDIT_REPORT=%ROOT%\.artifacts\fluent-audit.md
 
 if not exist "%OUT%" mkdir "%OUT%" >nul 2>nul
 
@@ -89,6 +93,48 @@ for %%P in (%PROJECTS%) do (
 if %FAILED%==1 (
   echo.
   echo Some packages failed to pack.
+  exit /b 1
+)
+
+REM --- Fluent coverage gate: the Release assemblies exist only after the pack loop, so it runs here ---
+REM Every packaged UI assembly is gated (Terminal and MewvalonEdit are not packaged yet, so their
+REM stale Release outputs are not audited here). Platform and backend assemblies declare no UI receivers.
+set GATE_ASSEMBLIES=^
+  src\MewUI\bin\Release\net10.0\Aprillz.MewUI.dll^
+  extensions\MewUI.Geometry\bin\Release\net10.0\Aprillz.MewUI.Geometry.dll^
+  extensions\MewUI.MewDock\bin\Release\net10.0\Aprillz.MewUI.MewDock.dll^
+  extensions\MewUI.Svg\bin\Release\net10.0\Aprillz.MewUI.Svg.dll^
+  extensions\MewUI.MewCharts\bin\Release\net10.0\Aprillz.MewUI.MewCharts.dll^
+  extensions\MewUI.Markdown\bin\Release\net10.0\Aprillz.MewUI.Markdown.dll^
+  extensions\MewUI.WebView2.Win32\bin\Release\net10.0-windows\Aprillz.MewUI.WebView2.Win32.dll^
+  extensions\MewUI.Skia\bin\Release\net10.0\Aprillz.MewUI.Skia.dll^
+  extensions\MewUI.Skia.Interop.Direct2D\bin\Release\net10.0\Aprillz.MewUI.Skia.Interop.Direct2D.dll^
+  extensions\MewUI.Skia.Interop.Gdi\bin\Release\net10.0\Aprillz.MewUI.Skia.Interop.Gdi.dll^
+  extensions\MewUI.Skia.Interop.MewVG.Win32\bin\Release\net10.0\Aprillz.MewUI.Skia.Interop.MewVG.Win32.dll^
+  extensions\MewUI.Skia.Interop.MewVG.X11\bin\Release\net10.0\Aprillz.MewUI.Skia.Interop.MewVG.X11.dll^
+  extensions\MewUI.Skia.Interop.MewVG.MacOS\bin\Release\net10.0\Aprillz.MewUI.Skia.Interop.MewVG.MacOS.dll
+
+echo Building MewUI.MarkupAudit ...
+dotnet build "%AUDIT_PROJECT%" -c Release /nr:false
+if errorlevel 1 (
+  echo FAILED: MewUI.MarkupAudit build
+  exit /b 1
+)
+
+set GATE_DLLS=
+for %%A in (%GATE_ASSEMBLIES%) do (
+  if exist "%ROOT%\%%A" (
+    set GATE_DLLS=!GATE_DLLS! "%ROOT%\%%A"
+  ) else (
+    echo Gate: %%A was not built; skipped
+  )
+)
+
+echo Running fluent coverage gate ...
+dotnet "%AUDIT_DLL%" --fail-on-missing !GATE_DLLS! > "%AUDIT_REPORT%"
+if errorlevel 1 (
+  echo.
+  echo FAILED: fluent coverage gate. Packages under %OUT% must not be published; see %AUDIT_REPORT%
   exit /b 1
 )
 
