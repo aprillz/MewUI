@@ -6,9 +6,9 @@ using Aprillz.MewUI.Native;
 namespace Aprillz.MewUI.Platform.Linux.Framebuffer;
 
 /// <summary>
-/// A DRM/KMS output: one connector driven at one mode from a GBM surface, presented with page flips.
-/// The flip completes asynchronously; one more frame may wait behind it, and <see cref="CanTakeFrame"/> holds
-/// the host off beyond that.
+/// A DRM/KMS output: one connector driven at one mode from a ring of three GBM buffers the backend renders into,
+/// presented with page flips. The flip completes asynchronously; one more frame may wait behind it, and
+/// <see cref="CanTakeFrame"/> holds the host off beyond that.
 /// </summary>
 internal sealed unsafe class DrmKmsOutput : IFramebufferOutput
 {
@@ -18,6 +18,9 @@ internal sealed unsafe class DrmKmsOutput : IFramebufferOutput
     private const int CURSOR_SIZE = 64;
     private const int DISPOSE_FLIP_WAIT_MS = 500;
 
+    // Shown, flipping and being drawn: the host draws at most one frame ahead of the flip, so three suffice.
+    private const int SCANOUT_BUFFER_COUNT = 3;
+
     private readonly int _fd;
     private readonly uint _connectorId;
     private readonly uint _crtcId;
@@ -25,14 +28,14 @@ internal sealed unsafe class DrmKmsOutput : IFramebufferOutput
     private readonly DrmModeCrtc _savedCrtc;
     private readonly bool _hasSavedCrtc;
     private readonly nint _gbmDevice;
-    private readonly nint _gbmSurface;
+    private readonly ScanoutBuffer[] _buffers;
     private readonly bool _cursorAllowed;
     private readonly DrmKmsWindowSurface _surface;
     private GCHandle _selfHandle;
-    private nint _frontBo;
-    private nint _pendingBo;
-    private nint _queuedBo;
-    private uint _queuedFramebufferId;
+    private ScanoutBuffer? _front;
+    private ScanoutBuffer? _pending;
+    private ScanoutBuffer? _queued;
+    private long _presentCount;
     private bool _modeSet;
     private bool _disposed;
     private readonly double _dpiScale;
@@ -53,7 +56,7 @@ internal sealed unsafe class DrmKmsOutput : IFramebufferOutput
         DrmModeCrtc savedCrtc,
         bool hasSavedCrtc,
         nint gbmDevice,
-        nint gbmSurface,
+        nint[] scanoutBuffers,
         double dpiScale,
         bool cursorAllowed)
     {
@@ -64,7 +67,12 @@ internal sealed unsafe class DrmKmsOutput : IFramebufferOutput
         _savedCrtc = savedCrtc;
         _hasSavedCrtc = hasSavedCrtc;
         _gbmDevice = gbmDevice;
-        _gbmSurface = gbmSurface;
+        _buffers = new ScanoutBuffer[scanoutBuffers.Length];
+        for (int index = 0; index < scanoutBuffers.Length; index++)
+        {
+            _buffers[index] = new ScanoutBuffer(scanoutBuffers[index]);
+        }
+
         _cursorAllowed = cursorAllowed;
         _dpiScale = dpiScale;
         _selfHandle = GCHandle.Alloc(this, GCHandleType.Normal);
@@ -83,9 +91,9 @@ internal sealed unsafe class DrmKmsOutput : IFramebufferOutput
 
     public int RefreshHz { get; }
 
-    public bool FlipPending => _pendingBo != 0;
+    public bool FlipPending => _pending != null;
 
-    public bool CanTakeFrame => _queuedBo == 0;
+    public bool CanTakeFrame => _queued == null && FindBufferToDraw() != null;
 
     public int EventFd => _fd;
 
@@ -177,19 +185,28 @@ internal sealed unsafe class DrmKmsOutput : IFramebufferOutput
                     return null;
                 }
 
-                nint gbmSurface = LibGbm.gbm_surface_create(gbmDevice, selection.Mode.HDisplay, selection.Mode.VDisplay,
-                    LibGbm.GBM_FORMAT_XRGB8888, LibGbm.GBM_BO_USE_SCANOUT | LibGbm.GBM_BO_USE_RENDERING);
-                if (gbmSurface == 0)
+                var scanoutBuffers = new nint[SCANOUT_BUFFER_COUNT];
+                for (int index = 0; index < scanoutBuffers.Length; index++)
                 {
-                    LibGbm.gbm_device_destroy(gbmDevice);
-                    failure = "gbm_surface_create failed";
-                    return null;
+                    scanoutBuffers[index] = LibGbm.gbm_bo_create(gbmDevice, selection.Mode.HDisplay, selection.Mode.VDisplay,
+                        LibGbm.GBM_FORMAT_XRGB8888, LibGbm.GBM_BO_USE_SCANOUT | LibGbm.GBM_BO_USE_RENDERING);
+                    if (scanoutBuffers[index] == 0)
+                    {
+                        for (int created = 0; created < index; created++)
+                        {
+                            LibGbm.gbm_bo_destroy(scanoutBuffers[created]);
+                        }
+
+                        LibGbm.gbm_device_destroy(gbmDevice);
+                        failure = "gbm_bo_create for a scan-out buffer failed";
+                        return null;
+                    }
                 }
 
                 keepFd = true;
                 failure = string.Empty;
                 return new DrmKmsOutput(fd, path, selection.ConnectorName, selection.ConnectorId, selection.CrtcId, selection.Mode,
-                    savedCrtc, hasSavedCrtc, gbmDevice, gbmSurface, options.DpiScale > 0 ? options.DpiScale : 1.0, options.ShowCursor);
+                    savedCrtc, hasSavedCrtc, gbmDevice, scanoutBuffers, options.DpiScale > 0 ? options.DpiScale : 1.0, options.ShowCursor);
             }
             finally
             {
@@ -304,25 +321,78 @@ internal sealed unsafe class DrmKmsOutput : IFramebufferOutput
         return 0;
     }
 
-    /// <summary>Puts the buffer the backend just swapped on screen: a mode set the first time, a page flip after.</summary>
-    internal void Present()
+    /// <summary>
+    /// The buffer the next frame draws into: the one a frame that never presented left behind, else the free
+    /// buffer shown most recently, which has the least to restore. 0 when every buffer is on its way to the screen.
+    /// </summary>
+    internal nint AcquireBuffer()
+    {
+        var buffer = FindBufferToDraw();
+        if (buffer == null)
+        {
+            return 0;
+        }
+
+        buffer.State = ScanoutBufferState.Drawing;
+        return buffer.Bo;
+    }
+
+    private ScanoutBuffer? FindBufferToDraw()
+    {
+        ScanoutBuffer? newest = null;
+        foreach (var buffer in _buffers)
+        {
+            if (buffer.State == ScanoutBufferState.Drawing)
+            {
+                return buffer;
+            }
+
+            if (buffer.State == ScanoutBufferState.Free && (newest == null || buffer.LastPresent > newest.LastPresent))
+            {
+                newest = buffer;
+            }
+        }
+
+        return newest;
+    }
+
+    internal DrmKmsBufferExport ExportBuffer(nint bo)
+    {
+        if (FindBuffer(bo) == null)
+        {
+            throw new ArgumentException("The buffer does not belong to this output.", nameof(bo));
+        }
+
+        int fd = LibGbm.gbm_bo_get_fd(bo);
+        if (fd < 0)
+        {
+            throw new InvalidOperationException("GBM: the scan-out buffer cannot be exported as a dma-buf.");
+        }
+
+        return new DrmKmsBufferExport(fd, LibGbm.gbm_bo_get_offset(bo, 0), LibGbm.gbm_bo_get_stride(bo), LibGbm.gbm_bo_get_modifier(bo));
+    }
+
+    /// <summary>How many presents ago <paramref name="bo"/> was presented, or 0 when it never was.</summary>
+    internal int GetBufferAge(nint bo)
+    {
+        var buffer = FindBuffer(bo);
+        return buffer == null || buffer.LastPresent == 0 ? 0 : (int)(_presentCount - buffer.LastPresent + 1);
+    }
+
+    /// <summary>Puts a buffer the backend finished drawing on screen: a mode set the first time, a page flip after.</summary>
+    internal void Present(nint bo)
     {
         if (_disposed)
         {
             return;
         }
 
-        nint bo = LibGbm.gbm_surface_lock_front_buffer(_gbmSurface);
-        if (bo == 0)
-        {
-            Logger.Write("gbm_surface_lock_front_buffer returned no buffer; frame dropped");
-            return;
-        }
-
-        uint framebufferId = GetFramebufferId(bo);
+        var buffer = FindBuffer(bo) ?? throw new ArgumentException("The buffer does not belong to this output.", nameof(bo));
+        buffer.LastPresent = ++_presentCount;
+        uint framebufferId = GetFramebufferId(buffer);
         if (framebufferId == 0)
         {
-            LibGbm.gbm_surface_release_buffer(_gbmSurface, bo);
+            buffer.State = ScanoutBufferState.Free;
             Logger.Write("drmModeAddFB failed; frame dropped");
             return;
         }
@@ -334,63 +404,78 @@ internal sealed unsafe class DrmKmsOutput : IFramebufferOutput
             if (LibDrm.drmModeSetCrtc(_fd, _crtcId, framebufferId, 0, 0, &connectorId, 1, &mode) != 0)
             {
                 int errno = Marshal.GetLastPInvokeError();
-                LibGbm.gbm_surface_release_buffer(_gbmSurface, bo);
+                buffer.State = ScanoutBufferState.Free;
                 throw new InvalidOperationException(
                     $"drmModeSetCrtc failed (errno {errno}). Another process holds the display; stop the display server (Xorg, Wayland compositor) before starting a framebuffer app.");
             }
 
             _modeSet = true;
-            _frontBo = bo;
+            _front = buffer;
+            buffer.State = ScanoutBufferState.Shown;
             ApplyCursor();
             return;
         }
 
-        if (_pendingBo != 0)
+        if (_pending != null)
         {
             // Legacy KMS takes one flip at a time; this frame goes up the moment the current flip lands.
-            if (_queuedBo != 0)
+            if (_queued != null)
             {
-                LibGbm.gbm_surface_release_buffer(_gbmSurface, _queuedBo);
+                _queued.State = ScanoutBufferState.Free;
             }
 
-            _queuedBo = bo;
-            _queuedFramebufferId = framebufferId;
+            _queued = buffer;
+            buffer.State = ScanoutBufferState.Queued;
             return;
         }
 
-        SubmitFlip(bo, framebufferId);
+        SubmitFlip(buffer);
     }
 
-    private void SubmitFlip(nint bo, uint framebufferId)
+    private void SubmitFlip(ScanoutBuffer buffer)
     {
         bool vsync = !Application.IsRunning || Application.Current.RenderLoopSettings.VSyncEnabled;
         nint userData = GCHandle.ToIntPtr(_selfHandle);
         int result = vsync
             ? -1
-            : LibDrm.drmModePageFlip(_fd, _crtcId, framebufferId, LibDrm.DRM_MODE_PAGE_FLIP_EVENT | LibDrm.DRM_MODE_PAGE_FLIP_ASYNC, userData);
+            : LibDrm.drmModePageFlip(_fd, _crtcId, buffer.FramebufferId, LibDrm.DRM_MODE_PAGE_FLIP_EVENT | LibDrm.DRM_MODE_PAGE_FLIP_ASYNC, userData);
         if (result != 0)
         {
-            result = LibDrm.drmModePageFlip(_fd, _crtcId, framebufferId, LibDrm.DRM_MODE_PAGE_FLIP_EVENT, userData);
+            result = LibDrm.drmModePageFlip(_fd, _crtcId, buffer.FramebufferId, LibDrm.DRM_MODE_PAGE_FLIP_EVENT, userData);
         }
 
         if (result != 0)
         {
             Logger.Write($"drmModePageFlip failed (errno {Marshal.GetLastPInvokeError()}); frame dropped");
-            LibGbm.gbm_surface_release_buffer(_gbmSurface, bo);
+            buffer.State = ScanoutBufferState.Free;
             return;
         }
 
-        _pendingBo = bo;
+        _pending = buffer;
+        buffer.State = ScanoutBufferState.Flipping;
     }
 
-    private uint GetFramebufferId(nint bo)
+    private ScanoutBuffer? FindBuffer(nint bo)
     {
-        nint data = LibGbm.gbm_bo_get_user_data(bo);
-        if (data != 0)
+        foreach (var buffer in _buffers)
         {
-            return (uint)(data & 0xFFFFFFFF);
+            if (buffer.Bo == bo)
+            {
+                return buffer;
+            }
         }
 
+        return null;
+    }
+
+    private uint GetFramebufferId(ScanoutBuffer buffer)
+    {
+        if (buffer.FramebufferId != 0)
+        {
+            return buffer.FramebufferId;
+        }
+
+        nint bo = buffer.Bo;
         uint width = LibGbm.gbm_bo_get_width(bo);
         uint height = LibGbm.gbm_bo_get_height(bo);
         uint stride = LibGbm.gbm_bo_get_stride(bo);
@@ -405,14 +490,9 @@ internal sealed unsafe class DrmKmsOutput : IFramebufferOutput
             return 0;
         }
 
-        // The card fd rides in the high half so the destroy callback can remove the framebuffer without state.
-        LibGbm.gbm_bo_set_user_data(bo, (nint)(((long)_fd << 32) | framebufferId), &DestroyFramebuffer);
+        buffer.FramebufferId = framebufferId;
         return framebufferId;
     }
-
-    [UnmanagedCallersOnly]
-    private static void DestroyFramebuffer(nint bo, nint data)
-        => LibDrm.drmModeRmFB((int)(data >> 32), (uint)(data & 0xFFFFFFFF));
 
     [UnmanagedCallersOnly]
     private static void OnPageFlip(int fd, uint sequence, uint seconds, uint microseconds, nint userData)
@@ -425,18 +505,23 @@ internal sealed unsafe class DrmKmsOutput : IFramebufferOutput
 
     private void CompleteFlip()
     {
-        if (_frontBo != 0)
+        if (_front != null)
         {
-            LibGbm.gbm_surface_release_buffer(_gbmSurface, _frontBo);
+            _front.State = ScanoutBufferState.Free;
         }
 
-        _frontBo = _pendingBo;
-        _pendingBo = 0;
-        if (_queuedBo != 0)
+        _front = _pending;
+        _pending = null;
+        if (_front != null)
         {
-            nint queued = _queuedBo;
-            _queuedBo = 0;
-            SubmitFlip(queued, _queuedFramebufferId);
+            _front.State = ScanoutBufferState.Shown;
+        }
+
+        if (_queued != null)
+        {
+            var queued = _queued;
+            _queued = null;
+            SubmitFlip(queued);
         }
 
         FlipCompleted?.Invoke();
@@ -577,8 +662,19 @@ internal sealed unsafe class DrmKmsOutput : IFramebufferOutput
         _cursorImages.Clear();
         _shownCursor = null;
 
-        // The GBM device, surface and card fd stay open: the graphics backend's EGL display and surface are
-        // built on them and may be torn down after the host. They go away with the process.
+        foreach (var buffer in _buffers)
+        {
+            if (buffer.FramebufferId != 0)
+            {
+                LibDrm.drmModeRmFB(_fd, buffer.FramebufferId);
+            }
+
+            // The backend's images keep their own reference to the buffer memory, so this only drops the platform's.
+            LibGbm.gbm_bo_destroy(buffer.Bo);
+        }
+
+        // The GBM device and card fd stay open: the graphics backend's EGL display is built on them and may be
+        // torn down after the host. They go away with the process.
         if (_selfHandle.IsAllocated)
         {
             _selfHandle.Free();
@@ -626,10 +722,35 @@ internal sealed unsafe class DrmKmsOutput : IFramebufferOutput
 
         public nint GbmDevice => _output._gbmDevice;
 
-        public nint GbmSurface => _output._gbmSurface;
-
         public uint GbmFormat => LibGbm.GBM_FORMAT_XRGB8888;
 
-        public void OnBuffersSwapped() => _output.Present();
+        public nint AcquireBuffer() => _output.AcquireBuffer();
+
+        public DrmKmsBufferExport ExportBuffer(nint buffer) => _output.ExportBuffer(buffer);
+
+        public int GetBufferAge(nint buffer) => _output.GetBufferAge(buffer);
+
+        public void Present(nint buffer) => _output.Present(buffer);
+    }
+
+    private enum ScanoutBufferState
+    {
+        Free,
+        Drawing,
+        Queued,
+        Flipping,
+        Shown,
+    }
+
+    private sealed class ScanoutBuffer(nint bo)
+    {
+        public nint Bo { get; } = bo;
+
+        public uint FramebufferId { get; set; }
+
+        /// <summary>The present counter when the buffer was last presented; 0 before its first.</summary>
+        public long LastPresent { get; set; }
+
+        public ScanoutBufferState State { get; set; }
     }
 }

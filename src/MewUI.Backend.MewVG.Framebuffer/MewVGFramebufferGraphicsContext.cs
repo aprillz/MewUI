@@ -66,7 +66,7 @@ internal sealed partial class MewVGFramebufferGraphicsContext : IPartialPresentC
 
     private sealed class FramebufferWindowFrameSession : IFrameSession
     {
-        // Older back buffers than this are restored whole; GBM surfaces cycle through four buffers.
+        // Older back buffers than this are restored whole; the output cycles through three buffers.
         private const int HISTORY_FRAMES = 4;
 
         private readonly MewVGFramebufferWindowResources _resources;
@@ -166,6 +166,7 @@ internal sealed partial class MewVGFramebufferGraphicsContext : IPartialPresentC
         public void BeginFrame()
         {
             _resources.MakeCurrent();
+            _resources.AcquireFrameTarget();
             _offscreenProvider.EnterSession();
             _copiedThisFrame = false;
             _restorePending = _resources.TracksBufferAge;

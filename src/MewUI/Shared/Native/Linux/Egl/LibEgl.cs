@@ -31,7 +31,13 @@ internal static partial class LibEgl
     public const int EGL_EXTENSIONS = 0x3055;
     public const int EGL_PLATFORM_GBM_KHR = 0x31D7;
     public const int EGL_PLATFORM_SURFACELESS_MESA = 0x31DD;
-    public const int EGL_BUFFER_AGE_EXT = 0x313D;
+    public const int EGL_LINUX_DMA_BUF_EXT = 0x3270;
+    public const int EGL_LINUX_DRM_FOURCC_EXT = 0x3271;
+    public const int EGL_DMA_BUF_PLANE0_FD_EXT = 0x3272;
+    public const int EGL_DMA_BUF_PLANE0_OFFSET_EXT = 0x3273;
+    public const int EGL_DMA_BUF_PLANE0_PITCH_EXT = 0x3274;
+    public const int EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT = 0x3443;
+    public const int EGL_DMA_BUF_PLANE0_MODIFIER_HI_EXT = 0x3444;
 
     public static readonly nint EGL_DEFAULT_DISPLAY = 0;
     public static readonly nint EGL_NO_DISPLAY = 0;
@@ -107,9 +113,36 @@ internal static partial class LibEgl
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool eglTerminate(nint dpy);
 
-    [LibraryImport(LibraryName)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    public static partial bool eglQuerySurface(nint dpy, nint surface, int attribute, out int value);
+    /// <summary>
+    /// Creates an EGLImage without a context (eglCreateImageKHR), for example from a dma-buf with
+    /// <see cref="EGL_LINUX_DMA_BUF_EXT"/>; 0 when the extension is missing or the import fails.
+    /// </summary>
+    public static unsafe nint CreateImage(nint dpy, int target, int[] attributes)
+    {
+        nint proc = eglGetProcAddress("eglCreateImageKHR");
+        if (proc == 0)
+        {
+            return 0;
+        }
+
+        var createImage = (delegate* unmanaged<nint, nint, uint, nint, int*, nint>)proc;
+        fixed (int* list = attributes)
+        {
+            return createImage(dpy, EGL_NO_CONTEXT, (uint)target, 0, list);
+        }
+    }
+
+    public static unsafe bool DestroyImage(nint dpy, nint image)
+    {
+        nint proc = eglGetProcAddress("eglDestroyImageKHR");
+        if (proc == 0)
+        {
+            return false;
+        }
+
+        var destroyImage = (delegate* unmanaged<nint, nint, uint>)proc;
+        return destroyImage(dpy, image) != 0;
+    }
 
     /// <summary>Returns the EGL display for a native platform (eglGetPlatformDisplayEXT), or 0 when the extension is missing.</summary>
     public static unsafe nint GetPlatformDisplay(int platform, nint nativeDisplay)

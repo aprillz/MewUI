@@ -50,6 +50,7 @@
     <Compile Include="..\MewUI\Shared\Rendering\FreeType\**\*.cs" LinkBase="Rendering\FreeType" />
 
     <Compile Include="..\MewUI\Shared\Native\Linux\Egl\*.cs" LinkBase="Native\Egl" />
+    <Compile Include="..\MewUI\Shared\Native\Linux\LibC.cs" LinkBase="Native" />
     <Compile Include="..\MewUI\Shared\Native\Linux\FreeType\**\*.cs" LinkBase="Native\FreeType" />
     <Compile Include="..\MewUI\Shared\Native\Linux\HarfBuzz\**\*.cs" LinkBase="Native\HarfBuzz" />
     <Compile Include="..\MewUI\Shared\Native\Linux\Fontconfig\**\*.cs" LinkBase="Native\Fontconfig" />
