@@ -174,7 +174,7 @@ public static class MenuExtensions
     /// Sets the submenu the item opens. To detach a submenu, set <see cref="MenuItem.SubMenu"/> to null.
     /// </summary>
     /// <param name="item">Target menu item.</param>
-    /// <param name="menu">Submenu.</param>
+    /// <param name="value">Submenu, or null to detach the current one.</param>
     /// <returns>The menu item for chaining.</returns>
     public static MenuItem SubMenu(this MenuItem item, Menu? value)
     {
