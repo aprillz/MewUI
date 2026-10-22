@@ -41,25 +41,26 @@ public sealed class ProcessConnection : ITerminalConnection
     /// <summary>Gets the arguments of the program.</summary>
     public IReadOnlyList<string> Arguments { get; }
 
-    /// <summary>Gets or sets the working directory, or null for the current one. Takes effect at <see cref="Start"/>.</summary>
+    /// <summary>Gets or sets the working directory, or null for the current one; takes effect at <see cref="Start"/>.</summary>
     public string? WorkingDirectory { get; init; }
 
     /// <summary>
     /// Gets or sets the title the program's console starts with on Windows, which a shell like cmd shows until it sets
-    /// its own; null leaves the system default, the program's path. Other systems have no starting title.
+    /// its own; null leaves the system default, the program's path.
     /// </summary>
+    /// <remarks>Other systems have no starting title.</remarks>
     public string? StartingTitle { get; init; }
 
     /// <summary>Gets the environment variables to set or (with a null value) remove, over those of this process.</summary>
     public IDictionary<string, string?> Environment { get; } = new Dictionary<string, string?>(StringComparer.Ordinal);
 
-    /// <summary>Gets or sets the size in cells the program starts with.</summary>
+    /// <summary>Gets or sets the number of columns the program starts with; the default is 80.</summary>
     public int InitialColumns { get; init; } = 80;
 
-    /// <summary>Gets or sets the size in rows the program starts with.</summary>
+    /// <summary>Gets or sets the number of rows the program starts with; the default is 24.</summary>
     public int InitialRows { get; init; } = 24;
 
-    /// <summary>The shell a terminal opens by default: <c>%COMSPEC%</c> (cmd.exe) on Windows, <c>$SHELL</c> elsewhere.</summary>
+    /// <summary>Gets the shell a terminal opens by default: <c>%COMSPEC%</c> (cmd.exe) on Windows, <c>$SHELL</c> elsewhere.</summary>
     public static string DefaultShell
     {
         get

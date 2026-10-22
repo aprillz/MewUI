@@ -10,10 +10,10 @@ public delegate void TerminalOutputHandler(ReadOnlySpan<byte> data);
 /// </summary>
 public interface ITerminalConnection : IDisposable
 {
-    /// <summary>Raised on a background thread with each block of output.</summary>
+    /// <summary>Occurs on a background thread with each block of output.</summary>
     event TerminalOutputHandler? Output;
 
-    /// <summary>Raised once, on a background thread, when the connection ends, with the exit code or -1 if unknown.</summary>
+    /// <summary>Occurs once, on a background thread, when the connection ends, with the exit code or -1 if unknown.</summary>
     event Action<int>? Closed;
 
     /// <summary>Starts the connection; output may be raised from then on.</summary>

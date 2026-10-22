@@ -20,36 +20,44 @@ using TerminalChanges = Aprillz.MewUI.Terminal.Core.Renderer;
 /// <remarks>Output is parsed on the connection's thread; the view takes the result on the UI thread.</remarks>
 public sealed partial class TerminalView : ContentControl, ITextInputClient, ITextCompositionClient
 {
+    /// <summary>The connection whose output this terminal shows, or null.</summary>
     public static readonly MewProperty<ITerminalConnection?> ConnectionProperty =
         MewProperty<ITerminalConnection?>.Register<TerminalView>(nameof(Connection), null, MewPropertyOptions.None,
             static (view, oldValue, newValue) => view.OnConnectionChanged(oldValue, newValue));
 
+    /// <summary>The number of rows of output kept above the screen; the default is 9001.</summary>
     public static readonly MewProperty<int> ScrollbackLinesProperty =
         MewProperty<int>.Register<TerminalView>(nameof(ScrollbackLines), TerminalSettings.DEFAULT_HISTORY_SIZE, MewPropertyOptions.None,
             static (view, _, newValue) => view.OnScrollbackLinesChanged(newValue));
 
+    /// <summary>The colors; the default is <see cref="TerminalColorScheme.Campbell"/>.</summary>
     public static readonly MewProperty<TerminalColorScheme> ColorSchemeProperty =
         MewProperty<TerminalColorScheme>.Register<TerminalView>(nameof(ColorScheme), TerminalColorScheme.Campbell, MewPropertyOptions.None,
             static (view, _, _) => view.ApplyAppearance());
 
+    /// <summary>The cursor shape shown until the application chooses one; the default is <see cref="TerminalCursorShape.Bar"/>.</summary>
     public static readonly MewProperty<TerminalCursorShape> CursorShapeProperty =
         MewProperty<TerminalCursorShape>.Register<TerminalView>(nameof(CursorShape), TerminalCursorShape.Bar, MewPropertyOptions.None,
             static (view, _, _) => view.ApplyAppearance());
 
+    /// <summary>The space between the edge and the cells, in DIPs; the default is 4.</summary>
     public static readonly MewProperty<double> TextPaddingProperty =
         MewProperty<double>.Register<TerminalView>(nameof(TextPadding), 4.0, MewPropertyOptions.AffectsLayout);
 
+    /// <summary>Whether Option (Alt) with a key that types a character sends ESC and the key's base character; the default is false.</summary>
     public static readonly MewProperty<bool> OptionIsMetaProperty =
         MewProperty<bool>.Register<TerminalView>(nameof(OptionIsMeta), false, MewPropertyOptions.None);
 
     private static readonly MewPropertyKey<string> TitlePropertyKey =
         MewProperty<string>.RegisterReadOnly<TerminalView>(nameof(Title), string.Empty);
 
+    /// <summary>The title the application set, or an empty string.</summary>
     public static readonly MewProperty<string> TitleProperty = TitlePropertyKey.Property;
 
     private static readonly MewPropertyKey<string> WorkingDirectoryPropertyKey =
         MewProperty<string>.RegisterReadOnly<TerminalView>(nameof(WorkingDirectory), string.Empty);
 
+    /// <summary>The working directory the shell reported, or an empty string.</summary>
     public static readonly MewProperty<string> WorkingDirectoryProperty = WorkingDirectoryPropertyKey.Property;
 
     private const int CURSOR_BLINK_MS = 530;
@@ -129,16 +137,16 @@ public sealed partial class TerminalView : ContentControl, ITextInputClient, ITe
         RegisterCommands();
     }
 
-    /// <summary>Raised when the application rings the bell.</summary>
+    /// <summary>Occurs when the application rings the bell.</summary>
     public event Action? Bell;
 
-    /// <summary>Raised with the new title when the application sets one.</summary>
+    /// <summary>Occurs when the application sets a title, with the new title.</summary>
     public event Action<string>? TitleChanged;
 
-    /// <summary>Raised with the URI of a hyperlink the user Ctrl+clicked.</summary>
+    /// <summary>Occurs when the user Ctrl+clicks a hyperlink, with its URI.</summary>
     public event Action<string>? HyperlinkActivated;
 
-    /// <summary>Raised when the connection ended, with its exit code or -1.</summary>
+    /// <summary>Occurs when the connection ends, with its exit code or -1.</summary>
     public event Action<int>? ConnectionClosed;
 
     /// <summary>Gets or sets the connection whose output this terminal shows; the terminal does not start or dispose it.</summary>
@@ -148,21 +156,21 @@ public sealed partial class TerminalView : ContentControl, ITextInputClient, ITe
         set => SetValue(ConnectionProperty, value);
     }
 
-    /// <summary>Gets or sets how many rows of output are kept above the screen.</summary>
+    /// <summary>Gets or sets the number of rows of output kept above the screen; the default is 9001.</summary>
     public int ScrollbackLines
     {
         get => GetValue(ScrollbackLinesProperty);
         set => SetValue(ScrollbackLinesProperty, value);
     }
 
-    /// <summary>Gets or sets the colors.</summary>
+    /// <summary>Gets or sets the colors; the default is <see cref="TerminalColorScheme.Campbell"/>.</summary>
     public TerminalColorScheme ColorScheme
     {
         get => GetValue(ColorSchemeProperty);
         set => SetValue(ColorSchemeProperty, value);
     }
 
-    /// <summary>Gets or sets the cursor shape shown until the application chooses one.</summary>
+    /// <summary>Gets or sets the cursor shape shown until the application chooses one; the default is <see cref="TerminalCursorShape.Bar"/>.</summary>
     public TerminalCursorShape CursorShape
     {
         get => GetValue(CursorShapeProperty);
@@ -171,16 +179,16 @@ public sealed partial class TerminalView : ContentControl, ITextInputClient, ITe
 
     /// <summary>
     /// Gets or sets whether Option (Alt) with a key that types a character, such as Option+O typing ø on a Mac, sends ESC
-    /// and the key's base character (Meta) instead of the character. Keys whose Alt combination types nothing of its own
-    /// send ESC either way.
+    /// and the key's base character (Meta) instead of the character; the default is false.
     /// </summary>
+    /// <remarks>Keys whose Alt combination types nothing of its own send ESC either way.</remarks>
     public bool OptionIsMeta
     {
         get => GetValue(OptionIsMetaProperty);
         set => SetValue(OptionIsMetaProperty, value);
     }
 
-    /// <summary>Gets or sets the space between the edge and the cells, in DIPs.</summary>
+    /// <summary>Gets or sets the space between the edge and the cells, in DIPs; the default is 4.</summary>
     public double TextPadding
     {
         get => GetValue(TextPaddingProperty);
@@ -209,7 +217,7 @@ public sealed partial class TerminalView : ContentControl, ITextInputClient, ITe
 
     internal double CellHeight => _renderer.CellHeight;
 
-    /// <summary>Shows <paramref name="text"/> as if the connection had written it. Any thread.</summary>
+    /// <summary>Shows <paramref name="text"/> as if the connection had written it; callable from any thread.</summary>
     public void Write(string text)
     {
         using (_terminal.LockForWriting())
@@ -220,7 +228,7 @@ public sealed partial class TerminalView : ContentControl, ITextInputClient, ITe
         QueueUpdate();
     }
 
-    /// <summary>Copies the selection to the clipboard; false when nothing is selected.</summary>
+    /// <summary>Copies the selection to the clipboard; returns false when nothing is selected.</summary>
     public bool Copy()
     {
         string text;
