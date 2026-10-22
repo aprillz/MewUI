@@ -26,7 +26,11 @@ Shared pieces:
 
 - `FluentMethodResolver.cs` resolves a property/event name to its fluent setter extension. The
   extension methods are the source of truth (no mapping table to drift); it also tries the
-  `On`-prefixed name (`Click` -> `OnClick`).
+  `On`-prefixed name (`Click` -> `OnClick`) and reads the hint attributes (see "Declaring what an
+  extension sets") that name the members a composite setter, a shorthand, or an alias assigns.
+- `FluentInitializerPlanner.cs` plans a whole object initializer for MEW1101: which contiguous
+  members each fluent call consumes, with what arguments, and which members stay behind. The
+  analyzer and the code fix share it, so a reported initializer always converts the way it was judged.
 - `ChainStatementDescriber.cs` decides what a single statement contributes to a chain on its
   receiver (a fluent call, an event subscription, a property assignment, a static attached setter, or
   a call an extension declares it replaces). MEW1103 / MEW1104 / MEW1105 / MEW1106 all go through it,
@@ -35,7 +39,7 @@ Shared pieces:
   it rebuilds a chain from its structure, expands element children as a tree, keeps values inline, and
   re-indents multi-line lambda bodies.
 
-52 tests in `tests/MewUI.Analyzers.Test` cover all six.
+76 tests in `tests/MewUI.Analyzers.Test` cover all six.
 
 ## `MEW1101` - Convert object initializer to fluent chain
 
@@ -56,12 +60,12 @@ visible: `dotnet_diagnostic.MEW1101.severity = suggestion`.
 ### Rules
 
 1. **Trigger.** An object creation with an object initializer where at least one member `Name = value`
-   maps to a fluent setter.
+   maps to a fluent call.
 2. **Fluent setter.** An in-scope extension method named exactly `Name` (or `On` + `Name` for events),
    callable on the created type, taking a single parameter that `value` converts to. The extension
    methods are the source of truth - any setter you add is picked up automatically.
 3. **Conversion.** Each matching member becomes `.Name(value)` in source order; `new T { ... }` gains
-   an explicit `()`. Two or more converted members are expanded onto separate lines.
+   an explicit `()`. Two or more converted calls are expanded onto separate lines.
 4. **Events.** A delegate-typed property `Click = handler` maps to `.OnClick(handler)` via the
    `On`-prefix rule.
 
@@ -73,7 +77,38 @@ visible: `dotnet_diagnostic.MEW1101.severity = suggestion`.
        .OnClick(OnOpen)
    ```
 
-5. **Partial conversion.** Members with no matching setter stay in a residual initializer.
+5. **Hinted calls.** An extension whose parameters carry `[FluentSetsMember]` or whose method carries
+   `[FluentSetsConstant]` (see "Declaring what an extension sets") replaces the members it declares:
+   a composite setter takes several members as its arguments, a shorthand replaces constant
+   assignments with a parameterless call, an alias maps one member to a differently named setter, and
+   a combined method does both (`ViewBox = r, ViewBoxUnits = ImageViewBoxUnits.Pixels` ->
+   `.ViewBoxPixels(r)`).
+
+   ```csharp
+   new SplitButton { Command = save, CommandPresentationMode = CommandPresentationMode.TextAndIcon }
+   // -> Convert to fluent chain
+   new SplitButton().Command(save, CommandPresentationMode.TextAndIcon)
+
+   new TextBlock { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
+   // -> Convert to fluent chain
+   new TextBlock().Center()
+   ```
+
+   A hinted call is used only when every member it declares is assigned, contiguously and in the
+   declared order, and every value converts to its parameter or equals the declared constant (an enum
+   must match by type, not just by number). `Command = save` alone does not become `.Command(save)`:
+   the omitted optional argument would overwrite `CommandPresentationMode` with its default. A
+   reversed or interrupted pair is converted member by member instead (`.CenterVertical()` then
+   `.CenterHorizontal()`), and a non-matching constant falls back to the same-name setter
+   (`.VerticalAlignment(VerticalAlignment.Top)`).
+6. **Priority.** When several calls could start at the same member: the one consuming more
+   contiguous members wins; at equal count a hinted call beats the same-name setter, which beats the
+   `On`-prefixed one; between hinted calls the one passing fewer arguments wins (`.ViewBoxPixels(r)`
+   over `.ViewBox(r, ImageViewBoxUnits.Pixels)`). The generated call is then bound like ordinary C# and kept only if it resolves
+   to the chosen extension. If candidates of the same priority cannot be told apart that way (two
+   differently named shorthands declaring the same constant, say), the members they cover stay in the
+   initializer.
+7. **Partial conversion.** Members with no matching call stay in a residual initializer.
 
    ```csharp
    new Widget { Text = "hi", Tag = obj, Width = 5 }
@@ -83,7 +118,7 @@ visible: `dotnet_diagnostic.MEW1101.severity = suggestion`.
        .Width(5)
    ```
 
-6. **No diagnostic** when no member maps to a setter.
+8. **No diagnostic** when no member maps to a call.
 
 ### Not yet handled
 
@@ -238,10 +273,18 @@ These are the shapes MEW1103 folds into a chain and MEW1104 converts on their ow
 Not offered when nothing resolves, when the resulting call would not return the receiver's type, or
 when the statement is already a fluent chain.
 
-### Declaring a replacement
+### Declaring what an extension sets
 
-A member such as `Panel.Add` cannot be matched to `Children` by name or signature, so the extension
-declares it:
+Most extensions are found by the naming conventions above. When an extension cannot be matched by
+name or signature, it declares what it sets with one of three attributes
+(`src/MewUI/Markup/Hints/FluentHintAttributes.cs`). They are internal to MewUI and read by metadata
+name (`Aprillz.MewUI.FluentReplacesMemberAttribute`, `Aprillz.MewUI.FluentSetsMemberAttribute`,
+`Aprillz.MewUI.FluentSetsConstantAttribute`), so the analyzer does not reference MewUI, and another
+assembly can compile the same declarations as its own internal types. Applying the extension in the
+members' place must have the same effect and ordering; the attribute is the only guarantee of that,
+so it is added by hand after checking both bodies.
+
+**`FluentReplacesMember`** - the extension replaces calls to an instance method (MEW1103 to MEW1106):
 
 ```csharp
 [FluentReplacesMember(nameof(Panel.Add))]
@@ -250,9 +293,46 @@ public static T Children<T>(this T panel, params Element[] children) where T : P
 ```
 
 The extension's only value parameter must be a `params` array that accepts every argument of the
-call it replaces. Applying it in the member's place must have the same effect and ordering; the
-attribute is the only guarantee of that, so it is added by hand after checking both bodies. The
-attribute is internal to MewUI and read by metadata name, so the analyzer does not reference MewUI.
+call it replaces.
+
+**`FluentSetsMember`** - a parameter receives the value of the named property (MEW1101). On every
+value parameter of a method it declares a composite setter; on the only parameter it declares an
+alias:
+
+```csharp
+public static T Command<T>(
+    this T button,
+    [FluentSetsMember(nameof(Button.Command))] Command? command,
+    [FluentSetsMember(nameof(Button.CommandPresentationMode))] CommandPresentationMode presentation = CommandPresentationMode.None)
+    where T : Button
+
+public static T BorderThickness<T>(this T border, [FluentSetsMember(nameof(Border.NonUniformBorderThickness))] Thickness value) where T : Border
+```
+
+Parameter order is the assignment order. A method with any unannotated value parameter, optional or
+not, is not a candidate, because its default could overwrite another member.
+
+**`FluentSetsConstant`** - a parameterless shorthand assigns a constant to the named property
+(MEW1101). Several on one method form one contract, ordered by `order` (contiguous from 0):
+
+```csharp
+[FluentSetsConstant(nameof(FrameworkElement.HorizontalAlignment), HorizontalAlignment.Center, order: 0)]
+[FluentSetsConstant(nameof(FrameworkElement.VerticalAlignment), VerticalAlignment.Center, order: 1)]
+public static T Center<T>(this T element) where T : FrameworkElement
+```
+
+**Combined** - a method may carry both: every value parameter annotated with `FluentSetsMember` and
+one or more `FluentSetsConstant` on the method. The contract is the parameters in order followed by
+the constants in `order`, and the generated call passes only the parameter arguments:
+
+```csharp
+[FluentSetsConstant(nameof(Image.ViewBoxUnits), ImageViewBoxUnits.Pixels)]
+public static Image ViewBoxPixels(this Image image, [FluentSetsMember(nameof(Image.ViewBox))] Rect? viewBox)
+```
+
+A malformed declaration (wrong constructor shape, duplicate or non-contiguous `order`, duplicate
+member, empty name, a constant on a method with an unannotated parameter) is ignored, so it never
+produces a conversion.
 
 ## `MEW1105` / `MEW1106` - The same two as diagnostics
 

@@ -23,15 +23,20 @@ MewUI fluent markup용 Roslyn analyzer와 refactoring 모음. NuGet analyzer(`an
 
 공유 컴포넌트:
 
-- `FluentMethodResolver.cs`: 속성/이벤트 이름을 fluent setter 확장으로 해석. **extension 메서드가
-  source of truth**(별도 매핑 표 없음 -> drift 없음)이고, `On`-prefix(`Click` -> `OnClick`)도 시도.
+- `FluentMethodResolver.cs`: 속성/이벤트 이름을 fluent setter 확장으로 해석. **확장 메서드가
+  진실의 출처**(별도 매핑 표 없음 -> drift 없음)이고, `On` 접두(`Click` -> `OnClick`)도 시도. 복합
+  setter, 축약형, 별칭이 어떤 멤버를 대입하는지 선언한 힌트 특성("확장이 무엇을 설정하는지 선언하기"
+  절)도 여기서 읽는다.
+- `FluentInitializerPlanner.cs`: MEW1101용으로 object initializer 전체를 계획. 각 fluent 호출이 연속된
+  멤버 중 무엇을 어떤 인자로 소비하고 무엇이 남는지 정한다. analyzer와 code fix가 같이 쓰므로 보고한
+  이니셜라이저는 판정한 그대로 변환된다.
 - `ChainStatementDescriber.cs`: 문장 하나가 수신자에 대한 어떤 체인 호출인지 판정(fluent 호출, 이벤트
   구독, 속성 대입, 정적 attached setter, 확장이 대체를 선언한 호출). MEW1103/1104/1105/1106이 모두 이
   판정을 거치므로 같은 문장을 서로 다르게 보지 않음.
 - `FluentChainLayout.cs`: 공유 레이아웃 엔진(MEW1101/1102/1103/1105 공용). 체인을 구조에서 재구성하고,
   element 자식은 트리로 펼치고, 값은 inline 유지하며, 멀티라인 람다 본문을 재들여쓰기.
 
-`tests/MewUI.Analyzers.Test`에 테스트 52개가 6개 기능을 모두 커버.
+`tests/MewUI.Analyzers.Test`에 테스트 76개가 6개 기능을 모두 커버.
 
 ## `MEW1101` - 이니셜라이저를 fluent 체인으로
 
@@ -51,14 +56,14 @@ new Border()
 
 ### 규칙
 
-1. **트리거.** object initializer를 가진 생성식 중, 멤버 `Name = value` 하나 이상이 fluent setter로
+1. **트리거.** object initializer를 가진 생성식 중, 멤버 `Name = value` 하나 이상이 fluent 호출로
    해석될 때.
-2. **fluent setter.** 생성 타입에 호출 가능한, 이름이 정확히 `Name`(이벤트는 `On` + `Name`)인 extension
-   메서드로, `value`가 변환되는 단일 파라미터를 받는 것. extension 메서드가 진실의 출처라, 추가한 setter는
+2. **fluent setter.** 생성 타입에 호출 가능한, 이름이 정확히 `Name`(이벤트는 `On` + `Name`)인 확장
+   메서드로, `value`가 변환되는 단일 매개변수를 받는 것. 확장 메서드가 진실의 출처라, 추가한 setter는
    자동 인식.
-3. **변환.** 매칭 멤버는 소스 순서대로 `.Name(value)`; `new T { ... }`엔 `()` 추가. 변환된 멤버가 2개 이상이면
+3. **변환.** 매칭 멤버는 소스 순서대로 `.Name(value)`; `new T { ... }`엔 `()` 추가. 변환된 호출이 2개 이상이면
    줄바꿈해서 펼침.
-4. **이벤트.** delegate 프로퍼티 `Click = handler`는 `On`-prefix 규칙으로 `.OnClick(handler)`.
+4. **이벤트.** delegate 프로퍼티 `Click = handler`는 `On` 접두 규칙으로 `.OnClick(handler)`.
 
    ```csharp
    new MenuItem { Text = "Open", Click = OnOpen }
@@ -68,7 +73,32 @@ new Border()
        .OnClick(OnOpen)
    ```
 
-5. **부분 변환.** setter 없는 멤버는 잔여 이니셜라이저로 남음.
+5. **힌트 호출.** 매개변수에 `[FluentSetsMember]`가 있거나 메서드에 `[FluentSetsConstant]`가 있는 확장("확장이
+   무엇을 설정하는지 선언하기" 절)은 선언한 멤버들을 대체한다. 복합 setter는 여러 멤버를 인자로 받고,
+   축약형은 상수 대입을 무인자 호출로 바꾸며, 별칭은 멤버 하나를 이름이 다른 setter로 보내고, 결합형은
+   둘을 함께 한다(`ViewBox = r, ViewBoxUnits = ImageViewBoxUnits.Pixels` -> `.ViewBoxPixels(r)`).
+
+   ```csharp
+   new SplitButton { Command = save, CommandPresentationMode = CommandPresentationMode.TextAndIcon }
+   // -> Convert to fluent chain
+   new SplitButton().Command(save, CommandPresentationMode.TextAndIcon)
+
+   new TextBlock { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
+   // -> Convert to fluent chain
+   new TextBlock().Center()
+   ```
+
+   힌트 호출은 선언한 멤버가 전부, 선언 순서대로 연속해 대입되어 있고, 각 값이 매개변수로 변환되거나
+   선언한 상수와 같을 때만(enum은 숫자만이 아니라 타입까지 일치) 쓴다. `Command = save`만 있으면
+   `.Command(save)`로 바꾸지 않는다. 생략한 선택 인자가 `CommandPresentationMode`를 기본값으로 덮어쓰기
+   때문이다. 순서가 뒤집히거나 사이에 다른 대입이 있으면 멤버별로 따로 변환하고(`.CenterVertical()` 뒤
+   `.CenterHorizontal()`), 상수가 다르면 동명 setter로 폴백한다(`.VerticalAlignment(VerticalAlignment.Top)`).
+6. **우선순위.** 같은 멤버에서 시작할 수 있는 호출이 여럿이면 연속 멤버를 더 많이 소비하는 쪽이 이긴다.
+   개수가 같으면 힌트 호출 > 동명 setter > `On` 접두 순이고, 힌트 호출끼리는 인자를 더 적게 넘기는 쪽이
+   이긴다(`.ViewBox(r, ImageViewBoxUnits.Pixels)`보다 `.ViewBoxPixels(r)`). 그다음 생성될 호출을 일반 C#처럼 바인딩해
+   선택한 확장으로 해석될 때만 쓴다. 같은 우선순위의 후보를 그 방법으로도 가를 수 없으면(이름이 다른 두
+   축약형이 같은 상수를 선언하는 경우 등) 그 멤버들은 이니셜라이저에 남긴다.
+7. **부분 변환.** 호출로 해석되지 않는 멤버는 잔여 이니셜라이저로 남음.
 
    ```csharp
    new Widget { Text = "hi", Tag = obj, Width = 5 }
@@ -78,7 +108,7 @@ new Border()
        .Width(5)
    ```
 
-6. setter로 해석되는 멤버가 없으면 **진단 없음**.
+8. 호출로 해석되는 멤버가 없으면 **진단 없음**.
 
 ### 아직 미지원
 
@@ -224,9 +254,16 @@ MEW1103이 체인으로 접고 MEW1104가 단독 변환하는 형태들.
 
 해석되는 것이 없거나, 결과 호출이 수신자 타입을 반환하지 않거나, 이미 fluent 체인인 문장이면 미제공.
 
-### 대체 선언
+### 확장이 무엇을 설정하는지 선언하기
 
-`Panel.Add` 같은 멤버는 이름으로도 시그니처로도 `Children`과 대응시킬 수 없으므로 확장이 선언한다.
+대부분의 확장은 위의 이름 규약으로 찾는다. 이름으로도 시그니처로도 대응시킬 수 없는 확장은 세 특성 중
+하나로 무엇을 설정하는지 선언한다(`src/MewUI/Markup/Hints/FluentHintAttributes.cs`). 특성은 MewUI internal이고
+분석기는 metadata name(`Aprillz.MewUI.FluentReplacesMemberAttribute`, `Aprillz.MewUI.FluentSetsMemberAttribute`,
+`Aprillz.MewUI.FluentSetsConstantAttribute`)으로 읽으므로 분석기는 MewUI를 참조하지 않고, 다른 어셈블리도 같은
+선언을 자기 internal 타입으로 컴파일할 수 있다. 멤버 자리에 확장을 넣었을 때 효과와 순서가 같아야 하며,
+이를 보증하는 것은 이 선언뿐이므로 양쪽 본문을 사람이 대조한 뒤 추가한다.
+
+**`FluentReplacesMember`** - 확장이 인스턴스 메서드 호출을 대체한다(MEW1103~MEW1106).
 
 ```csharp
 [FluentReplacesMember(nameof(Panel.Add))]
@@ -234,10 +271,44 @@ MEW1103이 체인으로 접고 MEW1104가 단독 변환하는 형태들.
 public static T Children<T>(this T panel, params Element[] children) where T : Panel
 ```
 
-확장의 유일한 값 매개변수는 대체 대상 호출의 모든 인자를 받는 `params` 배열이어야 한다. 멤버 자리에
-넣었을 때 효과와 순서가 같아야 하며, 이를 보증하는 것은 이 선언뿐이므로 양쪽 본문을 사람이 대조한 뒤
-추가한다. attribute는 MewUI internal이고 분석기는 metadata name으로 읽으므로 분석기는 MewUI를 참조하지
-않는다.
+확장의 유일한 값 매개변수는 대체 대상 호출의 모든 인자를 받는 `params` 배열이어야 한다.
+
+**`FluentSetsMember`** - 매개변수가 이름을 적은 속성의 값을 받는다(MEW1101). 메서드의 값 매개변수 전부에
+붙이면 복합 setter, 유일한 매개변수에 붙이면 별칭이다.
+
+```csharp
+public static T Command<T>(
+    this T button,
+    [FluentSetsMember(nameof(Button.Command))] Command? command,
+    [FluentSetsMember(nameof(Button.CommandPresentationMode))] CommandPresentationMode presentation = CommandPresentationMode.None)
+    where T : Button
+
+public static T BorderThickness<T>(this T border, [FluentSetsMember(nameof(Border.NonUniformBorderThickness))] Thickness value) where T : Border
+```
+
+매개변수 순서가 대입 순서다. 특성 없는 값 매개변수가 하나라도 있으면(선택 매개변수 포함) 그 기본값이
+다른 멤버를 덮어쓸 수 있으므로 후보가 아니다.
+
+**`FluentSetsConstant`** - 무인자 축약형이 이름을 적은 속성에 상수를 대입한다(MEW1101). 한 메서드의 여러
+선언은 `order`(0부터 연속) 순서의 계약 하나를 이룬다.
+
+```csharp
+[FluentSetsConstant(nameof(FrameworkElement.HorizontalAlignment), HorizontalAlignment.Center, order: 0)]
+[FluentSetsConstant(nameof(FrameworkElement.VerticalAlignment), VerticalAlignment.Center, order: 1)]
+public static T Center<T>(this T element) where T : FrameworkElement
+```
+
+**결합형** - 한 메서드에 둘을 함께 둘 수 있다. 값 매개변수 전부에 `FluentSetsMember`를, 메서드에
+`FluentSetsConstant`를 하나 이상 붙인다. 계약은 매개변수 순서 뒤에 `order` 순서의 상수가 이어지며, 생성되는
+호출은 매개변수 인자만 넘긴다.
+
+```csharp
+[FluentSetsConstant(nameof(Image.ViewBoxUnits), ImageViewBoxUnits.Pixels)]
+public static Image ViewBoxPixels(this Image image, [FluentSetsMember(nameof(Image.ViewBox))] Rect? viewBox)
+```
+
+잘못된 선언(생성자 형상 불일치, 중복되거나 연속되지 않는 `order`, 중복 멤버, 빈 이름, 특성 없는
+매개변수가 있는 메서드의 상수)은 무시하므로 변환을 만들지 않는다.
 
 ## `MEW1105` / `MEW1106` - 같은 둘의 진단 형태
 

@@ -24,29 +24,13 @@ public sealed class InitializerToFluentAnalyzer : DiagnosticAnalyzer
     {
         var creation = (ObjectCreationExpressionSyntax)context.Node;
 
-        var initializer = creation.Initializer;
-        if (initializer is null || !initializer.IsKind(SyntaxKind.ObjectInitializerExpression))
+        // Report once if at least one member maps to a fluent call; the fix applies the same plan.
+        var plan = FluentInitializerPlanner.Plan(context.SemanticModel, creation, context.CancellationToken);
+        if (plan is not null && plan.Invocations.Length > 0)
         {
-            return;
-        }
-
-        var receiver = context.SemanticModel.GetTypeInfo(creation, context.CancellationToken).Type;
-        if (receiver is null)
-        {
-            return;
-        }
-
-        // Report once if at least one member maps to a fluent setter; the fix handles the rest.
-        foreach (var expression in initializer.Expressions)
-        {
-            if (expression is AssignmentExpressionSyntax { Left: IdentifierNameSyntax name } assignment
-                && FluentMethodResolver.ResolveSetter(
-                    context.SemanticModel, receiver, creation.SpanStart, name.Identifier.ValueText, assignment.Right) is not null)
-            {
-                context.ReportDiagnostic(Diagnostic.Create(
-                    FluentDiagnostics.InitializerToFluent, creation.Type.GetLocation(), receiver.Name));
-                return;
-            }
+            var receiver = context.SemanticModel.GetTypeInfo(creation, context.CancellationToken).Type;
+            context.ReportDiagnostic(Diagnostic.Create(
+                FluentDiagnostics.InitializerToFluent, creation.Type.GetLocation(), receiver?.Name ?? creation.Type.ToString()));
         }
     }
 }

@@ -4,6 +4,8 @@ namespace Aprillz.MewUI.Analyzers;
 
 internal static class FluentDiagnostics
 {
+    private const string README_URL = "https://github.com/aprillz/MewUI/blob/main/src/MewUI.Analyzers/README.md";
+
     public const string InitializerToFluentId = "MEW1101";
 
     public static readonly DiagnosticDescriptor InitializerToFluent = new(
@@ -13,7 +15,8 @@ internal static class FluentDiagnostics
         category: "MewUI.Markup",
         defaultSeverity: DiagnosticSeverity.Hidden,
         isEnabledByDefault: true,
-        description: "MewUI exposes fluent setter extensions; an object initializer whose members have a matching setter can be rewritten as a fluent chain.");
+        description: "MewUI exposes fluent setter extensions; an object initializer whose members have a matching setter can be rewritten as a fluent chain.",
+        helpLinkUri: README_URL + "#mew1101---convert-object-initializer-to-fluent-chain");
 
     public const string MergeStatementsId = "MEW1105";
 
@@ -24,7 +27,8 @@ internal static class FluentDiagnostics
         category: "MewUI.Markup",
         defaultSeverity: DiagnosticSeverity.Hidden,
         isEnabledByDefault: true,
-        description: "A declaration or assignment followed by statements that only configure the same instance can be written as a single fluent chain, which keeps the element and its configuration together.");
+        description: "A declaration or assignment followed by statements that only configure the same instance can be written as a single fluent chain, which keeps the element and its configuration together.",
+        helpLinkUri: README_URL + "#mew1105--mew1106---the-same-two-as-diagnostics");
 
     public const string StatementToFluentCallId = "MEW1106";
 
@@ -35,5 +39,6 @@ internal static class FluentDiagnostics
         category: "MewUI.Markup",
         defaultSeverity: DiagnosticSeverity.Hidden,
         isEnabledByDefault: true,
-        description: "A property assignment, an event subscription, or a static attached setter has an equivalent fluent setter extension, so it can be written as a call on the element.");
+        description: "A property assignment, an event subscription, or a static attached setter has an equivalent fluent setter extension, so it can be written as a call on the element.",
+        helpLinkUri: README_URL + "#mew1105--mew1106---the-same-two-as-diagnostics");
 }

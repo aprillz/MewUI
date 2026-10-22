@@ -48,36 +48,21 @@ public sealed class InitializerToFluentCodeFix : CodeFixProvider
         var model = await document.GetSemanticModelAsync(cancellationToken).ConfigureAwait(false);
         var root = await document.GetSyntaxRootAsync(cancellationToken).ConfigureAwait(false);
         var text = await document.GetTextAsync(cancellationToken).ConfigureAwait(false);
-        var receiver = model?.GetTypeInfo(creation, cancellationToken).Type;
         var initializer = creation.Initializer;
-        if (model is null || root is null || receiver is null || initializer is null)
+        if (model is null || root is null || initializer is null)
         {
             return document;
         }
 
-        var convertible = new List<(string Method, ExpressionSyntax Value)>();
-        var residual = new List<ExpressionSyntax>();
-
-        foreach (var expression in initializer.Expressions)
-        {
-            if (expression is AssignmentExpressionSyntax { Left: IdentifierNameSyntax name } assignment)
-            {
-                var setter = FluentMethodResolver.ResolveSetter(
-                    model, receiver, creation.SpanStart, name.Identifier.ValueText, assignment.Right);
-                if (setter is not null)
-                {
-                    convertible.Add((setter.Name, assignment.Right.WithoutTrivia()));
-                    continue;
-                }
-            }
-
-            residual.Add(expression.WithoutTrivia());
-        }
-
-        if (convertible.Count == 0)
+        var plan = FluentInitializerPlanner.Plan(model, creation, cancellationToken);
+        if (plan is null || plan.Invocations.Length == 0)
         {
             return document;
         }
+
+        var residual = plan.ResidualIndexes
+            .Select(index => initializer.Expressions[index].WithoutTrivia())
+            .ToList();
 
         // Base `new T(...)`: strip the type's trailing trivia (e.g. the newline before a multi-line
         // initializer) so the parens are not stranded, and keep any unmapped members inline.
@@ -87,12 +72,13 @@ public sealed class InitializerToFluentCodeFix : CodeFixProvider
             .WithInitializer(residual.Count == 0 ? null : BuildResidualInitializer(residual));
 
         ExpressionSyntax chain = baseCreation;
-        foreach (var (method, value) in convertible)
+        foreach (var invocation in plan.Invocations)
         {
             chain = SyntaxFactory.InvocationExpression(
                 SyntaxFactory.MemberAccessExpression(
-                    SyntaxKind.SimpleMemberAccessExpression, chain, SyntaxFactory.IdentifierName(method)),
-                SyntaxFactory.ArgumentList(SyntaxFactory.SingletonSeparatedList(SyntaxFactory.Argument(value))));
+                    SyntaxKind.SimpleMemberAccessExpression, chain, SyntaxFactory.IdentifierName(invocation.Method.Name)),
+                SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList(
+                    invocation.Arguments.Select(argument => SyntaxFactory.Argument(argument.WithoutTrivia())))));
         }
 
         // Auto-format: expand into the markup tree once there are two or more calls.
@@ -101,7 +87,7 @@ public sealed class InitializerToFluentCodeFix : CodeFixProvider
         var baseIndent = lineText.Substring(0, lineText.Length - lineText.TrimStart().Length);
 
         var formatted = FluentChainLayout
-            .Format((InvocationExpressionSyntax)chain, baseIndent, convertible.Count >= FluentChainLayout.MinLinks, newline, model)
+            .Format((InvocationExpressionSyntax)chain, baseIndent, plan.Invocations.Length >= FluentChainLayout.MinLinks, newline, model)
             .WithTriviaFrom(creation);
 
         return document.WithSyntaxRoot(root.ReplaceNode(creation, formatted));
