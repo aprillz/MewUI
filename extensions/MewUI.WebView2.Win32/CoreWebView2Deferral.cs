@@ -17,8 +17,7 @@ public sealed class CoreWebView2Deferral : IDisposable
     }
 
     /// <summary>
-    /// Signals that the deferred event has been processed.
-    /// Call this method when your asynchronous operation is complete.
+    /// Signals that the deferred event has been processed; call it when the asynchronous work is complete.
     /// </summary>
     /// <exception cref="ObjectDisposedException">The deferral has been disposed.</exception>
     /// <exception cref="InvalidOperationException">Complete has already been called.</exception>
@@ -36,8 +35,7 @@ public sealed class CoreWebView2Deferral : IDisposable
     }
 
     /// <summary>
-    /// Releases all resources used by the CoreWebView2Deferral.
-    /// If Complete() was not called, this will call Complete() automatically.
+    /// Releases the deferral, calling <see cref="Complete"/> first when it was not called.
     /// </summary>
     public void Dispose()
     {

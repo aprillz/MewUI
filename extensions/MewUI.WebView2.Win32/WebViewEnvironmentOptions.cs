@@ -21,7 +21,7 @@ public sealed class WebViewEnvironmentOptions
     }
 
     /// <summary>
-    /// Gets or sets the language that the browser will use.
+    /// Gets or sets the language the browser uses.
     /// </summary>
     public string? Language
     {

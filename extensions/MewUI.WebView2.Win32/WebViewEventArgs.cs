@@ -125,7 +125,7 @@ public class WebViewNavigationCompletedEventArgs : EventArgs
     }
 
     /// <summary>
-    /// Gets a value indicating whether the navigation was successful.
+    /// Gets whether the navigation was successful.
     /// </summary>
     public bool IsSuccess { get; }
 
@@ -185,12 +185,12 @@ public class WebViewNavigationStartingEventArgs : EventArgs
     public string? Uri { get; }
 
     /// <summary>
-    /// Gets a value indicating whether the navigation was initiated by the user.
+    /// Gets whether the navigation was initiated by the user.
     /// </summary>
     public bool IsUserInitiated { get; }
 
     /// <summary>
-    /// Gets a value indicating whether the navigation is a redirect.
+    /// Gets whether the navigation is a redirect.
     /// </summary>
     public bool IsRedirected { get; }
 
@@ -200,7 +200,7 @@ public class WebViewNavigationStartingEventArgs : EventArgs
     public string? AdditionalAllowedFrameAncestors { get; }
 
     /// <summary>
-    /// Gets or sets a value indicating whether to cancel the navigation.
+    /// Gets or sets whether the navigation is canceled.
     /// </summary>
     public bool Cancel { get; set; }
 }
@@ -238,13 +238,12 @@ public class WebViewNewWindowRequestedEventArgs : EventArgs
     public string? Uri { get; }
 
     /// <summary>
-    /// Gets a value indicating whether the request was initiated by the user.
+    /// Gets whether the request was initiated by the user.
     /// </summary>
     public bool IsUserInitiated { get; }
 
     /// <summary>
-    /// Gets or sets a value indicating whether the new window request is handled.
-    /// When set to true, the default new window behavior is suppressed.
+    /// Gets or sets whether the new window request is handled; true suppresses the default new window behavior.
     /// </summary>
     public bool Handled
     {
@@ -257,8 +256,7 @@ public class WebViewNewWindowRequestedEventArgs : EventArgs
     }
 
     /// <summary>
-    /// Gets or sets the CoreWebView2 to use for the new window.
-    /// Set this to redirect the new window request to an existing CoreWebView2.
+    /// Gets or sets the <see cref="CoreWebView2"/> that takes the new window, redirecting the request to an existing browser.
     /// </summary>
     public CoreWebView2? NewWindow
     {
@@ -274,11 +272,9 @@ public class WebViewNewWindowRequestedEventArgs : EventArgs
     }
 
     /// <summary>
-    /// Gets a deferral that allows asynchronous completion of this event.
-    /// Use this when you need to perform async operations (like initializing a new WebView2)
-    /// before completing the event handling.
+    /// Gets a deferral that lets this event complete after asynchronous work, such as initializing a new WebView2.
     /// </summary>
-    /// <returns>A deferral object. Call Complete() when done.</returns>
+    /// <returns>A deferral; call <see cref="CoreWebView2Deferral.Complete"/> when done.</returns>
     /// <exception cref="InvalidOperationException">GetDeferral has already been called.</exception>
     public CoreWebView2Deferral GetDeferral()
     {
@@ -305,7 +301,7 @@ public class WebViewInitializationCompletedEventArgs : EventArgs
     }
 
     /// <summary>
-    /// Gets a value indicating whether the initialization was successful.
+    /// Gets whether the initialization was successful.
     /// </summary>
     public bool IsSuccess { get; }
 
@@ -328,7 +324,7 @@ public class WebViewSourceChangedEventArgs : EventArgs
     }
 
     /// <summary>
-    /// Gets a value indicating whether the navigation is to a new document.
+    /// Gets whether the navigation is to a new document.
     /// </summary>
     public bool IsNewDocument { get; }
 }
@@ -350,7 +346,7 @@ public class WebViewContentLoadingEventArgs : EventArgs
     }
 
     /// <summary>
-    /// Gets a value indicating whether the loaded content is an error page.
+    /// Gets whether the loaded content is an error page.
     /// </summary>
     public bool IsErrorPage { get; }
 

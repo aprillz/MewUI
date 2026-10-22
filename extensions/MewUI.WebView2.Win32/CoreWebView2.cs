@@ -22,7 +22,7 @@ public sealed class CoreWebView2
     internal ICoreWebView2 ComObject => _coreWebView2.Object;
 
     /// <summary>
-    /// Gets a value indicating whether the underlying COM object has been disposed.
+    /// Gets whether the underlying COM object has been disposed.
     /// </summary>
     internal bool IsDisposed => _disposed || _coreWebView2.IsDisposed;
 
@@ -83,7 +83,7 @@ public sealed class CoreWebView2
     }
 
     /// <summary>
-    /// Gets a value indicating whether the WebView can navigate backward.
+    /// Gets whether the WebView can navigate backward.
     /// </summary>
     public bool CanGoBack
     {
@@ -98,7 +98,7 @@ public sealed class CoreWebView2
     }
 
     /// <summary>
-    /// Gets a value indicating whether the WebView can navigate forward.
+    /// Gets whether the WebView can navigate forward.
     /// </summary>
     public bool CanGoForward
     {
@@ -128,7 +128,7 @@ public sealed class CoreWebView2
     }
 
     /// <summary>
-    /// Gets a value indicating whether there is a fullscreen HTML element inside the WebView.
+    /// Gets whether there is a fullscreen HTML element inside the WebView.
     /// </summary>
     public bool ContainsFullScreenElement
     {
@@ -361,9 +361,9 @@ public sealed class CoreWebView2
     }
 
     /// <summary>
-    /// Removes a script that was added with AddScriptToExecuteOnDocumentCreatedAsync.
+    /// Removes a script that was added with <see cref="AddScriptToExecuteOnDocumentCreatedAsync"/>.
     /// </summary>
-    /// <param name="id">The script ID returned by AddScriptToExecuteOnDocumentCreatedAsync.</param>
+    /// <param name="id">The script ID returned by <see cref="AddScriptToExecuteOnDocumentCreatedAsync"/>.</param>
     public void RemoveScriptToExecuteOnDocumentCreated(string id)
     {
         if (_coreWebView2.IsDisposed) return;

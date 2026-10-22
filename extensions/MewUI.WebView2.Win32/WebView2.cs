@@ -3,6 +3,8 @@ using Aprillz.MewUI.Text;
 
 namespace Aprillz.MewUI.Controls;
 
+/// <summary>Hosts a Microsoft Edge WebView2 browser inside a MewUI window; the browser initializes on the first navigation
+/// or <see cref="EnsureCoreWebView2Async"/>.</summary>
 [SupportedOSPlatform("windows")]
 public sealed partial class WebView2 : FrameworkElement
 {
@@ -85,7 +87,7 @@ public sealed partial class WebView2 : FrameworkElement
     public event Action<string>? DocumentTitleChanged;
 
     /// <summary>
-    /// Occurs when the CoreWebView2 initialization has completed.
+    /// Occurs when the <see cref="CoreWebView2"/> initialization has completed.
     /// </summary>
     public event Action<WebViewInitializationCompletedEventArgs>? CoreWebView2InitializationCompleted;
 
@@ -95,7 +97,7 @@ public sealed partial class WebView2 : FrameworkElement
     public event Action<WebViewWebMessageReceivedEventArgs>? WebMessageReceived;
 
     /// <summary>
-    /// Occurs when the Source property changes.
+    /// Occurs when <see cref="Source"/> changes.
     /// </summary>
     public event Action<WebViewSourceChangedEventArgs>? SourceChanged;
 
@@ -105,10 +107,11 @@ public sealed partial class WebView2 : FrameworkElement
     public event Action<WebViewContentLoadingEventArgs>? ContentLoading;
 
     /// <summary>
-    /// Occurs when the ZoomFactor property changes.
+    /// Occurs when <see cref="ZoomFactor"/> changes.
     /// </summary>
     public event Action? ZoomFactorChanged;
 
+    /// <summary>Gets or sets the initial value of <see cref="UseSharedEnvironment"/> for new controls; the default is true.</summary>
     public static bool UseSharedEnvironmentDefault { get; set; } = true;
 
     /// <summary>
@@ -134,12 +137,12 @@ public sealed partial class WebView2 : FrameworkElement
     public string? DocumentTitle => CoreWebView2?.DocumentTitle;
 
     /// <summary>
-    /// Gets a value indicating whether the WebView can navigate backward.
+    /// Gets whether the WebView can navigate backward.
     /// </summary>
     public bool CanGoBack => CoreWebView2?.CanGoBack ?? false;
 
     /// <summary>
-    /// Gets a value indicating whether the WebView can navigate forward.
+    /// Gets whether the WebView can navigate forward.
     /// </summary>
     public bool CanGoForward => CoreWebView2?.CanGoForward ?? false;
 
@@ -227,6 +230,8 @@ public sealed partial class WebView2 : FrameworkElement
         }
     }
 
+    /// <summary>Gets or sets whether this control shares one WebView2 environment with the other controls that do; throws
+    /// <see cref="InvalidOperationException"/> when set after the environment is created.</summary>
     public bool UseSharedEnvironment
     {
         get;
@@ -242,6 +247,8 @@ public sealed partial class WebView2 : FrameworkElement
         }
     } = UseSharedEnvironmentDefault;
 
+    /// <summary>Gets or sets the folder of the WebView2 runtime to use, or null for the installed runtime; throws
+    /// <see cref="InvalidOperationException"/> when set after the environment is created.</summary>
     public string? BrowserExecutableFolder
     {
         get => _browserExecutableFolder;
@@ -257,6 +264,8 @@ public sealed partial class WebView2 : FrameworkElement
         }
     }
 
+    /// <summary>Gets or sets the user data folder, or null for the default; throws <see cref="InvalidOperationException"/>
+    /// when set after the environment is created.</summary>
     public string? UserDataFolder
     {
         get => _userDataFolder;
@@ -272,6 +281,8 @@ public sealed partial class WebView2 : FrameworkElement
         }
     }
 
+    /// <summary>Gets or sets the environment options, or null for the defaults; throws <see cref="InvalidOperationException"/>
+    /// when set after the environment is created.</summary>
     public WebViewEnvironmentOptions? Options
     {
         get => _options;
@@ -288,8 +299,8 @@ public sealed partial class WebView2 : FrameworkElement
     }
 
     /// <summary>
-    /// Gets or sets the controller options used when creating the WebView2 controller.
-    /// Must be set before the controller is created.
+    /// Gets or sets the options used when creating the WebView2 controller, or null for the defaults; throws
+    /// <see cref="InvalidOperationException"/> when set after the controller is created.
     /// </summary>
     public WebViewControllerOptions? ControllerOptions
     {
@@ -311,9 +322,10 @@ public sealed partial class WebView2 : FrameworkElement
     }
 
     /// <summary>
-    /// Gets or sets the default background color used by the WebView controller.
-    /// When null, the WebView2 default background is used; setting null after a color was applied does not restore that default.
+    /// Gets or sets the default background color of the WebView controller; null keeps the WebView2 default, and a
+    /// translucent color throws <see cref="ArgumentException"/>.
     /// </summary>
+    /// <remarks>Setting null after a color was applied does not restore the WebView2 default.</remarks>
     public Color? DefaultBackgroundColor
     {
         get => _defaultBackgroundColor;
@@ -331,11 +343,11 @@ public sealed partial class WebView2 : FrameworkElement
         }
     }
 
+    /// <summary>Gets whether the browser is initialized and not disposed.</summary>
     public bool IsInitialized => _webView2 != null && !_webView2.IsDisposed;
 
     /// <summary>
-    /// Gets the CoreWebView2 instance associated with this WebView2 control.
-    /// This property is null until initialization is complete.
+    /// Gets the <see cref="Controls.CoreWebView2"/> of this control; null until initialization completes.
     /// </summary>
     public CoreWebView2? CoreWebView2 { get; private set; }
 
@@ -398,6 +410,7 @@ public sealed partial class WebView2 : FrameworkElement
         _ = NavigateToStringAsync(htmlContent);
     }
 
+    /// <summary>Navigates to the HTML content once the browser is initialized, or to about:blank when it is empty.</summary>
     public async Task NavigateToStringAsync(string htmlContent)
     {
         if (_disposed)
@@ -454,6 +467,7 @@ public sealed partial class WebView2 : FrameworkElement
     public void PostWebMessageAsString(string webMessageAsString)
         => CoreWebView2?.PostWebMessageAsString(webMessageAsString);
 
+    /// <summary>Navigates to <paramref name="source"/> once the browser is initialized, or to about:blank when it is null.</summary>
     public async Task NavigateAsync(Uri? source)
     {
         if (_disposed)
