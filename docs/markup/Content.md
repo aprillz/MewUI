@@ -64,27 +64,6 @@ Receiver: `ShadowDecorator`.
 | `OffsetY(double value)` | `OffsetY` | Sets the vertical offset of the shadow. |
 | `ShadowColor(Color value)` | `ShadowColor` | Sets the shadow color (including alpha for intensity). |
 
-### TransformDecorator
-
-Receiver: `TransformDecorator`.
-
-| Method | Sets | Summary |
-|---|---|---|
-| `Child(UIElement value)` | `Child` | Sets the child element. |
-| `Mode(TransformMode value)` | `Mode` | Sets whether the transform takes part in layout; the default is Render. |
-| `Transform(Matrix3x2 value)` | `Transform` | Sets the transform applied to the child, in DIPs; the default is identity. |
-| `TransformOrigin(Point value)` | `TransformOrigin` | Sets the point the transform is applied about in Render mode, as a fraction of this element's size (0..1); the default is the center (0.5, 0.5). |
-
-### Viewbox
-
-Receiver: `Viewbox`.
-
-| Method | Sets | Summary |
-|---|---|---|
-| `Child(UIElement value)` | `Child` | Sets the child element. |
-| `Stretch(Stretch value)` | `Stretch` | Sets how the child is scaled to fill this element; the default is Uniform. |
-| `StretchDirection(StretchDirection value)` | `StretchDirection` | Sets whether the scale may enlarge the child, shrink it, or both; the default is Both. |
-
 ### Border
 
 Receiver: `Border`.

@@ -44,7 +44,6 @@ Receiver: `Theme`.
 | `HasRuleForPolaSeries(Action<IPolarSeries> predicate)` |  | Defines a style builder for IPolarSeries objects. |
 | `HasRuleForPolarLineSeries(Action<IPolarLineSeries> predicate)` |  | Defines a style builder for IPolarLineSeries objects. |
 | `HasRuleForRowSeries(Action<IBarSeries> predicate)` |  | Defines a style builder for horizontal IBarSeries objects. |
-| `HasRuleForSankeySeries(Action<ISankeySeries> predicate)` |  | Defines a style builder for ISankeySeries objects. |
 | `HasRuleForScatterSeries(Action<IScatterSeries> predicate)` |  | Defines a style builder for IScatterSeries objects. |
 | `HasRuleForStackedBarSeries(Action<IStackedBarSeries> predicate)` |  | Defines a style builder for stacked IBarSeries objects. |
 | `HasRuleForStackedColumnSeries(Action<IStackedBarSeries> predicate)` |  | Defines a style builder for stacked vertical IBarSeries objects. |

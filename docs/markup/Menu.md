@@ -37,8 +37,9 @@ Receiver: `MenuItem`.
 | `IsCheckable(bool value = true)` | `IsCheckable` | Sets IsCheckable. Whether the item has a check slot. The slot is the icon column, which a menu with such an item keeps whether or not any check is currently shown; the item's own icon is not shown. |
 | `IsChecked(bool value = true)` | `IsChecked` | Sets IsChecked. Whether the check is shown in the slot of an item that IsCheckable. Clicking the item does not change it: the application sets it, usually from the state its command changes. |
 | `IsEnabled(bool value = true)` | `IsEnabled` | Sets the local enabled state, which the command's CanExecute is combined with rather than replacing. |
+| `Menu(Menu menu)` |  | Obsolete name of SubMenu. |
 | `OnCanClick(Func<bool> predicate)` | `event CanClick` | Sets the predicate asked whether the row can be clicked. Asked again each time the menu opens. |
-| `SubMenu(Menu menu)` | `SubMenu` | Sets the submenu the item opens. To detach a submenu, set SubMenu to null. |
+| `SubMenu(Menu value)` | `SubMenu` | Sets the submenu the item opens. To detach a submenu, set SubMenu to null. |
 | `Text(string text)` | `Text` | Sets the menu item's presentation and access-key override. A single underscore marks the following character as the access key; use a double underscore for a literal underscore. |
 
 ### ContextMenu

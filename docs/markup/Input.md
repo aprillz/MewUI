@@ -88,8 +88,7 @@ Receiver: `Slider`.
 |---|---|---|
 | `BindValue(ObservableValue<TSource> source, Func<TSource, double> convert, Func<double, TSource> convertBack = null)` | `bind Value` | Binds the value to a converted observable value. |
 | `BindValue(ObservableValue<double> source)` | `bind Value` | Binds the value to an observable value. |
-| `ChangeOnWheel(bool value = true)` | `ChangeOnWheel` | Sets whether the mouse wheel changes the value by SmallChange per notch while the pointer is over the slider. |
-| `Orientation(Orientation value)` | `Orientation` | Sets the direction of the track; a vertical slider has its minimum at the bottom. |
+| `ChangeOnWheel(bool value = true)` | `ChangeOnWheel` | Sets ChangeOnWheel. Whether the mouse wheel changes the value by SmallChange per notch while the pointer is over the slider. |
 | `ThumbBorderBrush(Color value)` | `ThumbBorderBrush` | Sets the thumb border color. |
 | `ThumbBrush(Color value)` | `ThumbBrush` | Sets the thumb color. |
 
