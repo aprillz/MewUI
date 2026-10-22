@@ -3104,7 +3104,7 @@ public static class ControlExtensions
         return control;
     }
 
-    public static NavigationList OnItemInvoked(this NavigationList control, Action<object?> handler)
+    public static NavigationList OnItemInvoked(this NavigationList control, Action<ItemInvokedEventArgs> handler)
     {
         control.ItemInvoked += handler;
         return control;

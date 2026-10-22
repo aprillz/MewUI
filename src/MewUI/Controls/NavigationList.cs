@@ -145,8 +145,11 @@ public class NavigationList : ScrollableItemsBase, ISelector, IIndexedSelector
     /// <summary>Occurs when the selection changes.</summary>
     public event Action<object?>? SelectionChanged;
 
-    /// <summary>Occurs when a selectable row is activated by click or Enter.</summary>
-    public event Action<object?>? ItemInvoked;
+    /// <summary>
+    /// Occurs when a selectable row is activated by click or Enter, before a click selects it; a handler that
+    /// sets <see cref="ItemInvokedEventArgs.Handled"/> keeps the selection as it is.
+    /// </summary>
+    public event Action<ItemInvokedEventArgs>? ItemInvoked;
 
     public bool TryGetItemIndexAt(Point position, out int index) => TryGetItemIndexAtCore(position, out index);
 
@@ -435,8 +438,13 @@ public class NavigationList : ScrollableItemsBase, ISelector, IIndexedSelector
 
     private void InvokeItem(int index)
     {
-        CommitTargetValue(SelectedIndexProperty, index);
-        ItemInvoked?.Invoke(_itemsSource.GetItem(index));
+        var args = new ItemInvokedEventArgs(_itemsSource.GetItem(index));
+        ItemInvoked?.Invoke(args);
+        if (!args.Handled)
+        {
+            CommitTargetValue(SelectedIndexProperty, index);
+        }
+
         InvalidateVisual();
     }
 
@@ -475,7 +483,7 @@ public class NavigationList : ScrollableItemsBase, ISelector, IIndexedSelector
             case Key.Enter:
                 if (SelectedIndex >= 0)
                 {
-                    ItemInvoked?.Invoke(SelectedItem);
+                    ItemInvoked?.Invoke(new ItemInvokedEventArgs(SelectedItem));
                     e.Handled = true;
                 }
                 break;
@@ -666,4 +674,25 @@ public enum NavigationItemKind
 
     /// <summary>Non-interactive divider.</summary>
     Separator,
+}
+
+/// <summary>Arguments of <see cref="NavigationList.ItemInvoked"/>.</summary>
+public sealed class ItemInvokedEventArgs
+{
+    public ItemInvokedEventArgs(object? item)
+    {
+        Item = item;
+    }
+
+    /// <summary>Gets the item that was activated.</summary>
+    public object? Item { get; }
+
+    /// <summary>
+    /// Gets or sets whether a handler performed the activation itself, so the list leaves its
+    /// selection unchanged.
+    /// </summary>
+    /// <remarks>
+    /// A row activated with Enter is already selected, and the flag changes nothing there.
+    /// </remarks>
+    public bool Handled { get; set; }
 }
