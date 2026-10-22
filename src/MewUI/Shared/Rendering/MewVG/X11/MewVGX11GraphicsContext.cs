@@ -69,6 +69,8 @@ internal sealed partial class MewVGX11GraphicsContext
 
         public bool ClearsTargetBeforeFirstWrite => true;
 
+        public bool TargetIsTopDown => false;
+
         public void SetTarget(nint display, nint window, bool preferImmediatePresent)
         {
             _display = display;

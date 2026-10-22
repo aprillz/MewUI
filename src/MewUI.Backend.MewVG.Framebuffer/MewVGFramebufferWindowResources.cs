@@ -63,6 +63,12 @@ internal sealed unsafe class MewVGFramebufferWindowResources : IDisposable, IMew
     public bool DrawsInPlace => _cpuSurface != null;
 
     /// <summary>
+    /// True for the scan-out buffers: the display reads their first row as the top line, while GL puts y=0 there,
+    /// so the frame is drawn flipped and read back in row order.
+    /// </summary>
+    public bool TargetIsTopDown => _drmSurface != null;
+
+    /// <summary>
     /// True when the output says how many presents ago each scan-out buffer was drawn, so a frame only copies
     /// what changed since. MEWUI_FB_BUFFER_AGE=0 turns it off.
     /// </summary>
@@ -288,7 +294,7 @@ internal sealed unsafe class MewVGFramebufferWindowResources : IDisposable, IMew
         if (_drmSurface != null)
         {
             OpenGLExt.BindFramebuffer(OpenGLExt.GL_FRAMEBUFFER, FrameTargetFbo);
-            _capture?.TryCapture(_drmSurface.PixelWidth, _drmSurface.PixelHeight, _device.IsGles);
+            _capture?.TryCapture(_drmSurface.PixelWidth, _drmSurface.PixelHeight, _device.IsGles, topDown: true);
             OpenGLExt.BindFramebuffer(OpenGLExt.GL_FRAMEBUFFER, 0);
 
             // The flip waits for the buffer's GPU work through the kernel's fence on it, so the commands only have
@@ -307,7 +313,7 @@ internal sealed unsafe class MewVGFramebufferWindowResources : IDisposable, IMew
         int width = _cpuSurface.PixelWidth;
         int height = _cpuSurface.PixelHeight;
         OpenGLExt.BindFramebuffer(OpenGLExt.GL_FRAMEBUFFER, _frameFbo);
-        _capture?.TryCapture(width, height, _device.IsGles);
+        _capture?.TryCapture(width, height, _device.IsGles, topDown: false);
         _cpuSurface.WaitForVerticalBlank();
         if (areas == null)
         {

@@ -67,7 +67,7 @@ internal sealed partial class MewVGX11GraphicsContext
             _frameClearPending = _frameSession.ClearsTargetBeforeFirstWrite;
 
             _vg.BeginFrame((float)_viewportWidthDip, (float)_viewportHeightDip, (float)DpiScale);
-            _vg.ResetTransform();
+            SetTargetOrientation(_frameSession.TargetIsTopDown);
             _vg.ResetScissor();
         }
         catch
@@ -491,6 +491,10 @@ internal sealed partial class MewVGX11GraphicsContext
         nint OpenGLShareGroup { get; }
         OpenGLPixelRenderSurface? PixelSurfaceTarget { get; }
         bool ClearsTargetBeforeFirstWrite { get; }
+
+        /// <summary>True when the target's first row is its top line, as a scan-out buffer behind a framebuffer object is.</summary>
+        bool TargetIsTopDown { get; }
+
         void BeginFrame();
         void BindFrameTarget();
         void EndFrame();
@@ -523,6 +527,8 @@ internal sealed partial class MewVGX11GraphicsContext
         public OpenGLPixelRenderSurface? PixelSurfaceTarget => _pixelSurface;
 
         public bool ClearsTargetBeforeFirstWrite => false;
+
+        public bool TargetIsTopDown => false;
 
         public void BeginFrame()
         {

@@ -100,6 +100,8 @@ internal sealed partial class MewVGFramebufferGraphicsContext : IPartialPresentC
         // A buffer whose age is unknown holds an older frame and has to be cleared; a kept or aged buffer must not be.
         public bool ClearsTargetBeforeFirstWrite => !_resources.DrawsInPlace && !_resources.TracksBufferAge;
 
+        public bool TargetIsTopDown => _resources.TargetIsTopDown;
+
         public void LimitPresentTo(IReadOnlyList<Rect> areas, double dpiScale, int widthPx, int heightPx)
         {
             _presentAreas.Clear();

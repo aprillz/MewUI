@@ -36,8 +36,11 @@ internal sealed unsafe class FramebufferFrameCapture
         return new FramebufferFrameCapture(path, delayMs);
     }
 
-    /// <summary>Reads the bound framebuffer and writes it out, until the capture window has passed.</summary>
-    public void TryCapture(int width, int height, bool gles)
+    /// <summary>
+    /// Reads the bound framebuffer and writes it out in the order the screen shows it, until the capture window
+    /// has passed; <paramref name="topDown"/> says the first row read is the top line.
+    /// </summary>
+    public void TryCapture(int width, int height, bool gles, bool topDown)
     {
         if (Stopwatch.GetTimestamp() > _dueTimestamp)
         {
@@ -54,8 +57,9 @@ internal sealed unsafe class FramebufferFrameCapture
         var header = System.Text.Encoding.ASCII.GetBytes($"P6\n{width} {height}\n255\n");
         stream.Write(header);
         var row = new byte[width * 3];
-        for (int line = height - 1; line >= 0; line--)
+        for (int index = 0; index < height; index++)
         {
+            int line = topDown ? index : height - 1 - index;
             int source = line * width * 4;
             for (int column = 0; column < width; column++)
             {
