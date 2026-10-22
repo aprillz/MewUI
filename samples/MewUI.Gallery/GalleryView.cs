@@ -31,12 +31,24 @@ partial class GalleryView : UserControl
 
         nav.Items(entries, e => e.Title, icon: e => e.Icon, content: PageContent, kind: e => e.Kind);
 
-        // Bottom-pinned footer item, sharing selection with the main list.
+        // Bottom-pinned footer, sharing selection with the main list. "Exit" is a command rather than a page:
+        // it leaves the selection alone and closes the window, the only way out where the platform draws no
+        // window frame (framebuffer).
         var footer = new[]
         {
             new NavEntry(NavigationItemKind.Item, "Settings", IconShape("settings_regular"), SettingsPage),
+            new NavEntry(NavigationItemKind.Separator, string.Empty, null, null),
+            new NavEntry(NavigationItemKind.Item, "Exit", IconShape("power_regular"), null),
         };
         nav.FooterItems(footer, e => e.Title, icon: e => e.Icon, content: PageContent, kind: e => e.Kind);
+        nav.FooterPane.ItemInvoked += args =>
+        {
+            if (args.Item is NavEntry entry && entry.Kind == NavigationItemKind.Item && entry.Page == null)
+            {
+                args.Handled = true;
+                _ = ConfirmExitAsync();
+            }
+        };
 
         nav.SelectedIndex = Array.FindIndex(entries, e => e.Kind == NavigationItemKind.Item);
 
@@ -46,6 +58,14 @@ partial class GalleryView : UserControl
                 .BorderBrush(t.Palette.WindowBackground.Lerp(t.Palette.ControlBorder, 0.45))
                 .BorderThickness(new Thickness(0, t.Metrics.ControlBorderThickness, 0, 0)))
             .Child(nav);
+    }
+
+    private async Task ConfirmExitAsync()
+    {
+        if (await MessageBox.ConfirmAsync("Exit the gallery?", owner: window))
+        {
+            window.Close();
+        }
     }
 
     /// <summary>Content shown by the footer "Settings" entry (theme/rendering controls), supplied by the host.</summary>
