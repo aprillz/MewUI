@@ -27,6 +27,7 @@ public sealed partial class ToggleSwitch : ToggleBase
         _pressCapture = new PressCaptureHelper(this, SetPressed);
     }
 
+    /// <summary>Gets or sets the thumb color.</summary>
     public Color ThumbBrush
     {
         get => GetValue(ThumbBrushProperty);

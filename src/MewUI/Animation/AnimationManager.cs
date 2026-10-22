@@ -5,11 +5,12 @@ using Aprillz.MewUI.Controls;
 namespace Aprillz.MewUI.Animation;
 
 /// <summary>
-/// Drives all active <see cref="AnimationClock"/> instances synchronized with the platform render pulse.
-/// <see cref="RenderLoopSettings.AnimationActive"/> reads <see cref="HasUnpausedClocks"/> each frame, so the host
-/// keeps pulsing while any clock runs. Per-window demand lets the host render only the surfaces that consumed that
-/// pulse. It never touches the user's <see cref="RenderLoopSettings.Continuous"/> flag.
+/// Drives all active <see cref="AnimationClock"/> instances in step with the platform render pulse.
 /// </summary>
+/// <remarks>
+/// The host keeps pulsing while any clock runs and renders only the surfaces that consumed the pulse; the user's
+/// <see cref="RenderLoopSettings.Continuous"/> flag is never touched.
+/// </remarks>
 public sealed class AnimationManager
 {
     private static AnimationManager? _instance;
@@ -59,7 +60,7 @@ public sealed class AnimationManager
     }
 
     /// <summary>
-    /// Gets the number of currently active animations.
+    /// Gets the number of registered clocks, running or paused.
     /// </summary>
     public int ActiveCount
     {
@@ -149,8 +150,7 @@ public sealed class AnimationManager
     }
 
     /// <summary>
-    /// Updates all active animation clocks. Called once by the platform host before selecting and
-    /// rendering the windows that consumed the pulse.
+    /// Advances every registered clock to the current time; the platform host calls it once per pulse before rendering.
     /// </summary>
     public void Update() => UpdateAt(Stopwatch.GetTimestamp());
 

@@ -14,20 +14,22 @@ public sealed class FontResource : IDisposable
     }
 
     /// <summary>
-    /// A value suitable for assigning to <c>Control.FontFamily</c>.
-    /// For stream-supplied fonts this is the cached font file path.
+    /// Gets the value to assign to <see cref="Controls.TextElement.FontFamily"/>: the family name parsed from the
+    /// font file when available, otherwise the name hint given at registration, otherwise the cached file path.
     /// </summary>
     public string FontFamily { get; }
 
     /// <summary>
-    /// The cached font file path.
+    /// Gets the cached font file path.
     /// </summary>
     public string FilePath { get; }
 
     /// <summary>
-    /// The parsed font family name from the font file, when available.
-    /// This does not imply the font is registered with any specific backend.
+    /// Gets the family name parsed from the font file, or an empty string when unavailable.
     /// </summary>
+    /// <remarks>
+    /// This does not imply the font is registered with any backend.
+    /// </remarks>
     public string ParsedFamilyName { get; }
 
     internal string Key { get; }

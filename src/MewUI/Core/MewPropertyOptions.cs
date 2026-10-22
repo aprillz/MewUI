@@ -10,10 +10,10 @@ public enum MewPropertyOptions
     /// <summary>No special behavior.</summary>
     None = 0,
 
-    /// <summary>Value changes trigger InvalidateVisual.</summary>
+    /// <summary>Value changes invoke <see cref="Controls.Element.InvalidateVisual"/>.</summary>
     AffectsRender = 1 << 0,
 
-    /// <summary>Value changes trigger InvalidateLayout.</summary>
+    /// <summary>Value changes invoke <see cref="Controls.Element.InvalidateMeasure"/>.</summary>
     AffectsLayout = 1 << 1,
 
     /// <summary>Value is inherited from parent elements when not set locally or by style.</summary>

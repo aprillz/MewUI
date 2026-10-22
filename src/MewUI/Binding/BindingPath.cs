@@ -36,9 +36,12 @@ public sealed class BindingPath<TRoot, TValue>
     internal bool CanWrite => _segments.Length > 0 && _segments[^1].CanWrite;
 
     /// <summary>
-    /// Appends a non-observable getter. The getter is evaluated during attachment and whenever an
-    /// observed upstream segment rebuilds the downstream path.
+    /// Appends a non-observable getter.
     /// </summary>
+    /// <remarks>
+    /// The getter is evaluated during attachment and whenever an observed upstream segment rebuilds
+    /// the downstream path.
+    /// </remarks>
     public BindingPath<TRoot, TNext> Then<TNext>(Func<TValue, TNext> getter)
     {
         ArgumentNullException.ThrowIfNull(getter);
@@ -46,9 +49,11 @@ public sealed class BindingPath<TRoot, TValue>
     }
 
     /// <summary>
-    /// Appends an observable segment. The observable value is read immediately and changes rebuild
-    /// the downstream path.
+    /// Appends an observable segment.
     /// </summary>
+    /// <remarks>
+    /// The observable value is read immediately and changes rebuild the downstream path.
+    /// </remarks>
     public BindingPath<TRoot, TNext> Then<TNext>(
         Func<TValue, ObservableValue<TNext>> selector)
     {
@@ -95,10 +100,12 @@ public static class MewPropertyBindingPathExtensions
 public static class IndexedBindingPathExtensions
 {
     /// <summary>
-    /// Appends a segment that reads an indexer and observes the owner's collection change or
-    /// indexer change notifications. An index that no longer exists makes the path unavailable
-    /// rather than faulted. The segment is read-only.
+    /// Appends a read-only segment that reads an indexer and observes the owner's collection change
+    /// or indexer change notifications.
     /// </summary>
+    /// <remarks>
+    /// An index that no longer exists makes the path unavailable rather than faulted.
+    /// </remarks>
     public static BindingPath<TRoot, TNext> ThenIndexed<TRoot, TOwner, TNext>(
         this BindingPath<TRoot, TOwner> path,
         Func<TOwner, TNext> getter,
@@ -123,9 +130,12 @@ public static class InpcBindingPathExtensions
     /// <summary>
     /// Appends a segment that reads <paramref name="getter"/> and observes the owner's
     /// <see cref="INotifyPropertyChanged.PropertyChanged"/> for the property that
-    /// <paramref name="getter"/> names. A change notification carrying a null or empty property
-    /// name is treated as "every property changed" and refreshes the segment.
+    /// <paramref name="getter"/> names.
     /// </summary>
+    /// <remarks>
+    /// A change notification carrying a null or empty property name is treated as "every property
+    /// changed" and refreshes the segment.
+    /// </remarks>
     /// <exception cref="ArgumentException">
     /// Thrown when <paramref name="getter"/> is not a single member access such as
     /// <c>x =&gt; x.Name</c>.

@@ -3,10 +3,12 @@ using System.Runtime.ExceptionServices;
 namespace Aprillz.MewUI;
 
 /// <summary>
-/// Style registry supporting both named styles and type-based style rules.
-/// Attach to any <see cref="Controls.FrameworkElement"/> (typically a Window) to provide
-/// scoped styles for descendant controls.
+/// Registry of named styles and type-based style rules, scoped to the <see cref="Controls.FrameworkElement"/>
+/// it is attached to.
 /// </summary>
+/// <remarks>
+/// Attach to any element (typically a window) to provide styles for its descendant controls.
+/// </remarks>
 public sealed class StyleSheet
 {
     private readonly object _sync = new();
@@ -34,9 +36,9 @@ public sealed class StyleSheet
     }
 
     /// <summary>
-    /// Defines a named style factory. The style is created on first lookup.
+    /// Defines a named style through a factory that is invoked on first lookup.
     /// </summary>
-    /// <param name="name">The style name (matched via <c>Control.StyleName</c>).</param>
+    /// <param name="name">The style name (matched via <see cref="Controls.Control.StyleName"/>).</param>
     /// <param name="factory">The style factory to invoke lazily.</param>
     public void Define(string name, Func<Style> factory)
     {
@@ -53,8 +55,8 @@ public sealed class StyleSheet
     }
 
     /// <summary>
-    /// Defines a type-based style rule. All descendant controls of type <typeparamref name="T"/>
-    /// (without an explicit <c>StyleName</c>) will receive this style.
+    /// Defines a type-based style rule that descendant controls of type <typeparamref name="T"/> without an
+    /// explicit <see cref="Controls.Control.StyleName"/> receive.
     /// </summary>
     public void Define<T>(Style style) where T : Controls.Control
     {
@@ -76,10 +78,13 @@ public sealed class StyleSheet
     }
 
     /// <summary>
-    /// Defines a type-based style rule that names its style instead of holding it. The name is resolved
-    /// where <c>Control.StyleName</c> is resolved, from the control's own scope chain, so a rule can point
-    /// at a style defined further out - a built-in key among them - and a nearer scope can redefine it.
+    /// Defines a type-based style rule that names its style instead of holding it.
     /// </summary>
+    /// <remarks>
+    /// The name is resolved where <see cref="Controls.Control.StyleName"/> is resolved, from the control's own
+    /// scope chain, so a rule can point at a style defined further out (a built-in key among them) and a
+    /// nearer scope can redefine it.
+    /// </remarks>
     /// <typeparam name="T">Control type the rule applies to.</typeparam>
     /// <param name="styleName">The style name to resolve when a control takes this rule.</param>
     public void Define<T>(string styleName) where T : Controls.Control
@@ -122,9 +127,12 @@ public sealed class StyleSheet
     }
 
     /// <summary>
-    /// Freezes this sheet for live use. Registered type styles and already-materialized named
-    /// styles are validated and snapshotted; named factories remain lazy.
+    /// Freezes this sheet for live use, validating and snapshotting the registered type styles and the
+    /// already-materialized named styles.
     /// </summary>
+    /// <remarks>
+    /// Named factories remain lazy and are frozen when first materialized.
+    /// </remarks>
     public void Freeze()
     {
         lock (_sync)
@@ -210,8 +218,8 @@ public sealed class StyleSheet
     }
 
     /// <summary>
-    /// Gets the matching style for the given control type.
-    /// Checks exact type first, then base types.
+    /// Gets the type rule style for the given control type, checking the exact type first and then its
+    /// base types; null when none matches.
     /// </summary>
     public Style? GetByType(Type controlType)
     {

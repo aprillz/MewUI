@@ -1,13 +1,13 @@
 namespace Aprillz.MewUI.Resources;
 
 /// <summary>
-/// Normalized image orientation. The values match the EXIF Orientation tag (1-8) so a parsed EXIF
-/// value maps without an intermediate table, and the diagonal cases (5/7) stay unambiguous - each is
-/// a single named transform rather than a rotation+mirror pair whose application order could differ.
+/// Normalized image orientation whose values match the EXIF Orientation tag (1-8).
 /// </summary>
 /// <remarks>
-/// Raw decoded pixels are never rotated; this value travels as metadata and is applied at draw/layout
-/// time by the consumer (see <see cref="OrientationTransform"/>). Unknown or invalid values normalize
+/// A parsed EXIF value maps without an intermediate table, and the diagonal cases (5/7) stay unambiguous:
+/// each is a single named transform rather than a rotation and mirror pair whose application order could
+/// differ. Raw decoded pixels are never rotated; this value travels as metadata and is applied at draw and
+/// layout time by the consumer (see <see cref="OrientationTransform"/>). Unknown or invalid values normalize
 /// to <see cref="Normal"/>.
 /// </remarks>
 public enum ImageOrientation : byte

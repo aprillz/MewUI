@@ -9,28 +9,36 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public sealed partial class SplitPanel : Panel
 {
+    /// <summary>The split direction; <see cref="Orientation.Horizontal"/> places the panes left and right, <see cref="Orientation.Vertical"/> top and bottom.</summary>
     public static readonly MewProperty<Orientation> OrientationProperty =
         MewProperty<Orientation>.Register<SplitPanel>(nameof(Orientation), Orientation.Horizontal, MewPropertyOptions.AffectsLayout,
             static (self, _, _) => self.OnOrientationChanged());
 
+    /// <summary>The splitter thickness in DIPs; the default is 8.</summary>
     public static readonly MewProperty<double> SplitterThicknessProperty =
         MewProperty<double>.Register<SplitPanel>(nameof(SplitterThickness), 8.0, MewPropertyOptions.AffectsLayout);
 
+    /// <summary>The first pane length; a star value shares the remaining space with a star-sized second pane by weight.</summary>
     public static readonly MewProperty<GridLength> FirstLengthProperty =
         MewProperty<GridLength>.Register<SplitPanel>(nameof(FirstLength), GridLength.Star, MewPropertyOptions.AffectsLayout);
 
+    /// <summary>The second pane length; a star value shares the remaining space with a star-sized first pane by weight.</summary>
     public static readonly MewProperty<GridLength> SecondLengthProperty =
         MewProperty<GridLength>.Register<SplitPanel>(nameof(SecondLength), GridLength.Star, MewPropertyOptions.AffectsLayout);
 
+    /// <summary>The minimum length of the first pane in DIPs.</summary>
     public static readonly MewProperty<double> MinFirstProperty =
         MewProperty<double>.Register<SplitPanel>(nameof(MinFirst), 0.0, MewPropertyOptions.AffectsLayout);
 
+    /// <summary>The minimum length of the second pane in DIPs.</summary>
     public static readonly MewProperty<double> MinSecondProperty =
         MewProperty<double>.Register<SplitPanel>(nameof(MinSecond), 0.0, MewPropertyOptions.AffectsLayout);
 
+    /// <summary>The maximum length of the first pane in DIPs; infinity is no bound.</summary>
     public static readonly MewProperty<double> MaxFirstProperty =
         MewProperty<double>.Register<SplitPanel>(nameof(MaxFirst), double.PositiveInfinity, MewPropertyOptions.AffectsLayout);
 
+    /// <summary>The maximum length of the second pane in DIPs; infinity is no bound.</summary>
     public static readonly MewProperty<double> MaxSecondProperty =
         MewProperty<double>.Register<SplitPanel>(nameof(MaxSecond), double.PositiveInfinity, MewPropertyOptions.AffectsLayout);
 
@@ -42,6 +50,9 @@ public sealed partial class SplitPanel : Panel
     private double _dragStartFirst;
     private double _dragStartSecond;
 
+    /// <summary>
+    /// Initializes a split panel with no panes.
+    /// </summary>
     public SplitPanel()
     {
         _splitter = new SplitterThumb(this)
@@ -62,8 +73,7 @@ public sealed partial class SplitPanel : Panel
     }
 
     /// <summary>
-    /// Gets or sets the split direction.
-    /// Horizontal means left/right panes; Vertical means top/bottom panes.
+    /// Gets or sets the split direction; <see cref="Orientation.Horizontal"/> (the default) places the panes left and right, <see cref="Orientation.Vertical"/> top and bottom.
     /// </summary>
     public Orientation Orientation
     {
@@ -74,7 +84,7 @@ public sealed partial class SplitPanel : Panel
     private void OnOrientationChanged() => UpdateSplitterCursor();
 
     /// <summary>
-    /// Gets or sets the splitter thickness (DIPs).
+    /// Gets or sets the splitter thickness in DIPs; the default is 8.
     /// </summary>
     public double SplitterThickness
     {
@@ -83,7 +93,7 @@ public sealed partial class SplitPanel : Panel
     }
 
     /// <summary>
-    /// Gets or sets the first pane length.
+    /// Gets or sets the first pane length; a star value (the default) shares the remaining space with a star-sized second pane by weight.
     /// </summary>
     public GridLength FirstLength
     {
@@ -92,8 +102,7 @@ public sealed partial class SplitPanel : Panel
     }
 
     /// <summary>
-    /// Gets or sets the second pane length.
-    /// Used when both panes are star-sized.
+    /// Gets or sets the second pane length; a star value (the default) shares the remaining space with a star-sized first pane by weight.
     /// </summary>
     public GridLength SecondLength
     {
@@ -101,24 +110,36 @@ public sealed partial class SplitPanel : Panel
         set => SetValue(SecondLengthProperty, value);
     }
 
+    /// <summary>
+    /// Gets or sets the minimum length of the first pane in DIPs.
+    /// </summary>
     public double MinFirst
     {
         get => GetValue(MinFirstProperty);
         set => SetValue(MinFirstProperty, value);
     }
 
+    /// <summary>
+    /// Gets or sets the minimum length of the second pane in DIPs.
+    /// </summary>
     public double MinSecond
     {
         get => GetValue(MinSecondProperty);
         set => SetValue(MinSecondProperty, value);
     }
 
+    /// <summary>
+    /// Gets or sets the maximum length of the first pane in DIPs; the default is no bound.
+    /// </summary>
     public double MaxFirst
     {
         get => GetValue(MaxFirstProperty);
         set => SetValue(MaxFirstProperty, value);
     }
 
+    /// <summary>
+    /// Gets or sets the maximum length of the second pane in DIPs; the default is no bound.
+    /// </summary>
     public double MaxSecond
     {
         get => GetValue(MaxSecondProperty);
@@ -126,7 +147,7 @@ public sealed partial class SplitPanel : Panel
     }
 
     /// <summary>
-    /// Gets or sets the first pane content.
+    /// Gets or sets the element shown in the first pane, or null for an empty pane.
     /// </summary>
     public UIElement? First
     {
@@ -145,7 +166,7 @@ public sealed partial class SplitPanel : Panel
     }
 
     /// <summary>
-    /// Gets or sets the second pane content.
+    /// Gets or sets the element shown in the second pane, or null for an empty pane.
     /// </summary>
     public UIElement? Second
     {

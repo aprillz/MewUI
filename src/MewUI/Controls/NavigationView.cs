@@ -118,10 +118,10 @@ public sealed partial class NavigationView : Control, IVisualTreeHost
         return button;
     }
 
-    /// <summary>Gets the navigation pane list. Prefer the typed <c>Items</c> extension.</summary>
+    /// <summary>Gets the navigation pane list. Prefer the typed <see cref="ControlExtensions.Items{T}(NavigationView, IReadOnlyList{T}, Func{T, string}, Func{T, PathGeometry}, Func{T, Element}, Func{T, NavigationItemKind}, Func{T, object})"/> extension.</summary>
     public NavigationList Pane => _pane;
 
-    /// <summary>Gets the bottom-pinned footer list. Prefer the typed <c>FooterItems</c> extension.</summary>
+    /// <summary>Gets the bottom-pinned footer list. Prefer the typed <see cref="ControlExtensions.FooterItems{T}(NavigationView, IReadOnlyList{T}, Func{T, string}, Func{T, PathGeometry}, Func{T, Element}, Func{T, NavigationItemKind}, Func{T, object})"/> extension.</summary>
     public NavigationList FooterPane => _footerPane;
 
     /// <summary>Gets or sets the expanded pane width.</summary>
@@ -138,7 +138,10 @@ public sealed partial class NavigationView : Control, IVisualTreeHost
         set => SetValue(CompactPaneWidthProperty, value);
     }
 
-    /// <summary>Gets or sets the requested pane placement. <see cref="PaneDisplayMode.Auto"/> resolves from width.</summary>
+    /// <summary>
+    /// Gets or sets the requested pane placement; <see cref="PaneDisplayMode.Auto"/> resolves from
+    /// the width.
+    /// </summary>
     public PaneDisplayMode PaneDisplayMode
     {
         get => GetValue(PaneDisplayModeProperty);
@@ -158,7 +161,10 @@ public sealed partial class NavigationView : Control, IVisualTreeHost
         set => SetValue(IsPaneOpenProperty, value);
     }
 
-    /// <summary>Gets or sets whether the toggle button is shown. Hiding it pins the pane to its current state.</summary>
+    /// <summary>
+    /// Gets or sets whether the toggle button is shown; hiding it pins the pane to its current
+    /// state.
+    /// </summary>
     public bool IsPaneToggleButtonVisible
     {
         get => GetValue(IsPaneToggleButtonVisibleProperty);
@@ -166,7 +172,7 @@ public sealed partial class NavigationView : Control, IVisualTreeHost
     }
 
     /// <summary>
-    /// Occurs after <see cref="EffectivePaneDisplayMode"/> changes. Raised once the layout pass that
+    /// Occurs after <see cref="EffectivePaneDisplayMode"/> changes, once the layout pass that
     /// resolved it has finished, so a handler may invalidate layout without re-entering it.
     /// </summary>
     public event Action? EffectivePaneDisplayModeChanged;
@@ -181,16 +187,21 @@ public sealed partial class NavigationView : Control, IVisualTreeHost
     /// <summary>Gets the selected item object (from either the main or footer region), or <see langword="null"/>.</summary>
     public object? SelectedItem => _footerActive ? _footerPane.SelectedItem : _pane.SelectedItem;
 
-    /// <summary>True when the pane currently shows item text.</summary>
+    /// <summary>Gets whether the pane currently shows item text.</summary>
     public bool PaneShowsText => IsPaneOpen;
 
-    /// <summary>True when the pane is a closed inline pane, i.e. an icon-only rail.</summary>
+    /// <summary>Gets whether the pane is a closed inline pane, that is an icon-only rail.</summary>
     public bool PaneIsRail => _effectiveMode == PaneDisplayMode.Inline && !IsPaneOpen;
 
     /// <summary>
-    /// Gets or sets the selector mapping the selected item to its content element. Built content is cached
-    /// per item. Prefer supplying this via the typed <c>Items</c> extension.
+    /// Gets or sets the selector mapping the selected item to its content element, which is cached
+    /// per item.
     /// </summary>
+    /// <remarks>
+    /// Prefer supplying this via the typed
+    /// <see cref="ControlExtensions.Items{T}(NavigationView, IReadOnlyList{T}, Func{T, string}, Func{T, PathGeometry}, Func{T, Element}, Func{T, NavigationItemKind}, Func{T, object})"/>
+    /// extension.
+    /// </remarks>
     public Func<object?, Element?>? ContentSelector
     {
         get => _contentSelector;
@@ -203,9 +214,13 @@ public sealed partial class NavigationView : Control, IVisualTreeHost
     }
 
     /// <summary>
-    /// Gets or sets the selector mapping a selected footer item to its content element. Prefer supplying this
-    /// via the typed <c>FooterItems</c> extension.
+    /// Gets or sets the selector mapping a selected footer item to its content element.
     /// </summary>
+    /// <remarks>
+    /// Prefer supplying this via the typed
+    /// <see cref="ControlExtensions.FooterItems{T}(NavigationView, IReadOnlyList{T}, Func{T, string}, Func{T, PathGeometry}, Func{T, Element}, Func{T, NavigationItemKind}, Func{T, object})"/>
+    /// extension.
+    /// </remarks>
     public Func<object?, Element?>? FooterContentSelector
     {
         get => _footerContentSelector;

@@ -10,10 +10,12 @@ namespace Aprillz.MewUI;
 public static class Design
 {
     /// <summary>
-    /// Whether this process is running as an editor preview session. Set by the preview session
-    /// assembly before <c>Main</c> (module initializer), so entry-point code can guard side
-    /// effects (network, database) before the UI runtime exists; false everywhere else.
+    /// Gets whether this process is running as an editor preview session; false everywhere else.
     /// </summary>
+    /// <remarks>
+    /// Set by the preview session assembly before <c>Main</c> (module initializer), so entry-point code
+    /// can guard side effects (network, database) before the UI runtime exists.
+    /// </remarks>
     public static bool IsPreviewMode { get; internal set; }
 
     // Preview-only sizing hints keyed per element; unused (and never allocated) outside preview

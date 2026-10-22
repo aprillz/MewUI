@@ -68,12 +68,14 @@ public sealed partial class Slider : RangeBase
         // the control bounds; ink past them is cut by any caching or clipping ancestor.
         double trackHeight = 4;
         double trackY = contentBounds.Y + (contentBounds.Height - trackHeight) / 2;
+    /// <summary>Gets or sets the thumb color.</summary>
         var trackRect = new Rect(
             contentBounds.X + ThumbSize / 2,
             trackY,
             Math.Max(0, contentBounds.Width - ThumbSize),
             trackHeight);
 
+    /// <summary>Gets or sets the thumb border color.</summary>
         var trackBg = Background;
 
         context.FillRoundedRectangle(trackRect, 2, 2, trackBg);

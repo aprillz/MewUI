@@ -13,8 +13,8 @@ public class NativeMessageEventArgs
     public bool Handled { get; set; }
 
     /// <summary>
-    /// Gets or sets the result value to return to the platform.
-    /// Only meaningful on Win32 (LRESULT); ignored on X11 and macOS.
+    /// Gets or sets the result value returned to the platform for this message; platforms whose message
+    /// dispatch takes no return value ignore it.
     /// </summary>
     public nint Result { get; set; }
 }

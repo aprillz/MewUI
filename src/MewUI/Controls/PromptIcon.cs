@@ -2,6 +2,7 @@ using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
 
+/// <summary>The symbol a <see cref="PromptIcon"/> draws.</summary>
 public enum PromptIconKind
 {
     None,
@@ -14,6 +15,7 @@ public enum PromptIconKind
     Crash,
 }
 
+/// <summary>A vector icon for prompts and message boxes, drawn in the theme's colors for its kind.</summary>
 public sealed class PromptIcon : FrameworkElement
 {
     public static readonly MewProperty<PromptIconKind> KindProperty =
@@ -64,6 +66,7 @@ public sealed class PromptIcon : FrameworkElement
     public PromptIcon()
     { }
 
+    /// <summary>Gets or sets the symbol drawn.</summary>
     public PromptIconKind Kind
     {
         get => GetValue(KindProperty);

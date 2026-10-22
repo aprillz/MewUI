@@ -23,14 +23,13 @@ public enum CompositionAttr : byte
 public sealed class TextCompositionEventArgs
 {
     /// <summary>
-    /// Gets the current composition text.
-    /// For Start/End events this may be empty.
+    /// Gets the current composition text, which may be empty for start and end events.
     /// </summary>
     public string Text { get; }
 
     /// <summary>
-    /// Per-character composition attributes. Length matches <see cref="Text"/> when available.
-    /// <see langword="null"/> when the IME does not provide attribute data.
+    /// Gets the per-character composition attributes, matching <see cref="Text"/> in length, or
+    /// <see langword="null"/> when the IME does not provide them.
     /// </summary>
     public CompositionAttr[]? Attributes { get; }
 
@@ -39,6 +38,9 @@ public sealed class TextCompositionEventArgs
     /// </summary>
     public bool Handled { get; set; }
 
+    /// <summary>
+    /// Creates arguments with the composition text and optional per-character attributes.
+    /// </summary>
     public TextCompositionEventArgs(string? text = null, CompositionAttr[]? attributes = null)
     {
         Text = text ?? string.Empty;

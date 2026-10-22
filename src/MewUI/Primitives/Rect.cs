@@ -128,7 +128,7 @@ public readonly struct Rect : IEquatable<Rect>
     public bool IsEmpty => Width == 0 || Height == 0;
 
     /// <summary>
-    /// Determines whether the rectangle contains the specified point.
+    /// Determines whether the rectangle contains the specified point; points on the right and bottom edges are outside.
     /// </summary>
     /// <param name="point">The point to test.</param>
     public bool Contains(Point point) =>
@@ -152,7 +152,7 @@ public readonly struct Rect : IEquatable<Rect>
         rect.Y < Bottom && rect.Bottom > Y;
 
     /// <summary>
-    /// Returns the intersection of this rectangle with another rectangle.
+    /// Returns the intersection of this rectangle with another rectangle; <see cref="Empty"/> when they do not overlap.
     /// </summary>
     /// <param name="rect">The rectangle to intersect with.</param>
     public Rect Intersect(Rect rect)
@@ -171,7 +171,7 @@ public readonly struct Rect : IEquatable<Rect>
     }
 
     /// <summary>
-    /// Returns the smallest rectangle that contains both this rectangle and another rectangle.
+    /// Returns the smallest rectangle that contains both this rectangle and another rectangle; an empty rectangle contributes nothing.
     /// </summary>
     /// <param name="rect">The rectangle to union with.</param>
     public Rect Union(Rect rect)
@@ -220,7 +220,7 @@ public readonly struct Rect : IEquatable<Rect>
     /// <summary>
     /// Returns a new rectangle inflated by the given thickness.
     /// </summary>
-    /// <param name="thickness">The thickness to apply.</param>
+    /// <param name="thickness">The thickness to add on each side.</param>
     public Rect Inflate(Thickness thickness) =>
         new(X - thickness.Left, Y - thickness.Top,
             Width + thickness.Left + thickness.Right,
@@ -229,7 +229,7 @@ public readonly struct Rect : IEquatable<Rect>
     /// <summary>
     /// Returns a new rectangle deflated by the given thickness.
     /// </summary>
-    /// <param name="thickness">The thickness to remove.</param>
+    /// <param name="thickness">The thickness to remove from each side.</param>
     public Rect Deflate(Thickness thickness) =>
         new(X + thickness.Left, Y + thickness.Top,
             Width - thickness.Left - thickness.Right,

@@ -5,7 +5,7 @@ using Aprillz.MewUI.Resources;
 namespace Aprillz.MewUI;
 
 /// <summary>
-/// Represents a multi-size icon. Picks the nearest bitmap for the requested size.
+/// Represents a multi-size icon that <see cref="Pick"/> resolves to the nearest bitmap for a requested size.
 /// </summary>
 public sealed class IconSource
 {
@@ -20,9 +20,12 @@ public sealed class IconSource
     public static IconSource FromFile(string path) => FromBytes(File.ReadAllBytes(path));
 
     /// <summary>
-    /// Loads an embedded resource from the specified assembly.
-    /// AOT-friendly: avoids reflection-based discovery; the caller provides the assembly + name.
+    /// Loads an embedded resource from the specified assembly; throws <see cref="FileNotFoundException"/>
+    /// when the resource does not exist.
     /// </summary>
+    /// <remarks>
+    /// AOT-friendly: the caller supplies the assembly and name, so no reflection-based discovery is needed.
+    /// </remarks>
     public static IconSource FromResource(Assembly assembly, string resourceName)
     {
         ArgumentNullException.ThrowIfNull(assembly);

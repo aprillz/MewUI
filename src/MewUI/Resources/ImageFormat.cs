@@ -1,7 +1,7 @@
 namespace Aprillz.MewUI;
 
 /// <summary>
-/// Known encoded image formats. Used for hints/diagnostics.
+/// Known encoded image formats, used for hints and diagnostics.
 /// </summary>
 public enum ImageFormat
 {

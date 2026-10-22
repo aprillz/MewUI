@@ -6,31 +6,33 @@ namespace Aprillz.MewUI.Animation;
 public readonly struct Keyframe<T>
 {
     /// <summary>
-    /// The time of this keyframe in milliseconds (absolute).
+    /// Gets or sets the time of this keyframe in milliseconds from the start of the track.
     /// </summary>
     public required double Time { get; init; }
 
     /// <summary>
-    /// The value at this keyframe.
+    /// Gets or sets the value at this keyframe.
     /// </summary>
     public required T Value { get; init; }
 
     /// <summary>
-    /// Easing function applied from this keyframe to the next.
-    /// <c>null</c> means linear interpolation.
+    /// Gets or sets the easing applied from this keyframe to the next; null means linear.
     /// </summary>
     public Func<double, double>? Easing { get; init; }
 }
 
 /// <summary>
-/// Evaluates interpolated values across a sorted sequence of keyframes.
-/// Each segment between keyframes can have its own easing function.
+/// Evaluates interpolated values across a sorted sequence of keyframes, each segment with its own optional easing.
 /// </summary>
 public sealed class KeyframeTrack<T>
 {
     private readonly Keyframe<T>[] _keyframes;
     private readonly LerpFunc<T> _lerp;
 
+    /// <summary>
+    /// Initializes a track from at least two keyframes, sorted by time.
+    /// </summary>
+    /// <exception cref="ArgumentException">Fewer than two keyframes were given.</exception>
     public KeyframeTrack(LerpFunc<T> lerp, params Keyframe<T>[] keyframes)
     {
         ArgumentNullException.ThrowIfNull(lerp);
@@ -49,12 +51,12 @@ public sealed class KeyframeTrack<T>
     }
 
     /// <summary>
-    /// The time of the last keyframe (ms).
+    /// Gets the time of the last keyframe in milliseconds.
     /// </summary>
     public double TotalDuration { get; }
 
     /// <summary>
-    /// Evaluates the interpolated value at the given time (ms).
+    /// Evaluates the interpolated value at the given time in milliseconds; times before the first or after the last keyframe return that keyframe's value.
     /// </summary>
     public T Evaluate(double timeMs)
     {
@@ -100,13 +102,16 @@ public sealed class KeyframeTrack<T>
 }
 
 /// <summary>
-/// A keyframe track that snaps to the most recent keyframe value without interpolation.
-/// Used for discrete transitions (e.g. on/off opacity).
+/// A keyframe track that holds the most recent keyframe value without interpolation, for discrete transitions such as on/off opacity.
 /// </summary>
 public sealed class DiscreteKeyframeTrack<T>
 {
     private readonly (double Time, T Value)[] _keyframes;
 
+    /// <summary>
+    /// Initializes a track from at least one (time, value) pair, sorted by time.
+    /// </summary>
+    /// <exception cref="ArgumentException">No keyframes were given.</exception>
     public DiscreteKeyframeTrack(params (double Time, T Value)[] keyframes)
     {
         if (keyframes.Length < 1)
@@ -122,12 +127,12 @@ public sealed class DiscreteKeyframeTrack<T>
     }
 
     /// <summary>
-    /// The time of the last keyframe (ms).
+    /// Gets the time of the last keyframe in milliseconds.
     /// </summary>
     public double TotalDuration { get; }
 
     /// <summary>
-    /// Returns the value of the most recent keyframe at or before the given time.
+    /// Returns the value of the most recent keyframe at or before the given time in milliseconds; times before the first keyframe return its value.
     /// </summary>
     public T Evaluate(double timeMs)
     {

@@ -113,9 +113,9 @@ public sealed partial class Image : FrameworkElement
     }
 
     /// <summary>
-    /// Gets or sets whether the source's orientation (e.g. JPEG EXIF) is applied. Defaults to
-    /// <see cref="ImageOrientationMode.FromImage"/> (upright); <see cref="ImageOrientationMode.Ignore"/>
-    /// shows the raw decoded pixels.
+    /// Gets or sets whether the source's orientation (e.g. JPEG EXIF) is applied; the default
+    /// <see cref="ImageOrientationMode.FromImage"/> shows the image upright and
+    /// <see cref="ImageOrientationMode.Ignore"/> the raw decoded pixels.
     /// </summary>
     public ImageOrientationMode OrientationMode
     {
@@ -124,7 +124,7 @@ public sealed partial class Image : FrameworkElement
     }
 
     /// <summary>
-    /// Gets or sets how a vector source is rendered. Defaults to
+    /// Gets or sets how a vector source is rendered; the default is
     /// <see cref="ImageVectorCacheMode.Cached"/>.
     /// </summary>
     public ImageVectorCacheMode VectorCacheMode

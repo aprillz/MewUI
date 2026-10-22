@@ -5,17 +5,20 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public class UniformGrid : Panel
 {
+    /// <summary>The spacing between cells in DIPs, for both row and column gaps.</summary>
     public static readonly MewProperty<double> SpacingProperty =
         MewProperty<double>.Register<UniformGrid>(nameof(Spacing), 0.0, MewPropertyOptions.AffectsLayout);
 
+    /// <summary>The number of rows; 0 derives it from the child count.</summary>
     public static readonly MewProperty<int> RowsProperty =
         MewProperty<int>.Register<UniformGrid>(nameof(Rows), 0, MewPropertyOptions.AffectsLayout);
 
+    /// <summary>The number of columns; 0 derives it from the child count.</summary>
     public static readonly MewProperty<int> ColumnsProperty =
         MewProperty<int>.Register<UniformGrid>(nameof(Columns), 0, MewPropertyOptions.AffectsLayout);
 
     /// <summary>
-    /// Gets or sets the spacing between cells (both row/column gaps).
+    /// Gets or sets the spacing between cells in DIPs, for both row and column gaps.
     /// </summary>
     public double Spacing
     {
@@ -24,7 +27,7 @@ public class UniformGrid : Panel
     }
 
     /// <summary>
-    /// Gets or sets the number of rows. 0 means auto-calculate.
+    /// Gets or sets the number of rows; 0 (the default) derives it from the child count.
     /// </summary>
     public int Rows
     {
@@ -33,7 +36,7 @@ public class UniformGrid : Panel
     }
 
     /// <summary>
-    /// Gets or sets the number of columns. 0 means auto-calculate.
+    /// Gets or sets the number of columns; 0 (the default) derives it from the child count.
     /// </summary>
     public int Columns
     {

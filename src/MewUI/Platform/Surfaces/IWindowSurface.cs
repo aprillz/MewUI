@@ -1,16 +1,17 @@
 namespace Aprillz.MewUI.Platform;
 
 /// <summary>
-/// Identifies the platform display/output associated with a window surface as an opaque
-/// (IdLow, IdHigh, NativeHandle) tuple. Equality is structural, so backends only need to
-/// know how to extract their own meaningful field - typically <see cref="NativeHandle"/>
-/// (Win32 HMONITOR, macOS NSScreen*, etc.) plus an optional secondary index
-/// (<see cref="IdHigh"/> carries the X11 screen number).
-/// The Core type is platform-neutral; per-platform construction lives in the corresponding
-/// platform backend.
+/// Identifies the platform display associated with a window surface as an opaque
+/// (IdLow, IdHigh, NativeHandle) tuple. Equality is structural, so a backend only needs to know
+/// which field its own platform fills, typically <see cref="NativeHandle"/> plus an optional
+/// secondary index in <see cref="IdHigh"/>. Per-platform construction lives in the platform assembly.
 /// </summary>
+/// <param name="IdLow">Low part of the opaque id.</param>
+/// <param name="IdHigh">High part of the opaque id, or a secondary index such as a screen number.</param>
+/// <param name="NativeHandle">Native display handle, when the platform has one.</param>
 public readonly record struct PlatformDisplayIdentity(ulong IdLow, long IdHigh, nint NativeHandle)
 {
+    /// <summary>Gets whether no field is set.</summary>
     public bool IsEmpty => IdLow == 0 && IdHigh == 0 && NativeHandle == 0;
 }
 
@@ -21,15 +22,17 @@ public readonly record struct PlatformDisplayIdentity(ulong IdLow, long IdHigh, 
 public interface IWindowSurface
 {
     /// <summary>
-    /// Gets the primary native handle of the surface.
-    /// For Win32 this is typically an HWND.
+    /// Gets the primary native handle of the surface; its concrete type is defined by the platform.
     /// </summary>
     nint Handle { get; }
 
+    /// <summary>Gets the width of the surface in device pixels.</summary>
     int PixelWidth { get; }
 
+    /// <summary>Gets the height of the surface in device pixels.</summary>
     int PixelHeight { get; }
 
+    /// <summary>Gets the DPI scale factor of the surface (1.0 at 96 DPI).</summary>
     double DpiScale { get; }
 
     /// <summary>
@@ -42,7 +45,7 @@ public interface IWindowSurface
 
 /// <summary>
 /// Optional graphics capability for factories that can present frames via platform window surfaces.
-/// This is used to support platform-specific presentation modes (e.g., layered windows).
+/// This is used to support platform-specific presentation modes (for example per-pixel-transparent windows).
 /// </summary>
 public interface IWindowSurfacePresenter
 {

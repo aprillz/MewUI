@@ -1,7 +1,12 @@
 namespace Aprillz.MewUI.Controls;
 
 /// <summary>
-/// Selects the virtualization strategy used by an items control.
+/// Selects the virtualization strategy used by an items control; obsolete, use
+/// <see cref="ControlExtensions.FixedHeightPresenter(ListBox)"/>,
+/// <see cref="ControlExtensions.VariableHeightPresenter(ListBox)"/>,
+/// <see cref="ControlExtensions.StackPresenter(ListBox)"/> or
+/// <see cref="ControlExtensions.WrapPresenter(ListBox, double, double)"/>
+/// instead.
 /// </summary>
 [Obsolete("Use the extension methods FixedHeightPresenter, VariableHeightPresenter, StackPresenter, or WrapPresenter instead.")]
 public enum ItemsPresenterMode

@@ -5,23 +5,21 @@ namespace Aprillz.MewUI.Controls;
 public abstract partial class UIElement
 {
     /// <summary>
-    /// Backing MewProperty for <see cref="AllowDrop"/>.
-    /// See the property remarks for platform-specific behavior.
+    /// Whether the element accepts drops; see <see cref="AllowDrop"/> for what the platform delivers.
     /// </summary>
     public static readonly MewProperty<bool> AllowDropProperty =
         MewProperty<bool>.Register<UIElement>(nameof(AllowDrop), false, MewPropertyOptions.None);
 
     /// <summary>
-    /// When <see langword="true"/>, mouse-press + threshold movement on this element triggers
-    /// <see cref="DragStarting"/> to begin a drag source session.
+    /// Whether a press-and-drag gesture on this element raises <see cref="DragStarting"/>.
     /// </summary>
     public static readonly MewProperty<bool> CanDragProperty =
         MewProperty<bool>.Register<UIElement>(nameof(CanDrag), false, MewPropertyOptions.None);
 
     /// <summary>
-    /// Gets or sets whether the element accepts drops.
-    /// When <see langword="true"/>, the element participates in drop-target hit testing
-    /// and can receive <see cref="DragEnter"/>/<see cref="DragOver"/>/<see cref="DragLeave"/>/<see cref="Drop"/>.
+    /// Gets or sets whether the element accepts drops, taking part in drop-target hit testing and
+    /// receiving <see cref="DragEnter"/>, <see cref="DragOver"/>, <see cref="DragLeave"/> and
+    /// <see cref="Drop"/>.
     /// </summary>
     /// <remarks>
     /// Setting <c>AllowDrop</c> on a <see cref="Window"/> additionally registers the window for drags from other
@@ -67,9 +65,10 @@ public abstract partial class UIElement
     public event Action<DragEventArgs>? Drop;
 
     /// <summary>
-    /// Occurs after a drag gesture is detected on this element.
-    /// Handlers populate <see cref="DragStartingEventArgs.Data"/>/<see cref="DragStartingEventArgs.AllowedEffects"/>
-    /// to start the session, or set <see cref="DragStartingEventArgs.Cancel"/>.
+    /// Occurs after a drag gesture is detected on this element; handlers populate
+    /// <see cref="DragStartingEventArgs.Data"/> and
+    /// <see cref="DragStartingEventArgs.AllowedEffects"/> to start the session, or set
+    /// <see cref="DragStartingEventArgs.Cancel"/>.
     /// </summary>
     public event Action<DragStartingEventArgs>? DragStarting;
 
@@ -109,8 +108,8 @@ public abstract partial class UIElement
     protected virtual void OnDragCompleted(DragCompletedEventArgs e) => DragCompleted?.Invoke(e);
 
     /// <summary>
-    /// Explicitly starts a drag session originating from this element, bypassing gesture detection.
-    /// Fire-and-forget; the result is reported via <see cref="DragCompleted"/>.
+    /// Starts a drag session from this element without gesture detection; the outcome is reported through
+    /// <see cref="DragCompleted"/>, and nothing happens while the element is not in a window.
     /// </summary>
     public void BeginDrag(IDataObject data, DragDropEffects allowedEffects, DragPreviewContent? preview = null)
     {

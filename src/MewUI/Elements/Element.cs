@@ -7,7 +7,7 @@ using System.Runtime.CompilerServices;
 namespace Aprillz.MewUI.Controls;
 
 /// <summary>
-/// Base class for all UI elements. Provides the core Measure/Arrange layout system.
+/// Base class for all UI elements, providing the measure and arrange layout passes.
 /// </summary>
 public abstract partial class Element : MewObject
 {
@@ -42,6 +42,9 @@ public abstract partial class Element : MewObject
         }
     }
 
+    /// <summary>
+    /// Assigns the field when the value differs and returns whether it changed.
+    /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     protected static bool Set<T>(ref T field, T value)
     {
@@ -54,6 +57,9 @@ public abstract partial class Element : MewObject
         return true;
     }
 
+    /// <summary>
+    /// Assigns the field when the value differs and returns whether it changed; NaN equals NaN.
+    /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     protected static bool SetDouble(ref double field, double value)
     {
@@ -73,23 +79,25 @@ public abstract partial class Element : MewObject
     public Size DesiredSize { get; private set; }
 
     /// <summary>
-    /// Gets the final bounds calculated during the Arrange pass, in window-absolute coordinates
-    /// (not the parent's coordinate space): panels arrange children by offsetting from their own
-    /// absolute <c>Bounds</c>, and element transforms are translate-only. Custom panels must pass
-    /// window-absolute rects to <see cref="Arrange"/>. Prefer <see cref="RenderSize"/> for
-    /// WPF-like usage.
+    /// Gets the bounds from the arrange pass in window coordinates, not the parent's, left untransformed
+    /// under an element that transforms its children.
     /// </summary>
+    /// <remarks>
+    /// Panels arrange children by offsetting from their own window-absolute bounds, so custom panels must
+    /// pass window-absolute rects to <see cref="Arrange"/>. <see cref="TranslatePoint"/> and
+    /// <see cref="TranslateRect"/> follow any child transform. Prefer <see cref="RenderSize"/> for
+    /// WPF-like usage.
+    /// </remarks>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Rect Bounds { get; private set; }
 
     /// <summary>
-    /// Gets the final render size calculated during the Arrange pass.
-    /// Equivalent to WPF's <c>RenderSize</c>.
+    /// Gets the size from the arrange pass, equivalent to WPF's RenderSize.
     /// </summary>
     public Size RenderSize => new(Bounds.Width, Bounds.Height);
 
     /// <summary>
-    /// Gets or sets the parent element.
+    /// Gets the visual parent element, or null when detached.
     /// </summary>
     public Element? Parent
     {
@@ -187,8 +195,8 @@ public abstract partial class Element : MewObject
     internal Element? ContextParent => _contextParentOverride ?? Parent;
 
     /// <summary>
-    /// Attaches a child element to this element. Use this in derived controls
-    /// instead of setting Parent directly.
+    /// Attaches a child element to this element; derived controls use this instead of setting
+    /// <see cref="Parent"/> directly.
     /// </summary>
     /// <param name="child">The child to attach.</param>
     protected void AttachChild(Element child)
@@ -197,6 +205,7 @@ public abstract partial class Element : MewObject
 
         if (child.Parent == this)
         {
+    /// <exception cref="InvalidOperationException">The child already has a different parent.</exception>
             return;
         }
 
@@ -239,6 +248,7 @@ public abstract partial class Element : MewObject
 
         if (ReferenceEquals(child, this))
         {
+    /// <exception cref="InvalidOperationException">The child is this element, already has a different logical parent, or is a logical ancestor of this element.</exception>
             throw new InvalidOperationException("An element cannot be its own logical child.");
         }
 
@@ -330,6 +340,7 @@ public abstract partial class Element : MewObject
         {
             return;
         }
+    /// <exception cref="InvalidOperationException">The candidate is rejected for one of the reasons above.</exception>
 
         if (ReferenceEquals(candidate, this))
         {
@@ -426,7 +437,7 @@ public abstract partial class Element : MewObject
     public bool IsArrangeDirty { get; private set; } = true;
 
     /// <summary>
-    /// Measures the element and determines its desired size.
+    /// Measures the element and determines its desired size; a clean element measured again with the same constraint is skipped.
     /// </summary>
     public void Measure(Size availableSize)
     {
@@ -456,7 +467,7 @@ public abstract partial class Element : MewObject
     }
 
     /// <summary>
-    /// Core measurement logic. Override in derived classes.
+    /// Measures the element's content for the available size.
     /// </summary>
     protected abstract Size MeasureCore(Size availableSize);
 
@@ -515,7 +526,7 @@ public abstract partial class Element : MewObject
     }
 
     /// <summary>
-    /// Core arrangement logic. Override in derived classes.
+    /// Arranges the element within its final bounds.
     /// </summary>
     protected abstract void ArrangeCore(Rect finalRect);
 
@@ -706,17 +717,8 @@ public abstract partial class Element : MewObject
     }
 
     /// <summary>
-    /// Invalidates the visual representation, causing a repaint.
+    /// Invalidates the element's visuals so the next frame repaints them.
     /// </summary>
-    /// <remarks>
-    /// Unlike <see cref="InvalidateMeasure"/> and <see cref="InvalidateArrange"/>, this walk is
-    /// intentionally left unbounded: bounding it would require a per-element dirty flag that gets
-    /// cleared on render, but <see cref="Render"/> is bypassed by <c>UIElement</c>'s sealed
-    /// override (which never calls the base implementation), so no in-scope hook exists to clear
-    /// such a flag. Since every element defaults to "dirty", an unclearable flag would get stuck
-    /// true and silently stop all repaint propagation after the first call. Left unoptimized until
-    /// UIElement gains a render-completion hook.
-    /// </remarks>
     public virtual void InvalidateVisual() =>
         Parent?.InvalidateVisual();
 
@@ -750,8 +752,7 @@ public abstract partial class Element : MewObject
     internal virtual void OnDetaching(Element? oldRoot) { }
 
     /// <summary>
-    /// Renders the element to the graphics context.
-    /// Subclasses must override <see cref="OnRender"/> instead of this method.
+    /// Renders the element to the graphics context; subclasses override <see cref="OnRender"/> instead.
     /// </summary>
     public virtual void Render(IGraphicsContext context)
     {
@@ -764,7 +765,7 @@ public abstract partial class Element : MewObject
     protected virtual void OnRender(IGraphicsContext context) { }
 
     /// <summary>
-    /// Finds the visual root of this element (typically a Window).
+    /// Gets the <see cref="Window"/> at the root of this element's visual tree, or null when the tree is not rooted in a window.
     /// </summary>
     public Element? FindVisualRoot()
     {
@@ -904,7 +905,8 @@ public abstract partial class Element : MewObject
     }
 
     /// <summary>
-    /// Returns a transform from this element's coordinate space to the specified ancestor's coordinate space.
+    /// Returns a transform from this element's coordinate space to the specified ancestor's coordinate space,
+    /// including any transform an element between them applies to its children.
     /// </summary>
     public GeneralTransform TransformToAncestor(Element ancestor)
     {
@@ -912,6 +914,7 @@ public abstract partial class Element : MewObject
 
         if (ancestor == this)
         {
+    /// <exception cref="InvalidOperationException"><paramref name="ancestor"/> is not an ancestor of this element.</exception>
             return IdentityGeneralTransform.Instance;
         }
 
@@ -932,6 +935,7 @@ public abstract partial class Element : MewObject
     {
         ArgumentNullException.ThrowIfNull(descendant);
 
+    /// <exception cref="InvalidOperationException"><paramref name="descendant"/> is not a descendant of this element.</exception>
         if (descendant == this)
         {
             return IdentityGeneralTransform.Instance;
@@ -946,13 +950,15 @@ public abstract partial class Element : MewObject
     }
 
     /// <summary>
-    /// Returns a transform from this element's coordinate space to the specified visual's coordinate space.
+    /// Returns a transform from this element's coordinate space to the specified visual's coordinate space,
+    /// including any transform an element between them applies to its children.
     /// Both elements must be in the same visual tree.
     /// </summary>
     public GeneralTransform TransformToVisual(Element visual)
     {
         ArgumentNullException.ThrowIfNull(visual);
 
+    /// <exception cref="InvalidOperationException">The elements are not in the same visual tree.</exception>
         if (visual == this)
         {
             return IdentityGeneralTransform.Instance;
@@ -1074,12 +1080,14 @@ public abstract partial class Element : MewObject
             // whole inherited epoch, which would destroy the remaining old entries.
             oldValues.Clear();
             for (int i = 0; i < inheritedIds.Count; i++)
+    /// <exception cref="InvalidOperationException">The elements are not in the same visual tree.</exception>
             {
                 var property = MewPropertyRegistry.GetProperty(inheritedIds[i]);
                 oldValues.Add(property != null ? element.PropertyStore.GetBoxedValue(property) : null);
             }
 
             for (int i = 0; i < inheritedIds.Count; i++)
+    /// <exception cref="InvalidOperationException">The elements are not in the same visual tree.</exception>
             {
                 var property = MewPropertyRegistry.GetProperty(inheritedIds[i]);
                 if (property == null)

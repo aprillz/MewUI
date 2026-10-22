@@ -4,7 +4,7 @@ namespace Aprillz.MewUI.Controls;
 
 /// <summary>
 /// A tooltip popup control. Content is set via <see cref="ContentControl.Content"/>.
-/// For simple text tooltips, use the <c>ToolTip(string)</c> extension method which creates a TextBlock.
+/// For simple text tooltips, use the <see cref="ControlExtensions.ToolTip{T}(T, string)"/> extension method which creates a TextBlock.
 /// </summary>
 public sealed partial class ToolTip : ContentControl
 {

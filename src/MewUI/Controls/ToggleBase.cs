@@ -1,7 +1,7 @@
 namespace Aprillz.MewUI.Controls;
 
 /// <summary>
-/// Base class for toggle controls like checkboxes and radio buttons.
+/// Base class for toggle controls like check boxes and radio buttons.
 /// </summary>
 public abstract partial class ToggleBase : CommandSourceControl
 {

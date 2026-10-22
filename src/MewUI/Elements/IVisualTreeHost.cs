@@ -8,7 +8,7 @@ namespace Aprillz.MewUI;
 public interface IVisualTreeHost
 {
     /// <summary>
-    /// Visits the children that participate in the current frame's visual tree, topmost first.
+    /// Visits the children that participate in the current frame's visual tree, topmost first, stopping when the visitor returns false; returns false when it stopped early.
     /// </summary>
     /// <remarks>
     /// Contract: yield only children that render this frame (a collapsed or hidden part is not
@@ -22,7 +22,7 @@ public interface IVisualTreeHost
 
 /// <summary>
 /// Marker for controls whose visual subtree is private composition backed by external state
-/// (e.g. <c>ItemsSource</c>). When such a host's <see cref="Element.InvalidateMeasure"/> is called,
+/// (such as <see cref="Controls.ItemsControl.ItemsSource"/>). When such a host's <see cref="Element.InvalidateMeasure"/> is called,
 /// the dirty flag propagates into its subtree so the inner <see cref="Controls.ScrollViewer"/>
 /// and presenter re-measure instead of short-circuiting on an unchanged constraint.
 /// </summary>

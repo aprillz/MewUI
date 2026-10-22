@@ -2,7 +2,7 @@ namespace Aprillz.MewUI;
 
 /// <summary>
 /// Represents a general point/rect transform between visual coordinate spaces.
-/// This is a minimal WPF-compatible shape (translation-only for now).
+/// This is a minimal WPF-compatible shape; it follows any transform applied between the two spaces.
 /// </summary>
 public abstract class GeneralTransform
 {
@@ -12,8 +12,9 @@ public abstract class GeneralTransform
     /// <param name="point">The point to transform.</param>
     public abstract Point Transform(Point point);
 
+    /// <exception cref="InvalidOperationException">The transform cannot map points, such as the inverse of a zero scale.</exception>
     /// <summary>
-    /// Transforms a bounding rectangle.
+    /// Transforms a rectangle and returns the axis-aligned bounding box of the result.
     /// </summary>
     /// <param name="rect">The rectangle to transform.</param>
     public virtual Rect TransformBounds(Rect rect) =>
@@ -32,7 +33,7 @@ public abstract class GeneralTransform
     }
 
     /// <summary>
-    /// Gets the inverse transform.
+    /// Gets the inverse transform; the inverse of a transform that has none maps no point, which <see cref="TryTransform"/> reports as false.
     /// </summary>
     public abstract GeneralTransform Inverse { get; }
 }

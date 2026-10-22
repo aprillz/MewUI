@@ -45,6 +45,10 @@ public abstract class SegmentedBase : Control, IVisualTreeHost
         _itemsSource.Changed += OnItemsViewChangedCore;
     }
 
+    /// <summary>
+    /// Gets or sets the per-segment padding; the strip height follows the control, so use a small
+    /// value for a compact, icon-only strip.
+    /// </summary>
     public Thickness ItemPadding
     {
         get => GetValue(ItemPaddingProperty);
@@ -67,14 +71,14 @@ public abstract class SegmentedBase : Control, IVisualTreeHost
         }
     }
 
-    /// <summary>Gets or sets the items data source. Defaults to an empty selectable view.</summary>
+    /// <summary>Gets or sets the items source; the default is an empty selectable view.</summary>
     public ISelectableItemsView ItemsSource
     {
         get => _itemsSource;
         set => ApplyItemsSource(value);
     }
 
-    /// <summary>Gets or sets the segment template. When unset a centered text template is used.</summary>
+    /// <summary>Gets or sets the segment template; unset, a centered text template is used.</summary>
     public IDataTemplate? ItemTemplate
     {
         get => _itemTemplate;

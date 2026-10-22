@@ -10,6 +10,9 @@ namespace Aprillz.MewUI;
 /// Resolution order: the explicit or focused target's context chain, then
 /// <see cref="FallbackTarget"/>, then the window scope, then the application scope. The nearest
 /// handler ends the search even when its CanExecute returns false (disabled shadowing).
+/// <para>Each window has a router (<see cref="Window.CommandRouter"/>). <see cref="Application.CommandRouter"/> serves
+/// surfaces that run without a window, such as a tray icon's menu: it has no focus and no window scope, so it resolves
+/// the target's scope chain and then the application scope.</para>
 /// </remarks>
 public sealed class CommandRouter
 {
@@ -41,7 +44,8 @@ public sealed class CommandRouter
     }
 
     /// <summary>
-    /// Captures the current focused context (or the window itself) as a reusable target snapshot.
+    /// Captures the current focused context (or the window itself) as a reusable target snapshot. The application's
+    /// router has no focus and returns an empty target, which resolves to the application scope.
     /// </summary>
     public CommandTarget CaptureTarget() => CommandTarget.From(ResolveFocusedOrigin());
 
@@ -72,8 +76,9 @@ public sealed class CommandRouter
     }
 
     /// <summary>
-    /// Queries with an operand captured earlier (a menu snapshots it when it opens) instead of
-    /// resolving one from the target now.
+    /// Queries whether the command can execute for the given target with a given operand (a menu item's
+    /// <see cref="MenuItem.CommandData"/>, or one a menu snapshotted when it opened) instead of one
+    /// resolved from the target.
     /// </summary>
     internal bool CanExecute(Command command, CommandTarget target, object? argument)
     {

@@ -31,8 +31,8 @@ public sealed class DragEventArgs
     public bool Handled { get; set; }
 
     /// <summary>
-    /// Gets or sets whether the current target accepts the drop.
-    /// Setting this to <see langword="true"/> implicitly handles the event.
+    /// Gets or sets whether the current target accepts the drop; setting it to <see langword="true"/> also
+    /// handles the event.
     /// </summary>
     public bool Accepted
     {
@@ -50,8 +50,8 @@ public sealed class DragEventArgs
     public DragDropEffects AllowedEffects { get; }
 
     /// <summary>
-    /// Gets or sets the effect chosen by the target.
-    /// Must be a subset of <see cref="AllowedEffects"/>; values outside are coerced to <see cref="DragDropEffects.None"/>.
+    /// Gets or sets the effect chosen by the target; a value outside <see cref="AllowedEffects"/> is coerced to
+    /// <see cref="DragDropEffects.None"/>.
     /// </summary>
     public DragDropEffects Effect
     {
@@ -73,11 +73,17 @@ public sealed class DragEventArgs
         _effect = effect;
     }
 
+    /// <summary>
+    /// Creates arguments for a drop allowing <see cref="DragDropEffects.Copy"/> only.
+    /// </summary>
     public DragEventArgs(IDataObject data, Point position, Point screenPosition)
         : this(data, position, screenPosition, DragDropEffects.Copy)
     {
     }
 
+    /// <summary>
+    /// Creates arguments for a drop with the effects the source allows; <paramref name="data"/> is required.
+    /// </summary>
     public DragEventArgs(IDataObject data, Point position, Point screenPosition, DragDropEffects allowedEffects)
     {
         Data = data ?? throw new ArgumentNullException(nameof(data));

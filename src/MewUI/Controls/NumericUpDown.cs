@@ -2,6 +2,7 @@ using Aprillz.MewUI.Input;
 
 namespace Aprillz.MewUI.Controls;
 
+/// <summary>A numeric input with step buttons and in-place text editing of a value within a range.</summary>
 public sealed partial class NumericUpDown : RangeBase
 {
     private static readonly bool _defaultStyleRegistered =
@@ -93,7 +94,8 @@ public sealed partial class NumericUpDown : RangeBase
         MewProperty<bool>.Register<NumericUpDown>(nameof(ChangeOnWheel), true, MewPropertyOptions.None);
 
     /// <summary>
-    /// Whether the mouse wheel changes the value by <see cref="RangeBase.SmallChange"/> per notch while the pointer is over the box.
+    /// Gets or sets whether the mouse wheel changes the value by
+    /// <see cref="RangeBase.SmallChange"/> per notch while the pointer is over the box.
     /// </summary>
     public bool ChangeOnWheel
     {
@@ -173,13 +175,14 @@ public sealed partial class NumericUpDown : RangeBase
         SetIsEditing(false);
     }
 
+    /// <summary>Gets or sets the format string the value is displayed with.</summary>
     public string Format
     {
         get => GetValue(FormatProperty);
         set => SetValue(FormatProperty, value);
     }
 
-    /// <summary>Obsolete name of <see cref="RangeBase.SmallChange"/>.</summary>
+    /// <summary>Gets or sets the step value; obsolete name of <see cref="RangeBase.SmallChange"/>.</summary>
     [Obsolete("Use SmallChange. Step is the SmallChange the box steps by; PageUp and PageDown step by LargeChange.")]
     public double Step
     {
@@ -188,8 +191,8 @@ public sealed partial class NumericUpDown : RangeBase
     }
 
     /// <summary>
-    /// When true, <see cref="RangeBase.Value"/> is rounded to the nearest whole number
-    /// on every assignment and each step is a whole number of at least 1. Default is false.
+    /// Gets or sets whether <see cref="RangeBase.Value"/> is rounded to the nearest whole number on
+    /// every assignment and each step is a whole number of at least 1; the default is false.
     /// </summary>
     public bool IsInteger
     {

@@ -13,14 +13,16 @@ public class Rectangle : Shape
     private double _cachedRy;
     private double _cachedStroke;
 
+    /// <summary>The X-axis corner radius in DIPs.</summary>
     public static readonly MewProperty<double> RadiusXProperty =
         MewProperty<double>.Register<Rectangle>(nameof(RadiusX), 0.0, MewPropertyOptions.AffectsRender);
 
+    /// <summary>The Y-axis corner radius in DIPs.</summary>
     public static readonly MewProperty<double> RadiusYProperty =
         MewProperty<double>.Register<Rectangle>(nameof(RadiusY), 0.0, MewPropertyOptions.AffectsRender);
 
     /// <summary>
-    /// Gets or sets the X-axis corner radius.
+    /// Gets or sets the X-axis corner radius in DIPs.
     /// </summary>
     public double RadiusX
     {
@@ -29,7 +31,7 @@ public class Rectangle : Shape
     }
 
     /// <summary>
-    /// Gets or sets the Y-axis corner radius.
+    /// Gets or sets the Y-axis corner radius in DIPs.
     /// </summary>
     public double RadiusY
     {

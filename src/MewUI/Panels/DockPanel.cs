@@ -3,7 +3,7 @@ using System.Runtime.CompilerServices;
 namespace Aprillz.MewUI.Controls;
 
 /// <summary>
-/// Dock position for DockPanel children.
+/// Dock position for <see cref="DockPanel"/> children.
 /// </summary>
 public enum Dock
 {
@@ -54,7 +54,7 @@ public sealed class DockPanel : Panel
     /// Gets the dock position of an element.
     /// </summary>
     /// <param name="element">Target element.</param>
-    /// <returns>The dock position.</returns>
+    /// <returns>The dock position, or <see cref="Dock.Left"/> when none was set.</returns>
     public static Dock GetDock(Element element)
     {
         ArgumentNullException.ThrowIfNull(element);
@@ -62,14 +62,16 @@ public sealed class DockPanel : Panel
         return DockMap.TryGetValue(element, out var data) ? data.Dock : Dock.Left;
     }
 
+    /// <summary>Whether the last child fills the remaining space instead of docking; the default is true.</summary>
     public static readonly MewProperty<bool> LastChildFillProperty =
         MewProperty<bool>.Register<DockPanel>(nameof(LastChildFill), true, MewPropertyOptions.AffectsLayout);
 
+    /// <summary>The spacing between children in DIPs.</summary>
     public static readonly MewProperty<double> SpacingProperty =
         MewProperty<double>.Register<DockPanel>(nameof(Spacing), 0.0, MewPropertyOptions.AffectsLayout);
 
     /// <summary>
-    /// Gets or sets whether the last child fills remaining space.
+    /// Gets or sets whether the last child fills the remaining space instead of docking; the default is true.
     /// </summary>
     public bool LastChildFill
     {
@@ -78,7 +80,7 @@ public sealed class DockPanel : Panel
     }
 
     /// <summary>
-    /// Gets or sets the spacing between children.
+    /// Gets or sets the spacing between children in DIPs.
     /// </summary>
     public double Spacing
     {

@@ -19,6 +19,7 @@ public sealed class PopupClosedEventArgs : EventArgs
 {
     public PopupClosedEventArgs(PopupCloseKind kind) => Kind = kind;
 
+    /// <summary>Gets why the popup closed.</summary>
     public PopupCloseKind Kind { get; }
 }
 
@@ -46,7 +47,7 @@ public class Popup : FrameworkElement, IVisualTreeHost, ILogicalTreeHost
 
     public static readonly MewProperty<bool> IsOpenProperty = IsOpenPropertyKey.Property;
 
-    /// <summary>The element shown in the popup surface.</summary>
+    /// <summary>Gets or sets the element shown in the popup surface.</summary>
     public UIElement? Content
     {
         get => GetValue(ContentProperty);
@@ -54,8 +55,8 @@ public class Popup : FrameworkElement, IVisualTreeHost, ILogicalTreeHost
     }
 
     /// <summary>
-    /// When true the popup survives an outside press and a focus change; only its owner leaving the
-    /// visual tree or an explicit <see cref="Close"/> takes it down. Read when the popup opens.
+    /// Gets or sets whether the popup survives an outside press and a focus change, read when it
+    /// opens; only its owner leaving the visual tree or <see cref="Close"/> then takes it down.
     /// </summary>
     public bool StaysOpen
     {
@@ -69,8 +70,10 @@ public class Popup : FrameworkElement, IVisualTreeHost, ILogicalTreeHost
     /// </summary>
     public bool IsOpen => GetValue(IsOpenProperty);
 
+    /// <summary>Occurs after the popup opens.</summary>
     public event EventHandler? Opened;
 
+    /// <summary>Occurs after the popup closes, with why it closed.</summary>
     public event EventHandler<PopupClosedEventArgs>? Closed;
 
     /// <summary>

@@ -17,7 +17,7 @@ public sealed class DispatcherUnhandledExceptionEventArgs : EventArgs
     public Exception Exception { get; }
 
     /// <summary>
-    /// Set to true to continue the UI loop instead of terminating.
+    /// Gets or sets whether the exception is handled, which continues the UI loop instead of terminating.
     /// </summary>
     public bool Handled { get; set; }
 }

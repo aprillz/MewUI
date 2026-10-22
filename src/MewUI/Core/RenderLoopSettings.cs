@@ -1,11 +1,13 @@
 namespace Aprillz.MewUI;
 
 /// <summary>
-/// Controls the application's render loop scheduling. Continuous rendering has exactly two inputs: the user
-/// <see cref="Continuous"/> flag, and active animations (driven internally by the animation system). The platform
-/// host reads <see cref="IsContinuous"/> - the OR of those (plus VSync-off) - each frame; nothing sets the loop mode
-/// directly.
+/// Controls the application's render loop scheduling.
 /// </summary>
+/// <remarks>
+/// Continuous rendering has exactly two inputs: the user <see cref="Continuous"/> flag, and active animations
+/// (driven internally by the animation system). The platform host reads <see cref="IsContinuous"/> (the OR of
+/// those, plus VSync off) each frame; nothing sets the loop mode directly.
+/// </remarks>
 public sealed class RenderLoopSettings
 {
     private int _continuous;
@@ -17,9 +19,12 @@ public sealed class RenderLoopSettings
     }
 
     /// <summary>
-    /// User flag: force the render loop to run continuously. This is the only direct way to request continuous
-    /// rendering; the animation system requests it on its own (see <see cref="IsContinuous"/>) while clocks run.
+    /// Gets or sets whether the render loop is forced to run continuously.
     /// </summary>
+    /// <remarks>
+    /// This is the only direct way to request continuous rendering; the animation system requests it on its own
+    /// (see <see cref="IsContinuous"/>) while clocks run.
+    /// </remarks>
     public bool Continuous
     {
         get => Volatile.Read(ref _continuous) != 0;
@@ -53,12 +58,15 @@ public sealed class RenderLoopSettings
     internal bool AnimationActive => Animation.AnimationManager.Instance.HasUnpausedClocks;
 
     /// <summary>
-    /// True when the render loop should run continuously: VSync is off, the user <see cref="Continuous"/> flag is set,
-    /// or animations are active. The single value the platform host reads each frame.
+    /// Gets whether the render loop should run continuously: VSync is off, <see cref="Continuous"/> is set, or
+    /// animations are active.
     /// </summary>
+    /// <remarks>
+    /// The single value the platform host reads each frame.
+    /// </remarks>
     public bool IsContinuous => !VSyncEnabled || Continuous || AnimationActive;
 
-    /// <summary>Convenience toggle for the user <see cref="Continuous"/> flag.</summary>
+    /// <summary>Sets <see cref="Continuous"/>.</summary>
     public void SetContinuous(bool enabled) => Continuous = enabled;
 
     /// <summary>

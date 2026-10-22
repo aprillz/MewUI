@@ -21,9 +21,9 @@ public interface IFileDialogService
     string? SelectFolder(FolderDialogOptions options);
 
     /// <summary>
-    /// Whether a native OS file dialog can actually be shown on this platform right now. Used to resolve
-    /// a native preference to either the native or managed in-framework dialog.
+    /// Returns whether a native file dialog can actually be shown on this platform right now.
     /// </summary>
+    /// <remarks>Used to resolve a native preference to either the native or the managed in-framework dialog.</remarks>
     bool IsNativeDialogAvailable() => true;
 }
 

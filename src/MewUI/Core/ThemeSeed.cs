@@ -57,7 +57,7 @@ public record ThemeSeed
     public required Color ButtonDisabledBackground { get; init; }
 
     /// <summary>
-    /// Gets an optional semantic error color. When null, the palette uses #DC143C.
+    /// Gets the optional semantic error color; null means the palette default (#DC143C).
     /// </summary>
     public Color? Error { get; init; }
 }

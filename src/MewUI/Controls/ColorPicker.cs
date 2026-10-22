@@ -54,7 +54,10 @@ public sealed class ColorPicker : DropDownBase
         set => SetValue(KindProperty, value);
     }
 
-    /// <summary>When <see langword="true"/>, exposes alpha editing via the popup and previews transparency in the header swatch.</summary>
+    /// <summary>
+    /// Gets or sets whether the popup offers alpha editing and the header swatch previews
+    /// transparency.
+    /// </summary>
     public bool ShowAlpha
     {
         get => GetValue(ShowAlphaProperty);

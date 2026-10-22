@@ -8,8 +8,7 @@ public static class DpiHelper
     private const double DefaultDpi = 96.0;
 
     /// <summary>
-    /// Enables Per-Monitor DPI V2 awareness for the current process.
-    /// Call this at the start of the application.
+    /// Enables per-monitor DPI awareness for the current process; call it at application start.
     /// </summary>
     public static bool EnablePerMonitorDpiAwareness()
         => Application.IsRunning && Application.Current.PlatformHost.EnablePerMonitorDpiAwareness();

@@ -57,7 +57,7 @@ public readonly partial struct Color : IEquatable<Color>
     public byte B => (byte)(_value & 0xFF);
 
     /// <summary>
-    /// Gets the color value in COLORREF format (0x00BBGGRR) for GDI.
+    /// Gets the color packed as 0x00BBGGRR with the alpha dropped.
     /// </summary>
     public uint ToCOLORREF() => ((uint)B << 16) | ((uint)G << 8) | R;
 
@@ -83,9 +83,11 @@ public readonly partial struct Color : IEquatable<Color>
     public static Color FromArgb(uint argb) => new(argb);
 
     /// <summary>
-    /// Parses a color from a hex string in <c>#RRGGBB</c> or <c>#RRGGBBAA</c> format.
+    /// Parses a color from a hex string in <c>#RRGGBB</c> or <c>#AARRGGBB</c> format, with or without the leading #.
     /// </summary>
     /// <param name="hex">The hex string.</param>
+    /// <exception cref="ArgumentException">The string has neither 6 nor 8 hex digits.</exception>
+    /// <exception cref="FormatException">A digit is not hexadecimal.</exception>
     public static Color FromHex(ReadOnlySpan<char> hex)
     {
         hex = hex.TrimStart('#');
@@ -115,7 +117,7 @@ public readonly partial struct Color : IEquatable<Color>
     /// Linearly interpolates between this color and another.
     /// </summary>
     /// <param name="other">The target color.</param>
-    /// <param name="t">The interpolation factor in the range [0, 1].</param>
+    /// <param name="t">The interpolation factor, clamped to [0, 1].</param>
     public Color Lerp(Color other, double t)
     {
         t = Math.Clamp(t, 0, 1);

@@ -34,18 +34,23 @@ public sealed class Application
     private Action<string[]>? _startup;
 
     /// <summary>
-    /// Determines when the run loop ends automatically as windows close. Scoped to this run; configure it
-    /// before the run through <see cref="AppOptions.ShutdownMode"/>, or assign it from the startup
-    /// callback. Defaults to <see cref="MewUI.ShutdownMode.OnLastWindowClose"/>.
+    /// Gets or sets when the run loop ends automatically as windows close; the default is
+    /// <see cref="MewUI.ShutdownMode.OnLastWindowClose"/>.
     /// </summary>
+    /// <remarks>
+    /// Scoped to this run; configure it before the run through <see cref="AppOptions.ShutdownMode"/>,
+    /// or assign it from the startup callback.
+    /// </remarks>
     public ShutdownMode ShutdownMode { get; set; } = ShutdownMode.OnLastWindowClose;
 
     /// <summary>
-    /// The window whose close ends the run under <see cref="MewUI.ShutdownMode.OnMainWindowClose"/>.
-    /// Set by the window-based <see cref="Run(Window)"/> overloads; assign it to promote a window opened
-    /// later, which is the only way a run started without a main window can use that mode. Null clears
-    /// the identity, leaving that mode with nothing to trigger on.
+    /// Gets or sets the window whose close ends the run under
+    /// <see cref="MewUI.ShutdownMode.OnMainWindowClose"/>, or null when no window does.
     /// </summary>
+    /// <remarks>
+    /// Set by the window-based <see cref="Run(Window)"/> overloads; assign it to promote a window opened
+    /// later, which is the only way a run started without a main window can use that mode.
+    /// </remarks>
     public Window? MainWindow
     {
         get => _runtime?.MainWindow;
@@ -62,8 +67,8 @@ public sealed class Application
     private IGraphicsFactory? _graphicsFactory;
 
     /// <summary>
-    /// Raised when an exception escapes from the UI dispatcher work queue.
-    /// Set <see cref="DispatcherUnhandledExceptionEventArgs.Handled"/> to true to continue.
+    /// Occurs when an exception escapes the UI dispatcher work queue; setting
+    /// <see cref="DispatcherUnhandledExceptionEventArgs.Handled"/> to true continues the run.
     /// </summary>
     public static event Action<DispatcherUnhandledExceptionEventArgs>? DispatcherUnhandledException;
 
@@ -80,10 +85,13 @@ public sealed class Application
     private StyleSheet _styleSheet = CreateDefaultStyleSheet();
 
     /// <summary>
-    /// Gets or sets the application-level style sheet. Named styles defined here are available to all
-    /// controls as a fallback when no closer StyleSheet is found in the context chain. Replace the
-    /// instance with a fully configured sheet to change application styles after live lookup begins.
+    /// Gets or sets the application-level style sheet, whose named styles are the fallback for all
+    /// controls when no closer <see cref="MewUI.StyleSheet"/> is found in the context chain.
     /// </summary>
+    /// <remarks>
+    /// Replace the instance with a fully configured sheet to change application styles after live
+    /// lookup begins.
+    /// </remarks>
     public StyleSheet StyleSheet
     {
         get => _styleSheet;
@@ -113,17 +121,24 @@ public sealed class Application
     public RenderLoopSettings RenderLoopSettings => _renderLoopSettings;
 
     /// <summary>
-    /// Raised when the theme changes.
+    /// Occurs when the theme changes, with the old and new theme.
     /// </summary>
     public event Action<Theme, Theme>? ThemeChanged;
 
     /// <summary>
-    /// Raised when the theme mode changes.
+    /// Occurs when the theme mode changes.
     /// </summary>
     public event Action? ThemeModeChanged;
 
+    /// <summary>
+    /// Gets the current theme mode.
+    /// </summary>
     public ThemeVariant ThemeMode => _themeManager.Mode;
 
+    /// <summary>
+    /// Sets the theme mode and applies the resulting theme to all windows; same as
+    /// <see cref="SetThemeMode"/>.
+    /// </summary>
     public void SetTheme(ThemeVariant mode)
     {
         var lastMode = _themeManager.Mode;
@@ -140,6 +155,9 @@ public sealed class Application
         }
     }
 
+    /// <summary>
+    /// Sets the theme mode and applies the resulting theme to all windows.
+    /// </summary>
     public void SetThemeMode(ThemeVariant mode)
     {
         var lastMode = _themeManager.Mode;
@@ -156,6 +174,10 @@ public sealed class Application
         }
     }
 
+    /// <summary>
+    /// Sets a built-in accent, with an optional accent text color, and applies the resulting theme to all
+    /// windows.
+    /// </summary>
     public void SetAccent(Accent accent, Color? accentText = null)
     {
         var change = _themeManager.SetAccent(accent, accentText);
@@ -165,6 +187,10 @@ public sealed class Application
         }
     }
 
+    /// <summary>
+    /// Sets a custom accent color, with an optional accent text color, and applies the resulting theme to
+    /// all windows.
+    /// </summary>
     public void SetAccent(Color accent, Color? accentText = null)
     {
         var change = _themeManager.SetAccent(accent, accentText);
@@ -185,15 +211,21 @@ public sealed class Application
     internal IPlatformHost PlatformHost { get; }
 
     /// <summary>
-    /// The services the running platform offers: clipboard, message boxes, file dialogs and the
-    /// shell's file icons. The host behind them stays internal.
+    /// Gets the services the running platform offers: clipboard, message boxes, file dialogs and the
+    /// shell's file icons.
     /// </summary>
+    /// <remarks>
+    /// The host behind them stays internal.
+    /// </remarks>
     public PlatformServices PlatformServices => _platformServices ??= new PlatformServices(PlatformHost);
 
     private PlatformServices? _platformServices;
 
     internal static event Action<IDispatcher?>? DispatcherChanged;
 
+    /// <summary>
+    /// Gets the UI dispatcher of the running application, or null before a run installs one.
+    /// </summary>
     public IDispatcher? Dispatcher
     {
         get; internal set
@@ -249,8 +281,8 @@ public sealed class Application
     }
 
     /// <summary>
-    /// Gets the selected graphics backend used by windows/controls.
-    /// This is derived from <see cref="DefaultGraphicsFactory"/> and exists mainly for diagnostics.
+    /// Gets the name of the selected graphics backend, derived from <see cref="DefaultGraphicsFactory"/>
+    /// for diagnostics.
     /// </summary>
     public static string SelectedGraphicsBackend
     {
@@ -268,12 +300,8 @@ public sealed class Application
     }
 
     /// <summary>
-    /// Gets or sets the default graphics factory used by windows/controls.
-    /// In trim/AOT-friendly setups, backend packages register factories via <see cref="RegisterGraphicsFactory"/>.
-    /// </summary>
-    /// <summary>
-    /// Gets the default graphics factory (the pre-<see cref="Current"/> reference). Rendering code that may run
-    /// before <see cref="Run(Window)"/> uses this as a fallback. The setter is internal - backends register the factory.
+    /// Gets the process-wide default graphics factory, which rendering code that may run before
+    /// <see cref="Run(Window)"/> uses as a fallback.
     /// </summary>
     public static IGraphicsFactory DefaultGraphicsFactory
     {
@@ -282,6 +310,10 @@ public sealed class Application
         get => _defaultGraphicsFactory ??= (_graphicsFactoryProvider ?? throw new InvalidOperationException(
             "No graphics backend registered. Add a backend package (Aprillz.MewUI.Backend.Direct2D / Gdi / MewVG.*)."))();
         internal set
+    /// <remarks>
+    /// Backend packages register the factory through <see cref="RegisterGraphicsFactory"/>; reading it
+    /// before any backend registered throws <see cref="InvalidOperationException"/>.
+    /// </remarks>
         {
             ArgumentNullException.ThrowIfNull(value);
             EnsureNotRunning("graphics backend");
@@ -377,9 +409,8 @@ public sealed class Application
     }
 
     /// <summary>
-    /// Runs the application with the specified main window. One UI runtime per process: a second
-    /// concurrent call is rejected. Running again after a previous run returns (normally or by
-    /// exception) is supported - the finally block below restores process state for it.
+    /// Runs the application with the specified main window; a second concurrent run in the process is
+    /// rejected, and a run after a previous run returned (normally or by exception) is supported.
     /// </summary>
     public static void Run(Window mainWindow)
     {
@@ -388,8 +419,8 @@ public sealed class Application
     }
 
     /// <summary>
-    /// Runs the application asynchronously. Browser platforms use this overload so the JavaScript
-    /// event loop remains active while the application is running.
+    /// Runs the application asynchronously, for hosts whose own event loop must keep running while the
+    /// application runs.
     /// </summary>
     public static Task RunAsync(Window mainWindow, CancellationToken cancellationToken = default)
     {
@@ -587,6 +618,9 @@ public sealed class Application
         PlatformHost = platformHost;
         _themeManager = new ThemeManager(platformHost, ThemeManager.Default);
     }
+    /// <summary>
+    /// Creates a builder with default <see cref="AppOptions"/>.
+    /// </summary>
 
     internal void NotifySystemThemeChanged()
     {
@@ -682,14 +716,14 @@ public sealed class Application
     }
 
     /// <summary>
-    /// Ends the run loop with exit code 0. Does nothing when no run is in progress.
+    /// Ends the run loop with exit code 0; does nothing when no run is in progress.
     /// </summary>
     // Separate from the exit-code overload rather than an optional parameter, so the method group still
     // converts to Action for command and event handlers.
     public static void Shutdown() => Shutdown(0);
 
     /// <summary>
-    /// Ends the run loop and sets the process exit code. Does nothing when no run is in progress.
+    /// Ends the run loop and sets the process exit code; does nothing when no run is in progress.
     /// </summary>
     /// <param name="exitCode">Value assigned to <see cref="Environment.ExitCode"/>.</param>
     public static void Shutdown(int exitCode)
@@ -704,7 +738,8 @@ public sealed class Application
     }
 
     /// <summary>
-    /// Dispatches pending messages in the message queue.
+    /// Dispatches pending messages in the message queue; obsolete, await asynchronous work or use the
+    /// dispatcher instead, and <see cref="Window.ShowDialog(Window)"/> for synchronous modal UI.
     /// </summary>
     [Obsolete("DoEvents will be removed. Await asynchronous work or use the dispatcher; for synchronous modal UI use Window.ShowDialog.")]
     public static void DoEvents()

@@ -7,6 +7,11 @@ namespace Aprillz.MewUI.Rendering
     /// Abstract interface for graphics rendering operations.
     /// Allows swapping the underlying graphics library via pluggable backends.
     /// </summary>
+    /// <remarks>
+    /// Coordinates, sizes and thicknesses are in DIPs under the current transform. The calls are
+    /// immediate-mode, but a window records each element's calls and replays the recording until the
+    /// element is invalidated, so a context handed to <c>OnRender</c> is not re-entered every frame.
+    /// </remarks>
     public interface IGraphicsContext : IDisposable
     {
         /// <summary>Gets the frame-bound text drawing surface.</summary>
@@ -25,25 +30,25 @@ namespace Aprillz.MewUI.Rendering
         void EndFrame();
 
         /// <summary>
-        /// Gets the current DPI scale factor.
+        /// Gets the DPI scale factor of the current render target (1.0 at 96 DPI).
         /// </summary>
         double DpiScale { get; }
 
         /// <summary>
-        /// Hints the context that text rendering should produce correct alpha channel values.
-        /// Backends that always produce correct alpha may ignore this hint.
+        /// Gets or sets whether text rendering must produce correct alpha channel values; backends that
+        /// always do may ignore the hint.
         /// </summary>
         bool EnableAlphaTextHint { get; set; }
 
         #region State Management
 
         /// <summary>
-        /// Saves the current graphics state.
+        /// Saves the current graphics state (transform, clip, <see cref="GlobalAlpha"/>, <see cref="TextPixelSnap"/>).
         /// </summary>
         void Save();
 
         /// <summary>
-        /// Restores the previously saved graphics state.
+        /// Restores the state saved by the matching <see cref="Save"/>.
         /// </summary>
         void Restore();
 
@@ -139,10 +144,8 @@ namespace Aprillz.MewUI.Rendering
         void IntersectClip(Rect rect);
 
         /// <summary>
-        /// Returns the axis-aligned bounding box of the current clip in <em>local</em>
-        /// (pre-transform) coordinates, or <see langword="null"/> when no clip is active.
-        /// Used by offscreen passes to skip rendering
-        /// portions that will never reach the final composite.
+        /// Returns the axis-aligned bounding box of the current clip in local (pre-transform)
+        /// coordinates, or <see langword="null"/> when no clip is active.
         /// </summary>
         Rect? GetClipBoundsLocal() => null;
 
@@ -290,7 +293,7 @@ namespace Aprillz.MewUI.Rendering
         void DrawImage(IImage image, Point location);
 
         /// <summary>
-        /// Draws an image scaled to fit within the specified bounds.
+        /// Draws the whole image stretched to the specified bounds.
         /// </summary>
         void DrawImage(IImage image, Rect destRect);
 

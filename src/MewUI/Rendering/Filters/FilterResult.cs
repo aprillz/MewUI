@@ -20,7 +20,9 @@ namespace Aprillz.MewUI.Rendering.Filters;
 /// </remarks>
 public abstract class FilterResult : IDisposable
 {
+    /// <summary>Gets the width in device pixels.</summary>
     public abstract int PixelWidth { get; }
+    /// <summary>Gets the height in device pixels.</summary>
     public abstract int PixelHeight { get; }
 
     /// <summary>
@@ -58,6 +60,7 @@ public abstract class FilterResult : IDisposable
     /// </summary>
     public abstract IRenderSurface? UnderlyingSurface { get; }
 
+    /// <summary>Releases the result according to its ownership: a no-op for a borrowed source, a pool return for a scratch surface.</summary>
     public abstract void Dispose();
 }
 
@@ -72,6 +75,10 @@ public sealed class BorrowedFilterResult : FilterResult
     private readonly ICpuPixelSurface? _pixelSource;
     private readonly IRenderSurface? _surface;
 
+    /// <summary>
+    /// Creates a result that aliases <paramref name="image"/>; <paramref name="surface"/> and
+    /// <paramref name="pixelSource"/> expose the backing surface and its CPU pixels when the caller has them.
+    /// </summary>
     public BorrowedFilterResult(IImage image, Rect bounds, IRenderSurface? surface = null, ICpuPixelSurface? pixelSource = null)
     {
         _image = image ?? throw new ArgumentNullException(nameof(image));
@@ -82,14 +89,21 @@ public sealed class BorrowedFilterResult : FilterResult
         PixelHeight = image.PixelHeight;
     }
 
+    /// <inheritdoc/>
     public override int PixelWidth { get; }
+    /// <inheritdoc/>
     public override int PixelHeight { get; }
+    /// <inheritdoc/>
     public override Rect Bounds { get; }
+    /// <inheritdoc/>
     public override bool IsPremultiplied => _pixelSource?.Capabilities.HasFlag(SurfaceCapabilities.Premultiplied) ?? false;
+    /// <inheritdoc/>
     public override IRenderSurface? UnderlyingSurface => _surface;
 
+    /// <inheritdoc/>
     public override IImage AsImage() => _image;
 
+    /// <inheritdoc/>
     public override ReadOnlySpan<byte> ReadPixels(out int strideBytes)
     {
         if (_pixelSource is null)
@@ -102,6 +116,7 @@ public sealed class BorrowedFilterResult : FilterResult
         return _pixelSource.GetReadOnlyPixelSpan();
     }
 
+    /// <inheritdoc/>
     public override void Dispose() { }
 }
 
@@ -120,6 +135,10 @@ public sealed class ScratchFilterResult : FilterResult, IPixelTargetAccess
     private readonly Action<ScratchSurfaceLease>? _releaseLease;
     private int _ownershipTransferredOrDisposed;
 
+    /// <summary>
+    /// Creates a result over <paramref name="lease"/>; <paramref name="release"/>, when given, runs on dispose
+    /// instead of disposing the image and the lease directly.
+    /// </summary>
     public ScratchFilterResult(ScratchSurfaceLease lease, IImage image, Rect bounds,
         Action<ScratchSurfaceLease>? release)
     {
@@ -131,20 +150,28 @@ public sealed class ScratchFilterResult : FilterResult, IPixelTargetAccess
         Bounds = bounds;
     }
 
+    /// <inheritdoc/>
     public override int PixelWidth => _surface.PixelWidth;
+    /// <inheritdoc/>
     public override int PixelHeight => _surface.PixelHeight;
+    /// <inheritdoc/>
     public override Rect Bounds { get; }
+    /// <inheritdoc/>
     public override bool IsPremultiplied => _pixels.Capabilities.HasFlag(SurfaceCapabilities.Premultiplied);
+    /// <inheritdoc/>
     public override IRenderSurface? UnderlyingSurface => _surface;
 
+    /// <inheritdoc/>
     public override IImage AsImage() => _image;
 
+    /// <inheritdoc/>
     public override ReadOnlySpan<byte> ReadPixels(out int strideBytes)
     {
         strideBytes = _pixels.StrideBytes;
         return _pixels.GetReadOnlyPixelSpan();
     }
 
+    /// <inheritdoc/>
     public override void Dispose()
     {
         if (Interlocked.Exchange(ref _ownershipTransferredOrDisposed, 1) != 0)
@@ -207,9 +234,11 @@ public sealed class DetachedScratchSurface : IDisposable
         _releaseLease = releaseLease;
     }
 
+    /// <summary>Gets the image over the detached scratch surface; throws <see cref="ObjectDisposedException"/> after dispose.</summary>
     public IImage Image => Volatile.Read(ref _image)
         ?? throw new ObjectDisposedException(nameof(DetachedScratchSurface));
 
+    /// <summary>Releases the image and returns the lease, exactly once.</summary>
     public void Dispose()
     {
         var lease = Interlocked.Exchange(ref _lease, null);

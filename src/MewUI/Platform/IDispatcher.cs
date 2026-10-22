@@ -54,6 +54,7 @@ public sealed class DispatcherMergeKey
         Priority = priority;
     }
 
+    /// <inheritdoc/>
     public override string ToString() => $"DispatcherMergeKey({Priority})";
 }
 

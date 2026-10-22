@@ -26,11 +26,13 @@ public sealed class ScratchSurfacePool : IDisposable
     /// </summary>
     public int MaxPerBucket { get; init; } = 4;
 
+    /// <summary>Creates a pool over <paramref name="factory"/> that rents surfaces at <paramref name="dpiScale"/>.</summary>
     public ScratchSurfacePool(IGraphicsFactory factory, double dpiScale)
         : this((IRenderDevice)(factory ?? throw new ArgumentNullException(nameof(factory))), dpiScale)
     {
     }
 
+    /// <summary>Creates a pool over <paramref name="device"/> that rents surfaces at <paramref name="dpiScale"/>.</summary>
     public ScratchSurfacePool(IRenderDevice device, double dpiScale)
     {
         _device = device ?? throw new ArgumentNullException(nameof(device));
@@ -114,6 +116,7 @@ public sealed class ScratchSurfacePool : IDisposable
             $"{nameof(ScratchSurfacePool)} currently requires CPU-readable render surfaces.");
     }
 
+    /// <summary>Returns <paramref name="surface"/> to the pool; a surface not rented from this pool is disposed instead.</summary>
     public void Return(IRenderSurface surface)
     {
         if (surface is null) return;
@@ -126,6 +129,7 @@ public sealed class ScratchSurfacePool : IDisposable
         Return(lease);
     }
 
+    /// <summary>Returns the surface of <paramref name="lease"/> to the pool; a lease that is not active is ignored.</summary>
     public void Return(ScratchSurfaceLease lease)
     {
         if (lease is null || lease.State != ScratchSurfaceLeaseState.Active) return;
@@ -160,6 +164,7 @@ public sealed class ScratchSurfacePool : IDisposable
         cache.ReturnScratchSurface(key, lease.Surface);
     }
 
+    /// <summary>Stops tracking leases; a surface still rented is disposed when its lease is.</summary>
     public void Dispose()
     {
         if (_disposed) return;
@@ -197,6 +202,10 @@ public sealed class ScratchSurfacePool : IDisposable
 
 }
 
+/// <summary>
+/// A rented scratch surface together with its CPU pixel view; dispose it to drop the surface when it is
+/// not handed back through <see cref="ScratchSurfacePool.Return(ScratchSurfaceLease)"/>.
+/// </summary>
 public sealed class ScratchSurfaceLease : IDisposable
 {
     private readonly ScratchSurfacePool _owner;
@@ -210,14 +219,17 @@ public sealed class ScratchSurfaceLease : IDisposable
         AccountedBytes = RenderResourceMetrics.ScratchBytes(surface.PixelWidth, surface.PixelHeight);
     }
 
+    /// <summary>Gets the rented surface.</summary>
     public IRenderSurface Surface { get; }
 
+    /// <summary>Gets the CPU pixel view of the surface.</summary>
     public ICpuPixelSurface Pixels { get; }
 
     internal long AccountedBytes { get; }
 
     internal ScratchSurfaceLeaseState State { get; set; } = ScratchSurfaceLeaseState.Active;
 
+    /// <summary>Releases the lease: an active lease disposes its surface, a pooled one is dropped from tracking.</summary>
     public void Dispose() => _owner.DisposeLease(this);
 
     internal void DisposeSurface()

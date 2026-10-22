@@ -12,11 +12,17 @@ namespace Aprillz.MewUI;
 /// </remarks>
 public sealed class CommandPresentation : MewObject
 {
+    /// <summary>
+    /// The default label including optional access-key markers.
+    /// </summary>
     public static readonly MewProperty<string?> AccessTextProperty =
         MewProperty<string?>.Register<CommandPresentation>(nameof(AccessText), null,
             MewPropertyOptions.None,
             static (self, _, _) => self.OnAccessTextChanged());
 
+    /// <summary>
+    /// The reusable icon template.
+    /// </summary>
     public static readonly MewProperty<IconTemplate?> IconProperty =
         MewProperty<IconTemplate?>.Register<CommandPresentation>(nameof(Icon), null,
             MewPropertyOptions.None,
@@ -24,6 +30,9 @@ public sealed class CommandPresentation : MewObject
 
     // No invalidation: nothing materializes a description in advance, so there is nothing built from it
     // to throw away. A tooltip that carries one is composed when it is about to appear.
+    /// <summary>
+    /// The sentence saying what running the command does, or null when there is none.
+    /// </summary>
     public static readonly MewProperty<string?> DescriptionProperty =
         MewProperty<string?>.Register<CommandPresentation>(nameof(Description), null);
 
@@ -39,6 +48,9 @@ public sealed class CommandPresentation : MewObject
     private char _accessKey;
     private int _accessKeyIndex = -1;
 
+    /// <summary>
+    /// Creates a presentation with an optional default label and icon.
+    /// </summary>
     public CommandPresentation(string? accessText = null, IconTemplate? icon = null)
     {
         if (accessText != null)
@@ -75,7 +87,8 @@ public sealed class CommandPresentation : MewObject
     public int AccessKeyIndex => _accessKeyIndex;
 
     /// <summary>
-    /// Gets or sets the reusable icon template. Each presenter builds its own visual at its own size.
+    /// Gets or sets the reusable icon template from which each presenter builds its own visual at its
+    /// own size.
     /// </summary>
     public IconTemplate? Icon
     {
@@ -84,9 +97,12 @@ public sealed class CommandPresentation : MewObject
     }
 
     /// <summary>
-    /// Gets or sets a sentence saying what running the command does. Material for a presenter to use,
-    /// not a tooltip: which surfaces show it is the presenter's choice.
+    /// Gets or sets the sentence saying what running the command does, or null when there is none.
     /// </summary>
+    /// <remarks>
+    /// Material for a presenter to use, not a tooltip: which surfaces show it is the presenter's
+    /// choice.
+    /// </remarks>
     public string? Description
     {
         get => GetValue(DescriptionProperty);

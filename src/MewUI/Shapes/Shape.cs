@@ -10,30 +10,34 @@ namespace Aprillz.MewUI;
 /// </summary>
 public abstract class Shape : FrameworkElement
 {
+    /// <summary>The brush that fills the shape interior; null draws no fill.</summary>
     public static readonly MewProperty<Brush?> FillProperty =
         MewProperty<Brush?>.Register<Shape>(nameof(Fill), null, MewPropertyOptions.AffectsRender);
 
+    /// <summary>The brush that strokes the shape outline; null draws no outline.</summary>
     public static readonly MewProperty<Brush?> StrokeProperty =
         MewProperty<Brush?>.Register<Shape>(nameof(Stroke), null, MewPropertyOptions.AffectsRender);
 
+    /// <summary>The stroke thickness in DIPs.</summary>
     public static readonly MewProperty<double> StrokeThicknessProperty =
         MewProperty<double>.Register<Shape>(nameof(StrokeThickness), 0.0, MewPropertyOptions.AffectsLayout);
 
+    /// <summary>The stroke style (line cap, line join, dash pattern).</summary>
     public static readonly MewProperty<StrokeStyle> StrokeStyleProperty =
         MewProperty<StrokeStyle>.Register<Shape>(nameof(StrokeStyle), default, MewPropertyOptions.AffectsRender);
 
+    /// <summary>How the geometry is stretched to fill the available space; the default is <see cref="Stretch.None"/>.</summary>
     public static readonly MewProperty<Stretch> StretchProperty =
         MewProperty<Stretch>.Register<Shape>(nameof(Stretch), Stretch.None, MewPropertyOptions.AffectsLayout);
 
     /// <summary>
-    /// The source rectangle a stretch maps onto the element, in the geometry's own coordinates.
-    /// Null uses the geometry's ink bounds.
+    /// The source rectangle a stretch maps onto the element, in the geometry's own coordinates; null uses the geometry's ink bounds.
     /// </summary>
     public static readonly MewProperty<Rect?> ViewBoxProperty =
         MewProperty<Rect?>.Register<Shape>(nameof(ViewBox), null, MewPropertyOptions.AffectsLayout);
 
     /// <summary>
-    /// Gets or sets the brush used to fill the shape interior.
+    /// Gets or sets the brush used to fill the shape interior; null draws no fill.
     /// </summary>
     public Brush? Fill
     {
@@ -42,7 +46,7 @@ public abstract class Shape : FrameworkElement
     }
 
     /// <summary>
-    /// Gets or sets the brush used to stroke the shape outline.
+    /// Gets or sets the brush used to stroke the shape outline; null draws no outline.
     /// </summary>
     public Brush? Stroke
     {
@@ -51,7 +55,7 @@ public abstract class Shape : FrameworkElement
     }
 
     /// <summary>
-    /// Gets or sets the stroke thickness in device-independent pixels.
+    /// Gets or sets the stroke thickness in DIPs.
     /// </summary>
     public double StrokeThickness
     {
@@ -69,7 +73,7 @@ public abstract class Shape : FrameworkElement
     }
 
     /// <summary>
-    /// Gets or sets how the geometry is stretched to fill the available space.
+    /// Gets or sets how the geometry is stretched to fill the available space; the default is <see cref="Stretch.None"/>.
     /// </summary>
     public Stretch Stretch
     {
@@ -79,10 +83,13 @@ public abstract class Shape : FrameworkElement
 
     /// <summary>
     /// Gets or sets the source rectangle a stretch maps onto the element, in the geometry's own
-    /// coordinates. Icons drawn on a design grid set it to that grid, so the margin the grid leaves
-    /// around the ink survives: stretching to the ink bounds instead scales each icon by however tightly
-    /// it happens to be drawn, and a row of them comes out at different optical weights.
+    /// coordinates; null uses the geometry's ink bounds.
     /// </summary>
+    /// <remarks>
+    /// Icons drawn on a design grid set it to that grid, so the margin the grid leaves around the ink
+    /// survives: stretching to the ink bounds instead scales each icon by however tightly it happens to
+    /// be drawn, and a row of them comes out at different optical weights.
+    /// </remarks>
     public Rect? ViewBox
     {
         get => GetValue(ViewBoxProperty);
@@ -95,11 +102,11 @@ public abstract class Shape : FrameworkElement
     private StrokeStyle _cachedPenStyle;
 
     /// <summary>
-    /// When overridden, returns the <see cref="PathGeometry"/> that defines this shape.
+    /// When overridden, returns the <see cref="PathGeometry"/> that defines this shape; null draws nothing.
     /// </summary>
     protected abstract PathGeometry? GetDefiningGeometry();
 
-    /// <summary>Gets a copy of the geometry after applying the shape's layout and stretch.</summary>
+    /// <summary>Gets a copy of the geometry after applying the shape's layout and stretch, or null when the shape has no geometry or no size.</summary>
     public PathGeometry? RenderedGeometry
     {
         get

@@ -34,7 +34,7 @@ public readonly struct CornerRadius : IEquatable<CornerRadius>
     public double BottomLeft { get; }
 
     /// <summary>
-    /// Initializes a new instance with a uniform radius for all corners.
+    /// Initializes a new instance of the <see cref="CornerRadius"/> struct with a uniform radius for all corners.
     /// </summary>
     public CornerRadius(double uniform)
         : this(uniform, uniform, uniform, uniform)
@@ -42,7 +42,7 @@ public readonly struct CornerRadius : IEquatable<CornerRadius>
     }
 
     /// <summary>
-    /// Initializes a new instance with individual corner radii (clockwise from top-left).
+    /// Initializes a new instance of the <see cref="CornerRadius"/> struct with individual corner radii (clockwise from top-left).
     /// </summary>
     public CornerRadius(double topLeft, double topRight, double bottomRight, double bottomLeft)
     {
@@ -80,10 +80,19 @@ public readonly struct CornerRadius : IEquatable<CornerRadius>
     public static CornerRadius operator *(double scalar, CornerRadius radius) =>
         radius * scalar;
 
+    /// <summary>
+    /// Determines whether two corner radii are equal.
+    /// </summary>
     public static bool operator ==(CornerRadius left, CornerRadius right) => left.Equals(right);
 
+    /// <summary>
+    /// Determines whether two corner radii are not equal.
+    /// </summary>
     public static bool operator !=(CornerRadius left, CornerRadius right) => !left.Equals(right);
 
+    /// <summary>
+    /// Determines whether this instance is equal to another corner radius.
+    /// </summary>
     public bool Equals(CornerRadius other) =>
         TopLeft.Equals(other.TopLeft) && TopRight.Equals(other.TopRight) &&
         BottomRight.Equals(other.BottomRight) && BottomLeft.Equals(other.BottomLeft);

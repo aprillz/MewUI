@@ -5,63 +5,85 @@ namespace Aprillz.MewUI;
 /// </summary>
 public sealed class Palette
 {
-    /// <summary>Window background color.</summary>
+    /// <summary>Gets the window background color.</summary>
     public Color WindowBackground { get; }
 
-    /// <summary>Default window foreground/text color.</summary>
+    /// <summary>Gets the default window foreground (text) color.</summary>
     public Color WindowText { get; }
 
-    /// <summary>Default control background color.</summary>
+    /// <summary>Gets the default control background color.</summary>
     public Color ControlBackground { get; }
 
-    /// <summary>Default control border color.</summary>
+    /// <summary>Gets the default control border color.</summary>
     public Color ControlBorder { get; }
 
+    /// <summary>Gets the background color of container controls.</summary>
     public Color ContainerBackground { get; }
 
+    /// <summary>Gets the face color of button-like controls.</summary>
     public Color ButtonFace { get; }
 
+    /// <summary>Gets the background color of a hovered button.</summary>
     public Color ButtonHoverBackground { get; }
 
+    /// <summary>Gets the background color of a pressed button.</summary>
     public Color ButtonPressedBackground { get; }
 
+    /// <summary>Gets the background color of a disabled button.</summary>
     public Color ButtonDisabledBackground { get; }
 
+    /// <summary>Gets the overlay color applied to accent surfaces on hover.</summary>
     public Color AccentHoverOverlay { get; }
 
+    /// <summary>Gets the overlay color applied to accent surfaces while pressed.</summary>
     public Color AccentPressedOverlay { get; }
 
+    /// <summary>Gets the overlay color applied to accent borders on hover.</summary>
     public Color AccentBorderHotOverlay { get; }
 
+    /// <summary>Gets the overlay color applied to accent borders while active.</summary>
     public Color AccentBorderActiveOverlay { get; }
 
+    /// <summary>Gets the accent color.</summary>
     public Color Accent { get; }
 
+    /// <summary>Gets the text color drawn on the accent color.</summary>
     public Color AccentText { get; }
 
+    /// <summary>Gets the accent color of disabled controls.</summary>
     public Color DisabledAccent { get; }
 
+    /// <summary>Gets the selection background color.</summary>
     public Color SelectionBackground { get; }
 
+    /// <summary>Gets the selection text color.</summary>
     public Color SelectionText { get; }
 
+    /// <summary>Gets the text color of disabled controls.</summary>
     public Color DisabledText { get; }
 
+    /// <summary>Gets the placeholder text color.</summary>
     public Color PlaceholderText { get; }
 
+    /// <summary>Gets the background color of disabled controls.</summary>
     public Color DisabledControlBackground { get; }
 
+    /// <summary>Gets the focus indicator color.</summary>
     public Color Focus { get; }
 
-    /// <summary>Semantic color used for validation and binding error feedback.</summary>
+    /// <summary>Gets the semantic color used for validation and binding error feedback.</summary>
     public Color Error { get; }
 
+    /// <summary>Gets the scrollbar thumb color.</summary>
     public Color ScrollBarThumb { get; }
 
+    /// <summary>Gets the scrollbar thumb color on hover.</summary>
     public Color ScrollBarThumbHover { get; }
 
+    /// <summary>Gets the scrollbar thumb color while dragged.</summary>
     public Color ScrollBarThumbActive { get; }
 
+    /// <summary>Gets the seed this palette was derived from.</summary>
     public ThemeSeed Seed { get; }
 
     /// <summary>
@@ -134,7 +156,7 @@ public sealed class Palette
     }
 
     /// <summary>
-    /// Returns true if a background should be treated as dark.
+    /// Returns whether a background color should be treated as dark.
     /// </summary>
     public static bool IsDarkBackground(Color color) => (color.R + color.G + color.B) < 128 * 3;
 

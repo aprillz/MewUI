@@ -7,12 +7,12 @@ namespace Aprillz.MewUI.Rendering;
 public interface IRenderTarget
 {
     /// <summary>
-    /// Gets the pixel width of the render target.
+    /// Gets the width of the render target in device pixels.
     /// </summary>
     int PixelWidth { get; }
 
     /// <summary>
-    /// Gets the pixel height of the render target.
+    /// Gets the height of the render target in device pixels.
     /// </summary>
     int PixelHeight { get; }
 

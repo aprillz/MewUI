@@ -5,20 +5,24 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public class WrapPanel : Panel
 {
+    /// <summary>The axis along which items flow before wrapping; the default is <see cref="Orientation.Horizontal"/>.</summary>
     public static readonly MewProperty<Orientation> OrientationProperty =
         MewProperty<Orientation>.Register<WrapPanel>(nameof(Orientation), Orientation.Horizontal, MewPropertyOptions.AffectsLayout);
 
+    /// <summary>The spacing between items and between lines in DIPs.</summary>
     public static readonly MewProperty<double> SpacingProperty =
         MewProperty<double>.Register<WrapPanel>(nameof(Spacing), 0.0, MewPropertyOptions.AffectsLayout);
 
+    /// <summary>A fixed width for all items in DIPs; NaN sizes each item to its content.</summary>
     public static readonly MewProperty<double> ItemWidthProperty =
         MewProperty<double>.Register<WrapPanel>(nameof(ItemWidth), double.NaN, MewPropertyOptions.AffectsLayout);
 
+    /// <summary>A fixed height for all items in DIPs; NaN sizes each item to its content.</summary>
     public static readonly MewProperty<double> ItemHeightProperty =
         MewProperty<double>.Register<WrapPanel>(nameof(ItemHeight), double.NaN, MewPropertyOptions.AffectsLayout);
 
     /// <summary>
-    /// Gets or sets the orientation of the wrap panel.
+    /// Gets or sets the axis along which items flow before wrapping; the default is <see cref="Orientation.Horizontal"/>.
     /// </summary>
     public Orientation Orientation
     {
@@ -27,7 +31,7 @@ public class WrapPanel : Panel
     }
 
     /// <summary>
-    /// Gets or sets the spacing between items and lines.
+    /// Gets or sets the spacing between items and between lines in DIPs.
     /// </summary>
     public double Spacing
     {
@@ -36,7 +40,7 @@ public class WrapPanel : Panel
     }
 
     /// <summary>
-    /// Gets or sets a fixed width for all items. NaN means auto-size.
+    /// Gets or sets a fixed width for all items in DIPs; NaN (the default) sizes each item to its content.
     /// </summary>
     public double ItemWidth
     {
@@ -45,7 +49,7 @@ public class WrapPanel : Panel
     }
 
     /// <summary>
-    /// Gets or sets a fixed height for all items. NaN means auto-size.
+    /// Gets or sets a fixed height for all items in DIPs; NaN (the default) sizes each item to its content.
     /// </summary>
     public double ItemHeight
     {

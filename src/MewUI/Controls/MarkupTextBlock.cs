@@ -5,7 +5,7 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>Displays lightweight inline markup as formatted text.</summary>
 public sealed partial class MarkupTextBlock : TextBlockBase
 {
-    /// <summary>Identifies the <see cref="Markup"/> property.</summary>
+    /// <summary>The source markup.</summary>
     public static readonly MewProperty<string> MarkupProperty =
         MewProperty<string>.Register<MarkupTextBlock>(nameof(Markup), string.Empty,
             MewPropertyOptions.AffectsLayout,
@@ -14,10 +14,10 @@ public sealed partial class MarkupTextBlock : TextBlockBase
     private static readonly MewPropertyKey<string> _textPropertyKey =
         MewProperty<string>.RegisterReadOnly<MarkupTextBlock>(nameof(Text), string.Empty);
 
-    /// <summary>Identifies the read-only <see cref="Text"/> property.</summary>
+    /// <summary>The decoded plain text displayed by the control.</summary>
     public static readonly MewProperty<string> TextProperty = _textPropertyKey.Property;
 
-    /// <summary>Identifies the <see cref="Options"/> property.</summary>
+    /// <summary>The markup presentation options.</summary>
     public static readonly MewProperty<TextMarkupOptions> OptionsProperty =
         MewProperty<TextMarkupOptions>.Register<MarkupTextBlock>(nameof(Options), TextMarkupOptions.Default,
             MewPropertyOptions.AffectsLayout,

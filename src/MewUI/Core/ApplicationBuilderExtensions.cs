@@ -65,7 +65,7 @@ public static class ApplicationBuilderExtensions
     }
 
     /// <summary>
-    /// Sets theme metrics overrides.
+    /// Sets the theme metric overrides.
     /// </summary>
     public static ApplicationBuilder UseMetrics(this ApplicationBuilder builder, ThemeMetrics metrics)
     {
@@ -80,7 +80,7 @@ public static class ApplicationBuilderExtensions
     }
 
     /// <summary>
-    /// Configures the main window factory.
+    /// Sets the main window factory.
     /// </summary>
     public static ApplicationBuilder BuildMainWindow(this ApplicationBuilder builder, Func<Window> factory)
     {
@@ -91,11 +91,14 @@ public static class ApplicationBuilderExtensions
     }
 
     /// <summary>
-    /// Configures the callback invoked on the UI thread after the dispatcher is installed and before
-    /// the main window is shown. Calling this method again replaces the previously configured callback.
-    /// When no main window factory is configured, <see cref="ApplicationBuilder.Run()"/> starts the
-    /// application without a main window.
+    /// Sets the callback invoked on the UI thread after the dispatcher is installed and before the main
+    /// window is shown.
     /// </summary>
+    /// <remarks>
+    /// Calling this method again replaces the previously configured callback. When no main window
+    /// factory is configured, <see cref="ApplicationBuilder.Run()"/> starts the application without a
+    /// main window.
+    /// </remarks>
     public static ApplicationBuilder OnStartup(this ApplicationBuilder builder, Action startup)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -106,11 +109,14 @@ public static class ApplicationBuilderExtensions
     }
 
     /// <summary>
-    /// Configures the callback invoked with the command-line arguments on the UI thread after the
-    /// dispatcher is installed and before the main window is shown. Calling this method again replaces the
-    /// previously configured callback. When no main window factory is configured,
-    /// <see cref="ApplicationBuilder.Run()"/> starts the application without a main window.
+    /// Sets the callback invoked with the command-line arguments on the UI thread after the dispatcher
+    /// is installed and before the main window is shown.
     /// </summary>
+    /// <remarks>
+    /// Calling this method again replaces the previously configured callback. When no main window
+    /// factory is configured, <see cref="ApplicationBuilder.Run()"/> starts the application without a
+    /// main window.
+    /// </remarks>
     public static ApplicationBuilder OnStartup(this ApplicationBuilder builder, Action<string[]> startup)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -121,7 +127,7 @@ public static class ApplicationBuilderExtensions
     }
 
     /// <summary>
-    /// Configures when the run loop ends automatically as windows close.
+    /// Sets when the run loop ends automatically as windows close.
     /// </summary>
     public static ApplicationBuilder WithShutdownMode(this ApplicationBuilder builder, ShutdownMode shutdownMode)
     {

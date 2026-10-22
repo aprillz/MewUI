@@ -46,6 +46,10 @@ public sealed partial class ComboBox : DropDownBase, ISelector, IIndexedSelector
     private FrameworkElement? _headerView;
     private TemplateContext? _headerContext;
 
+    /// <summary>
+    /// Gets or sets whether alternating drop-down items use a second background color (zebra
+    /// striping).
+    /// </summary>
     public bool ZebraStriping
     {
         get => GetValue(ZebraStripingProperty);
@@ -53,7 +57,7 @@ public sealed partial class ComboBox : DropDownBase, ISelector, IIndexedSelector
     }
 
     /// <summary>
-    /// Gets or sets the items data source.
+    /// Gets or sets the items source.
     /// </summary>
     public ISelectableItemsView ItemsSource
     {
@@ -131,7 +135,8 @@ public sealed partial class ComboBox : DropDownBase, ISelector, IIndexedSelector
         MewProperty<bool>.Register<ComboBox>(nameof(ChangeOnWheel), true, MewPropertyOptions.None);
 
     /// <summary>
-    /// Whether the mouse wheel changes the selection to the previous or next item while the pointer is over the combo box.
+    /// Gets or sets whether the mouse wheel changes the selection to the previous or next item
+    /// while the pointer is over the combo box.
     /// </summary>
     public bool ChangeOnWheel
     {
@@ -149,11 +154,12 @@ public sealed partial class ComboBox : DropDownBase, ISelector, IIndexedSelector
     }
 
     /// <summary>
-    /// Gets or sets the height of items in the dropdown list.
+    /// Gets or sets the height of items in the drop-down list.
     /// </summary>
     public static readonly MewProperty<double> ItemHeightProperty =
         MewProperty<double>.Register<ComboBox>(nameof(ItemHeight), double.NaN, MewPropertyOptions.AffectsLayout);
 
+    /// <summary>Gets or sets the height of items in the drop-down list.</summary>
     public double ItemHeight
     {
         get => GetValue(ItemHeightProperty);
@@ -161,7 +167,8 @@ public sealed partial class ComboBox : DropDownBase, ISelector, IIndexedSelector
     }
 
     /// <summary>
-    /// Gets or sets the item template for the dropdown list. If null, the list uses its default template.
+    /// Gets or sets the item template for the drop-down list; null uses the list's default
+    /// template.
     /// </summary>
     public IDataTemplate? ItemTemplate
     {
@@ -184,8 +191,8 @@ public sealed partial class ComboBox : DropDownBase, ISelector, IIndexedSelector
     }
 
     /// <summary>
-    /// Gets or sets the template that presents the selected item in the header. Null falls back to
-    /// <see cref="ItemTemplate"/>; with neither set the header draws the item text.
+    /// Gets or sets the template that presents the selected item in the header; null falls back to
+    /// <see cref="ItemTemplate"/>, and with neither set the header draws the item text.
     /// </summary>
     /// <remarks>
     /// The header keeps its own size: the built view is clipped to the text area and never grows the

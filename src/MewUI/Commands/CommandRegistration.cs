@@ -19,6 +19,9 @@ public sealed class CommandRegistration : IDisposable
     /// </summary>
     public Command Command => _handler.Command;
 
+    /// <summary>
+    /// Removes the handler from its scope; later calls do nothing.
+    /// </summary>
     public void Dispose()
     {
         var scope = _scope;

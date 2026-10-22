@@ -5,11 +5,12 @@ namespace Aprillz.MewUI.Controls;
 public abstract partial class UIElement
 {
     /// <summary>
-    /// Render-cache policy for this element. When set to a <see cref="BitmapCache"/>, the element's
-    /// rendered output is captured into an offscreen bitmap and blitted each frame until its content,
-    /// size, or DPI changes; the visual tree stays live (layout/hit-test/focus unaffected).
-    /// Default <see langword="null"/> = normal live rendering.
+    /// The render-cache policy; a <see cref="BitmapCache"/> captures the element's output into an offscreen
+    /// bitmap reused until its content, size or DPI changes, and null (the default) renders live.
     /// </summary>
+    /// <remarks>
+    /// The visual tree stays live under a cache: layout, hit testing and focus are unaffected.
+    /// </remarks>
     public static readonly MewProperty<CacheMode?> CacheModeProperty =
         MewProperty<CacheMode?>.Register<UIElement>(nameof(CacheMode), null,
             MewPropertyOptions.AffectsRender,
@@ -21,6 +22,7 @@ public abstract partial class UIElement
                 self.DisposeCacheEntry();
             });
 
+    /// <summary>Gets or sets how this element's rendering is cached, or null for no cache.</summary>
     public CacheMode? CacheMode
     {
         get => GetValue(CacheModeProperty);

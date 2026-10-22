@@ -7,7 +7,7 @@ public interface IGlyphOutlineFont
 {
     /// <summary>
     /// Appends the outline of <paramref name="ch"/> to <paramref name="path"/> at the given baseline origin.
-    /// Returns the glyph advance in device-independent pixels.
+    /// Returns the glyph advance in DIPs.
     /// </summary>
     bool TryAppendGlyphOutline(PathGeometry path, char ch, Point baselineOrigin, out double advance);
 }

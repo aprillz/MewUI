@@ -36,7 +36,7 @@ public sealed partial class TreeView : Control, ISubtreeInvalidationHost, IFocus
     private uint _observedExtentDpi;
 
     /// <summary>
-    /// Gets or sets the root nodes collection.
+    /// Gets or sets the items source: the hierarchical view that supplies the visible rows.
     /// </summary>
     public ITreeItemsView ItemsSource
     {
@@ -91,6 +91,15 @@ public sealed partial class TreeView : Control, ISubtreeInvalidationHost, IFocus
             MewPropertyOptions.None,
             static (self, _, newVal) => self.OnSelectionModePropertyChanged(newVal));
 
+    /// <summary>
+    /// Gets or sets the selection mode; multi-selection needs an items source that supports it
+    /// (e.g. <see cref="TreeItemsView{T}"/>), otherwise the mode stays
+    /// <see cref="ItemsSelectionMode.Single"/>.
+    /// </summary>
+    /// <remarks>
+    /// Range selection follows the flattened visible-row order; parent/child propagation is not
+    /// applied.
+    /// </remarks>
     public ItemsSelectionMode SelectionMode
     {
         get => GetValue(SelectionModeProperty);
@@ -181,9 +190,9 @@ public sealed partial class TreeView : Control, ISubtreeInvalidationHost, IFocus
     }
 
     /// <summary>
-    /// Gets or sets the selected item as an object for consistency with selector-style controls.
-    /// When using <see cref="TreeViewNode"/>-based items, this is equivalent to <see cref="SelectedNode"/>.
-    /// When using <see cref="TreeItemsView{T}"/>, this returns the actual typed item.
+    /// Gets or sets the selected item as an object: the <see cref="SelectedNode"/> for
+    /// <see cref="TreeViewNode"/> -based items, or the typed item for a
+    /// <see cref="TreeItemsView{T}"/>.
     /// </summary>
     public object? SelectedItem
     {
@@ -284,6 +293,7 @@ public sealed partial class TreeView : Control, ISubtreeInvalidationHost, IFocus
     public static readonly MewProperty<double> ItemHeightProperty =
         MewProperty<double>.Register<TreeView>(nameof(ItemHeight), double.NaN, MewPropertyOptions.AffectsLayout);
 
+    /// <summary>Gets or sets the height of each tree node row.</summary>
     public double ItemHeight
     {
         get => GetValue(ItemHeightProperty);
@@ -297,6 +307,7 @@ public sealed partial class TreeView : Control, ISubtreeInvalidationHost, IFocus
         MewProperty<Thickness>.Register<TreeView>(nameof(ItemPadding), default, MewPropertyOptions.AffectsLayout,
             static (self, _, _) => self.OnItemPaddingChanged());
 
+    /// <summary>Gets or sets the padding around each node's text.</summary>
     public Thickness ItemPadding
     {
         get => GetValue(ItemPaddingProperty);
@@ -310,9 +321,7 @@ public sealed partial class TreeView : Control, ISubtreeInvalidationHost, IFocus
         InvalidateItemBindings();
     }
 
-    /// <summary>
-    /// Gets or sets the node template. If not set explicitly, the default template is used.
-    /// </summary>
+    /// <summary>Gets or sets the node template; unset, the default template is used.</summary>
     public IDataTemplate ItemTemplate
     {
         get => _itemTemplate;
@@ -468,8 +477,8 @@ public sealed partial class TreeView : Control, ISubtreeInvalidationHost, IFocus
     }
 
     /// <summary>
-    /// Gets or sets the horizontal scrollbar mode. Items wider than the viewport scroll
-    /// horizontally (default: Auto).
+    /// Gets or sets the horizontal scroll mode, Auto by default, so items wider than the viewport
+    /// scroll horizontally.
     /// </summary>
     public ScrollMode HorizontalScroll
     {
@@ -1505,6 +1514,7 @@ public sealed class TreeViewExpansionEventArgs
         Item = item;
     }
 
+    /// <summary>Gets the item whose expansion state is changing.</summary>
     public object? Item { get; }
 }
 

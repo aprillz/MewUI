@@ -1,26 +1,41 @@
 namespace Aprillz.MewUI.Rendering;
 
+/// <summary>A surface whose BGRA32 pixels live in CPU memory.</summary>
 public interface ICpuPixelSurface : IRenderSurface
 {
+    /// <summary>Gets the byte distance between the starts of consecutive rows.</summary>
     int StrideBytes { get; }
 
+    /// <summary>Returns the pixel buffer for reading.</summary>
     ReadOnlySpan<byte> GetReadOnlyPixelSpan();
 
+    /// <summary>
+    /// Returns the pixel buffer for writing; call <see cref="IncrementVersion"/> and
+    /// <see cref="CommitCpuWrite"/> afterwards so consumers see the change.
+    /// </summary>
     Span<byte> GetWritablePixelSpan();
 
+    /// <summary>Returns a copy of the pixel buffer.</summary>
     byte[] CopyPixels();
 
+    /// <summary>Advances <see cref="IRenderSurface.Version"/> after the pixels were changed.</summary>
     void IncrementVersion();
 
     /// <summary>
-    /// Flushes pixels written through <see cref="GetWritablePixelSpan"/> to the surface's GPU resource so a
-    /// later draw or sample reflects them. No-op for surfaces whose CPU buffer IS the drawn memory or that
-    /// already upload from the CPU mirror on consume; surfaces that sample a GPU texture directly override
-    /// it to upload. Called by the CPU
-    /// filter executor after writing a result, on the render thread with the backend context current.
+    /// Flushes pixels written through <see cref="GetWritablePixelSpan"/> to the surface's GPU resource so
+    /// a later draw or sample reflects them; a no-op for surfaces whose CPU buffer is the drawn memory or
+    /// that upload from it when consumed.
     /// </summary>
+    /// <remarks>
+    /// The CPU filter executor calls this after writing a result, on the render thread with the backend
+    /// context current.
+    /// </remarks>
     void CommitCpuWrite() { }
 
+    /// <summary>
+    /// Fills every pixel with <paramref name="color"/>, premultiplying it when the surface is
+    /// <see cref="SurfaceCapabilities.Premultiplied"/>.
+    /// </summary>
     void Clear(Color color)
     {
         var span = GetWritablePixelSpan();
@@ -39,15 +54,20 @@ public interface ICpuPixelSurface : IRenderSurface
     }
 }
 
+/// <summary>A surface the GPU can sample as a texture.</summary>
 public interface IGpuSampleableSurface : IRenderSurface
 {
+    /// <summary>Gets whether row 0 is the bottom of the image, as in a GL framebuffer.</summary>
     bool YFlipped { get; }
 
+    /// <summary>Pins the texture for sampling; dispose the result once the draw that samples it has been issued.</summary>
     IDisposable RetainSampleHandle();
 }
 
+/// <summary>A surface that exposes its backend's native handle.</summary>
 public interface INativeRenderSurface : IRenderSurface
 {
+    /// <summary>Gets the native handle; its concrete type is defined by the backend.</summary>
     nint NativeHandle { get; }
 }
 
@@ -97,11 +117,15 @@ internal sealed class PersistentFrameRenderScope : IDisposable
     }
 }
 
+/// <summary>A surface whose CPU pixels are produced by an explicit readback.</summary>
 public interface IDeferredCpuReadableSurface : IRenderSurface
 {
+    /// <summary>Gets whether a readback has been requested and not yet applied.</summary>
     bool HasPendingReadback { get; }
 
+    /// <summary>Starts a readback and returns the operation that completes when the pixels are available.</summary>
     IRenderOperation RequestReadback();
 
+    /// <summary>Applies a completed readback to the CPU pixels; returns <see langword="false"/> when none has completed.</summary>
     bool TryFlushReadback();
 }

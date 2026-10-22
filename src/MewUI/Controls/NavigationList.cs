@@ -99,7 +99,7 @@ public class NavigationList : ScrollableItemsBase, ISelector, IIndexedSelector
     }
 
     /// <summary>
-    /// Gets or sets the per-item kind selector. When <see langword="null"/> every row is a selectable
+    /// Gets or sets the per-item kind selector; null makes every row a selectable
     /// <see cref="NavigationItemKind.Item"/>.
     /// </summary>
     public Func<object?, NavigationItemKind>? KindSelector
@@ -117,19 +117,24 @@ public class NavigationList : ScrollableItemsBase, ISelector, IIndexedSelector
         }
     }
 
-    /// <summary>Gets or sets the selected row index (-1 = none). Non-item rows are rejected.</summary>
+    /// <summary>Gets or sets the selected row index, or -1 for none; non-item rows are rejected.</summary>
     public int SelectedIndex
     {
         get => GetValue(SelectedIndexProperty);
         set => SetValue(SelectedIndexProperty, value);
     }
 
+    /// <summary>Gets or sets the padding around each row's content; the default comes from the theme.</summary>
     public Thickness ItemPadding
     {
         get => GetValue(ItemPaddingProperty);
         set => SetValue(ItemPaddingProperty, value);
     }
 
+    /// <summary>
+    /// Gets or sets the minimum height of selectable <see cref="NavigationItemKind.Item"/> rows;
+    /// headers and separators self-size, and NaN (the default) resolves from the theme.
+    /// </summary>
     public double ItemHeight
     {
         get => GetValue(ItemHeightProperty);

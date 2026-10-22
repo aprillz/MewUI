@@ -66,18 +66,18 @@ public readonly struct Size : IEquatable<Size>
     );
 
     /// <summary>
-    /// Returns a new size with the given thickness removed from both sides.
+    /// Returns a new size with the given thickness removed from each side, clamped at 0.
     /// </summary>
-    /// <param name="thickness">The thickness to remove.</param>
+    /// <param name="thickness">The thickness to remove from each side.</param>
     public Size Deflate(Thickness thickness) => new(
         Math.Max(0, Width - thickness.Left - thickness.Right),
         Math.Max(0, Height - thickness.Top - thickness.Bottom)
     );
 
     /// <summary>
-    /// Returns a new size with the given thickness added on both sides.
+    /// Returns a new size with the given thickness added on each side.
     /// </summary>
-    /// <param name="thickness">The thickness to add.</param>
+    /// <param name="thickness">The thickness to add on each side.</param>
     public Size Inflate(Thickness thickness) => new(
         Width + thickness.Left + thickness.Right,
         Height + thickness.Top + thickness.Bottom

@@ -3,6 +3,10 @@ using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
 
+/// <summary>
+/// A scrollable grid of rows with typed columns: column headers, resizing, sorting and row
+/// selection over an <see cref="ItemsView{T}"/>.
+/// </summary>
 public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtualizedTabNavigationHost, ISelector, IIndexedSelector, IMultiSelector
 {
     static GridView() { }
@@ -129,6 +133,7 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
             });
     }
 
+    /// <summary>Occurs when the selected row changes.</summary>
     public event Action<object?>? SelectionChanged;
 
     /// <summary>Occurs when a row is double-clicked with the primary mouse button.</summary>
@@ -137,48 +142,59 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
     /// <summary>Occurs when the active single-column sort changes.</summary>
     public event Action<GridViewSortChange>? SortChanged;
 
+    /// <summary>Gets or sets whether alternating rows use a second background color (zebra striping).</summary>
     public bool ZebraStriping
     {
         get => GetValue(ZebraStripingProperty);
         set => SetValue(ZebraStripingProperty, value);
     }
 
+    /// <summary>Gets or sets whether lines are drawn between rows and columns.</summary>
     public bool ShowGridLines
     {
         get => GetValue(ShowGridLinesProperty);
         set => SetValue(ShowGridLinesProperty, value);
     }
 
+    /// <summary>Gets or sets the row height in DIPs; NaN uses the theme default.</summary>
     public double RowHeight
     {
         get => GetValue(RowHeightProperty);
         set => SetValue(RowHeightProperty, value);
     }
 
+    /// <summary>Gets or sets the header row height in DIPs; NaN uses the theme default.</summary>
     public double HeaderHeight
     {
         get => GetValue(HeaderHeightProperty);
         set => SetValue(HeaderHeightProperty, value);
     }
 
+    /// <summary>Gets or sets the padding applied to each cell.</summary>
     public Thickness CellPadding
     {
         get => GetValue(CellPaddingProperty);
         set => SetValue(CellPaddingProperty, value);
     }
 
+    /// <summary>
+    /// Gets or sets the maximum height, in DIPs, the rows viewport grows to when the grid sizes to
+    /// its content.
+    /// </summary>
     public double MaxAutoViewportHeight
     {
         get => GetValue(MaxAutoViewportHeightProperty);
         set => SetValue(MaxAutoViewportHeightProperty, value);
     }
 
+    /// <summary>Gets or sets the selected row index, or -1 when nothing is selected.</summary>
     public int SelectedIndex
     {
         get => GetValue(SelectedIndexProperty);
         set => SetValue(SelectedIndexProperty, value);
     }
 
+    /// <summary>Gets or sets the selected item, or null when nothing is selected.</summary>
     public object? SelectedItem
     {
         get => GetValue(SelectedItemProperty);
@@ -186,9 +202,10 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
     }
 
     /// <summary>
-    /// Gets or sets the selection mode. Requires a multi-selection-capable items source
-    /// (e.g. from <see cref="ItemsView.Create{T}(IReadOnlyList{T}, System.Func{T, string}, System.Func{T, object})"/>);
-    /// otherwise stays <see cref="ItemsSelectionMode.Single"/>.
+    /// Gets or sets the selection mode; multi-selection needs an items source that supports it
+    /// (e.g. from
+    /// <see cref="ItemsView.Create{T}(IReadOnlyList{T}, System.Func{T, string}, System.Func{T, object})"/>
+    /// ), otherwise the mode stays <see cref="ItemsSelectionMode.Single"/>.
     /// </summary>
     public ItemsSelectionMode SelectionMode
     {
@@ -554,9 +571,9 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
     }
 
     /// <summary>
-    /// Gets or sets the data source. Assign an <see cref="ItemsView{T}"/> (e.g. from
-    /// <see cref="ItemsView.Create{T}(IReadOnlyList{T}, System.Func{T, string}, System.Func{T, object})"/>)
-    /// to display typed rows alongside typed columns.
+    /// Gets or sets the items source; assign an <see cref="ItemsView{T}"/> (e.g. from
+    /// <see cref="ItemsView.Create{T}(IReadOnlyList{T}, System.Func{T, string}, System.Func{T, object})"/>
+    /// ) to display typed rows alongside typed columns.
     /// </summary>
     public ISelectableItemsView ItemsSource
     {

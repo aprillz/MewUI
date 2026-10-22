@@ -33,8 +33,8 @@ public sealed class ApplicationBuilder
     public AppOptions Options { get; }
 
     /// <summary>
-    /// Applies configured options and runs the application. When no <see cref="MainWindowFactory"/>
-    /// is configured, a startup callback is required and the application runs without a main window.
+    /// Applies configured options and runs the application; without a <see cref="MainWindowFactory"/> a
+    /// startup callback is required and the run has no main window.
     /// </summary>
     public void Run()
     {

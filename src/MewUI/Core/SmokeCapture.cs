@@ -8,8 +8,7 @@ public static class SmokeCapture
     private static string? _pendingPath;
 
     /// <summary>
-    /// Requests a capture to be written to the specified path.
-    /// Subsequent calls replace the pending request.
+    /// Requests a capture to be written to the specified path; a later call replaces the pending request.
     /// </summary>
     /// <param name="path">Output path.</param>
     public static void Request(string path)

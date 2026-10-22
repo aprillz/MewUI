@@ -74,6 +74,7 @@ public sealed partial class SyntaxViewer : Control, IVisualTreeHost, ITextViewHo
             static viewer => viewer._document.TextLength > 0);
     }
 
+    /// <summary>Gets or sets the text presented.</summary>
     public string Text
     {
         get => GetValue(TextProperty);
@@ -81,7 +82,7 @@ public sealed partial class SyntaxViewer : Control, IVisualTreeHost, ITextViewHo
     }
 
     /// <summary>
-    /// Color the selected glyphs are painted in. Null keeps the colors they already have, so a
+    /// Gets or sets the color the selected glyphs are painted in; null keeps their own colors, so a
     /// colorized document stays readable through a selection.
     /// </summary>
     public Color? SelectionForeground
@@ -90,33 +91,43 @@ public sealed partial class SyntaxViewer : Control, IVisualTreeHost, ITextViewHo
         set => SetValue(SelectionForegroundProperty, value);
     }
 
+    /// <summary>Gets or sets whether lines wrap at the viewport width.</summary>
     public bool Wrap
     {
         get => GetValue(WrapProperty);
         set => SetValue(WrapProperty, value);
     }
 
-    /// <summary>Tab width in space characters.</summary>
+    /// <summary>Gets or sets the tab width in space characters.</summary>
     public int TabSize
     {
         get => GetValue(TabSizeProperty);
         set => SetValue(TabSizeProperty, value);
     }
 
-    /// <summary>Document whose text the view presents. Replaced whole when <see cref="Text"/> changes.</summary>
+    /// <summary>
+    /// Gets the document whose text the view presents; it is replaced whole when <see cref="Text"/>
+    /// changes.
+    /// </summary>
     public IReadOnlyTextDocument Document => _document;
+    /// <summary>Gets the extension pipeline of the text view.</summary>
     public TextViewExtensionPipeline Extensions { get; }
 
     /// <summary>Raised after the document was replaced by a <see cref="Text"/> change.</summary>
     public event Action<ITextViewHost>? DocumentChanged;
 
     public int SelectionStart => Math.Min(_anchor, _caret);
+    /// <summary>Gets the selection start as a character index.</summary>
     public int SelectionLength => Math.Abs(_caret - _anchor);
+    /// <summary>Gets the selection length in UTF-16 code units.</summary>
     public string SelectedText => SelectionLength == 0
+    /// <summary>Gets the currently selected text.</summary>
         ? string.Empty
     [FluentExcluded("Text view host event")]
         : _document.GetText(SelectionStart, SelectionLength);
+    /// <summary>Gets the vertical scroll offset in DIPs.</summary>
     public double VerticalOffset => _verticalOffset;
+    /// <summary>Gets the horizontal scroll offset in DIPs.</summary>
     public double HorizontalOffset => _horizontalOffset;
     public IClipboardService? ClipboardService { get; set; }
     internal int MaterializedLineCount => _view?.MaterializedLines.Count ?? 0;

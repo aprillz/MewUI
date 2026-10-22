@@ -21,7 +21,7 @@ public sealed class InputMap
     private bool _prefixesStale;
 
     /// <summary>
-    /// Raised when the map's gesture semantics change, so shortcut presentation can re-resolve.
+    /// Occurs when the map's gesture semantics change, so shortcut presentation can re-resolve.
     /// </summary>
     public event Action? Changed;
 

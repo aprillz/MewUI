@@ -3,12 +3,13 @@ namespace Aprillz.MewUI.Platform;
 /// <summary>
 /// The dialog's sidebar places (sections + entries). The layout (which sections/folders, order, labels) is
 /// an OS shell convention (Finder Favorites/Locations vs Explorer Quick access/This PC), so it is provided
-/// by the registered <see cref="IPlatformHost"/>; the default is empty. Special-folder paths are BCL and
+/// by the registered platform host; the default is empty. Special-folder paths are BCL and
 /// volumes come from the registered <see cref="IMountedVolumeProvider"/> - both cross-platform. Entries are
 /// tagged with a <see cref="ShellPlaceKind"/> so their distinctive system icon can be resolved.
 /// </summary>
 public interface IPlacesProvider
 {
+    /// <summary>Returns the sidebar entries in display order, section headers included.</summary>
     List<PlaceItem> GetPlaces();
 }
 

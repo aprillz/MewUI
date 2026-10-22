@@ -44,7 +44,7 @@ public sealed partial class DropDownButton : ContentControl, IPopupOwner
             value => SetValue(IsDropDownOpenProperty, value));
     }
 
-    /// <summary>Gets or sets the menu shown by the drop-down.</summary>
+    /// <summary>Gets or sets the menu the drop-down opens.</summary>
     public Menu? DropDownMenu
     {
         get => GetValue(DropDownMenuProperty);
@@ -58,15 +58,20 @@ public sealed partial class DropDownButton : ContentControl, IPopupOwner
         set => SetValue(IsDropDownOpenProperty, value);
     }
 
-    /// <summary>Gets or sets an upper bound on the menu height. The default is no bound; the menu is never taller
-    /// than the room on the side it opens toward, and scrolls beyond either limit.</summary>
+    /// <summary>
+    /// Gets or sets an upper bound on the menu height; the default is no bound.
+    /// </summary>
+    /// <remarks>
+    /// The menu is never taller than the room on the side it opens toward, and scrolls beyond
+    /// either limit.
+    /// </remarks>
     public double MaxDropDownHeight
     {
         get => GetValue(MaxDropDownHeightProperty);
         set => SetValue(MaxDropDownHeightProperty, value);
     }
 
-    /// <summary>Occurs right before the menu is shown, so items can be rebuilt.</summary>
+    /// <summary>Occurs right before the menu opens, so items can be rebuilt.</summary>
     public event Action? DropDownOpening;
 
     /// <summary>Occurs after the menu closed.</summary>

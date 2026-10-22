@@ -343,4 +343,10 @@ internal sealed class FileSystemBrowser
 
 internal readonly record struct FileSystemEntry(string FullPath, string Name, bool IsDirectory, long Size, DateTime Modified);
 
+/// <summary>One entry of the file dialog's places sidebar.</summary>
+/// <param name="Label">Text shown for the entry.</param>
+/// <param name="Path">File system path the entry opens; empty for a header.</param>
+/// <param name="Kind">Icon kind drawn when no shell icon is available.</param>
+/// <param name="Place">Semantic place used to resolve a distinctive shell icon.</param>
+/// <param name="IsHeader">Whether the entry is a section header rather than a navigable place.</param>
 public readonly record struct PlaceItem(string Label, string Path, FileIconKind Kind, ShellPlaceKind Place = ShellPlaceKind.Folder, bool IsHeader = false);

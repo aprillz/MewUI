@@ -8,7 +8,7 @@ namespace Aprillz.MewUI;
 public interface ILogicalTreeHost
 {
     /// <summary>
-    /// Visits logical children of the current element.
+    /// Visits the logical children of this element in order, stopping when the visitor returns false; returns false when it stopped early.
     /// </summary>
     bool VisitLogicalChildren(Func<Element, bool> visitor);
 }

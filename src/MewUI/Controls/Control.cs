@@ -16,15 +16,15 @@ public abstract partial class Control : TextElement
 
     #region MewProperty Declarations
 
-    /// <summary>Background color property.</summary>
+    /// <summary>The background color.</summary>
     public static readonly MewProperty<Color> BackgroundProperty =
         MewProperty<Color>.Register<Control>(nameof(Background), Color.Transparent, MewPropertyOptions.AffectsRender);
 
-    /// <summary>Border color property.</summary>
+    /// <summary>The border color.</summary>
     public static readonly MewProperty<Color> BorderBrushProperty =
         MewProperty<Color>.Register<Control>(nameof(BorderBrush), Color.Transparent, MewPropertyOptions.AffectsRender);
 
-    /// <summary>Template property. The built template tree replaces the control's own visuals.</summary>
+    /// <summary>The template whose built tree replaces the control's own visuals.</summary>
     public static readonly MewProperty<ControlTemplate?> TemplateProperty =
         MewProperty<ControlTemplate?>.Register<Control>(nameof(Template), null,
             MewPropertyOptions.AffectsLayout,
@@ -34,12 +34,12 @@ public abstract partial class Control : TextElement
     public static readonly MewProperty<double> CornerRadiusProperty =
         MewProperty<double>.Register<Control>(nameof(CornerRadius), 0.0, MewPropertyOptions.AffectsRender);
 
-    /// <summary>Border thickness property.</summary>
+    /// <summary>The border thickness.</summary>
     public static readonly MewProperty<double> BorderThicknessProperty =
         MewProperty<double>.Register<Control>(nameof(BorderThickness), 0.0,
             MewPropertyOptions.AffectsLayout | MewPropertyOptions.AffectsRender);
 
-    /// <summary>Inner padding property.</summary>
+    /// <summary>The inner padding.</summary>
     public static readonly MewProperty<Thickness> PaddingProperty =
         MewProperty<Thickness>.Register<Control>(nameof(Padding), default, MewPropertyOptions.AffectsLayout);
 
@@ -187,8 +187,8 @@ public abstract partial class Control : TextElement
     public IReadOnlyList<ValidationError> ValidationErrors => GetValue(ValidationErrorsProperty);
 
     /// <summary>
-    /// Named style key. Resolved from the nearest StyleSheet up the tree.
-    /// Higher priority than StyleSheet type rules and Theme style.
+    /// Gets or sets the named style key, resolved from the nearest StyleSheet up the tree and
+    /// taking priority over StyleSheet type rules and the theme style.
     /// </summary>
     public string? StyleName
     {
@@ -321,8 +321,8 @@ public abstract partial class Control : TextElement
     private bool _templateStale;
 
     /// <summary>
-    /// Gets or sets the template that provides this control's visual tree.
-    /// Null keeps the control's own drawn visuals.
+    /// Gets or sets the template that provides this control's visual tree; null keeps the control's
+    /// own drawn visuals.
     /// </summary>
     public ControlTemplate? Template
     {

@@ -20,11 +20,9 @@ internal sealed partial class TabHeaderButton : ContentControl
             MewPropertyOptions.AffectsRender | MewPropertyOptions.AffectsVisualState,
             static (self, _, _) => self.OnIsSelectedChanged());
 
-    /// <summary>
-    /// Gets or sets the tab index this header represents.
-    /// </summary>
     private void OnIsSelectedChanged() => RefreshVisualState();
 
+    /// <summary>Gets or sets the tab index this header represents.</summary>
     public int Index { get; set; }
 
     /// <summary>

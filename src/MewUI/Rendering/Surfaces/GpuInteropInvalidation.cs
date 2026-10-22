@@ -32,6 +32,7 @@ public enum GpuInteropInvalidationReason
 /// </summary>
 public sealed class GpuInteropInvalidatedEventArgs : EventArgs
 {
+    /// <summary>Creates event data for <paramref name="reason"/>.</summary>
     public GpuInteropInvalidatedEventArgs(
         GpuInteropInvalidationReason reason,
         bool renderTargetDeviceChanged = false,
@@ -46,12 +47,16 @@ public sealed class GpuInteropInvalidatedEventArgs : EventArgs
         RenderTargetHandle = renderTargetHandle;
     }
 
+    /// <summary>Gets the primary reason for the invalidation.</summary>
     public GpuInteropInvalidationReason Reason { get; }
 
+    /// <summary>Gets whether the render target device changed or was recreated.</summary>
     public bool RenderTargetDeviceChanged { get; }
 
+    /// <summary>Gets whether the display associated with the render target changed.</summary>
     public bool DisplayChanged { get; }
 
+    /// <summary>Gets whether an external resource was found incompatible with the render target.</summary>
     public bool ExternalResourceMismatch { get; }
 
     /// <summary>
@@ -69,5 +74,6 @@ public sealed class GpuInteropInvalidatedEventArgs : EventArgs
 /// </summary>
 public interface IGpuInteropInvalidationSource
 {
+    /// <summary>Occurs when external GPU interop resources should be revalidated.</summary>
     event EventHandler<GpuInteropInvalidatedEventArgs>? GpuInteropInvalidated;
 }

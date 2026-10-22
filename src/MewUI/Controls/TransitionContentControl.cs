@@ -32,9 +32,7 @@ public class TransitionContentControl : Control, IVisualTreeHost
             ? (_currentContent != null ? 1.0 : 0.0)
             : (_currentContent != null ? _progress : 1.0 - _progress);
 
-    /// <summary>
-    /// Gets or sets the content element. Changing this triggers the configured transition.
-    /// </summary>
+    /// <summary>Gets or sets the content element; changing it plays the configured transition.</summary>
     public Element? Content
     {
         get => _currentContent;
@@ -126,9 +124,12 @@ public class TransitionContentControl : Control, IVisualTreeHost
     }
 
     /// <summary>
-    /// Raised once a content change has finished playing, the run out to nothing included. A host that
-    /// tears itself down when it holds no content waits for this, or the exit is never seen.
+    /// Raised once a content change has finished playing, including the run out to nothing.
     /// </summary>
+    /// <remarks>
+    /// A host that tears itself down when it holds no content waits for this, or the exit is never
+    /// seen.
+    /// </remarks>
     public event Action? TransitionCompleted;
 
     private void OnTransitionCompleted()

@@ -3,9 +3,8 @@ using Aprillz.MewUI.Controls;
 namespace Aprillz.MewUI;
 
 /// <summary>
-/// Helper for traversing the logical tree. Only follows <see cref="ILogicalTreeHost"/>;
+/// Helper for traversing the logical tree; it follows only <see cref="ILogicalTreeHost"/> and
 /// never falls back to the visual <see cref="Element.Parent"/> chain.
-/// Uses iterative traversal with a reused stack to avoid per-node closure allocations.
 /// </summary>
 public static class LogicalTree
 {

@@ -1,7 +1,7 @@
 namespace Aprillz.MewUI.Animation;
 
 /// <summary>
-/// Interpolation function that blends between two values.
+/// Interpolation function that blends between two values; <paramref name="t"/> is the progress from 0 (<paramref name="from"/>) to 1 (<paramref name="to"/>).
 /// </summary>
 public delegate T LerpFunc<T>(T from, T to, double t);
 
@@ -15,6 +15,9 @@ public sealed class Tween<T>
     private AnimationClock? _clock;
     private T _currentValue;
 
+    /// <summary>
+    /// Initializes a tween between two values with the given interpolation function.
+    /// </summary>
     public Tween(T from, T to, LerpFunc<T> lerp)
     {
         ArgumentNullException.ThrowIfNull(lerp);
@@ -40,13 +43,12 @@ public sealed class Tween<T>
     public T CurrentValue => _currentValue;
 
     /// <summary>
-    /// Raised when the interpolated value changes.
+    /// Occurs when a clock tick updates <see cref="CurrentValue"/>.
     /// </summary>
     public event Action<T>? ValueChanged;
 
     /// <summary>
-    /// Binds this tween to an animation clock. The tween will update
-    /// its value on each clock tick.
+    /// Binds this tween to a clock so each tick updates <see cref="CurrentValue"/>, replacing any earlier binding.
     /// </summary>
     public Tween<T> Bind(AnimationClock clock)
     {
@@ -83,15 +85,20 @@ public sealed class Tween<T>
 /// </summary>
 public static class Lerp
 {
+    /// <summary>Linearly interpolates between two doubles.</summary>
     public static double Double(double a, double b, double t) => a + (b - a) * t;
 
+    /// <summary>Linearly interpolates between two floats.</summary>
     public static float Float(float a, float b, double t) => (float)(a + (b - a) * t);
 
+    /// <summary>Linearly interpolates between two colors per component.</summary>
     public static Color Color(Color a, Color b, double t) => a.Lerp(b, t);
 
+    /// <summary>Linearly interpolates between two points.</summary>
     public static Point Point(Point a, Point b, double t) =>
         new(a.X + (b.X - a.X) * t, a.Y + (b.Y - a.Y) * t);
 
+    /// <summary>Linearly interpolates between two thicknesses per side.</summary>
     public static Thickness Thickness(Thickness a, Thickness b, double t) =>
         new(Double(a.Left, b.Left, t),
             Double(a.Top, b.Top, t),
@@ -100,8 +107,7 @@ public static class Lerp
 }
 
 /// <summary>
-/// Static registry mapping CLR types to boxed interpolation functions.
-/// Type-level fact: "Color can lerp", "double can lerp".
+/// Registry of interpolation functions keyed by CLR type, used to animate property values.
 /// </summary>
 public static class TypeLerp
 {
@@ -117,7 +123,7 @@ public static class TypeLerp
     }
 
     /// <summary>
-    /// Registers a lerp function for a value type.
+    /// Registers the interpolation function for <typeparamref name="T"/>, replacing any earlier one.
     /// </summary>
     public static void Register<T>(LerpFunc<T> lerp)
     {
@@ -130,7 +136,7 @@ public static class TypeLerp
     public static bool CanLerp(Type type) => _registry.ContainsKey(type);
 
     /// <summary>
-    /// Interpolates between two boxed values. Snaps to target if no lerp registered.
+    /// Interpolates between two boxed values; returns <paramref name="to"/> when no function is registered for the type.
     /// </summary>
     public static object Interpolate(Type type, object from, object to, double t)
     {

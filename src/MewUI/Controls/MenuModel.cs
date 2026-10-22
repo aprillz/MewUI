@@ -18,11 +18,13 @@ internal enum MenuModelChange
     All = Structure | Text | Icon | Enabled | Command | Shortcut | SubMenu | Checked | Checkable,
 }
 
+/// <summary>An entry of a <see cref="Menu"/>: an item or a separator.</summary>
 public abstract class MenuEntry : MewObject
 {
     internal MenuEntry() { }
 }
 
+/// <summary>A separator entry between menu items.</summary>
 public sealed class MenuSeparator : MenuEntry
 {
     public static readonly MenuSeparator Instance = new();
@@ -30,6 +32,7 @@ public sealed class MenuSeparator : MenuEntry
     private MenuSeparator() { }
 }
 
+/// <summary>A menu entry that presents a command or opens a submenu.</summary>
 public sealed class MenuItem : MenuEntry
 {
     public static readonly MewProperty<Command?> CommandProperty =
@@ -140,10 +143,13 @@ public sealed class MenuItem : MenuEntry
     }
 
     /// <summary>
-    /// Gets or sets this placement's presentation text override. A single underscore marks the
-    /// following character as the access key. When this property has no value source, the command's
-    /// default presentation supplies the text; an explicitly assigned empty string remains empty.
+    /// Gets or sets this placement's presentation text override, in which a single underscore marks
+    /// the following character as the access key.
     /// </summary>
+    /// <remarks>
+    /// When this property has no value source, the command's default presentation supplies the
+    /// text; an explicitly assigned empty string remains empty.
+    /// </remarks>
     public string Text
     {
         get => GetValue(TextProperty);
@@ -151,9 +157,12 @@ public sealed class MenuItem : MenuEntry
     }
 
     /// <summary>
-    /// Gets or sets this placement's icon override. When this property has no value source, the
-    /// command's default icon is used; an explicitly assigned null suppresses that icon.
+    /// Gets or sets this placement's icon override.
     /// </summary>
+    /// <remarks>
+    /// When this property has no value source, the command's default icon is used; an explicitly
+    /// assigned null suppresses that icon.
+    /// </remarks>
     public IconTemplate? Icon
     {
         get => GetValue(IconProperty);
@@ -161,8 +170,8 @@ public sealed class MenuItem : MenuEntry
     }
 
     /// <summary>
-    /// Gets or sets the local enabled state. Command CanExecute is combined with this value without
-    /// replacing it.
+    /// Gets or sets the local enabled state, which the command's CanExecute is combined with rather
+    /// than replacing.
     /// </summary>
     public bool IsEnabled
     {
@@ -170,6 +179,7 @@ public sealed class MenuItem : MenuEntry
         set => SetValue(IsEnabledProperty, value);
     }
 
+    /// <summary>Gets or sets the submenu this item opens, or null for a leaf item.</summary>
     public Menu? SubMenu
     {
         get => GetValue(SubMenuProperty);
@@ -497,6 +507,7 @@ internal sealed class MenuBarItemCollection : IList<MenuItem>
     private void OnItemChanged(MenuItem _, MenuModelChange change) => Changed?.Invoke(change);
 }
 
+/// <summary>The entries a <see cref="ContextMenu"/>, a <see cref="MenuBar"/> item or a drop-down presents.</summary>
 public sealed class Menu
 {
     private readonly MenuEntryCollection _items = new();
@@ -510,12 +521,11 @@ public sealed class Menu
     }
 
     /// <summary>
-    /// Optional per-menu item height override (in DIP). When NaN, the presenter uses its default.
+    /// Gets or sets the per-menu item height override in DIPs; NaN (the default) uses the
+    /// presenter's default.
     /// </summary>
     public double ItemHeight { get; set; } = double.NaN;
 
-    /// <summary>
-    /// Optional per-menu item padding override. When null, the presenter uses its default.
-    /// </summary>
+    /// <summary>Gets or sets the per-menu item padding override; null uses the presenter's default.</summary>
     public Thickness? ItemPadding { get; set; }
 }

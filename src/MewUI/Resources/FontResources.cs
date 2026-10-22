@@ -6,21 +6,25 @@ using Aprillz.MewUI.Resources;
 namespace Aprillz.MewUI;
 
 /// <summary>
-/// Provides font loading helpers for scenarios where fonts are supplied as streams (e.g. embedded resources).
-/// Fonts are persisted to a local, user-safe cache directory. Rendering backends may interpret cached file paths
-/// and load/register the font as needed.
+/// Caches stream-supplied fonts (for example embedded resources) to files so that rendering backends can load them.
 /// </summary>
+/// <remarks>
+/// Fonts are persisted to a local, user-safe cache directory; rendering backends may interpret cached file
+/// paths and load or register the font as needed.
+/// </remarks>
 public static class FontResources
 {
     private static readonly ConcurrentDictionary<string, FontEntry> FontEntries = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Caches a font from a stream and returns a handle that can be used to set <c>Control.FontFamily</c>.
+    /// Caches a font from a stream and returns a handle whose <see cref="FontResource.FontFamily"/> can be
+    /// assigned to <see cref="Controls.TextElement.FontFamily"/>.
     /// </summary>
     /// <remarks>
-    /// The returned <see cref="FontResource.FontFamily"/> is the parsed font family name.
-    /// The font is registered in the global <see cref="FontRegistry"/> so that rendering backends
-    /// can resolve the family name to the cached file path.
+    /// The returned <see cref="FontResource.FontFamily"/> is the family name parsed from the font file when
+    /// available, otherwise <paramref name="nameHint"/>, otherwise the cached file path. The family name is
+    /// registered with the process-wide font registry so that rendering backends can resolve it to the cached
+    /// file path.
     /// </remarks>
     public static FontResource Register(Stream fontStream, string? extensionHint = null, string? nameHint = null)
     {
@@ -50,7 +54,7 @@ public static class FontResources
     }
 
     /// <summary>
-    /// Returns a filesystem path for the supplied font stream. Does not register the font.
+    /// Caches the supplied font stream to a file and returns its path without registering the font.
     /// </summary>
     public static string CacheToFile(Stream fontStream, string? extensionHint = null, string? nameHint = null)
     {

@@ -15,6 +15,9 @@ public sealed class CommandScope : IDisposable
     private Dictionary<Command, CommandHandler>? _handlers;
     private bool _disposed;
 
+    /// <summary>
+    /// Creates a scope that consults <paramref name="parent"/> when it has no handler for a command.
+    /// </summary>
     public CommandScope(CommandScope? parent = null) => Parent = parent;
 
     /// <summary>

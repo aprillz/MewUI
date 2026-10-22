@@ -16,10 +16,14 @@ public readonly record struct ScratchSurfaceKey(
     bool HasAlpha,
     ScratchResourceClass ResourceClass = ScratchResourceClass.General);
 
+/// <summary>Compatibility class that keeps scratch surfaces rented for one purpose from being reused for another.</summary>
 public enum ScratchResourceClass
 {
+    /// <summary>General-purpose scratch surface; may be served by a larger allocation.</summary>
     General = 0,
+    /// <summary>Filter graph intermediate; requires an exact-size allocation.</summary>
     FilterIntermediate,
+    /// <summary>A page of a glyph or image atlas.</summary>
     AtlasPage,
 }
 

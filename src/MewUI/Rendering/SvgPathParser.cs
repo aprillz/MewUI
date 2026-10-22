@@ -4,7 +4,7 @@ namespace Aprillz.MewUI.Rendering;
 
 /// <summary>
 /// Parses SVG path data mini-language strings into <see cref="PathGeometry"/> commands.
-/// Supports: M/m, L/l, H/h, V/v, C/c, S/s, Q/q, T/t, A/a, Z/z.
+/// Supports: M/m, L/l, H/h, V/v, C/c, S/s, Q/q, T/t, A/a, Z/z, and a leading F0/F1 fill rule.
 /// </summary>
 internal static class SvgPathParser
 {

@@ -37,7 +37,7 @@ public abstract class SetterBase
 }
 
 /// <summary>
-/// Sets a property value on the control itself.
+/// Sets a static or theme-resolved value on a property of the styled control.
 /// </summary>
 public sealed class Setter : SetterBase
 {
@@ -52,22 +52,27 @@ public sealed class Setter : SetterBase
 
     /// <summary>
     /// Creates a type-safe setter that resolves its value from the current theme.
-    /// Use static lambdas to avoid allocations: <c>(Theme t) => t.Palette.ButtonFace</c>.
     /// </summary>
+    /// <remarks>
+    /// Use static lambdas to avoid allocations: <c>(Theme t) => t.Palette.ButtonFace</c>.
+    /// </remarks>
     public static Setter Create<T>(MewProperty<T> property, Func<Theme, T> resolve)
         => new(property, t => resolve(t)!);
 
     /// <summary>
-    /// Creates a setter that unsets <paramref name="property"/> within a derived (<c>BasedOn</c>) style,
-    /// reverting it to the inherited value, or the type default when nothing is inherited, as if no style
-    /// in the chain set it. Higher-priority sources (a local value, animation, or a matching trigger) still win.
+    /// Creates a setter that unsets <paramref name="property"/> within a derived (<see cref="Style.BasedOn"/>) style,
+    /// reverting it to the inherited value, or the type default when nothing is inherited.
     /// </summary>
+    /// <remarks>
+    /// The result is as if no style in the chain set the property. Higher-priority sources (a local value,
+    /// an animation, or a matching trigger) still win.
+    /// </remarks>
     public static UnsetSetter Unset(MewProperty property)
         => new(property);
 }
 
 /// <summary>
-/// Unsets a property within a derived <see cref="Style"/> (<c>BasedOn</c>), reverting it to the inherited
+/// Unsets a property within a derived <see cref="Style"/> (<see cref="Style.BasedOn"/>), reverting it to the inherited
 /// value (or the type default) instead of a value the base style would provide.
 /// </summary>
 public sealed class UnsetSetter : SetterBase

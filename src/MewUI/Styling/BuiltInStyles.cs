@@ -3,12 +3,14 @@ using Aprillz.MewUI.Controls;
 namespace Aprillz.MewUI;
 
 /// <summary>
-/// Provides built-in named styles that can be referenced via <see cref="Control.StyleName"/>.
-/// These styles are automatically registered in the application-level <see cref="StyleSheet"/>.
+/// Provides the names of the built-in styles that <see cref="Control.StyleName"/> can reference.
 /// </summary>
+/// <remarks>
+/// These styles are registered in the application-level <see cref="StyleSheet"/> automatically.
+/// </remarks>
 public static class BuiltInStyles
 {
-    /// <summary>StyleName key for a flat (borderless) button.</summary>
+    /// <summary>Gets the style name of a flat (borderless) button.</summary>
     public static string FlatButton
     {
         get
@@ -18,7 +20,7 @@ public static class BuiltInStyles
         }
     }
 
-    /// <summary>StyleName key for an accent-colored button.</summary>
+    /// <summary>Gets the style name of an accent-colored button.</summary>
     public static string AccentButton
     {
         get
@@ -28,10 +30,10 @@ public static class BuiltInStyles
         }
     }
 
-    /// <summary>
-    /// StyleName key for an accent-colored split button. The accent is carried by the chrome the two
-    /// faces sit on; the hairline between them keeps its own color.
-    /// </summary>
+    /// <summary>Gets the style name of an accent-colored split button.</summary>
+    /// <remarks>
+    /// The accent is carried by the chrome the two faces sit on; the hairline between them keeps its own color.
+    /// </remarks>
     public static string AccentSplitButton
     {
         get
@@ -41,7 +43,7 @@ public static class BuiltInStyles
         }
     }
 
-    /// <summary>StyleName key for a ComboBox dropdown list popup.</summary>
+    /// <summary>Gets the style name of a <see cref="ComboBox"/> drop-down list popup.</summary>
     public static string ComboBoxPopup
     {
         get
@@ -51,7 +53,7 @@ public static class BuiltInStyles
         }
     }
 
-    /// <summary>StyleName key for a DatePicker calendar popup.</summary>
+    /// <summary>Gets the style name of a <see cref="DatePicker"/> calendar popup.</summary>
     public static string DatePickerPopup
     {
         get
@@ -61,7 +63,7 @@ public static class BuiltInStyles
         }
     }
 
-    /// <summary>StyleName key for a toolbar entry's button.</summary>
+    /// <summary>Gets the style name of a toolbar entry's button.</summary>
     public static string ToolBarButton
     {
         get
@@ -71,7 +73,7 @@ public static class BuiltInStyles
         }
     }
 
-    /// <summary>StyleName key for a toolbar entry's toggle button.</summary>
+    /// <summary>Gets the style name of a toolbar entry's toggle button.</summary>
     public static string ToolBarToggleButton
     {
         get
@@ -81,7 +83,7 @@ public static class BuiltInStyles
         }
     }
 
-    /// <summary>StyleName key for a toolbar label entry.</summary>
+    /// <summary>Gets the style name of a toolbar label entry.</summary>
     public static string ToolBarLabel
     {
         get

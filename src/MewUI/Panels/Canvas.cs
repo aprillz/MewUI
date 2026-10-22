@@ -21,59 +21,59 @@ public class Canvas : Panel
     #region Attached Properties
 
     /// <summary>
-    /// Sets the left position of an element.
+    /// Sets the distance in DIPs from the canvas's left edge to the element's left edge; NaN unsets it.
     /// </summary>
     /// <param name="element">Target element.</param>
     /// <param name="value">Left position.</param>
     public static void SetLeft(Element element, double value) =>
         SetAttachedValue(element, ref GetOrCreate(element).Left, value);
     /// <summary>
-    /// Gets the left position of an element.
+    /// Gets the distance in DIPs from the canvas's left edge to the element's left edge.
     /// </summary>
     /// <param name="element">Target element.</param>
-    /// <returns>The left position.</returns>
+    /// <returns>The left position, or NaN when unset.</returns>
     public static double GetLeft(Element element) => TryGet(element, out var props) ? props.Left : double.NaN;
 
     /// <summary>
-    /// Sets the top position of an element.
+    /// Sets the distance in DIPs from the canvas's top edge to the element's top edge; NaN unsets it.
     /// </summary>
     /// <param name="element">Target element.</param>
     /// <param name="value">Top position.</param>
     public static void SetTop(Element element, double value) =>
         SetAttachedValue(element, ref GetOrCreate(element).Top, value);
     /// <summary>
-    /// Gets the top position of an element.
+    /// Gets the distance in DIPs from the canvas's top edge to the element's top edge.
     /// </summary>
     /// <param name="element">Target element.</param>
-    /// <returns>The top position.</returns>
+    /// <returns>The top position, or NaN when unset.</returns>
     public static double GetTop(Element element) => TryGet(element, out var props) ? props.Top : double.NaN;
 
     /// <summary>
-    /// Sets the right position of an element.
+    /// Sets the distance in DIPs from the canvas's right edge to the element's right edge; NaN unsets it.
     /// </summary>
     /// <param name="element">Target element.</param>
     /// <param name="value">Right position.</param>
     public static void SetRight(Element element, double value) =>
         SetAttachedValue(element, ref GetOrCreate(element).Right, value);
     /// <summary>
-    /// Gets the right position of an element.
+    /// Gets the distance in DIPs from the canvas's right edge to the element's right edge.
     /// </summary>
     /// <param name="element">Target element.</param>
-    /// <returns>The right position.</returns>
+    /// <returns>The right position, or NaN when unset.</returns>
     public static double GetRight(Element element) => TryGet(element, out var props) ? props.Right : double.NaN;
 
     /// <summary>
-    /// Sets the bottom position of an element.
+    /// Sets the distance in DIPs from the canvas's bottom edge to the element's bottom edge; NaN unsets it.
     /// </summary>
     /// <param name="element">Target element.</param>
     /// <param name="value">Bottom position.</param>
     public static void SetBottom(Element element, double value) =>
         SetAttachedValue(element, ref GetOrCreate(element).Bottom, value);
     /// <summary>
-    /// Gets the bottom position of an element.
+    /// Gets the distance in DIPs from the canvas's bottom edge to the element's bottom edge.
     /// </summary>
     /// <param name="element">Target element.</param>
-    /// <returns>The bottom position.</returns>
+    /// <returns>The bottom position, or NaN when unset.</returns>
     public static double GetBottom(Element element) => TryGet(element, out var props) ? props.Bottom : double.NaN;
 
     private static CanvasAttachedProperties GetOrCreate(Element element) =>

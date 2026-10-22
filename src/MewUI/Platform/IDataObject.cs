@@ -62,19 +62,21 @@ public static class StandardDataFormats
 }
 
 /// <summary>
-/// In-memory <see cref="IDataObject"/> implementation. Stores arbitrary .NET references by format key.
-/// Used by framework-internal drag-and-drop (Phase 1); no OS clipboard format conversion is performed.
+/// In-memory <see cref="IDataObject"/> that stores arbitrary .NET references by format key; no platform
+/// format conversion is performed.
 /// </summary>
 public sealed class DataObject : IDataObject
 {
     private readonly Dictionary<string, object> _data;
 
+    /// <summary>Creates an empty data object.</summary>
     public DataObject()
     {
         _data = new Dictionary<string, object>(StringComparer.Ordinal);
         Formats = new FormatsView(_data);
     }
 
+    /// <summary>Creates a data object holding a copy of <paramref name="data"/>.</summary>
     public DataObject(IDictionary<string, object> data)
     {
         ArgumentNullException.ThrowIfNull(data);
@@ -82,11 +84,14 @@ public sealed class DataObject : IDataObject
         Formats = new FormatsView(_data);
     }
 
+    /// <inheritdoc/>
     public IReadOnlyList<string> Formats { get; }
 
+    /// <inheritdoc/>
     public bool Contains(string format)
         => !string.IsNullOrWhiteSpace(format) && _data.ContainsKey(format);
 
+    /// <inheritdoc/>
     public bool TryGetData<T>(string format, [NotNullWhen(true)] out T? value)
     {
         if (!string.IsNullOrWhiteSpace(format) &&
@@ -105,6 +110,7 @@ public sealed class DataObject : IDataObject
     public bool TryGetData<T>(DataFormat<T> format, [NotNullWhen(true)] out T? value) where T : class
         => TryGetData(format.Name, out value);
 
+    /// <inheritdoc/>
     public object? GetData(string format)
         => !string.IsNullOrWhiteSpace(format) && _data.TryGetValue(format, out var raw) ? raw : null;
 

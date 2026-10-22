@@ -12,8 +12,8 @@ public static class AlphaCheckerboard
     private static readonly Color DarkCellB = Color.FromRgb(100, 100, 100);
 
     /// <summary>
-    /// Fills <paramref name="rect"/> with an alpha-preview checkerboard.
-    /// Pass <paramref name="isDark"/> = <see langword="true"/> to use dark-theme cells.
+    /// Fills <paramref name="rect"/> with an alpha-preview checkerboard of <paramref name="cellSize"/> DIP
+    /// cells, using dark-theme cells when <paramref name="isDark"/> is <see langword="true"/>.
     /// </summary>
     public static void Fill(IGraphicsContext context, Rect rect, bool isDark, double cellSize = 8)
     {

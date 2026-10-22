@@ -27,18 +27,21 @@ public sealed class GlyphElement : FrameworkElement
         set => SetValue(TextElement.ForegroundProperty, value);
     }
 
+    /// <summary>Gets or sets the shape drawn.</summary>
     public GlyphKind Kind
     {
         get => GetValue(KindProperty);
         set => SetValue(KindProperty, value);
     }
 
+    /// <summary>Gets or sets the glyph size in DIPs.</summary>
     public double GlyphSize
     {
         get => GetValue(GlyphSizeProperty);
         set => SetValue(GlyphSizeProperty, value);
     }
 
+    /// <summary>Gets or sets the stroke thickness in DIPs.</summary>
     public double StrokeThickness
     {
         get => GetValue(StrokeThicknessProperty);

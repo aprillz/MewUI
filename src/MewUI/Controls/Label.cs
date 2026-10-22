@@ -45,8 +45,8 @@ public partial class Label : Control, IVisualTreeHost
     }
 
     /// <summary>
-    /// Gets or sets the target control that receives <see cref="UIElement.OnAccessKey"/> when
-    /// this label's access key is activated. If null, the access key bubbles up the parent chain.
+    /// Gets or sets the element that receives <see cref="UIElement.OnAccessKey"/> when this label's
+    /// access key is activated; null lets the access key bubble up the parent chain.
     /// </summary>
     public UIElement? Target
     {
@@ -73,8 +73,8 @@ public partial class Label : Control, IVisualTreeHost
     }
 
     /// <summary>
-    /// Gets or sets the text content. Use underscore prefix to define an access key
-    /// (e.g. "_Name" registers Alt+N). Use double underscore ("__") for a literal underscore.
+    /// Gets or sets the text; an underscore prefix marks the access key character (e.g. "_Name"
+    /// registers Alt+N) and a double underscore is a literal underscore.
     /// </summary>
     public string Text
     {

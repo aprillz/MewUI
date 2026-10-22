@@ -17,6 +17,10 @@ public sealed class DefaultFilterContext : IImageFilterContext, IDisposable
     private readonly FilterResult _source;
     private bool _disposed;
 
+    /// <summary>
+    /// Creates a context over <paramref name="sourceLayer"/> that owns a scratch pool at the layer's DPI;
+    /// the scale factors map filter input units to source pixels.
+    /// </summary>
     public DefaultFilterContext(IRenderSurface sourceLayer, IImage sourceImage, Rect sourceBounds,
         IGraphicsFactory factory, double logicalToPixelScaleX = 1.0, double logicalToPixelScaleY = 1.0)
         : this(new BorrowedFilterResult(sourceImage, sourceBounds, sourceLayer, sourceLayer as ICpuPixelSurface), sourceBounds, factory,
@@ -38,16 +42,22 @@ public sealed class DefaultFilterContext : IImageFilterContext, IDisposable
         LogicalToPixelScaleY = logicalToPixelScaleY;
     }
 
+    /// <inheritdoc/>
     public FilterResult Source => _source;
 
+    /// <inheritdoc/>
     public Rect SourceBounds { get; }
 
+    /// <inheritdoc/>
     public IGraphicsFactory Factory { get; }
 
+    /// <inheritdoc/>
     public double LogicalToPixelScaleX { get; }
 
+    /// <inheritdoc/>
     public double LogicalToPixelScaleY { get; }
 
+    /// <inheritdoc/>
     public ScratchFilterResult AcquireScratch(int pixelWidth, int pixelHeight, Rect bounds)
     {
         var lease = _pool.RentLease(pixelWidth, pixelHeight);
@@ -75,6 +85,7 @@ public sealed class DefaultFilterContext : IImageFilterContext, IDisposable
         });
     }
 
+    /// <inheritdoc/>
     public IImageFilterContext WithSource(FilterResult newSource)
     {
         // Sub-context shares the pool but replaces the source. We don't own or dispose the
@@ -83,6 +94,7 @@ public sealed class DefaultFilterContext : IImageFilterContext, IDisposable
             LogicalToPixelScaleX, LogicalToPixelScaleY);
     }
 
+    /// <summary>Disposes the scratch pool when this context owns it; a sub-context from <see cref="WithSource"/> does not.</summary>
     public void Dispose()
     {
         if (_disposed) return;

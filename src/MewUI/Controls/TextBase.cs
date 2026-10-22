@@ -110,7 +110,9 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextC
     /// </summary>
     private protected virtual MewProperty<string>? TextSyncProperty => null;
 
+    /// <summary>Gets the selection start as a character index.</summary>
     public int SelectionStart => GetValue(SelectionStartProperty);
+    /// <summary>Gets the selection length in UTF-16 code units.</summary>
     public int SelectionLength => GetValue(SelectionLengthProperty);
 
     /// <summary>
@@ -121,7 +123,7 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextC
     public bool CaretVisible => GetValue(CaretVisibleProperty);
 
     /// <summary>
-    /// Color the selected glyphs are painted in. Null keeps the colors they already have, so a
+    /// Gets or sets the color the selected glyphs are painted in; null keeps their own colors, so a
     /// colorized document stays readable through a selection.
     /// </summary>
     public Color? SelectionForeground
@@ -130,6 +132,7 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextC
         set => SetValue(SelectionForegroundProperty, value);
     }
 
+    /// <summary>Occurs when the text changes.</summary>
     public event Action<string>? TextChanged;
 
     /// <summary>
@@ -178,7 +181,7 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextC
     }
 
     /// <summary>
-    /// Gets or sets the caret index in document coordinates.
+    /// Gets or sets the caret position as a character index into the document.
     /// </summary>
     public int CaretPosition
     {
@@ -190,9 +193,13 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextC
         }
     }
 
+    /// <summary>Occurs when the control receives text input.</summary>
     public event Action<TextInputEventArgs>? TextInput;
+    /// <summary>Occurs when an IME composition starts.</summary>
     public event Action<TextCompositionEventArgs>? TextCompositionStart;
+    /// <summary>Occurs when the IME composition text changes.</summary>
     public event Action<TextCompositionEventArgs>? TextCompositionUpdate;
+    /// <summary>Occurs when an IME composition ends.</summary>
     public event Action<TextCompositionEventArgs>? TextCompositionEnd;
 
     /// <summary>Gets or sets an optional clipboard override for hosted editors and tests.</summary>
@@ -207,7 +214,9 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextC
         ? string.Empty
         : _document.GetText(_editor.Selection.Start, _editor.Selection.Length);
 
+    /// <summary>Gets whether an edit can be undone.</summary>
     public bool CanUndo => _editor.CanUndo;
+    /// <summary>Gets whether an undone edit can be redone.</summary>
     public bool CanRedo => _editor.CanRedo;
 
     private void BindStandardEditCommands()

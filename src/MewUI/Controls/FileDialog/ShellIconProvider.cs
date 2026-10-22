@@ -4,27 +4,37 @@ namespace Aprillz.MewUI.Platform;
 /// special-folder icon (Downloads, Pictures, ...) instead of a generic folder.</summary>
 public enum ShellPlaceKind
 {
+    /// <summary>An ordinary folder.</summary>
     Folder,
+    /// <summary>The user's home folder.</summary>
     Home,
+    /// <summary>The desktop folder.</summary>
     Desktop,
+    /// <summary>The documents folder.</summary>
     Documents,
+    /// <summary>The downloads folder.</summary>
     Downloads,
+    /// <summary>The music folder.</summary>
     Music,
+    /// <summary>The pictures folder.</summary>
     Pictures,
+    /// <summary>The videos folder.</summary>
     Videos,
+    /// <summary>The applications folder.</summary>
     Applications,
+    /// <summary>A drive or mounted volume.</summary>
     Drive,
 }
 
 /// <summary>
 /// Platform seam for the OS shell's file-type icons. The active implementation is exposed by the registered
-/// <see cref="IPlatformHost"/> (native impls live in the platform assemblies); the default falls back to the
-/// bundled vector icons (<see cref="FileIconElement"/>).
+/// platform host (native implementations live in the platform assemblies); the default falls back to the
+/// bundled vector icons.
 /// </summary>
 public interface IShellIconProvider
 {
     /// <summary>Icon for a file type. Non-blocking (by extension/type only, never touches <paramref name="path"/>
-    /// on disk, so a disconnected share/spun-down drive cannot block the UI - design.md §2.1). Null falls back
+    /// on disk, so a disconnected share/spun-down drive cannot block the UI). Null falls back
     /// to vector icons.</summary>
     ImageSource? GetIcon(string path, bool isDirectory, int sizePx);
 

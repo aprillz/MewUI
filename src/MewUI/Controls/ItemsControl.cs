@@ -42,7 +42,7 @@ public sealed partial class ItemsControl : ScrollableItemsBase
     // Presenter mode is determined by the IItemsPresenter instance set via SetPresenter().
 
     /// <summary>
-    /// Gets or sets the items data source.
+    /// Gets or sets the items source.
     /// </summary>
     public IItemsView ItemsSource
     {
@@ -72,6 +72,7 @@ public sealed partial class ItemsControl : ScrollableItemsBase
     public static readonly MewProperty<double> ItemHeightProperty =
         MewProperty<double>.Register<ItemsControl>(nameof(ItemHeight), double.NaN, MewPropertyOptions.AffectsLayout);
 
+    /// <summary>Gets or sets the height of each item in DIPs; NaN uses the theme default.</summary>
     public double ItemHeight
     {
         get => GetValue(ItemHeightProperty);
@@ -100,15 +101,14 @@ public sealed partial class ItemsControl : ScrollableItemsBase
                 presenterElement.InvalidateVisual();
             });
 
+    /// <summary>Gets or sets the padding for each item.</summary>
     public Thickness ItemPadding
     {
         get => GetValue(ItemPaddingProperty);
         set => SetValue(ItemPaddingProperty, value);
     }
 
-    /// <summary>
-    /// Gets or sets the item template. When not set, a default label template is used.
-    /// </summary>
+    /// <summary>Gets or sets the item template; unset, a default label template is used.</summary>
     public IDataTemplate ItemTemplate
     {
         get => _itemTemplate;

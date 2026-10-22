@@ -23,6 +23,10 @@ public sealed class AnimationClock
     private double _progress;
     private double _rawProgress;
 
+    /// <summary>
+    /// Initializes a clock with the given duration and easing; null easing uses <see cref="Easing.Default"/>.
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="duration"/> is zero or negative.</exception>
     public AnimationClock(TimeSpan duration, Func<double, double>? easing = null)
     {
         if (duration <= TimeSpan.Zero)
@@ -45,8 +49,7 @@ public sealed class AnimationClock
     public Func<double, double> EasingFunction { get; set; }
 
     /// <summary>
-    /// Gets or sets the repeat count.
-    /// 0 = play once, 1 = play twice, -1 = infinite.
+    /// Gets or sets the number of additional runs after the first; 0 (the default) plays once and -1 repeats forever.
     /// </summary>
     public int RepeatCount { get; set; }
 
@@ -76,14 +79,12 @@ public sealed class AnimationClock
     public double RawProgress => _rawProgress;
 
     /// <summary>
-    /// Called each frame with the eased progress value.
-    /// Single-owner callback - no multicast, no cleanup needed.
+    /// Gets or sets the callback invoked each frame with the eased progress; a single owner, not multicast.
     /// </summary>
     public Action<double>? TickCallback { get; set; }
 
     /// <summary>
-    /// Called when the animation completes (after all repeats).
-    /// Single-owner callback - no multicast, no cleanup needed.
+    /// Gets or sets the callback invoked once the animation completes after all repeats; a single owner, not multicast.
     /// </summary>
     public Action? CompletedCallback { get; set; }
 
@@ -115,7 +116,7 @@ public sealed class AnimationClock
     }
 
     /// <summary>
-    /// Starts the animation from the beginning.
+    /// Starts the animation from the beginning; a running clock restarts its timing.
     /// </summary>
     public void Start()
     {
@@ -140,7 +141,7 @@ public sealed class AnimationClock
     }
 
     /// <summary>
-    /// Stops the animation and resets progress.
+    /// Stops the animation; <see cref="Progress"/> keeps its last value until <see cref="Start"/>.
     /// </summary>
     public void Stop()
     {

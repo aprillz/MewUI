@@ -92,7 +92,7 @@ public abstract class PopupOwnerBase : Control, IPopupOwner
     protected virtual UIElement GetPopupFocusTarget(UIElement popup) => popup;
 
     /// <summary>
-    /// Gets whether a click inside the header should toggle the dropdown.
+    /// Gets whether a click inside the header should toggle the drop-down.
     /// Override to limit toggling to the arrow button area only.
     /// </summary>
     protected virtual bool IsToggleHit(in Rect headerRect, Point positionInControl) => headerRect.Contains(positionInControl);
@@ -100,7 +100,7 @@ public abstract class PopupOwnerBase : Control, IPopupOwner
     /// <summary>
     /// When true, the popup width comes from the popup's own content rather than this control's width,
     /// so the popup manager re-derives that width once the popup is connected and its inherited font
-    /// applies. Fixed-width dropdowns (sized to the control) leave this false.
+    /// applies. Fixed-width drop-downs (sized to the control) leave this false.
     /// </summary>
     protected virtual bool PopupSizesToContent => false;
 

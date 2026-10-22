@@ -47,7 +47,7 @@ public class ProgressIndicator : Control
     );
 
     /// <summary>
-    /// Gets or sets whether the ring animation is active.
+    /// Gets or sets whether the animation is active.
     /// </summary>
     public bool IsActive
     {

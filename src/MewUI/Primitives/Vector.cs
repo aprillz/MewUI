@@ -14,7 +14,7 @@ public readonly struct Vector : IEquatable<Vector>
     public static readonly Vector Zero = new(0, 0);
 
     /// <summary>
-    /// Gets the unit vector (1, 1).
+    /// Gets the vector (1, 1).
     /// </summary>
     public static readonly Vector One = new(1, 1);
 
@@ -50,7 +50,7 @@ public readonly struct Vector : IEquatable<Vector>
     public double LengthSquared => X * X + Y * Y;
 
     /// <summary>
-    /// Returns a normalized (unit-length) vector.
+    /// Returns a unit-length vector in the same direction; the zero vector returns <see cref="Zero"/>.
     /// </summary>
     public Vector Normalize()
     {

@@ -5,9 +5,9 @@ namespace Aprillz.MewUI;
 /// </summary>
 public enum BindingMode
 {
-    /// <summary>Source → Control only.</summary>
+    /// <summary>Changes flow from the source to the target only.</summary>
     OneWay,
 
-    /// <summary>Source ↔ Control (bidirectional).</summary>
+    /// <summary>Changes flow in both directions between the source and the target.</summary>
     TwoWay,
 }

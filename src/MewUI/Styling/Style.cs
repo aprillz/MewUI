@@ -6,8 +6,11 @@ namespace Aprillz.MewUI;
 
 /// <summary>
 /// Defines default and state-conditional property values for a control type.
-/// Created by Theme with palette colors; immutable after construction.
 /// </summary>
+/// <remarks>
+/// All members are init-only, so a style cannot change after construction; it is validated when a
+/// sheet or control first uses it live.
+/// </remarks>
 public sealed class Style
 {
     private static readonly object _freezeGate = new();
@@ -18,13 +21,14 @@ public sealed class Style
     private bool _isFrozen;
 
     /// <summary>
-    /// Gets whether this application style completely replaces the framework default style.
-    /// The style's own <see cref="BasedOn"/> chain is still applied.
+    /// Gets whether this application style completely replaces the framework default style; the style's
+    /// own <see cref="BasedOn"/> chain is still applied.
     /// </summary>
     public bool OverridesDefaultStyle { get; init; }
 
     /// <summary>
-    /// Gets the default theme style for the specified control type.
+    /// Gets the default theme style for a control type known only at run time, or null when none is
+    /// registered; throws <see cref="ArgumentException"/> when the type does not derive from <see cref="Control"/>.
     /// </summary>
     [RequiresUnreferencedCode(
         "Dynamic style lookup runs the target control's static constructor. Use ForType<T>() when the control type is known statically.")]
@@ -43,7 +47,7 @@ public sealed class Style
     }
 
     /// <summary>
-    /// Gets the default theme style for the specified control type.
+    /// Gets the default theme style for <typeparamref name="T"/>, or null when none is registered.
     /// </summary>
     public static Style? ForType<T>()
         where T : Control
@@ -53,9 +57,11 @@ public sealed class Style
     }
 
     /// <summary>
-    /// Creates a style that explicitly extends the nearest framework default style for
-    /// <typeparamref name="T"/>. This does not change ordinary Style or StyleSheet lookup.
+    /// Creates a style that explicitly extends the nearest framework default style for <typeparamref name="T"/>.
     /// </summary>
+    /// <remarks>
+    /// This does not change ordinary <see cref="Style"/> or <see cref="StyleSheet"/> lookup.
+    /// </remarks>
     public static Style DeriveFromDefault<
         T>(
         IReadOnlyList<SetterBase>? setters = null,
@@ -115,8 +121,7 @@ public sealed class Style
     public Type TargetType { get; }
 
     /// <summary>
-    /// Gets the parent style to inherit from. Properties not defined in this style
-    /// fall through to <see cref="BasedOn"/>.
+    /// Gets the parent style that properties not defined in this style fall through to.
     /// </summary>
     public Style? BasedOn
     {
@@ -134,8 +139,8 @@ public sealed class Style
     }
 
     /// <summary>
-    /// Gets the state-conditional triggers. Matching triggers are evaluated in declaration order;
-    /// for each property, the last active declaration wins.
+    /// Gets the state-conditional triggers, evaluated in declaration order so that for each property the
+    /// last matching declaration wins.
     /// </summary>
     public IReadOnlyList<StateTrigger> Triggers
     {
@@ -145,14 +150,20 @@ public sealed class Style
 
     /// <summary>
     /// Gets the transitions that animate property changes from this style's setters and triggers.
-    /// Resolved via <see cref="FindTransition"/> which walks the BasedOn chain.
     /// </summary>
+    /// <remarks>
+    /// Looked up through <see cref="FindTransition"/>, which walks the <see cref="BasedOn"/> chain.
+    /// </remarks>
     public IReadOnlyList<Transition> Transitions
     {
         get => _transitions;
         init => _transitions = value ?? throw new ArgumentNullException(nameof(value));
     }
 
+    /// <summary>
+    /// Creates a style for <paramref name="targetType"/>; throws <see cref="ArgumentException"/> when the
+    /// type does not derive from <see cref="Control"/>.
+    /// </summary>
     public Style(Type targetType)
     {
         ArgumentNullException.ThrowIfNull(targetType);
@@ -167,7 +178,8 @@ public sealed class Style
     }
 
     /// <summary>
-    /// Finds the transition for the given property, walking the BasedOn chain.
+    /// Finds the transition for the property with the given <see cref="MewProperty.Id"/>, walking the
+    /// <see cref="BasedOn"/> chain; null when none.
     /// </summary>
     public Transition? FindTransition(int propertyId)
     {

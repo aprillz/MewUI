@@ -22,6 +22,11 @@ public sealed class Separator : FrameworkElement
         MewProperty<Orientation>.Register<Separator>(nameof(Orientation), Orientation.Horizontal,
             MewPropertyOptions.AffectsLayout);
 
+    /// <summary>
+    /// Gets or sets the direction of the run this rule divides;
+    /// <see cref="Orientation.Horizontal"/> divides a left-to-right run and so draws a vertical
+    /// rule.
+    /// </summary>
     public Orientation Orientation
     {
         get => GetValue(OrientationProperty);

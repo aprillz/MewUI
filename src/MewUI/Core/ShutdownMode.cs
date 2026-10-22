@@ -5,7 +5,7 @@ namespace Aprillz.MewUI;
 /// </summary>
 public enum ShutdownMode
 {
-    /// <summary>Shut down when the last window closes. This is the default.</summary>
+    /// <summary>Shut down when the last window closes (the default).</summary>
     OnLastWindowClose,
 
     /// <summary>Shut down when the main window (the one passed to <see cref="Application.Run(Window)"/>) closes.</summary>

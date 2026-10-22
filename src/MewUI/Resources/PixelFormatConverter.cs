@@ -4,14 +4,17 @@ using Aprillz.MewUI.Rendering.Simd;
 namespace Aprillz.MewUI;
 
 /// <summary>
-/// Converts non-BGRA pixel formats to MewUI's internal BGRA32 layout. Output is a
-/// freshly-allocated <see cref="Bgra32PixelBuffer"/> that can be handed to
-/// <see cref="ImageSource.FromBgraPixels(Bgra32PixelBuffer)"/> or used directly by backends.
+/// Converts other pixel layouts to the BGRA32 layout that <see cref="ImageSource.FromBgraPixels(Bgra32PixelBuffer)"/>
+/// and backends consume.
 /// </summary>
+/// <remarks>
+/// Output is a freshly allocated <see cref="Bgra32PixelBuffer"/>.
+/// </remarks>
 public static class PixelFormatConverter
 {
     /// <summary>
-    /// Swizzles an RGBA32 buffer into BGRA32 by swapping R and B per pixel.
+    /// Swizzles an RGBA32 buffer into BGRA32 by swapping R and B per pixel; throws when the dimensions are not
+    /// positive or <paramref name="rgba"/> is not exactly <c>width * height * 4</c> bytes.
     /// </summary>
     /// <param name="width">Pixel width.</param>
     /// <param name="height">Pixel height.</param>

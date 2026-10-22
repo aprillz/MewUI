@@ -18,6 +18,7 @@ public class Adorner : Panel
         Add(child);
     }
 
+    /// <summary>Gets the element this adorner is positioned relative to.</summary>
     public UIElement AdornedElement { get; }
 
     protected override Size MeasureContent(Size availableSize)

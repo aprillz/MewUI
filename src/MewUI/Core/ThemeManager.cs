@@ -49,6 +49,10 @@ public sealed class ThemeManager
         }
     }
 
+    /// <summary>
+    /// Gets or sets the default seed used to construct the light theme when no custom theme is provided;
+    /// setting it after the application starts throws <see cref="InvalidOperationException"/>.
+    /// </summary>
     public static ThemeSeed DefaultLightSeed
     {
         get;
@@ -72,8 +76,8 @@ public sealed class ThemeManager
     } = ThemeSeed.DefaultLight;
 
     /// <summary>
-    /// Gets or sets the default seed used to construct the dark theme when no custom theme is provided.
-    /// This property must be set before the application starts.
+    /// Gets or sets the default seed used to construct the dark theme when no custom theme is provided;
+    /// setting it after the application starts throws <see cref="InvalidOperationException"/>.
     /// </summary>
     public static ThemeSeed DefaultDarkSeed
     {
@@ -98,8 +102,8 @@ public sealed class ThemeManager
     } = ThemeSeed.DefaultDark;
 
     /// <summary>
-    /// Gets or sets the default metrics used for theme construction.
-    /// This property must be set before the application starts.
+    /// Gets or sets the default metrics used for theme construction; setting it after the application
+    /// starts throws <see cref="InvalidOperationException"/>.
     /// </summary>
     public static ThemeMetrics DefaultMetrics
     {
@@ -124,8 +128,8 @@ public sealed class ThemeManager
     } = ThemeMetrics.Default;
 
     /// <summary>
-    /// Gets or sets the default accent used for theme construction.
-    /// This property must be set before the application starts.
+    /// Gets or sets the default accent used for theme construction; setting it after the application
+    /// starts throws <see cref="InvalidOperationException"/>.
     /// </summary>
     public static Accent DefaultAccent
     {
@@ -148,9 +152,8 @@ public sealed class ThemeManager
     } = Accent.Blue;
 
     /// <summary>
-    /// Gets or sets a custom default accent color.
-    /// When set, takes precedence over <see cref="DefaultAccent"/>.
-    /// This property must be set before the application starts.
+    /// Gets or sets a custom default accent color that takes precedence over <see cref="DefaultAccent"/>
+    /// when set; setting it after the application starts throws <see cref="InvalidOperationException"/>.
     /// </summary>
     public static Color? DefaultAccentColor
     {
@@ -173,8 +176,8 @@ public sealed class ThemeManager
     }
 
     /// <summary>
-    /// Gets or sets the default theme variant.
-    /// This property must be set before the application starts.
+    /// Gets or sets the default theme variant; setting it after the application starts throws
+    /// <see cref="InvalidOperationException"/>.
     /// </summary>
     public static ThemeVariant Default
     {
@@ -234,11 +237,17 @@ public sealed class ThemeManager
         }
     }
 
+    /// <summary>
+    /// Occurs when <see cref="Mode"/> changes.
+    /// </summary>
     public event Action? ThemeModeChanged;
 
     /// <summary>
-    /// Gets the current effective theme. This value is cached and recalculated only when inputs change.
+    /// Gets the current effective theme.
     /// </summary>
+    /// <remarks>
+    /// The value is cached and recalculated only when its inputs change.
+    /// </remarks>
     public Theme CurrentTheme
     {
         get

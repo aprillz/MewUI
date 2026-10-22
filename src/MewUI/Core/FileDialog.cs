@@ -2,11 +2,15 @@ namespace Aprillz.MewUI;
 
 /// <summary>
 /// A structured file filter: a display name plus one or more glob patterns (e.g. "*.png").
-/// Native backends translate this into their platform filter format; the managed backend uses it directly.
 /// </summary>
+/// <remarks>
+/// Native backends translate this into their platform filter format; the managed dialog uses it directly.
+/// </remarks>
+/// <param name="Name">The display name.</param>
+/// <param name="Patterns">The glob patterns, at least one.</param>
 public sealed record FileFilter(string Name, params string[] Patterns)
 {
-    /// <summary>True when <paramref name="fileName"/> matches any of this filter's patterns.</summary>
+    /// <summary>Returns whether <paramref name="fileName"/> matches any of this filter's patterns.</summary>
     public bool Matches(string fileName)
     {
         foreach (var pattern in Patterns)
@@ -64,7 +68,7 @@ public sealed record FileFilter(string Name, params string[] Patterns)
 /// </summary>
 public sealed class ManagedDialogExtras
 {
-    /// <summary>Show hidden files and folders in the managed browser.</summary>
+    /// <summary>Gets or sets whether hidden files and folders are shown in the managed browser.</summary>
     public bool ShowHiddenFiles { get; set; }
 }
 
@@ -73,21 +77,21 @@ public sealed class ManagedDialogExtras
 /// </summary>
 public sealed class OpenFileDialogOptions
 {
-    /// <summary>Owner window the dialog is parented to (optional; the active window is used when null).</summary>
+    /// <summary>Gets or sets the window that owns the dialog; null uses the active window.</summary>
     public Window? Owner { get; set; }
-    /// <summary>Dialog title.</summary>
+    /// <summary>Gets or sets the dialog title; the default is "Open".</summary>
     public string Title { get; set; } = "Open";
-    /// <summary>Initial directory (optional).</summary>
+    /// <summary>Gets or sets the directory the dialog opens in, or null for the dialog's own default.</summary>
     public string? InitialDirectory { get; set; }
-    /// <summary>Structured file filters (optional).</summary>
+    /// <summary>Gets or sets the file filters offered, or null for no filtering.</summary>
     public IReadOnlyList<FileFilter>? Filters { get; set; }
-    /// <summary>Zero-based index of the filter selected by default.</summary>
+    /// <summary>Gets or sets the zero-based index of the filter selected by default.</summary>
     public int FilterIndex { get; set; }
-    /// <summary>Whether multi-selection is enabled.</summary>
+    /// <summary>Gets or sets whether more than one file can be selected.</summary>
     public bool Multiselect { get; set; }
-    /// <summary>Whether to prefer a native dialog when available. Falls back to managed when managed dialogs are included. Default: true.</summary>
+    /// <summary>Gets or sets whether a native dialog is preferred when available, falling back to the managed dialog; the default is true.</summary>
     public bool PreferNative { get; set; } = true;
-    /// <summary>Managed-only advanced options (null uses defaults).</summary>
+    /// <summary>Gets or sets the managed-only advanced options; null uses the defaults.</summary>
     public ManagedDialogExtras? Managed { get; set; }
 }
 
@@ -96,25 +100,25 @@ public sealed class OpenFileDialogOptions
 /// </summary>
 public sealed class SaveFileDialogOptions
 {
-    /// <summary>Owner window the dialog is parented to (optional; the active window is used when null).</summary>
+    /// <summary>Gets or sets the window that owns the dialog; null uses the active window.</summary>
     public Window? Owner { get; set; }
-    /// <summary>Dialog title.</summary>
+    /// <summary>Gets or sets the dialog title; the default is "Save".</summary>
     public string Title { get; set; } = "Save";
-    /// <summary>Initial directory (optional).</summary>
+    /// <summary>Gets or sets the directory the dialog opens in, or null for the dialog's own default.</summary>
     public string? InitialDirectory { get; set; }
-    /// <summary>Structured file filters (optional).</summary>
+    /// <summary>Gets or sets the file filters offered, or null for no filtering.</summary>
     public IReadOnlyList<FileFilter>? Filters { get; set; }
-    /// <summary>Zero-based index of the filter selected by default.</summary>
+    /// <summary>Gets or sets the zero-based index of the filter selected by default.</summary>
     public int FilterIndex { get; set; }
-    /// <summary>Initial file name (optional).</summary>
+    /// <summary>Gets or sets the file name the dialog starts with, or null for none.</summary>
     public string? FileName { get; set; }
-    /// <summary>Default extension (optional).</summary>
+    /// <summary>Gets or sets the extension appended when the user types none, or null for none.</summary>
     public string? DefaultExtension { get; set; }
-    /// <summary>Whether to prompt before overwriting an existing file.</summary>
+    /// <summary>Gets or sets whether the dialog asks before overwriting an existing file; the default is true.</summary>
     public bool OverwritePrompt { get; set; } = true;
-    /// <summary>Whether to prefer a native dialog when available. Falls back to managed when managed dialogs are included. Default: true.</summary>
+    /// <summary>Gets or sets whether a native dialog is preferred when available, falling back to the managed dialog; the default is true.</summary>
     public bool PreferNative { get; set; } = true;
-    /// <summary>Managed-only advanced options (null uses defaults).</summary>
+    /// <summary>Gets or sets the managed-only advanced options; null uses the defaults.</summary>
     public ManagedDialogExtras? Managed { get; set; }
 }
 
@@ -123,15 +127,15 @@ public sealed class SaveFileDialogOptions
 /// </summary>
 public sealed class FolderDialogOptions
 {
-    /// <summary>Owner window the dialog is parented to (optional; the active window is used when null).</summary>
+    /// <summary>Gets or sets the window that owns the dialog; null uses the active window.</summary>
     public Window? Owner { get; set; }
-    /// <summary>Dialog title.</summary>
+    /// <summary>Gets or sets the dialog title; the default is "Select folder".</summary>
     public string Title { get; set; } = "Select folder";
-    /// <summary>Initial directory (optional).</summary>
+    /// <summary>Gets or sets the directory the dialog opens in, or null for the dialog's own default.</summary>
     public string? InitialDirectory { get; set; }
-    /// <summary>Whether to prefer a native dialog when available. Falls back to managed when managed dialogs are included. Default: true.</summary>
+    /// <summary>Gets or sets whether a native dialog is preferred when available, falling back to the managed dialog; the default is true.</summary>
     public bool PreferNative { get; set; } = true;
-    /// <summary>Managed-only advanced options (null uses defaults).</summary>
+    /// <summary>Gets or sets the managed-only advanced options; null uses the defaults.</summary>
     public ManagedDialogExtras? Managed { get; set; }
 }
 

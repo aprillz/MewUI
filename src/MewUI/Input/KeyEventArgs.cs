@@ -3,7 +3,7 @@ using Aprillz.MewUI.Platform;
 namespace Aprillz.MewUI;
 
 /// <summary>
-/// Modifier keys enumeration.
+/// Modifier keys that can be held during an input event.
 /// </summary>
 [Flags]
 public enum ModifierKeys
@@ -94,6 +94,9 @@ public class KeyEventArgs
         IsRepeat = isRepeat;
     }
 
+    /// <summary>
+    /// Creates arguments for a key the platform could not map, with <see cref="MewUI.Key.None"/>.
+    /// </summary>
     public KeyEventArgs(int platformKey, ModifierKeys modifiers = ModifierKeys.None, bool isRepeat = false)
         : this(Key.None, platformKey, modifiers, isRepeat)
     {
@@ -115,7 +118,7 @@ public class KeyEventArgs
     public bool AltKey => (Modifiers & ModifierKeys.Alt) != 0;
 
     /// <summary>
-    /// Gets whether the Meta key is pressed (Cmd on macOS, Win on Windows).
+    /// Gets whether the Meta key is pressed (Cmd on macOS, Win on Windows, Super on Linux).
     /// </summary>
     public bool MetaKey => (Modifiers & ModifierKeys.Meta) != 0;
 
@@ -133,9 +136,12 @@ public class TextInputEventArgs
     private string _text;
 
     /// <summary>
-    /// The text being input. A subscriber may assign a replacement, which the control then inserts
-    /// in place of what arrived; newlines are normalized the same way as on construction.
+    /// Gets or sets the text being input; a subscriber may assign a replacement, which the control
+    /// inserts in place of what arrived.
     /// </summary>
+    /// <remarks>
+    /// Newlines in an assigned replacement are normalized the same way as on construction.
+    /// </remarks>
     public string Text
     {
         get => _text;

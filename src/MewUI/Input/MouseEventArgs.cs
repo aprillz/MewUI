@@ -4,7 +4,7 @@ using Aprillz.MewUI.Platform;
 namespace Aprillz.MewUI;
 
 /// <summary>
-/// Mouse button enumeration.
+/// Identifies a mouse button.
 /// </summary>
 public enum MouseButton
 {
@@ -129,8 +129,10 @@ public class MouseEventArgs
 
     /// <summary>
     /// Gets the mouse position relative to the specified element (DIPs).
-    /// Equivalent to WPF's <c>MouseEventArgs.GetPosition</c> behavior.
     /// </summary>
+    /// <remarks>
+    /// Equivalent to WPF's <c>MouseEventArgs.GetPosition</c> behavior.
+    /// </remarks>
     public Point GetPosition(UIElement relativeTo)
     {
         ArgumentNullException.ThrowIfNull(relativeTo);
@@ -151,12 +153,13 @@ public class MouseEventArgs
 public class MouseWheelEventArgs : MouseEventArgs
 {
     /// <summary>
-    /// Gets the wheel scroll delta in notches.
-    /// <para>1.0 corresponds to one mouse-wheel notch. Trackpads and high-resolution
-    /// devices may produce fractional values.</para>
-    /// <para>Sign convention: <see cref="Vector.Y"/> positive = scroll-up intent
-    /// (toward earlier content); <see cref="Vector.X"/> positive = scroll-left intent.</para>
+    /// Gets the wheel scroll delta in notches, where 1.0 is one mouse-wheel notch and fractional values
+    /// come from trackpads and high-resolution devices.
     /// </summary>
+    /// <remarks>
+    /// Sign convention: <see cref="Vector.Y"/> positive = scroll-up intent (toward earlier content);
+    /// <see cref="Vector.X"/> positive = scroll-left intent.
+    /// </remarks>
     public Vector Delta { get; }
 
     /// <summary>

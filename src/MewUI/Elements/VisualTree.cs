@@ -4,8 +4,6 @@ namespace Aprillz.MewUI;
 
 /// <summary>
 /// Helper for traversing the visual tree.
-/// Uses iterative traversal with a reused stack to avoid
-/// per-node closure allocations.
 /// </summary>
 public static class VisualTree
 {
@@ -20,6 +18,10 @@ public static class VisualTree
         return true;
     };
 
+    /// <summary>
+    /// Returns the first element (depth-first, including <paramref name="element"/> itself)
+    /// of type <typeparamref name="T"/>, or <see langword="null"/> if none is found.
+    /// </summary>
     public static Element? FindVisualChild<T>(this Element element) where T : Element
     {
         return Find(element, static x => x is T);
@@ -27,7 +29,7 @@ public static class VisualTree
 
     /// <summary>
     /// Returns <see langword="true"/> when <paramref name="element"/> is
-    /// <paramref name="root"/> or a descendant of it in the logical/visual parent chain.
+    /// <paramref name="root"/> or a descendant of it in the visual parent chain.
     /// </summary>
     public static bool IsInSubtreeOf(UIElement element, Element root)
     {

@@ -19,14 +19,13 @@ public interface IGraphicsFactory : IRenderDevice, IDisposable
     string Backend { get; }
 
     /// <summary>
-    /// Creates a font resource.
+    /// Creates a font resource at the system DPI; <paramref name="size"/> is in DIPs.
     /// </summary>
     IFont CreateFont(string family, double size, FontWeight weight = FontWeight.Normal,
         bool italic = false, bool underline = false, bool strikethrough = false);
 
     /// <summary>
-    /// Creates a font resource for a specific DPI.
-    /// Font size is specified in DIPs (1/96 inch).
+    /// Creates a font resource for a specific DPI; <paramref name="size"/> is in DIPs (1/96 inch).
     /// </summary>
     IFont CreateFont(string family, double size, uint dpi, FontWeight weight = FontWeight.Normal,
         bool italic = false, bool underline = false, bool strikethrough = false);
@@ -40,9 +39,6 @@ public interface IGraphicsFactory : IRenderDevice, IDisposable
     /// <returns>A new graphics context.</returns>
     IGraphicsContext CreateContext(IRenderTarget target);
 
-    /// <summary>
-    /// Creates a measurement-only graphics context for text measurement.
-    /// </summary>
     /// <summary>
     /// Creates an executor for evaluating <see cref="ImageFilter"/> graphs. The default
     /// returns a CPU reference implementation; backends override to return GPU-accelerated
@@ -119,5 +115,6 @@ public interface IEncodedImageFactory
 /// </summary>
 public interface IWindowResourceReleaser
 {
+    /// <summary>Releases the resources the factory holds for the window identified by <paramref name="windowHandle"/>.</summary>
     void ReleaseWindowResources(nint windowHandle);
 }

@@ -1,15 +1,19 @@
 namespace Aprillz.MewUI.Rendering;
 
+/// <summary>Creates <see cref="IRenderOperation"/> values.</summary>
 public static class RenderOperation
 {
+    /// <summary>Gets an operation that is already completed.</summary>
     public static IRenderOperation Completed { get; } = new CompletedRenderOperation();
 
+    /// <summary>Wraps <paramref name="task"/>; returns <see cref="Completed"/> when it has already completed successfully.</summary>
     public static IRenderOperation FromTask(Task task)
     {
         ArgumentNullException.ThrowIfNull(task);
         return task.IsCompletedSuccessfully ? Completed : new TaskRenderOperation(task);
     }
 
+    /// <summary>Wraps <paramref name="valueTask"/>; returns <see cref="Completed"/> when it has already completed successfully.</summary>
     public static IRenderOperation FromValueTask(ValueTask valueTask)
         => valueTask.IsCompletedSuccessfully
             ? Completed

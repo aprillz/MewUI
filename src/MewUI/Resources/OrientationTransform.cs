@@ -4,12 +4,11 @@ namespace Aprillz.MewUI.Resources;
 
 /// <summary>
 /// Maps between an image's raw (as-decoded) pixel space and the oriented space the viewer sees after an
-/// <see cref="ImageOrientation"/> is applied. Every consumer that honors orientation (layout, ViewBox,
-/// alignment, hit/pixel lookup) goes through this single source of truth so the forward and inverse
-/// directions cannot drift apart.
+/// <see cref="ImageOrientation"/> is applied.
 /// </summary>
 /// <remarks>
-/// Matrices follow the <see cref="Vector2.Transform(Vector2, Matrix3x2)"/> convention and map the raw
+/// Every consumer that honors orientation (layout, view box, alignment, hit and pixel lookup) goes through
+/// this single source of truth so the forward and inverse directions cannot drift apart. Matrices follow the <see cref="Vector2.Transform(Vector2, Matrix3x2)"/> convention and map the raw
 /// image box <c>[0,w] x [0,h]</c> onto the oriented box anchored at the origin. The transforms are pure
 /// 90-degree rotations and axis flips, so they map axis-aligned rectangles to axis-aligned rectangles
 /// exactly.
@@ -23,7 +22,7 @@ public static class OrientationTransform
             : ImageOrientation.Normal;
 
     /// <summary>
-    /// True when the orientation is a quarter turn (or diagonal reflection), so the oriented size swaps
+    /// Returns whether the orientation is a quarter turn or diagonal reflection, so the oriented size swaps
     /// width and height relative to the raw size.
     /// </summary>
     public static bool SwapsWidthHeight(ImageOrientation orientation) =>
@@ -32,12 +31,12 @@ public static class OrientationTransform
             or ImageOrientation.Transverse
             or ImageOrientation.Rotate270;
 
-    /// <summary>Size of the image in oriented space (width/height swapped for quarter turns).</summary>
+    /// <summary>Returns the size of the image in oriented space, with width and height swapped for quarter turns.</summary>
     public static Size GetOrientedSize(ImageOrientation orientation, double rawWidth, double rawHeight) =>
         SwapsWidthHeight(orientation) ? new Size(rawHeight, rawWidth) : new Size(rawWidth, rawHeight);
 
     /// <summary>
-    /// Builds the raw-to-oriented affine transform for an image of the given raw size. Entries are 0/±1
+    /// Builds the raw-to-oriented affine transform for an image of the given raw size; entries are 0 or ±1
     /// plus a width/height translation, so the transform is exact for integer pixel coordinates.
     /// </summary>
     public static Matrix3x2 CreateRawToOrientedMatrix(ImageOrientation orientation, double rawWidth, double rawHeight)
@@ -61,7 +60,7 @@ public static class OrientationTransform
         };
     }
 
-    /// <summary>Inverse of <see cref="CreateRawToOrientedMatrix"/> (oriented coordinates back to raw).</summary>
+    /// <summary>Builds the inverse of <see cref="CreateRawToOrientedMatrix"/>, mapping oriented coordinates back to raw.</summary>
     public static Matrix3x2 CreateOrientedToRawMatrix(ImageOrientation orientation, double rawWidth, double rawHeight)
     {
         var forward = CreateRawToOrientedMatrix(orientation, rawWidth, rawHeight);

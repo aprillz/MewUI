@@ -7,16 +7,15 @@ using Aprillz.MewUI.Rendering;
 namespace Aprillz.MewUI;
 
 /// <summary>
-/// Backend-agnostic image source. Accepts either encoded image bytes (PNG/JPG/BMP) or
-/// pre-decoded BGRA pixel buffers.
-///
-/// For built-in backends, decoded pixels are shared and cached so rendering and pixel
-/// sampling (e.g. <c>Image.TryPeekColor</c>) reuse a single buffer. After a successful
-/// decode the encoded bytes are released when the full intrinsic variant is resident. Target-sized
-/// variants retain their backing so a later, larger request can replace them.
-///
-/// Sources created from raw pixels skip the decoder path entirely.
+/// Backend-agnostic image source created from encoded image bytes (PNG, JPEG, BMP) or pre-decoded BGRA32 pixels.
 /// </summary>
+/// <remarks>
+/// For built-in backends, decoded pixels are shared and cached so rendering and pixel sampling
+/// (<see cref="Controls.Image.TryPeekColor(Point, out Color)"/>) reuse a single buffer. After a successful
+/// decode the encoded bytes are released once the full intrinsic variant is resident; target-sized variants
+/// retain their backing so a later, larger request can replace them. Sources created from raw pixels skip
+/// the decoder path entirely.
+/// </remarks>
 public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource, IDecodedPixelCacheOwner, IDisposable
 {
     private delegate bool EncodedImageDecoder(byte[] encoded, out Bgra32PixelBuffer bitmap, out ImageOrientation orientation);
@@ -87,9 +86,11 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource, ID
     internal ReadOnlyMemory<byte> EncodedBytes => _encoded ?? ReadOnlyMemory<byte>.Empty;
 
     /// <summary>
-    /// Best-effort detected format id from registered decoders (diagnostics only).
-    /// Cached after first access - survives encoded-bytes release.
+    /// Gets the format id detected by registered decoders, or null when unknown; for diagnostics only.
     /// </summary>
+    /// <remarks>
+    /// Cached after first access, so it survives the release of the encoded bytes.
+    /// </remarks>
     public string? FormatId
     {
         get
@@ -103,18 +104,18 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource, ID
         }
     }
 
-    /// <summary>Intrinsic pixel width read from metadata without decoding pixels when supported.</summary>
+    /// <summary>Gets the intrinsic pixel width, read from metadata without decoding when the format supports it; 0 when unavailable.</summary>
     public int PixelWidth => TryGetMetadata(out var metadata) ? metadata.PixelWidth : 0;
 
-    /// <summary>Intrinsic pixel height read from metadata without decoding pixels when supported.</summary>
+    /// <summary>Gets the intrinsic pixel height, read from metadata without decoding when the format supports it; 0 when unavailable.</summary>
     public int PixelHeight => TryGetMetadata(out var metadata) ? metadata.PixelHeight : 0;
 
-    /// <summary>Whether the source carries a meaningful alpha channel.</summary>
+    /// <summary>Gets whether the source carries a meaningful alpha channel.</summary>
     public bool HasAlpha => !TryGetMetadata(out var metadata) || metadata.HasAlpha;
 
     /// <summary>
-    /// Orientation parsed from the source metadata without decoding pixels. Raw-pixel sources and formats
-    /// without orientation metadata return <see cref="ImageOrientation.Identity"/>.
+    /// Gets the orientation parsed from the source metadata without decoding pixels;
+    /// <see cref="ImageOrientation.Identity"/> for raw-pixel sources and formats without orientation metadata.
     /// </summary>
     public ImageOrientation Orientation => TryGetMetadata(out var metadata)
         ? metadata.Orientation
@@ -139,9 +140,12 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource, ID
     public static ImageSource FromFile(string path) => FromBytes(File.ReadAllBytes(path));
 
     /// <summary>
-    /// Loads an embedded resource from the specified assembly.
-    /// AOT-friendly: avoids reflection-based discovery; the caller provides the assembly + name.
+    /// Loads an embedded resource from the specified assembly; throws <see cref="FileNotFoundException"/>
+    /// when the resource does not exist.
     /// </summary>
+    /// <remarks>
+    /// AOT-friendly: the caller supplies the assembly and name, so no reflection-based discovery is needed.
+    /// </remarks>
     public static ImageSource FromResource(Assembly assembly, string resourceName)
     {
         ArgumentNullException.ThrowIfNull(assembly);
@@ -202,8 +206,7 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource, ID
         TryFromResource(typeof(TAnchor).Assembly, resourceName, out source);
 
     /// <summary>
-    /// Wraps a pre-decoded BGRA32 buffer. The array is referenced (not copied) - caller must
-    /// not mutate after handing it over.
+    /// Wraps a pre-decoded BGRA32 array without copying it; the caller must not mutate the array afterwards.
     /// </summary>
     public static ImageSource FromBgraPixels(int width, int height, byte[] bgra, bool hasAlpha = true)
     {
@@ -231,16 +234,17 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource, ID
     }
 
     /// <summary>
-    /// Wraps an existing <see cref="Bgra32PixelBuffer"/>. The buffer's array is referenced (not copied).
+    /// Wraps an existing <see cref="Bgra32PixelBuffer"/> without copying its array; the caller must not mutate
+    /// the array afterwards.
     /// </summary>
     public static ImageSource FromBgraPixels(Bgra32PixelBuffer buffer) => new(buffer);
 
     /// <summary>
-    /// Copies the decoded pixels into the caller-provided destination buffer in tight-packed BGRA32 order.
-    /// Triggers decode on first access if needed.
+    /// Copies the decoded pixels into <paramref name="destination"/> in BGRA32 order with the given stride,
+    /// decoding first when needed.
     /// </summary>
     /// <param name="destination">Destination buffer to receive the pixels.</param>
-    /// <param name="strideBytes">Destination stride in bytes per row. Must be at least <c>PixelWidth*4</c>.</param>
+    /// <param name="strideBytes">Destination stride in bytes per row; must be at least <c>PixelWidth * 4</c>.</param>
     public void CopyPixels(Span<byte> destination, int strideBytes)
     {
         TryEnsureDecoded(PixelWidth, PixelHeight, out _);
@@ -330,12 +334,13 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource, ID
         }
     }
 
+    /// <summary>Decodes the pixels at intrinsic size when they are not already resident.</summary>
     public void EnsureDecode()
     {
         TryEnsureDecoded(PixelWidth, PixelHeight, out _);
     }
 
-    /// <summary>Prepares pixels for a known device-pixel footprint without exceeding intrinsic size.</summary>
+    /// <summary>Decodes the pixels for a known device-pixel footprint, never exceeding the intrinsic size.</summary>
     public void EnsureDecode(int targetPixelWidth, int targetPixelHeight)
     {
         TryEnsureDecoded(targetPixelWidth, targetPixelHeight, out _);
@@ -468,6 +473,10 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource, ID
     public IImage CreateImage(IGraphicsFactory factory)
         => CreateImage(factory, PixelWidth, PixelHeight);
 
+    /// <summary>
+    /// Creates a backend image for a known device-pixel footprint, never exceeding the intrinsic size; throws
+    /// <see cref="ObjectDisposedException"/> after <see cref="Dispose"/>.
+    /// </summary>
     public IImage CreateImage(IGraphicsFactory factory, int targetPixelWidth, int targetPixelHeight)
     {
         ArgumentNullException.ThrowIfNull(factory);
@@ -723,9 +732,10 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource, ID
 
     /// <summary>
     /// Releases decoded pixels and retires cached backend realizations owned by this source.
-    /// Active image leases remain valid until their own disposal; no in-flight backend image is
-    /// destroyed early.
     /// </summary>
+    /// <remarks>
+    /// Active image leases remain valid until their own disposal; no in-flight backend image is destroyed early.
+    /// </remarks>
     public void Dispose()
     {
         List<SharedImageRealization>? dispose = null;

@@ -9,7 +9,7 @@ public partial class Window
     private UIElement? _lastInspectorHover;
     private bool _lastInspectorInfoPanelAvoidsMouse;
 
-    /// <summary>This window's development tools, or null when the app did not opt into them.</summary>
+    /// <summary>Gets this window's development tools, or null when the app did not opt into them.</summary>
     public WindowDevTools? DevTools => _devTools;
 
     // Forwarders so the DevTools windows keep reaching the overlay through the window they target.

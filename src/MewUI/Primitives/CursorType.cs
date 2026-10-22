@@ -5,8 +5,7 @@ namespace Aprillz.MewUI;
 /// </summary>
 public enum CursorType
 {
-    /// <summary>Hidden cursor: the pointer is not drawn (e.g. kiosk / fullscreen).
-    /// To inherit instead, leave an element's Cursor as <see langword="null"/>.</summary>
+    /// <summary>Hidden cursor: the pointer is not drawn (kiosk, fullscreen); to inherit instead, leave <see cref="Controls.UIElement.Cursor"/> <see langword="null"/>.</summary>
     None,
     /// <summary>Standard arrow cursor.</summary>
     Arrow,

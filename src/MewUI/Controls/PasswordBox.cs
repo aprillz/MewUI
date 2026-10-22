@@ -48,8 +48,8 @@ public sealed class PasswordBox : SingleLineTextBase
     }
 
     /// <summary>
-    /// Occurs when the password text changes. Carries no value so the password is never exposed
-    /// through this notification channel; read <see cref="Password"/> directly if the value is needed.
+    /// Occurs when the password text changes; it carries no value, so read <see cref="Password"/>
+    /// directly if needed.
     /// </summary>
     public event Action? PasswordChanged;
 

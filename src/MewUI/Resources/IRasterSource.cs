@@ -12,6 +12,6 @@ public interface IRasterSource
     /// <summary>Gets the raster height in pixels.</summary>
     int PixelHeight { get; }
 
-    /// <summary>Monotonically increasing version. Backends can use this to detect changes.</summary>
+    /// <summary>Gets the monotonically increasing version that backends compare to detect changes.</summary>
     int Version { get; }
 }

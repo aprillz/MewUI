@@ -15,7 +15,7 @@ public enum GridUnitType
     /// <summary>Size to content.</summary>
     Auto,
 
-    /// <summary>Fixed pixel size.</summary>
+    /// <summary>Fixed size in DIPs.</summary>
     Pixel,
 
     /// <summary>Proportional size (star sizing).</summary>
@@ -23,20 +23,23 @@ public enum GridUnitType
 }
 
 /// <summary>
-/// Represents a grid length value.
+/// Represents the length of a grid row or column: fixed, auto or star.
 /// </summary>
 public readonly struct GridLength
 {
     /// <summary>
-    /// Numeric value.
+    /// Gets the numeric value: the length in DIPs or the star weight.
     /// </summary>
     public double Value { get; }
 
     /// <summary>
-    /// Unit type.
+    /// Gets the unit type.
     /// </summary>
     public GridUnitType GridUnitType { get; }
 
+    /// <summary>
+    /// Initializes a length with a value and unit type; the unit defaults to <see cref="GridUnitType.Pixel"/>.
+    /// </summary>
     public GridLength(double value, GridUnitType type = GridUnitType.Pixel)
     {
         Value = value;
@@ -54,17 +57,17 @@ public readonly struct GridLength
     public bool IsStar => GridUnitType == GridUnitType.Star;
 
     /// <summary>
-    /// Gets whether this is absolute pixel sizing.
+    /// Gets whether this is a fixed length in DIPs.
     /// </summary>
     public bool IsAbsolute => GridUnitType == GridUnitType.Pixel;
 
     /// <summary>
-    /// Auto sizing (size to content).
+    /// Gets the auto length (size to content).
     /// </summary>
     public static GridLength Auto => new(1, GridUnitType.Auto);
 
     /// <summary>
-    /// Star sizing (1*).
+    /// Gets the 1* star length.
     /// </summary>
     public static GridLength Star => new(1, GridUnitType.Star);
 
@@ -76,15 +79,21 @@ public readonly struct GridLength
     public static GridLength Stars(double value) => new(value, GridUnitType.Star);
 
     /// <summary>
-    /// Absolute pixel sizing.
+    /// Fixed length in DIPs.
     /// </summary>
-    /// <param name="value">Pixel value.</param>
-    /// <returns>GridLength with pixel sizing.</returns>
+    /// <param name="value">The length in DIPs.</param>
+    /// <returns>GridLength with a fixed length.</returns>
     public static GridLength Pixels(double value) => new(value, GridUnitType.Pixel);
 
+    /// <summary>
+    /// Converts a double to a fixed length in DIPs.
+    /// </summary>
     public static implicit operator GridLength(double value) => new(value, GridUnitType.Pixel);
 }
 
+/// <summary>
+/// Base class for <see cref="RowDefinition"/> and <see cref="ColumnDefinition"/>.
+/// </summary>
 public abstract class GridDefinitionBase
 {
     internal Grid? ParentGrid { get; private set; }
@@ -116,18 +125,27 @@ public abstract class GridDefinitionBase
         }
     }
 
+    /// <summary>
+    /// Invalidates the measure of the grid this definition belongs to, if any.
+    /// </summary>
     protected void InvalidateParentGrid()
     {
         ParentGrid?.InvalidateMeasure();
     }
 }
 
+/// <summary>
+/// Defines the height constraints of one <see cref="Grid"/> row.
+/// </summary>
 public sealed class RowDefinition : GridDefinitionBase
 {
     private GridLength _height = GridLength.Star;
     private double _minHeight;
     private double _maxHeight = double.PositiveInfinity;
 
+    /// <summary>
+    /// Gets or sets the row height; the default is <see cref="GridLength.Star"/>.
+    /// </summary>
     public GridLength Height
     {
         get => _height;
@@ -143,6 +161,9 @@ public sealed class RowDefinition : GridDefinitionBase
         }
     }
 
+    /// <summary>
+    /// Gets or sets the minimum row height in DIPs.
+    /// </summary>
     public double MinHeight
     {
         get => _minHeight;
@@ -158,6 +179,9 @@ public sealed class RowDefinition : GridDefinitionBase
         }
     }
 
+    /// <summary>
+    /// Gets or sets the maximum row height in DIPs; the default is no bound.
+    /// </summary>
     public double MaxHeight
     {
         get => _maxHeight;
@@ -173,6 +197,9 @@ public sealed class RowDefinition : GridDefinitionBase
         }
     }
 
+    /// <summary>
+    /// Gets the height the last layout pass gave the row, in DIPs.
+    /// </summary>
     public double ActualHeight
     {
         get => ActualSize;
@@ -188,12 +215,18 @@ public sealed class RowDefinition : GridDefinitionBase
     internal override double ActualSize { get; set; }
 }
 
+/// <summary>
+/// Defines the width constraints of one <see cref="Grid"/> column.
+/// </summary>
 public sealed class ColumnDefinition : GridDefinitionBase
 {
     private GridLength _width = GridLength.Star;
     private double _minWidth;
     private double _maxWidth = double.PositiveInfinity;
 
+    /// <summary>
+    /// Gets or sets the column width; the default is <see cref="GridLength.Star"/>.
+    /// </summary>
     public GridLength Width
     {
         get => _width;
@@ -209,6 +242,9 @@ public sealed class ColumnDefinition : GridDefinitionBase
         }
     }
 
+    /// <summary>
+    /// Gets or sets the minimum column width in DIPs.
+    /// </summary>
     public double MinWidth
     {
         get => _minWidth;
@@ -224,6 +260,9 @@ public sealed class ColumnDefinition : GridDefinitionBase
         }
     }
 
+    /// <summary>
+    /// Gets or sets the maximum column width in DIPs; the default is no bound.
+    /// </summary>
     public double MaxWidth
     {
         get => _maxWidth;
@@ -239,6 +278,9 @@ public sealed class ColumnDefinition : GridDefinitionBase
         }
     }
 
+    /// <summary>
+    /// Gets the width the last layout pass gave the column, in DIPs.
+    /// </summary>
     public double ActualWidth
     {
         get => ActualSize;
@@ -390,15 +432,19 @@ public class Grid : Panel
 
     #endregion
 
+    /// <summary>Whether children without an explicit row and column are placed in the first free cell; the default is true.</summary>
     public static readonly MewProperty<bool> AutoIndexingProperty =
         MewProperty<bool>.Register<Grid>(nameof(AutoIndexing), true, MewPropertyOptions.AffectsLayout);
 
+    /// <summary>The spacing between rows and between columns in DIPs.</summary>
     public static readonly MewProperty<double> SpacingProperty =
         MewProperty<double>.Register<Grid>(nameof(Spacing), 0.0, MewPropertyOptions.AffectsLayout);
 
+    /// <summary>Whether lines are drawn between rows and columns, for layout debugging.</summary>
     public static readonly MewProperty<bool> ShowGridLineProperty =
         MewProperty<bool>.Register<Grid>(nameof(ShowGridLine), false, MewPropertyOptions.AffectsRender);
 
+    /// <summary>Whether all star rows and all star columns take the measure size of the largest star track on their axis, scaled by weight.</summary>
     public static readonly MewProperty<bool> ShareStarSizeProperty =
         MewProperty<bool>.Register<Grid>(nameof(ShareStarSize), false, MewPropertyOptions.AffectsLayout);
 
@@ -425,6 +471,9 @@ public class Grid : Panel
     private readonly Dictionary<SpanKey, double> _spanRequestScratch = new();
     private readonly List<KeyValuePair<SpanKey, double>> _spanRequestOrderScratch = new();
 
+    /// <summary>
+    /// Initializes a grid that lays out as one star row and column until definitions are added.
+    /// </summary>
     public Grid()
     {
         _rowDefinitions = new DefinitionCollection<RowDefinition>(this);
@@ -433,22 +482,37 @@ public class Grid : Panel
         _implicitColumns = [_implicitColumn];
     }
 
+    /// <summary>
+    /// Gets the row definitions; with none, the grid lays out as a single star row.
+    /// </summary>
     public IList<RowDefinition> RowDefinitions => _rowDefinitions;
 
+    /// <summary>
+    /// Gets the column definitions; with none, the grid lays out as a single star column.
+    /// </summary>
     public IList<ColumnDefinition> ColumnDefinitions => _columnDefinitions;
 
+    /// <summary>
+    /// Gets or sets whether children without an explicit row and column are placed in the first free cell; the default is true.
+    /// </summary>
     public bool AutoIndexing
     {
         get => GetValue(AutoIndexingProperty);
         set => SetValue(AutoIndexingProperty, value);
     }
 
+    /// <summary>
+    /// Gets or sets the spacing between rows and between columns in DIPs.
+    /// </summary>
     public double Spacing
     {
         get => GetValue(SpacingProperty);
         set => SetValue(SpacingProperty, value);
     }
 
+    /// <summary>
+    /// Gets or sets whether lines are drawn between rows and columns, for layout debugging.
+    /// </summary>
     public bool ShowGridLine
     {
         get => GetValue(ShowGridLineProperty);
@@ -456,11 +520,12 @@ public class Grid : Panel
     }
 
     /// <summary>
-    /// When true, all Star columns are sized to max(MeasureSize / weight) * weight,
-    /// and likewise for Star rows. The Grid's desired size grows to accommodate the
-    /// largest star content. (WPF SharedSizeGroup-like behavior, applied to all stars
-    /// on each axis regardless of Horizontal/VerticalAlignment.)
+    /// Gets or sets whether all star rows and all star columns take the measure size of the largest star track on their axis, scaled by weight.
     /// </summary>
+    /// <remarks>
+    /// The grid's desired size grows to fit the largest star content. This is WPF SharedSizeGroup-like behavior
+    /// applied to every star track on an axis, regardless of alignment.
+    /// </remarks>
     public bool ShareStarSize
     {
         get => GetValue(ShareStarSizeProperty);

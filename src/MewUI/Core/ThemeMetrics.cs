@@ -126,17 +126,17 @@ public sealed record class ThemeMetrics
     public required FontWeight FontWeight { get; init; }
 
     /// <summary>
-    /// Gets the visual thickness of the scroll bar thumb/track (in DIPs).
+    /// Gets the visual thickness of the scrollbar thumb and track (in DIPs).
     /// </summary>
     public required double ScrollBarThickness { get; init; }
 
     /// <summary>
-    /// Gets the minimum hit-test thickness for scroll bars (in DIPs).
+    /// Gets the minimum hit-test thickness for scrollbars (in DIPs).
     /// </summary>
     public required double ScrollBarHitThickness { get; init; }
 
     /// <summary>
-    /// Gets the minimum thumb length for scroll bars (in DIPs).
+    /// Gets the minimum thumb length for scrollbars (in DIPs).
     /// </summary>
     public required double ScrollBarMinThumbLength { get; init; }
 
@@ -146,12 +146,12 @@ public sealed record class ThemeMetrics
     public required double ScrollWheelStep { get; init; }
 
     /// <summary>
-    /// Gets the small-change amount used by scroll bars (in DIPs).
+    /// Gets the small-change amount used by scrollbars (in DIPs).
     /// </summary>
     public required double ScrollBarSmallChange { get; init; }
 
     /// <summary>
-    /// Gets the large-change amount used by scroll bars (in DIPs).
+    /// Gets the large-change amount used by scrollbars (in DIPs).
     /// </summary>
     public required double ScrollBarLargeChange { get; init; }
 

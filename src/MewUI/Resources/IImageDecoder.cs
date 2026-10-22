@@ -6,14 +6,16 @@ namespace Aprillz.MewUI.Resources;
 public interface IImageDecoder
 {
     /// <summary>
-    /// A stable identifier for this decoder (e.g. "png", "jpeg", "webp").
-    /// Used for diagnostics only; decoding is capability-based via <see cref="CanDecode"/>.
+    /// Gets a stable identifier for this decoder (for example "png", "jpeg", "webp"), used for diagnostics only.
     /// </summary>
+    /// <remarks>
+    /// Decoding is capability-based via <see cref="CanDecode"/>.
+    /// </remarks>
     string Id { get; }
 
     /// <summary>
-    /// Returns true if this decoder can handle the provided encoded bytes.
-    /// Should be fast and avoid allocations.
+    /// Returns whether this decoder can handle the provided encoded bytes; implementations should be fast and
+    /// avoid allocations.
     /// </summary>
     bool CanDecode(ReadOnlySpan<byte> encoded);
 
@@ -26,10 +28,13 @@ public interface IImageDecoder
     bool TryDecode(ReadOnlySpan<byte> encoded, out Bgra32PixelBuffer bitmap);
 
     /// <summary>
-    /// Reads the image orientation from the encoded metadata without decoding pixels. Kept separate from
-    /// <see cref="TryDecode(ReadOnlySpan{byte}, out Bgra32PixelBuffer)"/> so the fast byte[] pixel path is
-    /// preserved and the cheap metadata scan never forces an array copy. Defaults to
-    /// <see cref="ImageOrientation.Identity"/>; formats without orientation metadata need not override it.
+    /// Reads the image orientation from the encoded metadata without decoding pixels;
+    /// <see cref="ImageOrientation.Identity"/> by default.
     /// </summary>
+    /// <remarks>
+    /// Kept separate from <see cref="TryDecode(ReadOnlySpan{byte}, out Bgra32PixelBuffer)"/> so the fast byte[]
+    /// pixel path is preserved and the cheap metadata scan never forces an array copy. Formats without
+    /// orientation metadata need not override it.
+    /// </remarks>
     ImageOrientation ReadOrientation(ReadOnlySpan<byte> encoded) => ImageOrientation.Identity;
 }

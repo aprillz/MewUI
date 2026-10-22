@@ -11,45 +11,45 @@ public interface IPixelBufferSource : IRasterSource
     int StrideBytes { get; }
 
     /// <summary>
-    /// Whether the pixel buffer's RGB channels are already multiplied by alpha.
-    /// Consumers must skip their own premultiply step when true; otherwise the data gets
-    /// premultiplied a second time, darkening every semi-transparent pixel (visible as a
-    /// black halo on alpha-blended edges).
+    /// Gets whether the RGB channels are already multiplied by alpha; the default is false.
     /// </summary>
     /// <remarks>
-    /// Default false to preserve straight-alpha semantics for sources that haven't opted
-    /// in (PNG decode, raw byte arrays, <see cref="WriteableBitmap"/>). Render-target
-    /// sources that produce premultiplied output override to true.
+    /// Consumers must skip their own premultiply step when true; otherwise the data is premultiplied a second
+    /// time, darkening every semi-transparent pixel (a black halo on alpha-blended edges). The default
+    /// preserves straight-alpha semantics for sources that have not opted in (PNG decode, raw byte arrays,
+    /// <see cref="WriteableBitmap"/>); render-target sources that produce premultiplied output override to true.
     /// </remarks>
     bool IsPremultiplied => false;
 
     /// <summary>
-    /// Whether the buffer carries a meaningful alpha channel. False means every pixel is
-    /// fully opaque by construction (JPEG decode, opaque PNG, 24-bit BMP, etc.).
+    /// Gets whether the buffer carries a meaningful alpha channel; false means every pixel is fully opaque by
+    /// construction (JPEG decode, opaque PNG, 24-bit BMP), and the default is true.
     /// </summary>
     /// <remarks>
-    /// Lets consumers skip per-pixel alpha scans (the conservative "is every byte 0xFF?"
-    /// check that runs before premultiply) and pick the opaque blending path, which avoids
-    /// per-fragment blend math. Default <c>true</c> is the safe choice - preserves
-    /// alpha-aware blending for any source that hasn't explicitly opted out.
+    /// Lets consumers skip per-pixel alpha scans (the conservative "is every byte 0xFF?" check that runs
+    /// before premultiply) and pick the opaque blending path, which avoids per-fragment blend math. The
+    /// default preserves alpha-aware blending for any source that has not explicitly opted out.
     /// </remarks>
     bool HasAlpha => true;
 
     /// <summary>
-    /// Mechanism by which <see cref="Lock"/> exposes the pixel buffer. Default
-    /// <see cref="LockMode.Direct"/> for CPU-resident sources; GPU-resident sources
-    /// override to <see cref="LockMode.Readback"/> so deferred consumers can detect the
-    /// sync barrier before invoking <c>Lock</c>.
+    /// Gets the mechanism by which <see cref="Lock"/> exposes the pixel buffer; the default is
+    /// <see cref="LockMode.Direct"/>.
     /// </summary>
+    /// <remarks>
+    /// GPU-resident sources override to <see cref="LockMode.Readback"/> so deferred consumers can detect the
+    /// sync barrier before invoking <see cref="Lock"/>.
+    /// </remarks>
     LockMode LockMode => LockMode.Direct;
 
     /// <summary>
-    /// Producer hint: the buffer is updated frequently (e.g. each frame of a video,
-    /// animated CPU canvas). Consumers may route through async upload paths instead of a
-    /// blocking synchronous upload. Static sources (file-decoded PNG, opaque
-    /// WriteableBitmap drawn once) leave this <see langword="false"/> so the sync upload
-    /// path keeps mipmap generation and other quality settings.
+    /// Gets whether the producer updates the buffer frequently (for example every video frame), letting
+    /// consumers route through asynchronous upload paths; the default is false.
     /// </summary>
+    /// <remarks>
+    /// Static sources (a file-decoded PNG, an opaque <see cref="WriteableBitmap"/> drawn once) leave this false
+    /// so the synchronous upload path keeps mipmap generation and other quality settings.
+    /// </remarks>
     bool IsStreaming => false;
 
     /// <summary>
@@ -64,6 +64,10 @@ public interface IPixelBufferSource : IRasterSource
 /// <summary>
 /// Represents a rectangular region in pixel coordinates.
 /// </summary>
+/// <param name="X">Left edge in pixels.</param>
+/// <param name="Y">Top edge in pixels.</param>
+/// <param name="Width">Width in pixels.</param>
+/// <param name="Height">Height in pixels.</param>
 public readonly record struct PixelRegion(int X, int Y, int Width, int Height)
 {
     /// <summary>
@@ -118,11 +122,17 @@ public sealed class PixelBufferLock : IDisposable
     public byte[] Buffer { get; }
 
     /// <summary>
-    /// The dirty region since the last lock, or null if the entire buffer should be considered dirty.
-    /// Backends can use this for partial updates instead of re-uploading the entire buffer.
+    /// Gets the dirty region since the last lock, or null when the entire buffer should be treated as dirty.
     /// </summary>
+    /// <remarks>
+    /// Backends can use this for partial updates instead of uploading the entire buffer again.
+    /// </remarks>
     public PixelRegion? DirtyRegion { get; }
 
+    /// <summary>
+    /// Creates a lock over <paramref name="buffer"/> that invokes <paramref name="release"/> once on
+    /// <see cref="Dispose"/>.
+    /// </summary>
     public PixelBufferLock(
         byte[] buffer,
         int pixelWidth,

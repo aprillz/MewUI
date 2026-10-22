@@ -3,8 +3,10 @@ using Aprillz.MewUI.Controls;
 namespace Aprillz.MewUI;
 
 /// <summary>
-/// Describes a square icon's layout size in DIPs and raster target size in physical pixels.
+/// Describes a square icon's layout size in DIPs and raster target size in device pixels.
 /// </summary>
+/// <param name="Dip">The layout size in DIPs.</param>
+/// <param name="Pixel">The raster target size in device pixels.</param>
 public readonly record struct IconTemplateSize(double Dip, int Pixel);
 
 /// <summary>
@@ -20,6 +22,9 @@ public sealed class IconTemplate
 {
     private readonly Func<IconTemplateSize, FrameworkElement> _build;
 
+    /// <summary>
+    /// Creates a template from a callback that builds a new icon visual for a requested size.
+    /// </summary>
     public IconTemplate(Func<IconTemplateSize, FrameworkElement> build)
     {
         ArgumentNullException.ThrowIfNull(build);

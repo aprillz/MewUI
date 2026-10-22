@@ -5,14 +5,16 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public class StackPanel : Panel
 {
+    /// <summary>The axis along which children are stacked; the default is <see cref="Orientation.Vertical"/>.</summary>
     public static readonly MewProperty<Orientation> OrientationProperty =
         MewProperty<Orientation>.Register<StackPanel>(nameof(Orientation), Orientation.Vertical, MewPropertyOptions.AffectsLayout);
 
+    /// <summary>The spacing between children in DIPs.</summary>
     public static readonly MewProperty<double> SpacingProperty =
         MewProperty<double>.Register<StackPanel>(nameof(Spacing), 0.0, MewPropertyOptions.AffectsLayout);
 
     /// <summary>
-    /// Gets or sets the orientation of the stack.
+    /// Gets or sets the axis along which children are stacked; the default is <see cref="Orientation.Vertical"/>.
     /// </summary>
     public Orientation Orientation
     {
@@ -21,7 +23,7 @@ public class StackPanel : Panel
     }
 
     /// <summary>
-    /// Gets or sets the spacing between children.
+    /// Gets or sets the spacing between children in DIPs.
     /// </summary>
     public double Spacing
     {

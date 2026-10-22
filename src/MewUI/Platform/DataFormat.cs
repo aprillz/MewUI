@@ -17,12 +17,16 @@ public sealed class DataFormat<T> : IEquatable<DataFormat<T>> where T : class
     /// </summary>
     public string Name { get; }
 
+    /// <inheritdoc/>
     public bool Equals(DataFormat<T>? other) => other is not null && string.Equals(Name, other.Name, StringComparison.Ordinal);
 
+    /// <inheritdoc/>
     public override bool Equals(object? obj) => obj is DataFormat<T> other && Equals(other);
 
+    /// <inheritdoc/>
     public override int GetHashCode() => StringComparer.Ordinal.GetHashCode(Name);
 
+    /// <inheritdoc/>
     public override string ToString() => Name;
 }
 

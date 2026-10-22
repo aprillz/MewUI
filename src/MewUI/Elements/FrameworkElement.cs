@@ -12,6 +12,7 @@ public abstract class FrameworkElement : UIElement, IDisposable
     private bool _hasArrangedSize;
     private StyleSheet? _styleSheet;
 
+    /// <summary>The theme this element resolves its metrics and palette from.</summary>
     protected static readonly MewProperty<Theme> ThemeProperty = MewProperty<Theme>.Register<FrameworkElement>(nameof(Theme), null!, MewPropertyOptions.AffectsRender);
 
     /// <summary>
@@ -52,39 +53,51 @@ public abstract class FrameworkElement : UIElement, IDisposable
 
     #region MewProperty Declarations
 
+    /// <summary>The explicit width in DIPs; NaN sizes to content.</summary>
     public static readonly MewProperty<double> WidthProperty =
         MewProperty<double>.Register<FrameworkElement>(nameof(Width), double.NaN, MewPropertyOptions.AffectsLayout);
 
+    /// <summary>The explicit height in DIPs; NaN sizes to content.</summary>
     public static readonly MewProperty<double> HeightProperty =
         MewProperty<double>.Register<FrameworkElement>(nameof(Height), double.NaN, MewPropertyOptions.AffectsLayout);
 
+    /// <summary>The minimum width in DIPs.</summary>
     public static readonly MewProperty<double> MinWidthProperty =
         MewProperty<double>.Register<FrameworkElement>(nameof(MinWidth), 0.0, MewPropertyOptions.AffectsLayout);
 
+    /// <summary>The minimum height in DIPs.</summary>
     public static readonly MewProperty<double> MinHeightProperty =
         MewProperty<double>.Register<FrameworkElement>(nameof(MinHeight), 0.0, MewPropertyOptions.AffectsLayout);
 
+    /// <summary>The maximum width in DIPs; infinity is no bound.</summary>
     public static readonly MewProperty<double> MaxWidthProperty =
         MewProperty<double>.Register<FrameworkElement>(nameof(MaxWidth), double.PositiveInfinity, MewPropertyOptions.AffectsLayout);
 
+    /// <summary>The maximum height in DIPs; infinity is no bound.</summary>
     public static readonly MewProperty<double> MaxHeightProperty =
         MewProperty<double>.Register<FrameworkElement>(nameof(MaxHeight), double.PositiveInfinity, MewPropertyOptions.AffectsLayout);
 
+    /// <summary>The outer margin in DIPs.</summary>
     public static readonly MewProperty<Thickness> MarginProperty =
         MewProperty<Thickness>.Register<FrameworkElement>(nameof(Margin), default, MewPropertyOptions.AffectsLayout);
 
+    /// <summary>The horizontal alignment within the parent; the default is <see cref="HorizontalAlignment.Stretch"/>.</summary>
     public static readonly MewProperty<HorizontalAlignment> HorizontalAlignmentProperty =
         MewProperty<HorizontalAlignment>.Register<FrameworkElement>(nameof(HorizontalAlignment), HorizontalAlignment.Stretch, MewPropertyOptions.AffectsLayout);
 
+    /// <summary>The vertical alignment within the parent; the default is <see cref="VerticalAlignment.Stretch"/>.</summary>
     public static readonly MewProperty<VerticalAlignment> VerticalAlignmentProperty =
         MewProperty<VerticalAlignment>.Register<FrameworkElement>(nameof(VerticalAlignment), VerticalAlignment.Stretch, MewPropertyOptions.AffectsLayout);
 
+    /// <summary>An arbitrary object value for custom use.</summary>
     public static readonly MewProperty<object?> TagProperty =
         MewProperty<object?>.Register<FrameworkElement>(nameof(Tag), null, MewPropertyOptions.None);
 
+    /// <summary>What to show when the pointer rests on this element, or null for nothing.</summary>
     public static readonly MewProperty<Element?> ToolTipProperty =
         MewProperty<Element?>.Register<FrameworkElement>(nameof(ToolTip), null, MewPropertyOptions.None);
 
+    /// <summary>The menu shown when the pointer is right-pressed over this element, or null for none.</summary>
     public static readonly MewProperty<ContextMenu?> ContextMenuProperty =
         MewProperty<ContextMenu?>.Register<FrameworkElement>(nameof(ContextMenu), null, MewPropertyOptions.None);
 
@@ -94,8 +107,11 @@ public abstract class FrameworkElement : UIElement, IDisposable
 
     /// <summary>
     /// Gets or sets what to show when the pointer rests on this element.
-    /// Use the <c>ToolTip(string)</c> extension method for simple text tooltips.
     /// </summary>
+    /// <remarks>
+    /// For simple text tooltips, use the <see cref="ControlExtensions.ToolTip{T}(T, string)"/>
+    /// extension.
+    /// </remarks>
     public Element? ToolTip
     {
         get => GetValue(ToolTipProperty);
@@ -168,9 +184,9 @@ public abstract class FrameworkElement : UIElement, IDisposable
     }
 
     /// <summary>
-    /// What to show when the pointer rests on this element, or <see langword="null"/> to show nothing.
-    /// Called each time a tooltip is about to appear, so an element that builds its content from something
-    /// that changes can build it here rather than keeping <see cref="ToolTip"/> in step.
+    /// Returns what to show when the pointer rests on this element, or <see langword="null"/> for nothing; called each
+    /// time a tooltip is about to appear, so content built from changing state is built here rather than kept in
+    /// step through <see cref="ToolTip"/>.
     /// </summary>
     protected virtual Element? ResolveToolTipContent() => ToolTip;
 
@@ -243,18 +259,14 @@ public abstract class FrameworkElement : UIElement, IDisposable
     /// </summary>
     public event Action<SizeChangedEventArgs>? SizeChanged;
 
-    /// <summary>
-    /// Gets or sets the explicit width. Use double.NaN for automatic sizing.
-    /// </summary>
+    /// <summary>Gets or sets the explicit width; <see cref="double.NaN"/> means automatic sizing.</summary>
     public double Width
     {
         get => GetValue(WidthProperty);
         set => SetValue(WidthProperty, value);
     }
 
-    /// <summary>
-    /// Gets or sets the explicit height. Use double.NaN for automatic sizing.
-    /// </summary>
+    /// <summary>Gets or sets the explicit height; <see cref="double.NaN"/> means automatic sizing.</summary>
     public double Height
     {
         get => GetValue(HeightProperty);
@@ -262,7 +274,7 @@ public abstract class FrameworkElement : UIElement, IDisposable
     }
 
     /// <summary>
-    /// Gets or sets the minimum width.
+    /// Gets or sets the minimum width in DIPs.
     /// </summary>
     public double MinWidth
     {
@@ -271,12 +283,13 @@ public abstract class FrameworkElement : UIElement, IDisposable
         {
             if (value < 0)
                 throw new ArgumentOutOfRangeException(nameof(value), "MinWidth must be 0 or greater.");
+    /// <exception cref="ArgumentOutOfRangeException">The value is negative.</exception>
             SetValue(MinWidthProperty, value);
         }
     }
 
     /// <summary>
-    /// Gets or sets the minimum height.
+    /// Gets or sets the minimum height in DIPs.
     /// </summary>
     public double MinHeight
     {
@@ -285,12 +298,13 @@ public abstract class FrameworkElement : UIElement, IDisposable
         {
             if (value < 0)
                 throw new ArgumentOutOfRangeException(nameof(value), "MinHeight must be 0 or greater.");
+    /// <exception cref="ArgumentOutOfRangeException">The value is negative.</exception>
             SetValue(MinHeightProperty, value);
         }
     }
 
     /// <summary>
-    /// Gets or sets the maximum width.
+    /// Gets or sets the maximum width in DIPs; the default is no bound.
     /// </summary>
     public double MaxWidth
     {
@@ -299,12 +313,13 @@ public abstract class FrameworkElement : UIElement, IDisposable
         {
             if (value < 0)
                 throw new ArgumentOutOfRangeException(nameof(value), "MaxWidth must be 0 or greater.");
+    /// <exception cref="ArgumentOutOfRangeException">The value is negative.</exception>
             SetValue(MaxWidthProperty, value);
         }
     }
 
     /// <summary>
-    /// Gets or sets the maximum height.
+    /// Gets or sets the maximum height in DIPs; the default is no bound.
     /// </summary>
     public double MaxHeight
     {
@@ -313,6 +328,7 @@ public abstract class FrameworkElement : UIElement, IDisposable
         {
             if (value < 0)
                 throw new ArgumentOutOfRangeException(nameof(value), "MaxHeight must be 0 or greater.");
+    /// <exception cref="ArgumentOutOfRangeException">The value is negative.</exception>
             SetValue(MaxHeightProperty, value);
         }
     }
@@ -354,17 +370,17 @@ public abstract class FrameworkElement : UIElement, IDisposable
     }
 
     /// <summary>
-    /// Gets the actual width after layout.
+    /// Gets the width from the last arrange pass, in DIPs.
     /// </summary>
     public double ActualWidth => Bounds.Width;
 
     /// <summary>
-    /// Gets the actual height after layout.
+    /// Gets the height from the last arrange pass, in DIPs.
     /// </summary>
     public double ActualHeight => Bounds.Height;
 
     /// <summary>
-    /// Gets the current DPI value.
+    /// Gets the DPI of the window hosting this element, or the system DPI when detached.
     /// </summary>
     /// <returns>The DPI value.</returns>
     public uint GetDpi() => GetDpiCached();
@@ -376,6 +392,9 @@ public abstract class FrameworkElement : UIElement, IDisposable
         get
         {
             if (Application.IsRunning)
+    /// <summary>
+    /// Gets the theme in effect for this element.
+    /// </summary>
             {
                 if (GetValue(ThemeProperty) is null)
                 {
@@ -403,6 +422,9 @@ public abstract class FrameworkElement : UIElement, IDisposable
             return;
         }
 
+    /// <summary>
+    /// Hides the tooltip, releases bindings and calls <see cref="OnDispose"/>; later calls do nothing.
+    /// </summary>
         _disposed = true;
 
         HideToolTip();
@@ -495,8 +517,8 @@ public abstract class FrameworkElement : UIElement, IDisposable
     }
 
     /// <summary>
-    /// Gets the process-wide graphics factory. Safe to call off the UI thread: unlike a
-    /// <see cref="Element.FindVisualRoot"/> lookup, it never touches the (UI-thread-only) Parent chain.
+    /// Gets the process-wide graphics factory; safe off the UI thread, since unlike a
+    /// <see cref="Element.FindVisualRoot"/> lookup it never reads the parent chain.
     /// </summary>
     /// <returns>The graphics factory.</returns>
     protected IGraphicsFactory GetGraphicsFactory()
@@ -658,7 +680,7 @@ public abstract class FrameworkElement : UIElement, IDisposable
     }
 
     /// <summary>
-    /// Measures the content. Override in derived classes.
+    /// Measures the content within the available size, after margin and explicit size constraints.
     /// </summary>
     protected virtual Size MeasureContent(Size availableSize) => Size.Empty;
 
@@ -669,7 +691,7 @@ public abstract class FrameworkElement : UIElement, IDisposable
     }
 
     /// <summary>
-    /// Arranges the content. Override in derived classes.
+    /// Arranges the content within the final bounds.
     /// </summary>
     protected virtual void ArrangeContent(Rect bounds)
     { }

@@ -223,8 +223,8 @@ public interface IWindowBackend : IDisposable
     void SetBorderless(bool value) { }
 
     /// <summary>
-    /// Sets the native window border color (Win11+, macOS).
-    /// Use <see langword="null"/> to restore the default.
+    /// Sets the native window border color where the platform supports it (see
+    /// <see cref="WindowChromeCapabilities.NativeBorderColor"/>); <see langword="null"/> restores the default.
     /// </summary>
     void SetWindowBorderColor(Color? color) { }
 

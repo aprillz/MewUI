@@ -34,10 +34,12 @@ public abstract class MewProperty
     internal int Id { get; }
 
     /// <summary>
-    /// True when this property was registered via <see cref="MewProperty{T}.RegisterReadOnly{TOwner}"/>.
+    /// Gets whether this property was registered via <see cref="MewProperty{T}.RegisterReadOnly{TOwner}"/>.
+    /// </summary>
+    /// <remarks>
     /// Read-only properties reject the public <c>SetValue(MewProperty&lt;T&gt;, T)</c> and
     /// <c>SetBinding</c> paths; the owner must use the <see cref="MewPropertyKey{T}"/> overload.
-    /// </summary>
+    /// </remarks>
     public bool IsReadOnly => ReadOnlyKey != null;
 
     /// <summary>
@@ -65,19 +67,19 @@ public abstract class MewProperty
     /// </summary>
     internal Action<IPropertyOwner, object?>? ValidateCallback { get; set; }
 
-    /// <summary>Whether value changes should trigger InvalidateVisual.</summary>
+    /// <summary>Gets whether value changes invoke <see cref="Controls.Element.InvalidateVisual"/>.</summary>
     public bool AffectsRender => (Options & MewPropertyOptions.AffectsRender) != 0;
 
-    /// <summary>Whether value changes should trigger InvalidateLayout.</summary>
+    /// <summary>Gets whether value changes invoke <see cref="Controls.Element.InvalidateMeasure"/>.</summary>
     public bool AffectsLayout => (Options & MewPropertyOptions.AffectsLayout) != 0;
 
-    /// <summary>Whether this property inherits values from parent elements.</summary>
+    /// <summary>Gets whether this property inherits values from parent elements.</summary>
     public bool Inherits => (Options & MewPropertyOptions.Inherits) != 0;
 
-    /// <summary>Whether Bind() defaults to TwoWay mode for this property.</summary>
+    /// <summary>Gets whether binding this property defaults to <see cref="BindingMode.TwoWay"/>.</summary>
     public bool BindsTwoWayByDefault => (Options & MewPropertyOptions.BindsTwoWayByDefault) != 0;
 
-    /// <summary>Whether value changes should queue visual-state reconciliation.</summary>
+    /// <summary>Gets whether value changes invoke <see cref="Controls.UIElement.InvalidateVisualState"/>.</summary>
     public bool AffectsVisualState => (Options & MewPropertyOptions.AffectsVisualState) != 0;
 
     internal MewProperty(Type ownerType)
@@ -100,8 +102,10 @@ public abstract class MewProperty
 
 /// <summary>
 /// Identifies a visual property with value resolution and animation support.
-/// Static descriptors - one instance per property, shared across all control instances.
 /// </summary>
+/// <remarks>
+/// Static descriptors: one instance per property, shared across all owner instances.
+/// </remarks>
 /// <typeparam name="T">The property value type.</typeparam>
 public sealed class MewProperty<T> : MewProperty
 {
@@ -194,7 +198,7 @@ public sealed class MewProperty<T> : MewProperty
     /// <summary>
     /// Registers a new property descriptor with a change callback that receives old and new values.
     /// </summary>
-    /// <typeparam name="TOwner">The declaring control type.</typeparam>
+    /// <typeparam name="TOwner">The declaring owner type.</typeparam>
     /// <param name="name">Property name.</param>
     /// <param name="defaultValue">Default value when not set by style or local override.</param>
     /// <param name="options">Metadata flags.</param>
@@ -237,10 +241,13 @@ public sealed class MewProperty<T> : MewProperty
 
     /// <summary>
     /// Registers a new read-only property descriptor and returns a <see cref="MewPropertyKey{T}"/>
-    /// that authorizes mutation. The owning type should expose the <c>Key.Property</c> as a
-    /// public <c>MewProperty&lt;T&gt;</c> for read access while keeping the key private.
+    /// that authorizes mutation.
     /// </summary>
-    /// <typeparam name="TOwner">The declaring control type.</typeparam>
+    /// <remarks>
+    /// The owning type should expose <see cref="MewPropertyKey{T}.Property"/> as a public
+    /// <c>MewProperty&lt;T&gt;</c> for read access while keeping the key private.
+    /// </remarks>
+    /// <typeparam name="TOwner">The declaring owner type.</typeparam>
     /// <param name="name">Property name.</param>
     /// <param name="defaultValue">Default value when not set by style or owner.</param>
     /// <param name="options">Metadata flags.</param>
@@ -269,7 +276,7 @@ public sealed class MewProperty<T> : MewProperty
 /// <typeparam name="T">The property value type.</typeparam>
 public sealed class MewPropertyKey<T>
 {
-    /// <summary>The underlying read-only property descriptor (safe to expose publicly for reads).</summary>
+    /// <summary>Gets the underlying read-only property descriptor, which is safe to expose publicly for reads.</summary>
     public MewProperty<T> Property { get; }
 
     internal MewPropertyKey(MewProperty<T> property)

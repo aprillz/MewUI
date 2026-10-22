@@ -61,10 +61,13 @@ public sealed class ScrollViewer : ContentControl
             static (self, _, newVal) => self.OnAutoHideScrollBarsChanged(newVal));
 
     /// <summary>
-    /// When true, scroll bars overlay the content (no reserved width) and stay hidden until revealed: they
-    /// fade in on scroll or when the pointer is over the bar region, and fade out after leaving / going idle.
-    /// Default false (bars follow the normal visibility rules at full opacity).
+    /// Gets or sets whether scrollbars overlay the content, reserving no width, and stay hidden
+    /// until a scroll or a pointer over the bar region reveals them; the default is false.
     /// </summary>
+    /// <remarks>
+    /// Revealed bars fade out after the pointer leaves or the view goes idle; with the option off,
+    /// bars follow the normal visibility rules at full opacity.
+    /// </remarks>
     public bool AutoHideScrollBars
     {
         get => GetValue(AutoHideScrollBarsProperty);
@@ -81,7 +84,7 @@ public sealed class ScrollViewer : ContentControl
     public event Action? ScrollChanged;
 
     /// <summary>
-    /// Gets or sets the vertical scrollbar mode.
+    /// Gets or sets the vertical scroll mode.
     /// </summary>
     public ScrollMode VerticalScroll
     {
@@ -90,7 +93,7 @@ public sealed class ScrollViewer : ContentControl
     }
 
     /// <summary>
-    /// Gets or sets the horizontal scrollbar mode.
+    /// Gets or sets the horizontal scroll mode.
     /// </summary>
     public ScrollMode HorizontalScroll
     {

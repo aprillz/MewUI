@@ -27,6 +27,7 @@ public interface IImageFilterContext
     /// </summary>
     Rect SourceBounds { get; }
 
+    /// <summary>Gets the factory used to create backend resources such as image views over scratch surfaces.</summary>
     IGraphicsFactory Factory { get; }
 
     /// <summary>
@@ -65,8 +66,7 @@ public interface IImageFilterContext
 /// <summary>
 /// Backend-agnostic graph evaluator. Each backend implements its own concrete executor
 /// that handles the node types it can render natively. Unsupported nodes delegate to a
-/// fallback executor (typically the CPU one) - see plan.md for the chain-of-responsibility
-/// model.
+/// fallback executor (typically the CPU one).
 /// </summary>
 public interface IImageFilterExecutor
 {

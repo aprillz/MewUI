@@ -8,17 +8,17 @@ namespace Aprillz.MewUI;
 [DebuggerDisplay("HsvColor({H}, {S}, {V})")]
 public readonly struct HsvColor(float h, float s, float v) : IEquatable<HsvColor>
 {
-    /// <summary>Hue in degrees [0, 360).</summary>
+    /// <summary>Gets the hue in degrees, in [0, 360).</summary>
     public float H { get; } = h;
 
-    /// <summary>Saturation [0, 1].</summary>
+    /// <summary>Gets the saturation, in [0, 1].</summary>
     public float S { get; } = s;
 
-    /// <summary>Value (brightness) [0, 1].</summary>
+    /// <summary>Gets the value (brightness), in [0, 1].</summary>
     public float V { get; } = v;
 
     /// <summary>
-    /// Converts RGB color to HSV.
+    /// Converts RGB components to HSV.
     /// </summary>
     public static HsvColor FromRgb(byte r, byte g, byte b)
     {
@@ -48,7 +48,7 @@ public readonly struct HsvColor(float h, float s, float v) : IEquatable<HsvColor
     }
 
     /// <summary>
-    /// Converts RGB color to HSV.
+    /// Converts a <see cref="Color"/> to HSV, ignoring its alpha.
     /// </summary>
     public static HsvColor FromColor(Color color) => FromRgb(color.R, color.G, color.B);
 
@@ -88,10 +88,21 @@ public readonly struct HsvColor(float h, float s, float v) : IEquatable<HsvColor
     /// </summary>
     public static Color HueToRgb(float h) => HsvToRgb(h, 1f, 1f);
 
+    /// <summary>
+    /// Determines whether this instance is equal to another HSV color.
+    /// </summary>
     public bool Equals(HsvColor other) => H == other.H && S == other.S && V == other.V;
     public override bool Equals(object? obj) => obj is HsvColor other && Equals(other);
     public override int GetHashCode() => HashCode.Combine(H, S, V);
+
+    /// <summary>
+    /// Determines whether two HSV colors are equal.
+    /// </summary>
     public static bool operator ==(HsvColor left, HsvColor right) => left.Equals(right);
+
+    /// <summary>
+    /// Determines whether two HSV colors are not equal.
+    /// </summary>
     public static bool operator !=(HsvColor left, HsvColor right) => !left.Equals(right);
 
     public override string ToString() =>

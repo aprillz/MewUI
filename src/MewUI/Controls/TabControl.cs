@@ -288,6 +288,7 @@ public sealed partial class TabControl : Control, ISelector, IIndexedSelector, I
         }
     }
 
+    /// <summary>Adds a tab after the existing ones.</summary>
     public void AddTab(TabItem tab)
     {
         ArgumentNullException.ThrowIfNull(tab);
@@ -330,6 +331,7 @@ public sealed partial class TabControl : Control, ISelector, IIndexedSelector, I
 
     Element? IFocusTraversalScope.ActiveTraversalRoot => SelectedTab?.Content;
 
+    /// <summary>Adds tabs after the existing ones.</summary>
     public void AddTabs(params TabItem[] tabs)
     {
         ArgumentNullException.ThrowIfNull(tabs);
@@ -340,6 +342,7 @@ public sealed partial class TabControl : Control, ISelector, IIndexedSelector, I
         }
     }
 
+    /// <summary>Removes every tab.</summary>
     public void ClearTabs()
     {
         DetachCurrentContent();
@@ -356,6 +359,7 @@ public sealed partial class TabControl : Control, ISelector, IIndexedSelector, I
         InvalidateVisual();
     }
 
+    /// <summary>Removes the tab at <paramref name="index"/>.</summary>
     public void RemoveTabAt(int index)
     {
         if ((uint)index >= (uint)_tabs.Count)

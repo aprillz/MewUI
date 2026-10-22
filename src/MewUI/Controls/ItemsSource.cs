@@ -1,7 +1,8 @@
 namespace Aprillz.MewUI;
 
 /// <summary>
-/// Provides a data source abstraction for list controls.
+/// Obsolete snapshot data source for list controls; use
+/// <see cref="ItemsView.Create{T}(IReadOnlyList{T}, Func{T, string}, Func{T, object})"/> instead.
 /// </summary>
 [Obsolete("Use ItemsView.Create instead. An ItemsSource reports a snapshot only: it does not observe " +
     "collection changes, so adding or removing items (including through an ObservableCollection) leaves " +

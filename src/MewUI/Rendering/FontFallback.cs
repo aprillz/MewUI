@@ -121,8 +121,9 @@ public static class FontFallback
     public static IReadOnlyList<string> FallbackChain => _chain;
 
     /// <summary>
-    /// Locale hint for font fallback (affects CJK script priority in DirectWrite).
-    /// <c>null</c> = system default (<see cref="CultureInfo.CurrentUICulture"/>).
+    /// Gets or sets the locale hint for font fallback, which decides CJK script priority on backends that
+    /// resolve fallback by locale; <see langword="null"/> means the system default
+    /// (<see cref="CultureInfo.CurrentUICulture"/>).
     /// </summary>
     public static string? Locale
     {

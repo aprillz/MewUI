@@ -61,14 +61,14 @@ public readonly struct KeySequence : IEquatable<KeySequence>
         _length = length;
     }
 
-    /// <summary>The strokes in the order they are pressed.</summary>
+    /// <summary>Gets the strokes in the order they are pressed.</summary>
     [UnscopedRef]
     public ReadOnlySpan<KeyGesture> Strokes => ((ReadOnlySpan<KeyGesture>)_strokes)[.._length];
 
-    /// <summary>The number of strokes; zero only for the default value.</summary>
+    /// <summary>Gets the number of strokes; zero only for the default value.</summary>
     public int Length => _length;
 
-    /// <summary>Whether the sequence is one stroke, which is what a <see cref="KeyGesture"/> expresses.</summary>
+    /// <summary>Gets whether the sequence is one stroke, which is what a <see cref="KeyGesture"/> expresses.</summary>
     public bool IsSingle => _length == 1;
 
     internal KeyGesture this[int index]
@@ -80,6 +80,7 @@ public readonly struct KeySequence : IEquatable<KeySequence>
         }
     }
 
+    /// <summary>Converts a gesture to a sequence of one stroke.</summary>
     public static implicit operator KeySequence(KeyGesture gesture) => new(gesture);
 
     public static bool operator ==(KeySequence left, KeySequence right) => left.Equals(right);

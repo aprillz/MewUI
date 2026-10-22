@@ -6,14 +6,19 @@ using Aprillz.MewUI.Platform;
 namespace Aprillz.MewUI;
 
 /// <summary>
-/// Represents a keyboard shortcut as a Key + ModifierKeys combination.
-/// <see cref="ModifierKeys.Primary"/> is resolved to the platform's command modifier at matching/display time.
+/// Represents a keyboard shortcut as a <see cref="MewUI.Key"/> and <see cref="ModifierKeys"/> combination.
 /// </summary>
+/// <remarks>
+/// <see cref="ModifierKeys.Primary"/> is resolved to the platform's command modifier at matching and display
+/// time.
+/// </remarks>
+/// <param name="Key">The key.</param>
+/// <param name="Modifiers">The modifier keys held with it.</param>
 public readonly record struct KeyGesture(Key Key, ModifierKeys Modifiers = ModifierKeys.None)
 {
     /// <summary>
-    /// Returns true if this gesture matches the given key event.
-    /// Resolves <see cref="ModifierKeys.Primary"/> to the platform modifier before comparing.
+    /// Returns whether this gesture matches the given key event, with <see cref="ModifierKeys.Primary"/>
+    /// resolved to the platform modifier first.
     /// </summary>
     public bool Matches(KeyEventArgs e)
         => e.Key == Key && e.Modifiers == ResolveModifiers(Modifiers);

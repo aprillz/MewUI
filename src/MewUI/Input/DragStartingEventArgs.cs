@@ -20,8 +20,8 @@ public sealed class DragStartingEventArgs
     public Point StartPositionInWindow { get; }
 
     /// <summary>
-    /// Gets or sets the data payload for the drag.
-    /// Leave <see langword="null"/> (or set <see cref="Cancel"/>) to skip starting a session.
+    /// Gets or sets the data payload for the drag; <see langword="null"/> (or <see cref="Cancel"/>) skips
+    /// starting a session.
     /// </summary>
     public IDataObject? Data { get; set; }
 
@@ -36,17 +36,24 @@ public sealed class DragStartingEventArgs
     public DragPreviewContent? Preview { get; set; }
 
     /// <summary>
-    /// Set to <see langword="true"/> to cancel starting the drag session.
+    /// Gets or sets whether starting the drag session is cancelled.
     /// </summary>
     public bool Cancel { get; set; }
 
     /// <summary>
-    /// Whether this platform can host a transparent top-level overlay for a <see cref="DragPreviewScope.CrossWindow"/>
-    /// preview. Optional hint: the framework already degrades to an opaque overlay when this is <see langword="false"/>,
-    /// so handlers only need to read this if they want to author a different visual for the opaque case.
+    /// Gets whether this platform can host a transparent top-level overlay for a
+    /// <see cref="DragPreviewScope.CrossWindow"/> preview.
     /// </summary>
+    /// <remarks>
+    /// Optional hint: the framework already degrades to an opaque overlay when this is
+    /// <see langword="false"/>, so handlers only need to read this if they want to author a different visual
+    /// for the opaque case.
+    /// </remarks>
     public bool SupportsTransparentOverlay { get; }
 
+    /// <summary>
+    /// Creates arguments with the positions where the drag candidate began.
+    /// </summary>
     public DragStartingEventArgs(Point startPositionInElement, Point startPositionInWindow)
     {
         StartPositionInElement = startPositionInElement;

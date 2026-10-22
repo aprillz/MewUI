@@ -3,10 +3,14 @@ using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Platform;
 
+/// <summary>Kind of file system item an icon represents.</summary>
 public enum FileIconKind
 {
+    /// <summary>A file.</summary>
     File,
+    /// <summary>A folder.</summary>
     Folder,
+    /// <summary>A drive or mounted volume.</summary>
     Drive,
 }
 

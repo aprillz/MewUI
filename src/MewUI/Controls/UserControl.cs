@@ -1,5 +1,6 @@
 namespace Aprillz.MewUI.Controls;
 
+/// <summary>A control whose content is built by <see cref="OnBuild"/> on the first layout pass.</summary>
 public class UserControl : ContentControl
 {
     // Lazy-build gate: one attempt only, so an intentional null OnBuild is not retried every layout.

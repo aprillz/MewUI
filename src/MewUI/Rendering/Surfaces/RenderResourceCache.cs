@@ -1,5 +1,9 @@
 namespace Aprillz.MewUI.Rendering;
 
+/// <summary>
+/// The framework's <see cref="IRenderResourceCache"/>: resident entries under a byte and count budget,
+/// deferred releases, and a scratch surface pool that evicts idle and over-budget surfaces.
+/// </summary>
 public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
 {
     private const long DEFAULT_PERSISTENT_BUDGET_BYTES = 256L * 1024 * 1024;
@@ -43,6 +47,7 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
     private long _scratchReturnSequence;
     private bool _disposed;
 
+    /// <summary>Creates a cache with the default resident budget (256 MB, 512 entries).</summary>
     public RenderResourceCache()
         : this(DEFAULT_PERSISTENT_BUDGET_BYTES, DEFAULT_PERSISTENT_MAX_COUNT)
     {
@@ -59,6 +64,7 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
         _tickProvider = tickProvider ?? (() => Environment.TickCount64);
     }
 
+    /// <inheritdoc/>
     public bool TryGet(RenderCacheKey key, out IRenderCacheEntry entry)
     {
         lock (_gate)
@@ -80,6 +86,7 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
         return false;
     }
 
+    /// <inheritdoc/>
     public IRenderCacheEntry Add(
         RenderCacheKey key,
         IRenderSurface surface,
@@ -109,6 +116,7 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
         }
     }
 
+    /// <inheritdoc/>
     public bool TryAdd(
         RenderCacheKey key,
         IRenderSurface surface,
@@ -180,6 +188,7 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
         }
     }
 
+    /// <inheritdoc/>
     public void Release(RenderCacheKey key)
     {
         lock (_gate)
@@ -192,6 +201,7 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
         }
     }
 
+    /// <inheritdoc/>
     public void ReleaseLater(IDisposable resource, IRenderOperation safeAfter)
     {
         ArgumentNullException.ThrowIfNull(resource);
@@ -227,6 +237,7 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
         }
     }
 
+    /// <inheritdoc/>
     public void Trim(RenderCacheTrimReason reason)
     {
         lock (_gate)
@@ -259,6 +270,7 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
         }
     }
 
+    /// <inheritdoc/>
     public void Maintain(RenderCacheMaintenanceMode mode = RenderCacheMaintenanceMode.Frame)
     {
         lock (_gate)
@@ -347,9 +359,11 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
         }
     }
 
+    /// <inheritdoc/>
     public IRenderSurface? RentScratchSurface(ScratchSurfaceKey key)
         => RentScratchSurface(key, exactSizeOnly: false);
 
+    /// <inheritdoc/>
     public IRenderSurface? RentScratchSurface(ScratchSurfaceKey key, bool exactSizeOnly)
     {
         lock (_gate)
@@ -520,6 +534,7 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
         return pooled.Surface;
     }
 
+    /// <inheritdoc/>
     public void ReturnScratchSurface(ScratchSurfaceKey key, IRenderSurface surface)
     {
         ArgumentNullException.ThrowIfNull(surface);
@@ -670,6 +685,7 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
         _scratchBytes = 0;
     }
 
+    /// <summary>Disposes every resident entry, pooled scratch surface and pending release, waiting for the operations they depend on.</summary>
     public void Dispose()
     {
         lock (_gate)

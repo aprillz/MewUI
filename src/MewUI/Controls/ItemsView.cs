@@ -98,9 +98,6 @@ public interface ISelectableItemsView : IItemsView
 public static class ItemsView
 {
     /// <summary>
-    /// Gets an empty items view instance.
-    /// </summary>
-    /// <summary>
     /// Gets an empty selectable items view instance.
     /// </summary>
     public static ISelectableItemsView EmptySelectable { get; } = new EmptyItemsView();
@@ -127,7 +124,8 @@ public static class ItemsView
         new(items, textSelector, keySelector);
 
     /// <summary>
-    /// Wraps the legacy <see cref="ItemsSource"/> type into an <see cref="IItemsView"/>.
+    /// Wraps the legacy <see cref="ItemsSource"/> type into an <see cref="IItemsView"/>; obsolete,
+    /// use <see cref="Create{T}(IReadOnlyList{T}, Func{T, string}, Func{T, object})"/> instead.
     /// </summary>
     /// <param name="source">Legacy items source.</param>
     [Obsolete("Use ItemsView.Create instead. The wrapped source reports a snapshot only, so the view " +

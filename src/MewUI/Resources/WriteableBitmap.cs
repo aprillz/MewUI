@@ -7,9 +7,11 @@ using Aprillz.MewUI.Resources;
 namespace Aprillz.MewUI;
 
 /// <summary>
-/// Mutable bitmap source (BGRA32, straight alpha). Similar to WPF's WriteableBitmap.
-/// Backends are expected to upload pixels as needed when <see cref="Version"/> changes.
+/// Mutable BGRA32 bitmap source with straight alpha, similar to WPF's WriteableBitmap.
 /// </summary>
+/// <remarks>
+/// Backends upload the pixels again when <see cref="Version"/> changes.
+/// </remarks>
 public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSource, IDisposable
 {
     private readonly object _lock = new();
@@ -36,21 +38,22 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
     public int StrideBytes => PixelWidth * 4;
 
     /// <summary>
-    /// Whether this bitmap is expected to carry alpha. Set at construction time -
-    /// callers that know their content is opaque (video frames, photo decoders, etc.)
-    /// can pass <c>false</c> so backends pick <c>ALPHA_MODE.IGNORE</c> on the GPU side
-    /// and skip per-pixel alpha scans on upload. Default <c>true</c> preserves alpha
-    /// for general-purpose use.
+    /// Gets whether this bitmap carries a meaningful alpha channel; false lets backends treat every pixel as opaque.
     /// </summary>
+    /// <remarks>
+    /// Set at construction. Callers that know their content is opaque (video frames, photo decoders) pass
+    /// false so backends choose <see cref="BitmapAlphaMode.Ignore"/> and skip per-pixel alpha scans on upload;
+    /// the default true preserves alpha for general-purpose use.
+    /// </remarks>
     public bool HasAlpha { get; }
 
     /// <summary>
-    /// Monotonically increasing version. Incremented after any committed write.
+    /// Gets the monotonically increasing version, incremented after every committed write.
     /// </summary>
     public int Version => Volatile.Read(ref _version);
 
     /// <summary>
-    /// Raised when pixels have changed and the bitmap should be re-uploaded/redrawn.
+    /// Occurs when the pixels have changed and backends must upload the bitmap again.
     /// </summary>
     public event Action? Changed;
 
@@ -61,10 +64,10 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
     /// <param name="heightPx">Bitmap height in pixels.</param>
     /// <param name="clear"><see langword="true"/> to clear the buffer to zero; otherwise leaves it uninitialized.</param>
     /// <param name="hasAlpha">
-    /// <see langword="false"/> when callers guarantee every pixel is opaque (video frames,
-    /// JPEG-derived content, etc.) - backends use this to pick <c>ALPHA_MODE.IGNORE</c>
-    /// over <c>PREMULTIPLIED</c> and skip the per-pixel alpha scan on upload. Default
-    /// <see langword="true"/> preserves alpha for general-purpose drawing.
+    /// <see langword="false"/> when every pixel is guaranteed opaque (video frames, JPEG-derived content),
+    /// letting backends choose <see cref="BitmapAlphaMode.Ignore"/> over <see cref="BitmapAlphaMode.Premultiplied"/>
+    /// and skip the per-pixel alpha scan on upload; the default <see langword="true"/> preserves alpha for
+    /// general-purpose drawing.
     /// </param>
     public WriteableBitmap(int widthPx, int heightPx, bool clear = true, bool hasAlpha = true)
     {
@@ -127,8 +130,7 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
     }
 
     /// <summary>
-    /// Locks the bitmap for writing.
-    /// The returned context will publish changes on Dispose (unless <paramref name="markDirtyOnDispose"/> is false).
+    /// Locks the bitmap for writing and returns a context that publishes the changes when disposed.
     /// </summary>
     /// <param name="markDirtyOnDispose">
     /// When <see langword="true"/>, increments <see cref="Version"/> and raises <see cref="Changed"/> when the context is disposed,
@@ -296,8 +298,8 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
     }
 
     /// <summary>
-    /// Represents a locked write scope for a <see cref="WriteableBitmap"/>.
-    /// Disposing the scope releases the lock and optionally raises <see cref="Changed"/>.
+    /// Locked write scope for a <see cref="WriteableBitmap"/> whose disposal releases the lock and optionally
+    /// raises <see cref="Changed"/>.
     /// </summary>
     public ref struct WriteContext
     {
@@ -323,17 +325,17 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
         public int StrideBytes => _owner.StrideBytes;
 
         /// <summary>
-        /// Gets the bitmap width in pixels.
+        /// Gets the bitmap width in pixels; the same value as <see cref="PixelWidth"/>.
         /// </summary>
         public int Width => _owner.PixelWidth;
 
         /// <summary>
-        /// Gets the bitmap height in pixels.
+        /// Gets the bitmap height in pixels; the same value as <see cref="PixelHeight"/>.
         /// </summary>
         public int Height => _owner.PixelHeight;
 
         /// <summary>
-        /// Gets the stride (bytes per row).
+        /// Gets the stride (bytes per row); the same value as <see cref="StrideBytes"/>.
         /// </summary>
         public int Stride => _owner.StrideBytes;
 
@@ -357,7 +359,7 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
         }
 
         /// <summary>
-        /// Marks a dirty rectangle in pixel coordinates to minimize texture updates.
+        /// Marks a dirty rectangle in pixel coordinates so backends can upload only that region.
         /// </summary>
         /// <param name="x">X in pixels.</param>
         /// <param name="y">Y in pixels.</param>

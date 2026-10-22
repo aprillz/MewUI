@@ -33,6 +33,7 @@ public sealed class CpuImageFilterExecutor : IImageFilterExecutor
     /// </remarks>
     public double MaxInputScale => 1.0;
 
+    /// <inheritdoc/>
     public FilterResult Execute(ImageFilter filter, IImageFilterContext context) => filter switch
     {
         SourceFilter => context.Source,

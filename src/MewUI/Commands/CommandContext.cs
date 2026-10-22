@@ -3,8 +3,8 @@ using Aprillz.MewUI.Controls;
 namespace Aprillz.MewUI;
 
 /// <summary>
-/// Invocation context passed to command handlers: the routing window, the invocation source
-/// element (e.g. the toolbar button) and the invocation's cancellation token.
+/// Invocation context passed to command handlers: the routing window (none when the application's router runs the
+/// command), the invocation source element (e.g. the toolbar button) and the invocation's cancellation token.
 /// </summary>
 public readonly struct CommandContext
 {
@@ -17,7 +17,8 @@ public readonly struct CommandContext
     }
 
     /// <summary>
-    /// Gets the window whose router dispatched the command.
+    /// Gets the window whose router dispatched the command, or null when <see cref="Application.CommandRouter"/> did,
+    /// as for a tray icon's menu while no window is open.
     /// </summary>
     public Window Window { get; }
 

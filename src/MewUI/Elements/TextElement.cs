@@ -7,27 +7,27 @@ public abstract class TextElement : FrameworkElement
 {
     #region MewProperty Declarations
 
-    /// <summary>Foreground (text) color property with inheritance support.</summary>
+    /// <summary>The text color; inherited by descendants.</summary>
     public static readonly MewProperty<Color> ForegroundProperty =
         MewProperty<Color>.Register<TextElement>(nameof(Foreground), Color.Black,
             MewPropertyOptions.AffectsRender | MewPropertyOptions.Inherits);
 
-    /// <summary>Font family property with inheritance support.</summary>
+    /// <summary>The font family; an empty value follows the theme's font family, and it is inherited by descendants.</summary>
     public static readonly MewProperty<string> FontFamilyProperty =
         MewProperty<string>.Register<TextElement>(nameof(FontFamily), ThemeMetrics.SystemFontFamily,
             MewPropertyOptions.AffectsLayout | MewPropertyOptions.Inherits);
 
-    /// <summary>Font size property with inheritance support.</summary>
+    /// <summary>The font size; inherited by descendants.</summary>
     public static readonly MewProperty<double> FontSizeProperty =
         MewProperty<double>.Register<TextElement>(nameof(FontSize), 12.0,
             MewPropertyOptions.AffectsLayout | MewPropertyOptions.Inherits);
 
-    /// <summary>Font weight property with inheritance support.</summary>
+    /// <summary>The font weight; inherited by descendants.</summary>
     public static readonly MewProperty<FontWeight> FontWeightProperty =
         MewProperty<FontWeight>.Register<TextElement>(nameof(FontWeight), FontWeight.Normal,
             MewPropertyOptions.AffectsLayout | MewPropertyOptions.Inherits);
 
-    /// <summary>Font style property with inheritance support.</summary>
+    /// <summary>The font style; inherited by descendants.</summary>
     public static readonly MewProperty<FontStyle> FontStyleProperty =
         MewProperty<FontStyle>.Register<TextElement>(nameof(FontStyle), FontStyle.Normal,
             MewPropertyOptions.AffectsLayout | MewPropertyOptions.Inherits);
@@ -44,10 +44,12 @@ public abstract class TextElement : FrameworkElement
     }
 
     /// <summary>
-    /// Gets or sets the font family. An empty value follows the theme's font family. A comma-separated list draws with
-    /// its first installed family; the installed families after it supply the characters that one lacks, ahead of
-    /// <see cref="Rendering.FontFallback"/>.
+    /// Gets or sets the font family; an empty value follows the theme's font family.
     /// </summary>
+    /// <remarks>
+    /// A comma-separated list draws with its first installed family; the installed families after it supply the
+    /// characters that one lacks, ahead of <see cref="Rendering.FontFallback"/>.
+    /// </remarks>
     public string FontFamily
     {
         get

@@ -31,10 +31,12 @@ public partial class Button : CommandSourceControl
             static (self, _, _) => self.UpdateCommandPresentationContent());
 
     /// <summary>
-    /// Gets or sets which command presentation parts are used as generated content. The default is
-    /// <see cref="MewUI.CommandPresentationMode.None"/>; an explicitly supplied Content value or
-    /// binding always takes precedence.
+    /// Gets or sets which command presentation parts are used as generated content; the default is
+    /// <see cref="MewUI.CommandPresentationMode.None"/>.
     /// </summary>
+    /// <remarks>
+    /// An explicitly supplied Content value or binding always takes precedence.
+    /// </remarks>
     public CommandPresentationMode CommandPresentationMode
     {
         get => GetValue(CommandPresentationModeProperty);
@@ -175,7 +177,7 @@ public partial class Button : CommandSourceControl
     }
 
     /// <summary>
-    /// Click event handler (AOT-compatible).
+    /// Occurs when the button is clicked.
     /// </summary>
     public event Action? Click;
 

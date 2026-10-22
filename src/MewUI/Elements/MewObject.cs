@@ -4,9 +4,8 @@ using System.Runtime.CompilerServices;
 namespace Aprillz.MewUI.Controls;
 
 /// <summary>
-/// Base class providing the MewProperty system: per-instance value storage,
-/// change notification, and data binding.
-/// Analogous to WPF's DependencyObject.
+/// Base class providing the MewProperty system (per-instance value storage, change notification and
+/// data binding), analogous to WPF's DependencyObject.
 /// </summary>
 public abstract class MewObject : IPropertyOwner
 {
@@ -138,10 +137,12 @@ public abstract class MewObject : IPropertyOwner
 
     /// <summary>
     /// Called when a mutation through this object's API moved a property to a different value tier,
-    /// whether or not the effective value changed. Override for state that depends on which tier
-    /// supplies a value (e.g. "the caller supplied content" versus "nothing did") rather than on the
-    /// value itself.
+    /// whether or not the effective value changed.
     /// </summary>
+    /// <remarks>
+    /// Override for state that depends on which tier supplies a value ("the caller supplied content"
+    /// versus "nothing did") rather than on the value itself.
+    /// </remarks>
     /// <param name="property">The property whose value source changed.</param>
     protected virtual void OnValueSourceChanged(MewProperty property) { }
 
@@ -157,9 +158,8 @@ public abstract class MewObject : IPropertyOwner
     }
 
     /// <summary>
-    /// Gets the current (possibly interpolated) value of a visual property.
-    /// For properties with <see cref="MewPropertyOptions.Inherits"/>, walks the parent chain
-    /// when no local or style value exists on this element.
+    /// Gets the effective (possibly animated) value of a property, following the parent chain for a
+    /// property with <see cref="MewPropertyOptions.Inherits"/> when this object has no value of its own.
     /// </summary>
     protected T GetValue<T>(MewProperty<T> property)
     {
@@ -204,8 +204,7 @@ public abstract class MewObject : IPropertyOwner
     private protected virtual bool IsInheritedCacheCurrent() => true;
 
     /// <summary>
-    /// Resolves an inherited property value by walking the parent chain.
-    /// Override in subclasses that participate in a visual tree.
+    /// Resolves an inherited property value by walking the parent chain; the base returns the registered default.
     /// </summary>
     protected virtual T ResolveInheritedValue<T>(MewProperty<T> property)
         => property.GetDefaultForType(PropertyStore.OwnerType);
@@ -217,8 +216,7 @@ public abstract class MewObject : IPropertyOwner
         => property.GetBoxedDefaultForType(PropertyStore.OwnerType);
 
     /// <summary>
-    /// Sets the local (user-defined) value of a property.
-    /// Highest priority in value resolution.
+    /// Sets the local value of a property, the highest-priority source, replacing any binding on it.
     /// </summary>
     /// <exception cref="InvalidOperationException">
     /// Thrown when <paramref name="property"/> was registered via
@@ -527,8 +525,7 @@ public abstract class MewObject : IPropertyOwner
     }
 
     /// <summary>
-    /// Re-evaluates the coerce callback for a property. Call when external state
-    /// that affects coercion has changed (e.g. WindowSize.IsResizable changed → re-coerce CanMaximize).
+    /// Re-runs the coerce callback of a property after external state it depends on changed.
     /// </summary>
     protected void CoerceValue<T>(MewProperty<T> property)
     {
@@ -1147,7 +1144,7 @@ public abstract class MewObject : IPropertyOwner
     }
 
     /// <summary>
-    /// Disposes all property bindings. Called during element disposal.
+    /// Disposes all property bindings and forwards, as element disposal does.
     /// </summary>
     protected void DisposePropertyBindings()
     {

@@ -108,8 +108,7 @@ public enum FontWeight
 }
 
 /// <summary>
-/// Font style values. Oblique, the slanted upright a family may carry beside a true italic, is absent
-/// until a backend can tell it from Italic: two of the three draw it with the same flag today.
+/// Font style values.
 /// </summary>
 public enum FontStyle
 {
@@ -120,10 +119,13 @@ public enum FontStyle
 }
 
 /// <summary>
-/// Orientation for layout panels.
+/// Specifies a horizontal or vertical orientation.
 /// </summary>
 public enum Orientation
 {
+/// <remarks>
+/// Oblique, the slanted upright a family may carry beside a true italic, has no value of its own; a slanted face is requested as <see cref="Italic"/>.
+/// </remarks>
     /// <summary>Horizontal layout.</summary>
     Horizontal,
     /// <summary>Vertical layout.</summary>
@@ -131,7 +133,7 @@ public enum Orientation
 }
 
 /// <summary>
-/// Text horizontal/vertical alignment options.
+/// Text alignment along an axis; <see cref="Top"/> and <see cref="Bottom"/> alias <see cref="Left"/> and <see cref="Right"/> for vertical use.
 /// </summary>
 public enum TextAlignment
 {
@@ -148,10 +150,15 @@ public enum TextAlignment
 public enum TextWrapping
 {
     NoWrap,
+    /// <summary>Align to the left (or top).</summary>
     Wrap,
+    /// <summary>Align to the center.</summary>
     WrapWithOverflow
+    /// <summary>Align to the right (or bottom).</summary>
 }
+    /// <summary>Align to the top; the same value as <see cref="Left"/>.</summary>
 
+    /// <summary>Align to the bottom; the same value as <see cref="Right"/>.</summary>
 /// <summary>
 /// Text trimming options for text that overflows its bounds.
 /// </summary>
@@ -160,6 +167,9 @@ public enum TextTrimming
     /// <summary>Text is not trimmed (may overflow bounds).</summary>
     None,
 
+    /// <summary>Text stays on one line and overflows.</summary>
     /// <summary>Text is trimmed at character boundary with an ellipsis (…).</summary>
+    /// <summary>Text breaks at word boundaries, and inside a word wider than the line.</summary>
     CharacterEllipsis,
+    /// <summary>Text breaks at word boundaries only; a word wider than the line overflows.</summary>
 }

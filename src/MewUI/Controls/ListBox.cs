@@ -48,6 +48,7 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
     private bool _suppressItemsSelectionChanged;
     private ISelectableItemsView _itemsSource = ItemsView.EmptySelectable;
 
+    /// <summary>Gets or sets whether alternating items use a second background color (zebra striping).</summary>
     public bool ZebraStriping
     {
         get => GetValue(ZebraStripingProperty);
@@ -55,7 +56,7 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
     }
 
     /// <summary>
-    /// Gets or sets the items data source.
+    /// Gets or sets the items source.
     /// </summary>
     public ISelectableItemsView ItemsSource
     {
@@ -152,8 +153,9 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
     private IMultiSelectableItemsView? MultiView => _itemsSource.AsMultiSelectable();
 
     /// <summary>
-    /// Gets or sets the selection mode. Requires an items source that supports multi-selection
-    /// (e.g. created from a typed list); otherwise stays <see cref="ItemsSelectionMode.Single"/>.
+    /// Gets or sets the selection mode; multi-selection needs an items source that supports it
+    /// (e.g. created from a typed list), otherwise the mode stays
+    /// <see cref="ItemsSelectionMode.Single"/>.
     /// </summary>
     public ItemsSelectionMode SelectionMode
     {
@@ -214,6 +216,7 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
     public static readonly MewProperty<double> ItemHeightProperty =
         MewProperty<double>.Register<ListBox>(nameof(ItemHeight), double.NaN, MewPropertyOptions.AffectsLayout);
 
+    /// <summary>Gets or sets the height of each list item.</summary>
     public double ItemHeight
     {
         get => GetValue(ItemHeightProperty);
@@ -227,6 +230,7 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
         MewProperty<Thickness>.Register<ListBox>(nameof(ItemPadding), default, MewPropertyOptions.AffectsLayout,
             static (self, _, _) => self.OnItemPaddingChanged());
 
+    /// <summary>Gets or sets the padding around each item's text.</summary>
     public Thickness ItemPadding
     {
         get => GetValue(ItemPaddingProperty);
@@ -240,9 +244,7 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
         InvalidateItemBindings();
     }
 
-    /// <summary>
-    /// Gets or sets the item template. If not set explicitly, the default template is used.
-    /// </summary>
+    /// <summary>Gets or sets the item template; unset, the default template is used.</summary>
     public IDataTemplate ItemTemplate
     {
         get => _itemTemplate;
@@ -292,8 +294,8 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
     }
 
     /// <summary>
-    /// Gets or sets the horizontal scrollbar mode. Items wider than the viewport scroll
-    /// horizontally (default: Auto).
+    /// Gets or sets the horizontal scroll mode, Auto by default, so items wider than the viewport
+    /// scroll horizontally.
     /// </summary>
     public ScrollMode HorizontalScroll
     {

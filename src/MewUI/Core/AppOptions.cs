@@ -16,8 +16,8 @@ public sealed class AppOptions
     public Accent? Accent { get; set; }
 
     /// <summary>
-    /// Gets or sets the default accent as a custom color.
-    /// Takes precedence over <see cref="Accent"/> when set.
+    /// Gets or sets the default accent as a custom color, which takes precedence over
+    /// <see cref="Accent"/> when set.
     /// </summary>
     public Color? AccentColor { get; set; }
 
@@ -37,8 +37,11 @@ public sealed class AppOptions
     public ThemeMetrics? Metrics { get; set; }
 
     /// <summary>
-    /// Gets or sets when the run loop ends automatically as windows close. Applied to
-    /// <see cref="Application.ShutdownMode"/> at run start; leave null to keep the default.
+    /// Gets or sets when the run loop ends automatically as windows close; null keeps the
+    /// <see cref="Application.ShutdownMode"/> default.
     /// </summary>
+    /// <remarks>
+    /// Applied to <see cref="Application.ShutdownMode"/> at run start.
+    /// </remarks>
     public ShutdownMode? ShutdownMode { get; set; }
 }

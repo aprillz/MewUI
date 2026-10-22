@@ -1,7 +1,7 @@
 namespace Aprillz.MewUI.Controls;
 
 /// <summary>
-/// When a control that always scrolls its content shows a scroll bar.
+/// When a control that always scrolls its content shows a scrollbar.
 /// </summary>
 public enum ScrollBarVisibility
 {

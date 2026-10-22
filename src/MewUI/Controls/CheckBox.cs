@@ -3,7 +3,7 @@ using Aprillz.MewUI.Rendering;
 namespace Aprillz.MewUI.Controls;
 
 /// <summary>
-/// A checkbox control with optional content label.
+/// A check box control with optional content label.
 /// </summary>
 public partial class CheckBox : CommandSourceControl
 {
@@ -45,7 +45,7 @@ public partial class CheckBox : CommandSourceControl
     }
 
     /// <summary>
-    /// Gets or sets whether the checkbox supports indeterminate state.
+    /// Gets or sets whether the check box supports the indeterminate state.
     /// </summary>
     public bool IsThreeState
     {
@@ -54,7 +54,7 @@ public partial class CheckBox : CommandSourceControl
     }
 
     /// <summary>
-    /// Gets or sets the checked state.
+    /// Gets or sets the checked state; null is indeterminate.
     /// </summary>
     public bool? IsChecked
     {

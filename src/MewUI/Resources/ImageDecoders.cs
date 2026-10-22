@@ -34,16 +34,21 @@ public static class ImageDecoders
     private readonly record struct Registration(IImageDecoder Decoder, int Priority, long Order);
 
     /// <summary>
-    /// Registers a decoder. Decoders are queried in registration order, with the most recently registered
-    /// non-fallback decoders checked first. If multiple decoders report <see cref="IImageDecoder.CanDecode"/>
-    /// for the same input, the first match wins.
+    /// Registers a decoder that is queried before the previously registered regular decoders, replacing any
+    /// decoder with the same <see cref="IImageDecoder.Id"/>.
     /// </summary>
+    /// <remarks>
+    /// Decoders are queried most recently registered first, regular decoders before fallback decoders; the
+    /// first one whose <see cref="IImageDecoder.CanDecode"/> accepts the input wins.
+    /// </remarks>
     public static void Register(IImageDecoder decoder) => RegisterCore(decoder, DEFAULT_PRIORITY);
 
     /// <summary>
-    /// Registers a fallback decoder. Fallback decoders are only tried after all regular decoders.
-    /// Use this for "try anything" decoders that might match ambiguous inputs.
+    /// Registers a fallback decoder that is tried only after all regular decoders.
     /// </summary>
+    /// <remarks>
+    /// Use this for "try anything" decoders that might match ambiguous inputs.
+    /// </remarks>
     public static void RegisterFallback(IImageDecoder decoder) => RegisterCore(decoder, FALLBACK_PRIORITY);
 
     private static void RegisterCore(IImageDecoder decoder, int priority)
@@ -117,19 +122,23 @@ public static class ImageDecoders
     }
 
     /// <summary>
-    /// Attempts to decode an encoded image byte array into a <see cref="Bgra32PixelBuffer"/>. Use the
-    /// <see cref="TryDecode(byte[], out Bgra32PixelBuffer, out ImageOrientation)"/> overload when the
-    /// source orientation is also needed.
+    /// Attempts to decode an encoded image byte array into a <see cref="Bgra32PixelBuffer"/>.
     /// </summary>
+    /// <remarks>
+    /// Use the <see cref="TryDecode(byte[], out Bgra32PixelBuffer, out ImageOrientation)"/> overload when the
+    /// source orientation is also needed.
+    /// </remarks>
     public static bool TryDecode(byte[] encoded, out Bgra32PixelBuffer bitmap)
         => TryDecode(encoded, out bitmap, out _);
 
     /// <summary>
     /// Attempts to decode an encoded image byte array into pixels plus the orientation parsed from its
-    /// metadata. Uses the same fast byte[] pixel path as <see cref="TryDecode(byte[], out Bgra32PixelBuffer)"/>;
-    /// orientation comes from <see cref="IImageDecoder.ReadOrientation"/> (a cheap, copy-free metadata scan)
-    /// and is <see cref="ImageOrientation.Identity"/> for formats without orientation metadata.
+    /// metadata; the orientation is <see cref="ImageOrientation.Identity"/> for formats without orientation metadata.
     /// </summary>
+    /// <remarks>
+    /// Uses the same fast byte[] pixel path as <see cref="TryDecode(byte[], out Bgra32PixelBuffer)"/>; the
+    /// orientation comes from <see cref="IImageDecoder.ReadOrientation"/>, a cheap, copy-free metadata scan.
+    /// </remarks>
     public static bool TryDecode(byte[] encoded, out Bgra32PixelBuffer bitmap, out ImageOrientation orientation)
     {
         ArgumentNullException.ThrowIfNull(encoded);
@@ -173,8 +182,8 @@ public static class ImageDecoders
     }
 
     /// <summary>
-    /// Attempts to identify the input format by probing registered decoders.
-    /// This is intended for diagnostics only.
+    /// Identifies the input format by probing registered decoders, for diagnostics only; null when no decoder
+    /// accepts the input.
     /// </summary>
     public static string? DetectFormatId(ReadOnlySpan<byte> encoded)
     {

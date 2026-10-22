@@ -7,11 +7,12 @@ namespace Aprillz.MewUI;
 /// </summary>
 public class PathShape : Shape
 {
+    /// <summary>The geometry that defines this path; null draws nothing.</summary>
     public static readonly MewProperty<PathGeometry?> DataProperty =
         MewProperty<PathGeometry?>.Register<PathShape>(nameof(Data), null, MewPropertyOptions.AffectsLayout);
 
     /// <summary>
-    /// Gets or sets the geometry that defines this path.
+    /// Gets or sets the geometry that defines this path; null draws nothing.
     /// </summary>
     public PathGeometry? Data
     {

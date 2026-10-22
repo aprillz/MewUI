@@ -3,7 +3,7 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// A horizontal cluster of segments joined into a single rounded frame (toolbar / split action).
 /// Shares the segment model and chrome of <see cref="SegmentedBase"/> but carries no selection: each
-/// segment is independent. Populate it with <c>Items</c> + <c>PrepareContainer</c>, assigning each
+/// segment is independent. Populate it with <see cref="ControlExtensions.Items{TSelf}(TSelf, string[])"/> + <see cref="ControlExtensions.PrepareContainer{T}(ButtonGroup, Action{SegmentButton, T, int})"/>, assigning each
 /// segment's <see cref="CommandSourceControl.Command"/>, subscribing to <see cref="SegmentButton.Click"/>,
 /// and/or configuring <see cref="SegmentButton.IsCheckable"/> (independent toggle). For a single
 /// mutually exclusive choice use <see cref="SegmentedControl"/>.

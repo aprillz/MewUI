@@ -29,12 +29,13 @@ public sealed class FocusManager
     public UIElement? FocusedElement { get; private set; }
 
     /// <summary>
-    /// Sets focus to the specified element.
+    /// Sets focus to the specified element after resolving its default focus target; returns false when
+    /// the element cannot take focus.
     /// </summary>
     public bool SetFocus(UIElement? element) => SetFocus(element, resolveDefault: true);
 
     /// <summary>
-    /// Sets focus to the specified element.
+    /// Sets focus to the specified element; returns false when the element cannot take focus.
     /// </summary>
     /// <param name="element">The element to focus.</param>
     /// <param name="resolveDefault">

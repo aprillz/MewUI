@@ -7,13 +7,15 @@ namespace Aprillz.MewUI.Resources;
 
 /// <summary>
 /// Draws an SVG that reduces to plain fills, strokes and clips, without the MewUI.Svg extension.
-/// Shapes, groups, transforms, inherited presentation attributes, inline <c>style</c>, solid and
-/// gradient paint, and <c>clipPath</c> are read; <c>style</c> blocks, <c>class</c>, <c>filter</c>,
-/// <c>mask</c>, <c>pattern</c>, <c>text</c>, <c>image</c> and <c>use</c> are not.
 /// </summary>
+/// <remarks>
+/// Shapes, groups, transforms, inherited presentation attributes, inline <c>style</c>, solid and gradient
+/// paint, and <c>clipPath</c> are read; <c>style</c> blocks, <c>class</c>, <c>filter</c>, <c>mask</c>,
+/// <c>pattern</c>, <c>text</c>, <c>image</c> and <c>use</c> are not.
+/// </remarks>
 public sealed class SimpleSvgSource : MewObject, IVectorImageSource, INotifyImageChanged
 {
-    /// <summary>Replaces the fill and stroke colors inherited from the root. Null keeps the source colors.</summary>
+    /// <summary>The tint color that replaces the fill and stroke colors inherited from the root; null keeps the source colors.</summary>
     public static readonly MewProperty<Color?> TintProperty =
         MewProperty<Color?>.Register<SimpleSvgSource>(nameof(Tint), null,
             changed: (owner, _, _) => owner.Changed?.Invoke());
@@ -26,9 +28,12 @@ public sealed class SimpleSvgSource : MewObject, IVectorImageSource, INotifyImag
     public event Action? Changed;
 
     /// <summary>
-    /// Replaces the fill and stroke colors that were inherited from the root element, which is what
-    /// recolors a monochrome icon. Paint declared on a shape or an intermediate group is left alone.
+    /// Gets or sets the tint color that replaces the fill and stroke colors inherited from the root element;
+    /// null keeps the source colors.
     /// </summary>
+    /// <remarks>
+    /// This is what recolors a monochrome icon; paint declared on a shape or an intermediate group is left alone.
+    /// </remarks>
     public Color? Tint
     {
         get => GetValue(TintProperty);
@@ -38,7 +43,7 @@ public sealed class SimpleSvgSource : MewObject, IVectorImageSource, INotifyImag
     /// <inheritdoc />
     public Size IntrinsicSize => _document.IntrinsicSize;
 
-    /// <summary>Reads SVG markup. Throws <see cref="FormatException"/> when the markup is malformed.</summary>
+    /// <summary>Reads SVG markup; throws <see cref="FormatException"/> when the markup is malformed.</summary>
     public static SimpleSvgSource FromString(string markup)
     {
         ArgumentNullException.ThrowIfNull(markup);

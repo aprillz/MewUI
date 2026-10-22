@@ -29,8 +29,10 @@ public abstract class ImageFilter
 /// </summary>
 public sealed class SourceFilter : ImageFilter
 {
+    /// <summary>The single instance.</summary>
     public static readonly SourceFilter Instance = new();
     private SourceFilter() { }
+    /// <inheritdoc/>
     public override IReadOnlyList<ImageFilter?> Inputs => Array.Empty<ImageFilter?>();
 }
 
@@ -40,7 +42,9 @@ public sealed class SourceFilter : ImageFilter
 /// </summary>
 public sealed class FloodFilter(Color color) : ImageFilter
 {
+    /// <summary>Gets the fill color.</summary>
     public Color Color { get; } = color;
+    /// <inheritdoc/>
     public override IReadOnlyList<ImageFilter?> Inputs => Array.Empty<ImageFilter?>();
 }
 
@@ -51,12 +55,17 @@ public sealed class FloodFilter(Color color) : ImageFilter
 /// </summary>
 public sealed class BlurFilter(double radiusX, double radiusY, ImageFilter? input = null) : ImageFilter
 {
+    /// <summary>Creates a blur with the same radius on both axes.</summary>
     public BlurFilter(double radius, ImageFilter? input = null) : this(radius, radius, input) { }
 
+    /// <summary>Gets the horizontal blur radius in DIPs; negative values are clamped to 0.</summary>
     public double RadiusX { get; } = Math.Max(0, radiusX);
+    /// <summary>Gets the vertical blur radius in DIPs; negative values are clamped to 0.</summary>
     public double RadiusY { get; } = Math.Max(0, radiusY);
+    /// <summary>Gets the input filter, or <see langword="null"/> for the source layer.</summary>
     public ImageFilter? Input { get; } = input;
 
+    /// <inheritdoc/>
     public override IReadOnlyList<ImageFilter?> Inputs => new[] { Input };
 }
 
@@ -66,11 +75,14 @@ public sealed class BlurFilter(double radiusX, double radiusY, ImageFilter? inpu
 /// </summary>
 public sealed class ColorMatrixFilter(float[] matrix4x5, ImageFilter? input = null) : ImageFilter
 {
+    /// <summary>Gets the 4x5 row-major matrix.</summary>
     public float[] Matrix { get; } = matrix4x5 is { Length: 20 }
         ? matrix4x5
         : throw new ArgumentException("Matrix must have exactly 20 entries (4 rows × 5 cols).", nameof(matrix4x5));
+    /// <summary>Gets the input filter, or <see langword="null"/> for the source layer.</summary>
     public ImageFilter? Input { get; } = input;
 
+    /// <inheritdoc/>
     public override IReadOnlyList<ImageFilter?> Inputs => new[] { Input };
 }
 
@@ -80,10 +92,14 @@ public sealed class ColorMatrixFilter(float[] matrix4x5, ImageFilter? input = nu
 /// </summary>
 public sealed class OffsetFilter(double dx, double dy, ImageFilter? input = null) : ImageFilter
 {
+    /// <summary>Gets the horizontal offset in DIPs.</summary>
     public double Dx { get; } = dx;
+    /// <summary>Gets the vertical offset in DIPs.</summary>
     public double Dy { get; } = dy;
+    /// <summary>Gets the input filter, or <see langword="null"/> for the source layer.</summary>
     public ImageFilter? Input { get; } = input;
 
+    /// <inheritdoc/>
     public override IReadOnlyList<ImageFilter?> Inputs => new[] { Input };
 }
 
@@ -111,10 +127,14 @@ public enum CompositeOp
 /// </summary>
 public sealed class CompositeFilter(ImageFilter foreground, ImageFilter background, CompositeOp op) : ImageFilter
 {
+    /// <summary>Gets the foreground input.</summary>
     public ImageFilter Foreground { get; } = foreground ?? throw new ArgumentNullException(nameof(foreground));
+    /// <summary>Gets the background input.</summary>
     public ImageFilter Background { get; } = background ?? throw new ArgumentNullException(nameof(background));
+    /// <summary>Gets the composition operator.</summary>
     public CompositeOp Op { get; } = op;
 
+    /// <inheritdoc/>
     public override IReadOnlyList<ImageFilter?> Inputs => new ImageFilter?[] { Foreground, Background };
 }
 
@@ -125,9 +145,12 @@ public sealed class CompositeFilter(ImageFilter foreground, ImageFilter backgrou
 /// </summary>
 public sealed class ComposeFilter(ImageFilter outer, ImageFilter inner) : ImageFilter
 {
+    /// <summary>Gets the filter applied last, to the result of <see cref="Inner"/>.</summary>
     public ImageFilter Outer { get; } = outer ?? throw new ArgumentNullException(nameof(outer));
+    /// <summary>Gets the filter applied first, to the source layer.</summary>
     public ImageFilter Inner { get; } = inner ?? throw new ArgumentNullException(nameof(inner));
 
+    /// <inheritdoc/>
     public override IReadOnlyList<ImageFilter?> Inputs => new ImageFilter?[] { Outer, Inner };
 }
 
@@ -142,15 +165,15 @@ public sealed class ComposeFilter(ImageFilter outer, ImageFilter inner) : ImageF
 /// </remarks>
 public sealed class MergeFilter(params ImageFilter[] inputs) : ImageFilter
 {
+    /// <summary>Gets the inputs in composition order.</summary>
     public IReadOnlyList<ImageFilter> InputList { get; } = inputs ?? throw new ArgumentNullException(nameof(inputs));
 
+    /// <inheritdoc/>
     public override IReadOnlyList<ImageFilter?> Inputs => InputList!;
 }
 
 /// <summary>
-/// Convenience: blurred, colored, offset copy of the input drawn behind it. Equivalent to
-/// <c>Merge(Source, Composite(Flood(Color), Offset(dx, dy, Blur(σ, SourceAlpha))))</c> but
-/// backends may implement as a single fused shader. Maps to SVG drop-shadow filter idioms.
+/// Whether a <see cref="DropShadowFilter"/> outputs the shadow together with its input or the shadow alone.
 /// </summary>
 public enum DropShadowMode
 {
@@ -160,15 +183,30 @@ public enum DropShadowMode
     DrawShadowOnly,
 }
 
+/// <summary>
+/// Draws a blurred, colored copy of the input offset by (<see cref="Dx"/>, <see cref="Dy"/>) DIPs behind
+/// it, or the shadow alone when <see cref="Mode"/> says so.
+/// </summary>
+/// <remarks>
+/// Equivalent to <c>Merge(Source, Composite(Flood(Color), Offset(dx, dy, Blur(σ, SourceAlpha))))</c>, but
+/// backends may implement it as a single fused shader. Maps to SVG drop-shadow filter idioms.
+/// </remarks>
 public sealed class DropShadowFilter(double dx, double dy, double radius, Color color,
     DropShadowMode mode = DropShadowMode.DrawShadowAndForeground, ImageFilter? input = null) : ImageFilter
 {
+    /// <summary>Gets the horizontal shadow offset in DIPs.</summary>
     public double Dx { get; } = dx;
+    /// <summary>Gets the vertical shadow offset in DIPs.</summary>
     public double Dy { get; } = dy;
+    /// <summary>Gets the blur radius in DIPs; negative values are clamped to 0.</summary>
     public double Radius { get; } = Math.Max(0, radius);
+    /// <summary>Gets the shadow color.</summary>
     public Color Color { get; } = color;
+    /// <summary>Gets whether the input is drawn over the shadow or the shadow is output alone.</summary>
     public DropShadowMode Mode { get; } = mode;
+    /// <summary>Gets the input filter, or <see langword="null"/> for the source layer.</summary>
     public ImageFilter? Input { get; } = input;
 
+    /// <inheritdoc/>
     public override IReadOnlyList<ImageFilter?> Inputs => new[] { Input };
 }

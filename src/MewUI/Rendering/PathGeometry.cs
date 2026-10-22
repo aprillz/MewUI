@@ -8,9 +8,13 @@ namespace Aprillz.MewUI.Rendering;
 /// </summary>
 public enum PathCommandType : byte
 {
+    /// <summary>Starts a new sub-path at (X0, Y0).</summary>
     MoveTo,
+    /// <summary>Draws a straight line to (X0, Y0).</summary>
     LineTo,
+    /// <summary>Draws a cubic Bezier curve with control points (X0, Y0) and (X1, Y1) to (X2, Y2).</summary>
     BezierTo,
+    /// <summary>Closes the current sub-path with a straight line back to its start.</summary>
     Close,
 }
 
@@ -20,18 +24,26 @@ public enum PathCommandType : byte
 [StructLayout(LayoutKind.Sequential)]
 public readonly struct PathCommand
 {
+    /// <summary>Gets the command type.</summary>
     public PathCommandType Type { get; }
 
     // MoveTo/LineTo: X0,Y0 = target point
     // BezierTo: X0,Y0 = control point 1; X1,Y1 = control point 2; X2,Y2 = end point
     // Close: (no coordinates used)
+    /// <summary>Gets the X coordinate of the target point of a move or line, or of the first control point of a curve.</summary>
     public double X0 { get; }
+    /// <summary>Gets the Y coordinate of the target point of a move or line, or of the first control point of a curve.</summary>
     public double Y0 { get; }
+    /// <summary>Gets the X coordinate of the second control point of a curve; unused by other commands.</summary>
     public double X1 { get; }
+    /// <summary>Gets the Y coordinate of the second control point of a curve; unused by other commands.</summary>
     public double Y1 { get; }
+    /// <summary>Gets the X coordinate of the end point of a curve; unused by other commands.</summary>
     public double X2 { get; }
+    /// <summary>Gets the Y coordinate of the end point of a curve; unused by other commands.</summary>
     public double Y2 { get; }
 
+    /// <summary>Creates a command; coordinates the command does not use stay 0.</summary>
     public PathCommand(PathCommandType type, double x0 = 0, double y0 = 0,
         double x1 = 0, double y1 = 0, double x2 = 0, double y2 = 0)
     {
@@ -546,7 +558,9 @@ public sealed class PathGeometry : Geometry
     }
 
     /// <summary>
-    /// Parses SVG path data into a frozen <see cref="PathGeometry"/>. A string argument
+    /// Parses SVG path data into a frozen <see cref="PathGeometry"/>. A leading <c>F0</c> sets
+    /// <see cref="FillRule"/> to <see cref="FillRule.EvenOdd"/> and <c>F1</c> to <see cref="FillRule.NonZero"/>,
+    /// as in XAML path markup; without it the rule is <see cref="FillRule.NonZero"/>. A string argument
     /// binds here via implicit conversion to <see cref="ReadOnlySpan{T}"/>.
     /// </summary>
     public static PathGeometry Parse(ReadOnlySpan<char> pathData)

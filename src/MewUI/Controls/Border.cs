@@ -46,6 +46,7 @@ public sealed partial class Border : Control, IVisualTreeHost, ILogicalTreeHost
             static (self, oldValue, newValue) => self.OnChildChanged(oldValue, newValue),
             validate: static (self, value) => self.ValidateLogicalChild(value, allowTransfer: true));
 
+    /// <summary>Gets or sets the child element.</summary>
     public UIElement? Child
     {
         get => GetValue(ChildProperty);
@@ -66,8 +67,8 @@ public sealed partial class Border : Control, IVisualTreeHost, ILogicalTreeHost
     }
 
     /// <summary>
-    /// Gets or sets the per-side border thickness. When set (non-zero), overrides the
-    /// uniform <see cref="Control.BorderThickness"/> inherited from Control.
+    /// Gets or sets the per-side border thickness, which when non-zero overrides the uniform
+    /// <see cref="Control.BorderThickness"/>.
     /// </summary>
     public Thickness NonUniformBorderThickness
     {
@@ -76,8 +77,8 @@ public sealed partial class Border : Control, IVisualTreeHost, ILogicalTreeHost
     }
 
     /// <summary>
-    /// Gets or sets the per-corner radius. When set (non-zero), overrides the
-    /// uniform <see cref="Control.CornerRadius"/> inherited from Control.
+    /// Gets or sets the per-corner radius, which when non-zero overrides the uniform
+    /// <see cref="Control.CornerRadius"/>.
     /// </summary>
     public CornerRadius NonUniformCornerRadius
     {
@@ -103,6 +104,10 @@ public sealed partial class Border : Control, IVisualTreeHost, ILogicalTreeHost
         }
     }
 
+    /// <summary>
+    /// Gets or sets whether the child is clipped to the border bounds, following the rounded
+    /// corners when <see cref="Control.CornerRadius"/> is set.
+    /// </summary>
     public bool ClipToBounds
     {
         get => GetValue(ClipToBoundsProperty);

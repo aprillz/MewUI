@@ -11,16 +11,20 @@ public static class LayoutRounding
     private const int MIDPOINT_NOISE_DIGITS = 6;
 
     /// <summary>
-    /// Snaps bounds geometry (background/border/layout boxes) to device pixels.
-    /// This snapping may shrink/grow by rounding edges, so prefer it for geometry that should be stable.
+    /// Snaps bounds geometry (background, border and layout boxes) to device pixels by rounding its edges.
     /// </summary>
+    /// <remarks>
+    /// The rectangle may shrink or grow by rounding, so prefer this for geometry that should be stable.
+    /// </remarks>
     public static Rect SnapBoundsRectToPixels(Rect rect, double dpiScale) =>
         SnapRectEdgesToPixels(rect, dpiScale);
 
     /// <summary>
     /// Snaps a viewport rectangle to device pixels without allowing it to shrink due to rounding.
-    /// Prefer this for scroll viewports and clip rectangles.
     /// </summary>
+    /// <remarks>
+    /// Prefer this for scroll viewports and clip rectangles.
+    /// </remarks>
     public static Rect SnapViewportRectToPixels(Rect rect, double dpiScale) =>
         SnapRectEdgesToPixelsOutward(rect, dpiScale);
 
@@ -31,8 +35,8 @@ public static class LayoutRounding
         ExpandClipByDevicePixels(rect, dpiScale, rightPx, bottomPx);
 
     /// <summary>
-    /// Snaps a constraint rectangle (used for Measure inputs) to device pixels.
-    /// This should be stable and must not cause layout expansion beyond the available slot.
+    /// Snaps a constraint rectangle (a measure input) to device pixels without expanding it beyond the
+    /// available slot.
     /// </summary>
     public static Rect SnapConstraintRectToPixels(Rect rect, double dpiScale) =>
         SnapRectEdgesToPixels(rect, dpiScale);
@@ -118,10 +122,12 @@ public static class LayoutRounding
 
     /// <summary>
     /// Snaps a rectangle outward (floor left/top, ceil right/bottom) so it never shrinks.
-    /// A small epsilon tolerance prevents floating-point round-trip errors
-    /// (e.g. <c>Floor((16/1.5 + 2/1.5) * 1.5)</c> yielding 17 instead of 18) from
-    /// shifting edges by an extra device pixel.
     /// </summary>
+    /// <remarks>
+    /// A small epsilon tolerance prevents floating-point round-trip errors
+    /// (e.g. <c>Floor((16/1.5 + 2/1.5) * 1.5)</c> yielding 17 instead of 18) from shifting edges by an
+    /// extra device pixel.
+    /// </remarks>
     public static Rect SnapRectEdgesToPixelsOutward(Rect rect, double dpiScale)
     {
         if (dpiScale <= 0 || double.IsNaN(dpiScale) || double.IsInfinity(dpiScale))
@@ -237,9 +243,11 @@ public static class LayoutRounding
 
     /// <summary>
     /// Ceils a DIP value to a pixel-aligned integer coordinate.
-    /// A small epsilon tolerance prevents floating-point round-trip errors from
-    /// expanding by an extra device pixel.
     /// </summary>
+    /// <remarks>
+    /// A small epsilon tolerance prevents floating-point round-trip errors from expanding by an extra
+    /// device pixel.
+    /// </remarks>
     public static int CeilToPixelInt(double value, double dpiScale)
     {
         if (dpiScale <= 0 || double.IsNaN(dpiScale) || double.IsInfinity(dpiScale))

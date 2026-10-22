@@ -122,6 +122,7 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
         };
     }
 
+    /// <summary>Gets or sets the text content.</summary>
     public string Text
     {
         get => GetTextSnapshot();
@@ -130,19 +131,21 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
 
     private protected override MewProperty<string>? TextSyncProperty => TextProperty;
 
+    /// <summary>Gets the currently selected text.</summary>
     public string SelectedText => GetSelectedDocumentText();
 
     private protected override bool SupportsClipboardCopy => true;
 
     private protected override string? GetClipboardCopyText() => SelectedText;
 
+    /// <summary>Gets or sets whether lines wrap at the viewport width.</summary>
     public bool Wrap
     {
         get => GetValue(WrapProperty);
         set => SetValue(WrapProperty, value);
     }
 
-    /// <summary>When the vertical scroll bar is shown; the text scrolls either way.</summary>
+    /// <summary>Gets or sets when the vertical scrollbar is shown; the text scrolls either way.</summary>
     public ScrollBarVisibility VerticalScrollBarVisibility
     {
         get => GetValue(VerticalScrollBarVisibilityProperty);
@@ -150,24 +153,29 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
     }
 
     /// <summary>
-    /// Whether the desired size is the document's extent, clamped to the offered space, instead of
-    /// the offered space itself. Off by default: reporting the offered space is what an editor
-    /// filling a pane wants, and it costs no extent lookup.
+    /// Gets or sets whether the desired size is the document's extent clamped to the offered space,
+    /// instead of the offered space itself; the default is false.
     /// </summary>
+    /// <remarks>
+    /// Reporting the offered space is what an editor filling a pane wants, and it costs no extent
+    /// lookup.
+    /// </remarks>
     public bool SizeToDocument
     {
         get => GetValue(SizeToDocumentProperty);
         set => SetValue(SizeToDocumentProperty, value);
     }
 
-    /// <summary>Tab width in space characters.</summary>
+    /// <summary>Gets or sets the tab width in space characters.</summary>
     public int TabSize
     {
         get => GetValue(TabSizeProperty);
         set => SetValue(TabSizeProperty, value);
     }
 
+    /// <summary>Gets the horizontal scroll offset in DIPs.</summary>
     public double HorizontalOffset => _horizontalOffset;
+    /// <summary>Gets the vertical scroll offset in DIPs.</summary>
     public double VerticalOffset => _verticalOffset;
     /// <summary>
     /// Gets or sets the backing document; assigning a new one keeps the view and extension
@@ -181,13 +189,16 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
     }
 
     IReadOnlyTextDocument ITextViewHost.Document => _document;
+    /// <summary>Gets the extension pipeline of the text view.</summary>
     public TextViewExtensionPipeline Extensions { get; }
 
     /// <summary>Raised after the document content changed or the document was replaced.</summary>
     public event Action<ITextViewHost>? DocumentChanged;
     public IReadOnlyList<TextLineLayout> VisibleTextLines
+    /// <summary>Gets the line layouts currently materialized.</summary>
         => _view?.MaterializedLines ?? Array.Empty<TextLineLayout>();
     public Rect TextViewportBounds => _contentBounds;
+    /// <summary>Gets the bounds the text is drawn in, in local coordinates.</summary>
 
     internal int MaterializedLineCount => _view?.MaterializedLines.Count ?? 0;
     internal int MaterializedCharacterCount
@@ -200,7 +211,9 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
         => (_verticalScrollBar.Value, _verticalScrollBar.Maximum);
     internal bool IsHorizontalScrollBarVisible => _horizontalScrollBar.IsVisible;
 
+    /// <summary>Occurs when the caret, the selection or the undo state changes.</summary>
     public event Action? EditingStateChanged;
+    /// <summary>Occurs when <see cref="Wrap"/> changes.</summary>
     public event Action<bool>? WrapChanged;
 
     /// <summary>Re-runs registered classifiers, generators, projections, and layers.</summary>

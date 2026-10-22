@@ -18,8 +18,8 @@ public partial class TextBlock : TextBlockBase
     private InlineCollection? _inlines;
 
     /// <summary>
-    /// Gets or sets the text content. Setting it replaces <see cref="Inlines"/>; while runs are
-    /// present the value is their concatenated text.
+    /// Gets or sets the text content; setting it replaces <see cref="Inlines"/>, and while runs
+    /// are present the value is their concatenated text.
     /// </summary>
     public string Text
     {

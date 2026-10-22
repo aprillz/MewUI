@@ -12,14 +12,14 @@ public abstract partial class UIElement : Element
     private bool _visualStateDirty;
 
     /// <summary>
-    /// Controls visibility. When false, the element is not rendered and does not participate in layout.
+    /// Whether the element is rendered and takes part in layout.
     /// </summary>
     public static readonly MewProperty<bool> IsVisibleProperty =
         MewProperty<bool>.Register<UIElement>(nameof(IsVisible), true,
             MewPropertyOptions.AffectsRender | MewPropertyOptions.AffectsLayout);
 
     /// <summary>
-    /// Controls whether the element is enabled for user interaction.
+    /// Whether the element is enabled for user interaction.
     /// </summary>
     public static readonly MewProperty<bool> IsEnabledProperty =
         MewProperty<bool>.Register<UIElement>(nameof(IsEnabled), true,
@@ -30,93 +30,99 @@ public abstract partial class UIElement : Element
             MewPropertyOptions.AffectsRender | MewPropertyOptions.AffectsVisualState);
 
     /// <summary>
-    /// Whether this element is enabled and so is every ancestor. Read-only; derived from
-    /// <see cref="IsEnabled"/> and the parent chain.
+    /// Whether this element and every ancestor are enabled; read-only, derived from <see cref="IsEnabled"/> and the parent chain.
     /// </summary>
     public static readonly MewProperty<bool> IsEffectivelyEnabledProperty =
         IsEffectivelyEnabledPropertyKey.Property;
 
     /// <summary>
-    /// Whether the element has keyboard focus. Read-only; set by <see cref="Input.FocusManager"/>.
+    /// Whether the element has keyboard focus; read-only, set by <see cref="Input.FocusManager"/>.
     /// </summary>
     public static readonly MewProperty<bool> IsFocusedProperty =
         MewProperty<bool>.RegisterReadOnly<UIElement>(nameof(IsFocused), false,
             MewPropertyOptions.AffectsRender | MewPropertyOptions.AffectsVisualState).Property;
 
     /// <summary>
-    /// Whether this element or any of its descendants has keyboard focus.
-    /// Read-only; derived from the focus chain.
+    /// Whether this element or any of its descendants has keyboard focus; read-only, derived from the focus chain.
     /// </summary>
     public static readonly MewProperty<bool> IsFocusWithinProperty =
         MewProperty<bool>.RegisterReadOnly<UIElement>(nameof(IsFocusWithin), false,
             MewPropertyOptions.AffectsRender | MewPropertyOptions.AffectsVisualState).Property;
 
     /// <summary>
-    /// Whether the mouse is over this element. Read-only; set by the input router.
+    /// Whether the mouse is over this element; read-only, set by the input router.
     /// </summary>
     public static readonly MewProperty<bool> IsMouseOverProperty =
         MewProperty<bool>.RegisterReadOnly<UIElement>(nameof(IsMouseOver), false,
             MewPropertyOptions.AffectsVisualState).Property;
 
     /// <summary>
-    /// Whether this element has mouse capture. Read-only; set via <see cref="Window.CaptureMouse(UIElement)"/>.
+    /// Whether this element has mouse capture; read-only, set via <see cref="Window.CaptureMouse(UIElement)"/>.
     /// </summary>
     public static readonly MewProperty<bool> IsMouseCapturedProperty =
         MewProperty<bool>.RegisterReadOnly<UIElement>(nameof(IsMouseCaptured), false,
             MewPropertyOptions.AffectsVisualState).Property;
 
     /// <summary>
-    /// Opacity of the element and everything under it, from 0 (invisible) to 1 (opaque).
-    /// Does not affect layout or hit testing: a fully transparent element still occupies its box
-    /// and still takes the pointer.
+    /// The opacity of the element and everything under it, from 0 (invisible) to 1 (opaque); it affects
+    /// neither layout nor hit testing, so a fully transparent element still occupies its box and takes the pointer.
     /// </summary>
     public static readonly MewProperty<double> OpacityProperty =
         MewProperty<double>.Register<UIElement>(nameof(Opacity), 1.0,
             MewPropertyOptions.AffectsRender);
 
     /// <summary>
-    /// Controls whether the element participates in hit testing.
+    /// Whether the element participates in hit testing.
     /// </summary>
     public static readonly MewProperty<bool> IsHitTestVisibleProperty =
         MewProperty<bool>.Register<UIElement>(nameof(IsHitTestVisible), true,
             MewPropertyOptions.None);
 
     /// <summary>
-    /// Position in the Tab order. Non-negative finite values are visited ascending, before
-    /// elements without an explicit index; NaN (default), negative and infinite values keep tree order.
+    /// The position in the Tab order; non-negative finite values are visited ascending before elements
+    /// without one, and NaN (the default), negative and infinite values keep tree order.
     /// </summary>
     public static readonly MewProperty<double> TabIndexProperty =
         MewProperty<double>.Register<UIElement>(nameof(TabIndex), double.NaN);
 
     /// <summary>
-    /// Whether a focusable element participates in Tab traversal. False only removes it from the
-    /// Tab order; click and programmatic focus are unaffected. Non-focusable elements are never
-    /// promoted into the Tab order by this property. Control authors exclude internal parts
-    /// (constructor/style); apps exclude individual instances.
+    /// Whether a focusable element is in the Tab order; false removes it from Tab traversal only,
+    /// leaving click and programmatic focus unaffected.
     /// </summary>
+    /// <remarks>
+    /// Non-focusable elements are never promoted into the Tab order by this property. Control authors
+    /// exclude internal parts (constructor/style); apps exclude individual instances.
+    /// </remarks>
     public static readonly MewProperty<bool> IsTabStopProperty =
         MewProperty<bool>.Register<UIElement>(nameof(IsTabStop), true);
 
     /// <summary>
-    /// Whether the element can receive keyboard focus. Control authors set the per-type default
-    /// (via <see cref="MewProperty{T}.OverrideDefaultValue{TOwner}"/> in a static constructor);
-    /// apps may override individual instances, for example to drop a composed part from focus.
-    /// Setting this false on the currently focused element does not move focus immediately; the
-    /// next Tab or click resolves it.
+    /// Whether the element can receive keyboard focus.
     /// </summary>
+    /// <remarks>
+    /// Control authors set the per-type default (via <see cref="MewProperty{T}.OverrideDefaultValue{TOwner}"/>
+    /// in a static constructor); apps may override individual instances, for example to drop a composed
+    /// part from focus. Setting this false on the currently focused element does not move focus
+    /// immediately; the next Tab or click resolves it.
+    /// </remarks>
     public static readonly MewProperty<bool> FocusableProperty =
         MewProperty<bool>.Register<UIElement>(nameof(Focusable), false);
 
     /// <summary>
-    /// When <see langword="true"/>, the viewport-bounds cull check in <see cref="Render"/> is skipped.
-    /// The check already follows transforms applied through the drawing context; set this on children
-    /// whose visible area differs from their layout bounds in some other way.
-    /// Inherits to descendants.
+    /// Whether the element is drawn even when it lies outside the viewport; inherited by descendants.
     /// </summary>
+    /// <remarks>
+    /// The viewport cull in <see cref="Render"/> already follows transforms applied through the drawing
+    /// context; set this on children whose visible area differs from their layout bounds in some other way.
+    /// </remarks>
     public static readonly MewProperty<bool> SkipViewportCullProperty =
         MewProperty<bool>.Register<UIElement>(nameof(SkipViewportCull), false,
             MewPropertyOptions.Inherits);
 
+    /// <summary>
+    /// Gets or sets whether the element is drawn even when it lies outside the viewport; inherited
+    /// by descendants.
+    /// </summary>
     public bool SkipViewportCull
     {
         get => GetValue(SkipViewportCullProperty);
@@ -124,9 +130,8 @@ public abstract partial class UIElement : Element
     }
 
     /// <summary>
-    /// Specifies the cursor to display when the mouse is over this element.
-    /// <see langword="null"/> means no override (inherit from parent or platform default);
-    /// <see cref="CursorType.None"/> hides the cursor.
+    /// The cursor shown while the mouse is over this element; null inherits from the parent or the
+    /// platform default, and <see cref="CursorType.None"/> hides the cursor.
     /// </summary>
     public static readonly MewProperty<CursorType?> CursorProperty =
         MewProperty<CursorType?>.Register<UIElement>(nameof(Cursor), null,
@@ -144,8 +149,7 @@ public abstract partial class UIElement : Element
     }
 
     /// <summary>
-    /// Called when a MewProperty value changes. Handles layout/render invalidation
-    /// and property-specific side effects.
+    /// Called when a property value changes; invalidates layout or rendering as the property declares and applies property-specific side effects.
     /// </summary>
     protected override void OnMewPropertyChanged(MewProperty property)
     {
@@ -305,8 +309,7 @@ public abstract partial class UIElement : Element
     }
 
     /// <summary>
-    /// Whether this element is enabled and so is every ancestor. Test this, not <see cref="IsEnabled"/>,
-    /// when deciding whether input applies or a disabled appearance should be drawn.
+    /// Gets whether this element and every ancestor are enabled; input and the disabled appearance follow this, not <see cref="IsEnabled"/>.
     /// </summary>
     public bool IsEffectivelyEnabled => GetValue(IsEffectivelyEnabledProperty);
 
@@ -333,17 +336,18 @@ public abstract partial class UIElement : Element
         get => GetValue(TabIndexProperty);
         set => SetValue(TabIndexProperty, value);
     }
+    /// <summary>Gets or sets the position in the Tab order.</summary>
 
     public bool IsTabStop
     {
         get => GetValue(IsTabStopProperty);
         set => SetValue(IsTabStopProperty, value);
     }
+    /// <summary>Gets or sets whether the element participates in Tab traversal.</summary>
 
     /// <summary>
-    /// Gets or sets the cursor to display when the mouse is over this element.
-    /// <see langword="null"/> means no override (inherit from parent or platform default);
-    /// <see cref="CursorType.None"/> hides the cursor.
+    /// Gets or sets the cursor shown while the mouse is over this element; null inherits from the
+    /// parent or the platform default, and <see cref="CursorType.None"/> hides the cursor.
     /// </summary>
     public CursorType? Cursor
     {
@@ -358,13 +362,15 @@ public abstract partial class UIElement : Element
 
     /// <summary>
     /// Gets whether this element or any of its descendants has keyboard focus.
-    /// Useful for container visuals (e.g. TabControl outline) and WinForms-like focus navigation.
     /// </summary>
     public bool IsFocusWithin => GetValue(IsFocusWithinProperty);
 
     /// <summary>
     /// Gets whether the mouse is over this element.
     /// </summary>
+    /// <remarks>
+    /// Container visuals (a tab control outline, for example) and container-level focus navigation read this.
+    /// </remarks>
     public bool IsMouseOver => GetValue(IsMouseOverProperty);
 
     /// <summary>
@@ -429,8 +435,8 @@ public abstract partial class UIElement : Element
     public event Action<MouseWheelEventArgs>? MouseWheel;
 
     /// <summary>
-    /// Occurs when a key is pressed while the element has focus. Marking it handled also drops the
-    /// text input that keystroke would produce.
+    /// Occurs when a key is pressed while the element has focus; marking it handled also drops the
+    /// text input the keystroke would produce.
     /// </summary>
     public event Action<KeyEventArgs>? KeyDown;
 
@@ -481,6 +487,9 @@ public abstract partial class UIElement : Element
         if (!IsVisible)
         {
             return;
+    /// <summary>
+    /// Renders the element and its subtree unless it is invisible, fully transparent or outside the viewport.
+    /// </summary>
         }
 
         double opacity = Opacity;
@@ -613,15 +622,18 @@ public abstract partial class UIElement : Element
     protected virtual void ResolveVisualState(bool snap) { }
 
     /// <summary>
-    /// Queues this element for visual-state reconciliation at the start of the next layout pass.
-    /// Dedup'd via an internal dirty flag; safe to call repeatedly. Call when a property that feeds
-    /// into <see cref="Controls.Control.ComputeVisualState"/> changes.
+    /// Queues this element for visual-state reconciliation at the start of the next layout pass; call it
+    /// when a property that feeds <see cref="Controls.Control.ComputeVisualState"/> changes.
     /// </summary>
     public void InvalidateVisualState()
     {
         if (_visualStateDirty)
         {
             return;
+    /// <remarks>
+    /// Repeated calls before the pass runs are merged, and a detached element is skipped since
+    /// attach-time style resolution recomputes its state.
+    /// </remarks>
         }
 
         // Detached elements skip the queue: attach-time style resolution recomputes the state.
@@ -659,7 +671,7 @@ public abstract partial class UIElement : Element
     /// <summary>
     /// Performs hit testing to find the element at the specified point.
     /// </summary>
-    /// <param name="point">The point in element coordinates.</param>
+    /// <param name="point">The point in window coordinates, the space of <see cref="Element.Bounds"/>.</param>
     /// <returns>The element at the point, or null.</returns>
     public UIElement? HitTest(Point point) => OnHitTest(point);
 
@@ -747,6 +759,7 @@ public abstract partial class UIElement : Element
         var root = FindVisualRoot();
         if (root is not Window window || window.Handle == 0)
         {
+    /// <exception cref="InvalidOperationException">The element is not connected to a shown window.</exception>
             throw new InvalidOperationException("The visual is not connected to a window.");
         }
 
@@ -765,6 +778,7 @@ public abstract partial class UIElement : Element
         var root = FindVisualRoot();
         if (root is not Window window || window.Handle == 0)
         {
+    /// <exception cref="InvalidOperationException">The element is not connected to a shown window.</exception>
             throw new InvalidOperationException("The visual is not connected to a window.");
         }
 
@@ -777,7 +791,8 @@ public abstract partial class UIElement : Element
     /// Converts a rectangle from element coordinates in DIPs to screen coordinates in device pixels.
     /// </summary>
     /// <param name="rect">The rectangle in element coordinates.</param>
-    /// <returns>The rectangle in screen coordinates in device pixels.</returns>
+    /// <returns>The bounding box of the rectangle in screen coordinates in device pixels.</returns>
+    /// <exception cref="InvalidOperationException">The element is not connected to a shown window.</exception>
     public Rect RectToScreen(Rect rect)
     {
         var tl = PointToScreen(rect.TopLeft);
@@ -789,7 +804,8 @@ public abstract partial class UIElement : Element
     /// Converts a rectangle from screen coordinates in device pixels to element coordinates in DIPs.
     /// </summary>
     /// <param name="rect">The rectangle in screen coordinates in device pixels.</param>
-    /// <returns>The rectangle in element coordinates.</returns>
+    /// <returns>The bounding box of the rectangle in element coordinates.</returns>
+    /// <exception cref="InvalidOperationException">The element is not connected to a shown window.</exception>
     public Rect RectFromScreen(Rect rect)
     {
         var tl = PointFromScreen(rect.TopLeft);

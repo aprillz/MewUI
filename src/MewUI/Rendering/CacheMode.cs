@@ -14,21 +14,23 @@ public abstract class CacheMode
 /// on the live element - only painting is served from the cache. Clearing <c>CacheMode</c> resumes
 /// live rendering immediately. Backing bitmaps are released while their subtree is hidden,
 /// outside the window viewport, or detached, and are recreated when rendered again.
-/// <para/>
+/// </summary>
+/// <remarks>
 /// Settings are immutable. To change them, assign a new <see cref="BitmapCache"/> instance to
 /// <see cref="Controls.UIElement.CacheMode"/> so the property change is observed and the cache is
 /// rebuilt. Mutating an already-assigned instance would not invalidate the cache.
-/// </summary>
+/// </remarks>
 public sealed class BitmapCache : CacheMode
 {
     /// <summary>
-    /// Scale at which the cache bitmap is rendered relative to device pixels (1.0 = device pixels).
-    /// Above 1 produces a sharper cache at higher memory cost; below 1, softer and cheaper.
+    /// Gets or sets the scale at which the cache bitmap is rendered relative to device pixels; the default
+    /// is 1.0, above 1 is sharper at a higher memory cost and below 1 is softer and cheaper.
     /// </summary>
     public double RenderAtScale { get; init; } = 1.0;
 
     /// <summary>
-    /// Whether the cache bitmap dimensions are snapped to whole device pixels to avoid blur.
+    /// Gets or sets whether the cache bitmap dimensions are snapped to whole device pixels to avoid blur;
+    /// the default is <see langword="true"/>.
     /// </summary>
     public bool SnapsToDevicePixels { get; init; } = true;
 }

@@ -48,6 +48,9 @@ public static class BuiltInAccent
         return isDark ? pair.Dark : pair.Light;
     }
 
+    /// <summary>
+    /// Returns the built-in color of the accent for a dark or light theme.
+    /// </summary>
     public static Color GetAccentColor(this Accent accent, bool isDark)
         => GetColor(accent, isDark);
 }

@@ -11,14 +11,16 @@ public abstract class Panel : FrameworkElement
 {
     private readonly List<Element> _children = new();
 
+    /// <summary>The inner padding between the panel bounds and its children.</summary>
     public static readonly MewProperty<Thickness> PaddingProperty =
         MewProperty<Thickness>.Register<Panel>(nameof(Padding), default, MewPropertyOptions.AffectsLayout);
 
+    /// <summary>Whether children are clipped to the panel bounds.</summary>
     public static readonly MewProperty<bool> ClipToBoundsProperty =
         MewProperty<bool>.Register<Panel>(nameof(ClipToBounds), false, MewPropertyOptions.AffectsRender);
 
     /// <summary>
-    /// Gets or sets the inner padding.
+    /// Gets or sets the inner padding between the panel bounds and its children.
     /// </summary>
     public Thickness Padding
     {
@@ -26,6 +28,9 @@ public abstract class Panel : FrameworkElement
         set => SetValue(PaddingProperty, value);
     }
 
+    /// <summary>
+    /// Gets or sets whether children are clipped to the panel bounds.
+    /// </summary>
     public bool ClipToBounds
     {
         get => GetValue(ClipToBoundsProperty);
@@ -43,7 +48,7 @@ public abstract class Panel : FrameworkElement
     protected List<Element> ChildrenList => _children;
 
     /// <summary>
-    /// Adds a child element to the panel.
+    /// Adds a child element to the end of the panel, transferring it from its current owner if it has one.
     /// </summary>
     public void Add(Element child)
     {
@@ -73,7 +78,7 @@ public abstract class Panel : FrameworkElement
     }
 
     /// <summary>
-    /// Removes a child element from the panel.
+    /// Removes a child element from the panel; returns false when it was not a child.
     /// </summary>
     public bool Remove(Element child)
     {
@@ -121,7 +126,7 @@ public abstract class Panel : FrameworkElement
     public int Count => _children.Count;
 
     /// <summary>
-    /// Inserts a child at the specified index.
+    /// Inserts a child at the specified index, transferring it from its current owner if it has one.
     /// </summary>
     public void Insert(int index, Element child)
     {

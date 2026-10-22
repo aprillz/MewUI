@@ -35,9 +35,12 @@ public sealed class Command
 
     /// <summary>
     /// Gets the normalized default presentation label, or null when presentation supplies its own
-    /// text. Access-key markers accepted by the constructor are removed from this value, so
-    /// presenters that do not support access keys can display it directly.
+    /// text.
     /// </summary>
+    /// <remarks>
+    /// Access-key markers accepted by the constructor are removed from this value, so presenters that
+    /// do not support access keys can display it directly.
+    /// </remarks>
     public string? Text => Presentation.DisplayText;
 
     /// <summary>
@@ -55,5 +58,8 @@ public sealed class Command
     /// </summary>
     public string? Description => Presentation.Description;
 
+    /// <summary>
+    /// Returns <see cref="Id"/>.
+    /// </summary>
     public override string ToString() => Id;
 }

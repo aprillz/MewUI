@@ -29,6 +29,7 @@ public abstract class SingleLineTextBase : TextBase
         _document.Changed += OnDocumentViewChanged;
     }
 
+    /// <summary>Gets the horizontal scroll offset in DIPs.</summary>
     public double HorizontalOffset => _horizontalOffset;
 
     private protected override string NormalizeTypedText(string text)

@@ -20,17 +20,15 @@ public abstract partial class UIElement
     private bool _elementTriggerReevalPending;
 
     /// <summary>
-    /// Transitions owned by this element. A registered property animates on every external value
-    /// change - a direct set, a binding push, or an element trigger - unlike a style transition,
-    /// which only animates style-resolved changes. Later entries win for the same property.
+    /// Gets or sets the transitions owned by this element; the list is snapshotted on assignment,
+    /// so assign a new list to change the set.
+    /// </summary>
     /// <remarks>
     /// A registered property animates on every external value change (a direct set, a binding push,
     /// or an element trigger), unlike a style transition, which only animates style-resolved
     /// changes. Later entries win for the same property.
     /// </remarks>
     [FluentExcluded("Configured through the Transition builder")]
-    /// The list is snapshotted on assignment; to change the set, assign a new list.
-    /// </summary>
     public IReadOnlyList<Transition>? Transitions
     {
         get => _elementTransitions;
@@ -47,7 +45,9 @@ public abstract partial class UIElement
     }
 
     /// <summary>
-    /// Conditional values owned by this element. While a trigger's condition property equals its
+    /// Gets or sets the conditional values owned by this element; the list is snapshotted and
+    /// validated on assignment, so assign a new list to change the set.
+    /// </summary>
     /// <remarks>
     /// While a trigger's condition property equals its value, its setters apply above style values;
     /// leaving the condition removes them, revealing whatever is underneath. Later triggers win for
@@ -56,12 +56,6 @@ public abstract partial class UIElement
     /// non-control elements.
     /// </remarks>
     [FluentExcluded("Configured through the trigger builders")]
-    /// value, its setters apply above style values; leaving the condition removes them, revealing
-    /// whatever is underneath. Later triggers win for the same target property. The list is
-    /// snapshotted and validated on assignment; to change the set, assign a new list.
-    /// Style state triggers remain in the Style slot, so these values keep their independent,
-    /// higher-priority ElementTrigger slot on controls as well as non-control elements.
-    /// </summary>
     public IReadOnlyList<ElementTrigger>? Triggers
     {
         get => _elementTriggers;
