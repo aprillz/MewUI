@@ -63,6 +63,10 @@ if errorlevel 1 (
   exit /b 1
 )
 
+REM The publish scope decides which xmldocmd failures are fatal; assemblies outside it only warn.
+set SCOPE=
+for /f "usebackq delims=" %%S in (`powershell -NoProfile -ExecutionPolicy Bypass -Command "$items = Get-Content -Raw '%SCOPE_FILE%' | ConvertFrom-Json; if ($items) { $items -join ' ' }"`) do set SCOPE=%%S
+
 for %%P in (%PROJECTS%) do call :generate "%%P"
 
 if "!DLLS!"=="" (
@@ -85,8 +89,6 @@ if errorlevel 1 (
 )
 
 REM --- Publish scope: only the assemblies listed in publish-scope.json are staged under .artifacts\api ---
-set SCOPE=
-for /f "usebackq delims=" %%S in (`powershell -NoProfile -ExecutionPolicy Bypass -Command "$items = Get-Content -Raw '%SCOPE_FILE%' | ConvertFrom-Json; if ($items) { $items -join ' ' }"`) do set SCOPE=%%S
 
 if exist "%PUBLISH_OUT%" rmdir /s /q "%PUBLISH_OUT%"
 mkdir "%PUBLISH_OUT%" >nul 2>nul
@@ -138,7 +140,7 @@ for %%D in ("%ROOT%\%PROJECT%") do set PROJECT_DIR=%%~dpD
 set DLL=%PROJECT_DIR%bin\Release\%PROJECT_TFM%\%ASSEMBLY%.dll
 
 echo Building %NAME% (%PROJECT_TFM%) ...
-dotnet build "%ROOT%\%PROJECT%" -c Release -f %PROJECT_TFM% /nr:false
+dotnet build "%ROOT%\%PROJECT%" -c Release -f %PROJECT_TFM% -p:CopyLocalLockFileAssemblies=true /nr:false
 if errorlevel 1 (
   echo FAILED: %NAME% build
   set FAILED=1
@@ -156,8 +158,14 @@ dotnet xmldocmd "%DLL%" "%BUILD_OUT%\%ASSEMBLY%" --visibility public --newline l
 set XMLDOCMD_EXIT=!errorlevel!
 popd
 if not "!XMLDOCMD_EXIT!"=="0" (
-  echo FAILED: xmldocmd %ASSEMBLY%
-  set FAILED=1
+  set IN_SCOPE=0
+  for %%S in (%SCOPE%) do if /i "%%S"=="%ASSEMBLY%" set IN_SCOPE=1
+  if "!IN_SCOPE!"=="1" (
+    echo FAILED: xmldocmd %ASSEMBLY%
+    set FAILED=1
+  ) else (
+    echo WARNING: xmldocmd %ASSEMBLY% failed; the assembly is outside publish-scope.json, so it is skipped
+  )
   exit /b 0
 )
 
