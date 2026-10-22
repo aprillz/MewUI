@@ -106,12 +106,12 @@ internal sealed unsafe class DrmKmsOutput : IFramebufferOutput
     /// Opens the first usable card (or the one in <paramref name="options"/>), returning null with the reason
     /// when no card has a connected display this process may drive.
     /// </summary>
-    public static DrmKmsOutput? TryOpen(FramebufferPlatformOptions options, out string failure)
+    public static DrmKmsOutput? TryOpen(FramebufferPlatformOptions options, IFramebufferSession session, out string failure)
     {
         var failures = new List<string>();
         foreach (var path in EnumerateCardPaths(options.DrmDevicePath))
         {
-            var output = TryOpenCard(path, options, out string reason);
+            var output = TryOpenCard(path, options, session, out string reason);
             if (output != null)
             {
                 failure = string.Empty;
@@ -143,12 +143,12 @@ internal sealed unsafe class DrmKmsOutput : IFramebufferOutput
         }
     }
 
-    private static DrmKmsOutput? TryOpenCard(string path, FramebufferPlatformOptions options, out string failure)
+    private static DrmKmsOutput? TryOpenCard(string path, FramebufferPlatformOptions options, IFramebufferSession session, out string failure)
     {
-        int fd = LibC.Open(path, LibC.O_RDWR | LibC.O_CLOEXEC);
+        int fd = session.OpenDevice(path, LibC.O_RDWR);
         if (fd < 0)
         {
-            failure = $"open failed (errno {Marshal.GetLastPInvokeError()})";
+            failure = $"open failed (errno {-fd})";
             return null;
         }
 
@@ -217,7 +217,7 @@ internal sealed unsafe class DrmKmsOutput : IFramebufferOutput
         {
             if (!keepFd)
             {
-                LibC.Close(fd);
+                session.CloseDevice(fd);
             }
         }
     }
@@ -525,6 +525,36 @@ internal sealed unsafe class DrmKmsOutput : IFramebufferOutput
         }
 
         FlipCompleted?.Invoke();
+    }
+
+    public void Suspend()
+    {
+        // The seat manager drops the master right after this returns, so nothing may stay queued behind the flip.
+        if (_queued != null)
+        {
+            _queued.State = ScanoutBufferState.Free;
+            _queued = null;
+        }
+
+        WaitForPendingFlip();
+        _cursorApplied = false;
+    }
+
+    public void Resume()
+    {
+        if (_disposed || !_modeSet || _front == null)
+        {
+            return;
+        }
+
+        uint connectorId = _connectorId;
+        var mode = _mode;
+        if (LibDrm.drmModeSetCrtc(_fd, _crtcId, _front.FramebufferId, 0, 0, &connectorId, 1, &mode) != 0)
+        {
+            Logger.Write($"drmModeSetCrtc on resume failed (errno {Marshal.GetLastPInvokeError()})");
+        }
+
+        ApplyCursor();
     }
 
     public void DispatchEvents()

@@ -53,6 +53,12 @@ internal static unsafe partial class LibInput
     public static partial nint libinput_unref(nint libinput);
 
     [LibraryImport(LIBRARY_NAME)]
+    public static partial void libinput_suspend(nint libinput);
+
+    [LibraryImport(LIBRARY_NAME)]
+    public static partial int libinput_resume(nint libinput);
+
+    [LibraryImport(LIBRARY_NAME)]
     public static partial int libinput_event_get_type(nint inputEvent);
 
     [LibraryImport(LIBRARY_NAME)]

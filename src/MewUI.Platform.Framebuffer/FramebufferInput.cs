@@ -49,13 +49,15 @@ internal sealed unsafe class FramebufferInput : IDisposable
     private readonly nint _udev;
     private readonly nint _libinput;
     private readonly LibInputInterface* _interface;
+    private GCHandle _sessionHandle;
     private bool _disposed;
 
-    private FramebufferInput(nint udev, nint libinput, LibInputInterface* inputInterface)
+    private FramebufferInput(nint udev, nint libinput, LibInputInterface* inputInterface, GCHandle sessionHandle)
     {
         _udev = udev;
         _libinput = libinput;
         _interface = inputInterface;
+        _sessionHandle = sessionHandle;
         Fd = LibInput.libinput_get_fd(libinput);
     }
 
@@ -70,7 +72,8 @@ internal sealed unsafe class FramebufferInput : IDisposable
             ? $"input: permission denied on all {_deniedDevices} devices in /dev/input; add the user to the 'input' group (or grant an ACL) and log in again"
             : null;
 
-    public static FramebufferInput? TryOpen(string seat, out string failure)
+    /// <summary>Opens the seat's devices through <paramref name="session"/>, which libinput calls back for every node.</summary>
+    public static FramebufferInput? TryOpen(string seat, IFramebufferSession session, out string failure)
     {
         nint udev;
         try
@@ -94,13 +97,15 @@ internal sealed unsafe class FramebufferInput : IDisposable
         inputInterface->OpenRestricted = &OpenRestricted;
         inputInterface->CloseRestricted = &CloseRestricted;
 
+        var sessionHandle = GCHandle.Alloc(session, GCHandleType.Normal);
         nint libinput;
         try
         {
-            libinput = LibInput.libinput_udev_create_context(inputInterface, 0, udev);
+            libinput = LibInput.libinput_udev_create_context(inputInterface, GCHandle.ToIntPtr(sessionHandle), udev);
         }
         catch (DllNotFoundException ex)
         {
+            sessionHandle.Free();
             NativeMemory.Free(inputInterface);
             LibInput.udev_unref(udev);
             failure = $"input: {ex.Message}";
@@ -114,6 +119,7 @@ internal sealed unsafe class FramebufferInput : IDisposable
                 LibInput.libinput_unref(libinput);
             }
 
+            sessionHandle.Free();
             NativeMemory.Free(inputInterface);
             LibInput.udev_unref(udev);
             failure = $"input: libinput could not take seat '{seat}'";
@@ -121,31 +127,51 @@ internal sealed unsafe class FramebufferInput : IDisposable
         }
 
         failure = string.Empty;
-        return new FramebufferInput(udev, libinput, inputInterface);
+        return new FramebufferInput(udev, libinput, inputInterface, sessionHandle);
     }
 
     [UnmanagedCallersOnly]
     private static int OpenRestricted(byte* path, int flags, nint userData)
     {
-        int fd = LibC.Open(path, flags | LibC.O_CLOEXEC);
+        var session = (IFramebufferSession)GCHandle.FromIntPtr(userData).Target!;
+        string devicePath = Marshal.PtrToStringUTF8((nint)path) ?? string.Empty;
+        int fd = session.OpenDevice(devicePath, flags);
         if (fd >= 0)
         {
             _openedDevices++;
             return fd;
         }
 
-        int errno = Marshal.GetLastPInvokeError();
+        int errno = -fd;
         if (errno == EACCES)
         {
             _deniedDevices++;
         }
 
-        Logger.Write($"open {Marshal.PtrToStringUTF8((nint)path)} failed (errno {errno})");
-        return -errno;
+        Logger.Write($"open {devicePath} failed (errno {errno})");
+        return fd;
     }
 
     [UnmanagedCallersOnly]
-    private static void CloseRestricted(int fd, nint userData) => LibC.Close(fd);
+    private static void CloseRestricted(int fd, nint userData)
+        => ((IFramebufferSession)GCHandle.FromIntPtr(userData).Target!).CloseDevice(fd);
+
+    /// <summary>Closes every device while the seat is away; <see cref="Resume"/> opens them again.</summary>
+    public void Suspend()
+    {
+        if (!_disposed)
+        {
+            LibInput.libinput_suspend(_libinput);
+        }
+    }
+
+    public void Resume()
+    {
+        if (!_disposed && LibInput.libinput_resume(_libinput) != 0)
+        {
+            Logger.Write("libinput_resume failed");
+        }
+    }
 
     /// <summary>Reads every event libinput has queued and hands it to <paramref name="sink"/>.</summary>
     public void Dispatch(IFramebufferInputSink sink, int screenWidth, int screenHeight)
@@ -287,5 +313,9 @@ internal sealed unsafe class FramebufferInput : IDisposable
         LibInput.libinput_unref(_libinput);
         LibInput.udev_unref(_udev);
         NativeMemory.Free(_interface);
+        if (_sessionHandle.IsAllocated)
+        {
+            _sessionHandle.Free();
+        }
     }
 }

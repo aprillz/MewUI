@@ -36,4 +36,10 @@ internal interface IFramebufferOutput : IDisposable
 
     /// <summary>Moves the pointer's hot spot to a screen pixel.</summary>
     void MoveCursor(int x, int y);
+
+    /// <summary>Stops presenting because the session is losing the seat: a flip in flight finishes, a queued frame is dropped.</summary>
+    void Suspend();
+
+    /// <summary>Takes the screen back after <see cref="Suspend"/>: the mode and the cursor are set again.</summary>
+    void Resume();
 }

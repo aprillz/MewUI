@@ -50,9 +50,35 @@ public enum FramebufferOutputKind
     Fbdev,
 }
 
+/// <summary>Where the framebuffer host gets its device access from.</summary>
+public enum FramebufferSessionKind
+{
+    /// <summary><see cref="Seat"/> when a seat manager accepts the process, <see cref="Direct"/> otherwise.</summary>
+    Auto,
+
+    /// <summary>
+    /// The seat manager (logind or seatd, through libseat) hands out the DRM card and the input devices. The process
+    /// has to run inside an active session on the seat; the app pauses while another virtual terminal is active and
+    /// resumes with the screen when it comes back.
+    /// </summary>
+    Seat,
+
+    /// <summary>The device nodes are opened directly, which needs the video and input groups and no other DRM master.</summary>
+    Direct,
+}
+
 /// <summary>Configures the Linux framebuffer platform host.</summary>
 public sealed class FramebufferPlatformOptions
 {
+    /// <summary>Where device access comes from. <see cref="FramebufferSessionKind.Auto"/> by default.</summary>
+    public FramebufferSessionKind Session { get; set; } = FramebufferSessionKind.Auto;
+
+    /// <summary>
+    /// Whether Ctrl+Alt+F1 to F12 switch the virtual terminal through the seat manager instead of reaching the app. On
+    /// by default; a kiosk turns it off. Has no effect with direct device access.
+    /// </summary>
+    public bool VtSwitchKeys { get; set; } = true;
+
     /// <summary>How to reach the screen.</summary>
     public FramebufferOutputKind Output { get; set; } = FramebufferOutputKind.Auto;
 

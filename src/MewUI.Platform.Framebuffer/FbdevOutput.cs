@@ -68,6 +68,14 @@ internal sealed unsafe class FbdevOutput : IFramebufferOutput
 
     public bool CanTakeFrame => true;
 
+    public void Suspend()
+    {
+    }
+
+    public void Resume()
+    {
+    }
+
     public int EventFd => -1;
 
     public IWindowSurface WindowSurface => _surface;

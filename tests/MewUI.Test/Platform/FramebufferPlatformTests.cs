@@ -181,4 +181,23 @@ public sealed class FramebufferPlatformTests
 
     private static void AssertOffset<T>(string field, int expected)
         => Assert.AreEqual(expected, Marshal.OffsetOf<T>(field).ToInt32(), $"{typeof(T).Name}.{field}");
+
+    [TestMethod]
+    public void TerminalSwitchKeys_MapCtrlAltFunctionKeysOnly()
+    {
+        const uint KEY_F1 = 59;
+        const uint KEY_F10 = 68;
+        const uint KEY_F12 = 88;
+        const uint KEY_A = 30;
+        var both = ModifierKeys.Control | ModifierKeys.Alt;
+
+        Assert.IsTrue(FramebufferPlatformHost.TryGetTerminalSwitchTarget(KEY_F1, both, out int first));
+        Assert.AreEqual(1, first);
+        Assert.IsTrue(FramebufferPlatformHost.TryGetTerminalSwitchTarget(KEY_F10, both | ModifierKeys.Shift, out int tenth));
+        Assert.AreEqual(10, tenth);
+        Assert.IsTrue(FramebufferPlatformHost.TryGetTerminalSwitchTarget(KEY_F12, both, out int twelfth));
+        Assert.AreEqual(12, twelfth);
+        Assert.IsFalse(FramebufferPlatformHost.TryGetTerminalSwitchTarget(KEY_F1, ModifierKeys.Control, out _));
+        Assert.IsFalse(FramebufferPlatformHost.TryGetTerminalSwitchTarget(KEY_A, both, out _));
+    }
 }

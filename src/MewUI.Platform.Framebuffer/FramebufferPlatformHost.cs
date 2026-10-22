@@ -33,6 +33,7 @@ internal sealed class FramebufferPlatformHost : IPlatformHost, IFramebufferInput
 
     private readonly FramebufferPlatformOptions _options;
     private readonly FramebufferClipboardService _clipboard = new();
+    private IFramebufferSession? _session;
     private IFramebufferOutput? _output;
     private FramebufferInput? _input;
     private FramebufferKeyboard? _keyboard;
@@ -50,6 +51,10 @@ internal sealed class FramebufferPlatformHost : IPlatformHost, IFramebufferInput
     // hides it again until the mouse next moves.
     private bool _cursorHidden = true;
     private bool _cursorMoved;
+
+    // False while another virtual terminal holds the seat: nothing is drawn and no device is read.
+    private bool _sessionActive = true;
+    private uint _swallowedKey;
     private uint _repeatingKey;
     private IDisposable? _keyRepeat;
     private long _nextFrameTimestamp;
@@ -115,6 +120,7 @@ internal sealed class FramebufferPlatformHost : IPlatformHost, IFramebufferInput
         var previousContext = SynchronizationContext.Current;
         try
         {
+            EnsureSession();
             EnsureOutput();
             OpenInput();
             SetupWakePipe();
@@ -196,6 +202,62 @@ internal sealed class FramebufferPlatformHost : IPlatformHost, IFramebufferInput
     private CursorType? ShownCursor
         => _options.ShowCursor && _cursorType != CursorType.None && !_cursorHidden ? _cursorType : null;
 
+    private IFramebufferSession EnsureSession()
+    {
+        if (_session != null)
+        {
+            return _session;
+        }
+
+        IFramebufferSession? session = null;
+        string failure = string.Empty;
+        if (_options.Session != FramebufferSessionKind.Direct)
+        {
+            session = SeatFramebufferSession.TryOpen(out failure);
+        }
+
+        if (session == null)
+        {
+            if (_options.Session == FramebufferSessionKind.Seat)
+            {
+                throw new PlatformNotSupportedException($"The framebuffer platform could not join a seat: {failure}.");
+            }
+
+            if (failure.Length > 0)
+            {
+                Console.Error.WriteLine($"[MewUI.Framebuffer] session: {failure}; opening devices directly");
+            }
+
+            session = new DirectFramebufferSession();
+        }
+
+        _session = Attach(session);
+        Console.Error.WriteLine($"[MewUI.Framebuffer] session: {session.Description}");
+        return session;
+    }
+
+    private IFramebufferSession ReplaceSession(IFramebufferSession replacement)
+    {
+        var previous = _session;
+        if (previous != null)
+        {
+            previous.Disabling -= OnSessionDisabling;
+            previous.Enabled -= OnSessionEnabled;
+            previous.Dispose();
+        }
+
+        _session = Attach(replacement);
+        _sessionActive = true;
+        return replacement;
+    }
+
+    private IFramebufferSession Attach(IFramebufferSession session)
+    {
+        session.Disabling += OnSessionDisabling;
+        session.Enabled += OnSessionEnabled;
+        return session;
+    }
+
     private IFramebufferOutput EnsureOutput()
     {
         if (_output != null)
@@ -203,11 +265,21 @@ internal sealed class FramebufferPlatformHost : IPlatformHost, IFramebufferInput
             return _output;
         }
 
+        var session = EnsureSession();
         string drmFailure = string.Empty;
         IFramebufferOutput? output = null;
         if (_options.Output != FramebufferOutputKind.Fbdev)
         {
-            var drm = DrmKmsOutput.TryOpen(_options, out drmFailure);
+            var drm = DrmKmsOutput.TryOpen(_options, session, out drmFailure);
+            if (drm == null && _options.Session == FramebufferSessionKind.Auto && session is SeatFramebufferSession)
+            {
+                // A seat manager accepts a process whose session is not active on the seat (an ssh login, say) but
+                // hands it no devices; the direct access it would have had without the seat is tried instead.
+                Console.Error.WriteLine($"[MewUI.Framebuffer] session: the seat gave no DRM device ({drmFailure}); opening devices directly");
+                session = ReplaceSession(new DirectFramebufferSession());
+                drm = DrmKmsOutput.TryOpen(_options, session, out drmFailure);
+            }
+
             if (drm != null)
             {
                 drm.FlipCompleted += OnFlipCompleted;
@@ -247,7 +319,7 @@ internal sealed class FramebufferPlatformHost : IPlatformHost, IFramebufferInput
     private void OpenInput()
     {
         _keyboard = FramebufferKeyboard.Create(_options.KeyboardLayout);
-        _input = FramebufferInput.TryOpen(_options.Seat, out string failure);
+        _input = FramebufferInput.TryOpen(_options.Seat, EnsureSession(), out string failure);
         Console.Error.WriteLine(_input != null
             ? $"[MewUI.Framebuffer] input: libinput seat {_options.Seat}; {_keyboard.Description}"
             : $"[MewUI.Framebuffer] {failure}; running without input");
@@ -256,6 +328,26 @@ internal sealed class FramebufferPlatformHost : IPlatformHost, IFramebufferInput
         {
             Console.Error.WriteLine($"[MewUI.Framebuffer] {problem}");
         }
+    }
+
+    private void OnSessionDisabling()
+    {
+        StopKeyRepeat();
+        _sessionActive = false;
+        _output?.Suspend();
+        _input?.Suspend();
+        Logger.Write("session paused: the seat went to another virtual terminal");
+        _session?.AcknowledgeDisable();
+    }
+
+    private void OnSessionEnabled()
+    {
+        _sessionActive = true;
+        _output?.Resume();
+        _input?.Resume();
+        _window?.NoteFrameLost();
+        Logger.Write("session resumed");
+        SignalWake();
     }
 
     private void OnFlipCompleted()
@@ -329,7 +421,7 @@ internal sealed class FramebufferPlatformHost : IPlatformHost, IFramebufferInput
     {
         var window = _window;
         var output = _output;
-        if (window == null || output == null || !window.IsShown || !output.CanTakeFrame)
+        if (window == null || output == null || !window.IsShown || !output.CanTakeFrame || !_sessionActive)
         {
             return;
         }
@@ -381,8 +473,9 @@ internal sealed class FramebufferPlatformHost : IPlatformHost, IFramebufferInput
 
         var window = _window;
         var output = _output;
-        bool flipPending = output?.FlipPending == true;
-        bool canRender = window != null && window.IsShown && output?.CanTakeFrame == true;
+        var session = _session;
+        bool flipPending = output?.FlipPending == true && _sessionActive;
+        bool canRender = window != null && window.IsShown && output?.CanTakeFrame == true && _sessionActive;
         int timeout = _dispatcher?.GetPollTimeoutMs(MAX_WAIT_MS) ?? MAX_WAIT_MS;
 
         if (canRender && window!.NeedsRender && !settings.IsContinuous)
@@ -402,10 +495,11 @@ internal sealed class FramebufferPlatformHost : IPlatformHost, IFramebufferInput
         }
 
         // Input readiness needs no handling here: the next pass reads it at the top of the loop.
-        PollFd* fds = stackalloc PollFd[3];
+        PollFd* fds = stackalloc PollFd[4];
         int count = 0;
         int outputIndex = -1;
         int wakeIndex = -1;
+        int sessionIndex = -1;
         if (_input != null)
         {
             fds[count++] = new PollFd { fd = _input.Fd, events = PollEvents.POLLIN };
@@ -415,6 +509,12 @@ internal sealed class FramebufferPlatformHost : IPlatformHost, IFramebufferInput
         {
             outputIndex = count;
             fds[count++] = new PollFd { fd = output.EventFd, events = PollEvents.POLLIN };
+        }
+
+        if (session != null && session.EventFd >= 0)
+        {
+            sessionIndex = count;
+            fds[count++] = new PollFd { fd = session.EventFd, events = PollEvents.POLLIN };
         }
 
         if (_wakeReadFd >= 0)
@@ -443,6 +543,11 @@ internal sealed class FramebufferPlatformHost : IPlatformHost, IFramebufferInput
         if (outputIndex >= 0 && (fds[outputIndex].revents & PollEvents.POLLIN) != 0)
         {
             output!.DispatchEvents();
+        }
+
+        if (sessionIndex >= 0 && (fds[sessionIndex].revents & PollEvents.POLLIN) != 0)
+        {
+            session!.DispatchEvents();
         }
 
         if (wakeIndex >= 0 && (fds[wakeIndex].revents & PollEvents.POLLIN) != 0)
@@ -545,6 +650,22 @@ internal sealed class FramebufferPlatformHost : IPlatformHost, IFramebufferInput
 
         var stroke = keyboard.Process(evdevCode, pressed);
         Logger.Write($"key {evdevCode} {(pressed ? "down" : "up")} -> {stroke.Key} {stroke.Modifiers} text={(stroke.Text == null ? "-" : $"'{stroke.Text}'")}");
+        if (!pressed && evdevCode == _swallowedKey)
+        {
+            // The release of a terminal switch key never reaches the app, as its press did not.
+            _swallowedKey = 0;
+            return;
+        }
+
+        if (pressed && _options.VtSwitchKeys && _session?.CanSwitchSession == true
+            && TryGetTerminalSwitchTarget(evdevCode, stroke.Modifiers, out int terminal))
+        {
+            StopKeyRepeat();
+            _swallowedKey = evdevCode;
+            _session.TrySwitchSession(terminal);
+            return;
+        }
+
         if (pressed)
         {
             StopKeyRepeat();
@@ -559,6 +680,33 @@ internal sealed class FramebufferPlatformHost : IPlatformHost, IFramebufferInput
         }
 
         _window?.RouteKey(stroke, pressed, isRepeat: false);
+    }
+
+    /// <summary>Maps Ctrl+Alt+F1 to F12 to the virtual terminal number it asks for; false for any other key.</summary>
+    internal static bool TryGetTerminalSwitchTarget(uint evdevCode, ModifierKeys modifiers, out int terminal)
+    {
+        const ModifierKeys SWITCH_MODIFIERS = ModifierKeys.Control | ModifierKeys.Alt;
+        const uint KEY_F1 = 59;
+        const uint KEY_F10 = 68;
+        const uint KEY_F11 = 87;
+        const uint KEY_F12 = 88;
+
+        terminal = 0;
+        if ((modifiers & SWITCH_MODIFIERS) != SWITCH_MODIFIERS)
+        {
+            return false;
+        }
+
+        if (evdevCode >= KEY_F1 && evdevCode <= KEY_F10)
+        {
+            terminal = (int)(evdevCode - KEY_F1) + 1;
+        }
+        else if (evdevCode == KEY_F11 || evdevCode == KEY_F12)
+        {
+            terminal = (int)(evdevCode - KEY_F11) + 11;
+        }
+
+        return terminal > 0;
     }
 
     private void StartKeyRepeat(uint evdevCode)
@@ -656,6 +804,8 @@ internal sealed class FramebufferPlatformHost : IPlatformHost, IFramebufferInput
         _keyboard = null;
         _output?.Dispose();
         _output = null;
+        _session?.Dispose();
+        _session = null;
         CloseWakePipe();
     }
 }

@@ -103,6 +103,13 @@ internal sealed class FramebufferWindowBackend : IWindowBackend
         _host.RequestWake();
     }
 
+    /// <summary>Tells the window the screen no longer holds its last frame, so the next frame copies all of it.</summary>
+    internal void NoteFrameLost()
+    {
+        Window.NotePresentedFrameLost();
+        Invalidate(erase: false);
+    }
+
     /// <summary>Lays out and draws one frame onto the output's surface.</summary>
     internal void Render()
     {

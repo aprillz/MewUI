@@ -25,6 +25,7 @@
     <Compile Include="..\MewUI\Shared\Native\Linux\Gbm\*.cs" LinkBase="Native\Gbm" />
     <Compile Include="..\MewUI\Shared\Native\Linux\Fbdev\*.cs" LinkBase="Native\Fbdev" />
     <Compile Include="..\MewUI\Shared\Native\Linux\LibInput\*.cs" LinkBase="Native\LibInput" />
+    <Compile Include="..\MewUI\Shared\Native\Linux\Seat\*.cs" LinkBase="Native\Seat" />
     <Compile Include="..\MewUI\Shared\Native\Linux\Xkb\*.cs" LinkBase="Native\Xkb" />
   </ItemGroup>
 
