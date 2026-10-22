@@ -16,6 +16,13 @@ internal sealed class DocCommandOptions
                                       method pages of xmldocmd output under <api-dir>; re-running replaces the lines.
           --api-index <api-dir>       Write <api-dir>/index.md (package table) and <api-dir>/<Assembly>/index.md (namespaces);
                                       <api-dir>/version.txt (MewUIVersion=, Commit=) is shown when present.
+          --api-starlight <api-dir>   Prepare the pages under <api-dir> for the Starlight site: frontmatter (title, slug),
+                                      site-absolute links, generated-comment removal, version stamp on the root index.
+                                      Needs no assemblies; re-running changes nothing.
+          --site-base <path>          Site base path for --api-starlight links (default: none, links start with /api/).
+          --guide-links <json>        JSON object of type name to guide URL for --api-starlight; type pages get a "Guide:" line.
+                                      Keys use the page-path form (Namespace.Type, generic arity as -N); a key ending in "."
+                                      is a namespace prefix used when no exact key matches.
           --doc-review <ns>           Write a Markdown review table of every public member of the namespace, one type per
                                       section, with the summaries of the fluent counterparts side by side.
           --changed-since <git-ref>   Limit --doc-review to types declared in .cs files that 'git diff --name-only <git-ref>'
@@ -31,12 +38,21 @@ internal sealed class DocCommandOptions
 
     public string? ApiIndexDirectory { get; private set; }
 
+    public string? ApiStarlightDirectory { get; private set; }
+
+    public string SiteBase { get; private set; } = string.Empty;
+
+    public string? GuideLinksPath { get; private set; }
+
     public string? DocReviewNamespace { get; private set; }
 
     public string? ChangedSince { get; private set; }
 
     /// <summary>True when any documentation command was given.</summary>
-    public bool IsSet => DocCoverage || ApiCrosslinkDirectory != null || ApiIndexDirectory != null || DocReviewNamespace != null;
+    public bool IsSet => NeedsAssemblies || ApiStarlightDirectory != null;
+
+    /// <summary>True when a given command reads assemblies; --api-starlight alone works on the pages only.</summary>
+    public bool NeedsAssemblies => DocCoverage || ApiCrosslinkDirectory != null || ApiIndexDirectory != null || DocReviewNamespace != null;
 
     /// <summary>Consumes one option (and its value when it takes one); false with a message when the option is unknown or lacks its value.</summary>
     public bool TryParse(string option, string[] arguments, ref int index, out string? error)
@@ -53,6 +69,12 @@ internal sealed class DocCommandOptions
                 return TakeValue(arguments, ref index, option, value => ApiCrosslinkDirectory = value, out error);
             case "--api-index":
                 return TakeValue(arguments, ref index, option, value => ApiIndexDirectory = value, out error);
+            case "--api-starlight":
+                return TakeValue(arguments, ref index, option, value => ApiStarlightDirectory = value, out error);
+            case "--site-base":
+                return TakeValue(arguments, ref index, option, value => SiteBase = value, out error);
+            case "--guide-links":
+                return TakeValue(arguments, ref index, option, value => GuideLinksPath = value, out error);
             case "--doc-review":
                 return TakeValue(arguments, ref index, option, value => DocReviewNamespace = value, out error);
             case "--changed-since":
@@ -106,6 +128,11 @@ internal static class DocCommands
             if (options.ApiIndexDirectory != null)
             {
                 exitCode = Math.Max(exitCode, RunIndex(options.ApiIndexDirectory, assemblyPaths));
+            }
+
+            if (options.ApiStarlightDirectory != null)
+            {
+                exitCode = Math.Max(exitCode, RunStarlight(options));
             }
 
             return exitCode;
@@ -198,6 +225,30 @@ internal static class DocCommands
 
         var packages = ApiIndexWriter.Write(apiDirectory, assemblyPaths, Console.Error);
         Console.Error.WriteLine($"Wrote index pages for {packages.Count} assemblies under {apiDirectory}.");
+        return 0;
+    }
+
+    private static int RunStarlight(DocCommandOptions options)
+    {
+        var apiDirectory = options.ApiStarlightDirectory!;
+        if (!Directory.Exists(apiDirectory))
+        {
+            Console.Error.WriteLine($"API directory not found: {apiDirectory}");
+            return 2;
+        }
+
+        if (options.GuideLinksPath != null && !File.Exists(options.GuideLinksPath))
+        {
+            Console.Error.WriteLine($"Guide links file not found: {options.GuideLinksPath}");
+            return 2;
+        }
+
+        var warnings = new List<string>();
+        var summary = ApiStarlightWriter.Run(apiDirectory, options.SiteBase, options.GuideLinksPath, warnings);
+        WriteWarnings(warnings);
+        Console.Error.WriteLine(
+            $"Prepared {summary.Pages} pages for Starlight under {apiDirectory}: {summary.FrontMatterAdded} frontmatter blocks added, " +
+            $"{summary.LinksRewritten} links rewritten, {summary.GuideLines} guide lines, {summary.UnresolvedLinks} links left unresolved.");
         return 0;
     }
 

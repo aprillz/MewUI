@@ -3,7 +3,8 @@ setlocal EnableExtensions EnableDelayedExpansion
 
 REM Generates the API reference Markdown for every package assembly (xmldocmd + fluent cross-links)
 REM under .artifacts\api-build, then stages the assemblies listed in publish-scope.json under
-REM .artifacts\api with the package table and version stamp. Nothing here is committed.
+REM .artifacts\api with the package table and version stamp, prepared for the Starlight site
+REM (frontmatter, site-absolute links, guide links from guide-links.json). Nothing here is committed.
 REM Usage: build_api_docs.cmd [ProjectName ...]   (e.g. build_api_docs.cmd MewUI MewUI.Markdown)
 REM Requires: dotnet tool restore in this folder (the manifest pins xmldocmd).
 
@@ -110,6 +111,12 @@ if "!PUBLISH_DLLS!"=="" (
   dotnet "%AUDIT_DLL%" --api-index "%PUBLISH_OUT%" !PUBLISH_DLLS!
   if errorlevel 1 (
     echo FAILED: api-index of the publish set
+    exit /b 1
+  )
+  echo Preparing the publish set for Starlight ...
+  dotnet "%AUDIT_DLL%" --api-starlight "%PUBLISH_OUT%" --site-base /MewUI --guide-links "%~dp0guide-links.json"
+  if errorlevel 1 (
+    echo FAILED: api-starlight of the publish set
     exit /b 1
   )
 )

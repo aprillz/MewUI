@@ -21,6 +21,7 @@ public static class ApiIndexWriter
     private static readonly Regex _property = new(@"\$\(([A-Za-z0-9_]+)\)", RegexOptions.Compiled);
     private static readonly Regex _whitespace = new(@"\s+", RegexOptions.Compiled);
     private static readonly Regex _heading = new(@"^# (?<name>.+?) (?<kind>[a-z ]+)$", RegexOptions.Compiled);
+    private static readonly Regex _link = new(@"\]\((?<target>[^)\s#]+)(?<anchor>#[^)]*)?\)", RegexOptions.Compiled);
 
     /// <summary>Writes the root and per-assembly index pages for the assemblies whose xmldocmd folders exist; absent folders are logged and skipped.</summary>
     public static IReadOnlyList<ApiPackageInfo> Write(string apiDirectory, IReadOnlyList<string> assemblyPaths, TextWriter log)
@@ -160,12 +161,49 @@ public static class ApiIndexWriter
         var name = System.Net.WebUtility.HtmlDecode(match.Groups["name"].Value);
         var kind = match.Groups["kind"].Value;
         var description = lines.Length > 2 && !lines[2].StartsWith("```", StringComparison.Ordinal) ? lines[2] : string.Empty;
+        description = RebaseLinks(description, namespaceName);
         var link = $"{namespaceName}/{Path.GetFileName(pagePath)}";
         var isFluent = kind.EndsWith("class", StringComparison.Ordinal) && name.EndsWith(EXTENSIONS_SUFFIX, StringComparison.Ordinal);
         return new TypeHeading(name, kind, description, link, isFluent);
     }
 
-    private static string? ReadVersionStamp(string apiDirectory)
+    /// <summary>Rewrites the relative links of a type summary, written for the type's namespace folder, so they resolve from the assembly index one level up.</summary>
+    internal static string RebaseLinks(string markdown, string namespaceName)
+    {
+        return _link.Replace(markdown, match =>
+        {
+            var target = match.Groups["target"].Value;
+            var anchor = match.Groups["anchor"].Value;
+            if (target.StartsWith("/", StringComparison.Ordinal) || target.Contains("://", StringComparison.Ordinal) || target.StartsWith("mailto:", StringComparison.Ordinal))
+            {
+                return match.Value;
+            }
+
+            var segments = new List<string>(namespaceName.Split('/'));
+            foreach (var segment in target.Replace('\\', '/').Split('/'))
+            {
+                if (segment == "." || segment.Length == 0)
+                {
+                    continue;
+                }
+                else if (segment == "..")
+                {
+                    if (segments.Count > 0)
+                    {
+                        segments.RemoveAt(segments.Count - 1);
+                    }
+                }
+                else
+                {
+                    segments.Add(segment);
+                }
+            }
+
+            return "](" + string.Join("/", segments) + anchor + ")";
+        });
+    }
+
+    internal static string? ReadVersionStamp(string apiDirectory)
     {
         var path = Path.Combine(apiDirectory, VERSION_FILE);
         if (!File.Exists(path))

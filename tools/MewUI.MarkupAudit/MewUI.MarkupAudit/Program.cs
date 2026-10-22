@@ -61,6 +61,9 @@ for (var index = 0; index < args.Length; index++)
         case "--doc-coverage-scope":
         case "--api-crosslink":
         case "--api-index":
+        case "--api-starlight":
+        case "--site-base":
+        case "--guide-links":
         case "--doc-review":
         case "--changed-since":
             if (!docCommand.TryParse(argument, args, ref index, out var docError))
@@ -96,7 +99,8 @@ if (propertiesOnly && eventsOnly)
     return;
 }
 
-if (assemblyPaths.Count == 0)
+// A page-only command (--api-starlight) has nothing to load, so the default assembly is not required.
+if (assemblyPaths.Count == 0 && (!docCommand.IsSet || docCommand.NeedsAssemblies))
 {
     var repositoryRoot = FindRepositoryRoot();
     if (repositoryRoot == null)
