@@ -23,6 +23,12 @@ public abstract partial class UIElement
     /// Transitions owned by this element. A registered property animates on every external value
     /// change - a direct set, a binding push, or an element trigger - unlike a style transition,
     /// which only animates style-resolved changes. Later entries win for the same property.
+    /// <remarks>
+    /// A registered property animates on every external value change (a direct set, a binding push,
+    /// or an element trigger), unlike a style transition, which only animates style-resolved
+    /// changes. Later entries win for the same property.
+    /// </remarks>
+    [FluentExcluded("Configured through the Transition builder")]
     /// The list is snapshotted on assignment; to change the set, assign a new list.
     /// </summary>
     public IReadOnlyList<Transition>? Transitions
@@ -42,6 +48,14 @@ public abstract partial class UIElement
 
     /// <summary>
     /// Conditional values owned by this element. While a trigger's condition property equals its
+    /// <remarks>
+    /// While a trigger's condition property equals its value, its setters apply above style values;
+    /// leaving the condition removes them, revealing whatever is underneath. Later triggers win for
+    /// the same target property. Style state triggers remain in the Style slot, so these values
+    /// keep their independent, higher-priority ElementTrigger slot on controls as well as
+    /// non-control elements.
+    /// </remarks>
+    [FluentExcluded("Configured through the trigger builders")]
     /// value, its setters apply above style values; leaving the condition removes them, revealing
     /// whatever is underneath. Later triggers win for the same target property. The list is
     /// snapshotted and validated on assignment; to change the set, assign a new list.

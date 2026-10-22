@@ -575,6 +575,7 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
         => _core.SortByColumn(columnIndex, direction);
 
     /// <summary>Clears the active sort and restores current source order.</summary>
+    [FluentExcluded("Configured through the Items builder")]
     public void ClearSort() => _core.ClearSort();
 
     public void SetColumns<TItem>(IReadOnlyList<GridViewColumn<TItem>> columns)

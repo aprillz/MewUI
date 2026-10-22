@@ -36,6 +36,10 @@ public sealed partial class ScrollBar : RangeBase
     /// Multiplies the rendered thumb alpha (0..1). Used by an owner to fade the bar in/out; layout and
     /// hit-testing are unaffected.
     /// </summary>
+    /// <remarks>
+    /// An owner uses it to fade the bar in and out.
+    /// </remarks>
+    [FluentExcluded("Render-internal value")]
     public double RenderOpacity
     {
         get => _renderOpacity;

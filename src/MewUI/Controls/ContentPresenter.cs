@@ -15,6 +15,10 @@ public sealed class ContentPresenter : FrameworkElement, IVisualTreeHost
     /// Gets or sets which slot of the templated parent to display. Leaving it unset projects the
     /// templated parent's own display slot; set it to another element-typed slot (e.g. Header)
     /// inside the template build.
+    /// <remarks>
+    /// Set it to another element-typed slot (e.g. Header) inside the template build.
+    /// </remarks>
+    [FluentExcluded("Template wiring")]
     /// </summary>
     public MewProperty<Element?> ContentSource
     {

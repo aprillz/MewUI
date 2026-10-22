@@ -191,6 +191,7 @@ public partial class Button : CommandSourceControl
     /// </remarks>
     public Func<bool>? CanClick
     {
+    [FluentExcluded("Use Command for enablement")]
         get;
         set
         {

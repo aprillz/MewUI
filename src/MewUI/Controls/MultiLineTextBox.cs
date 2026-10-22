@@ -169,7 +169,11 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
 
     public double HorizontalOffset => _horizontalOffset;
     public double VerticalOffset => _verticalOffset;
-    /// <summary>Backing document. Assigning a new one keeps the view and extension registrations while caret, selection, scroll, and undo history reset.</summary>
+    /// <summary>
+    /// Gets or sets the backing document; assigning a new one keeps the view and extension
+    /// registrations while caret, selection, scroll and undo history reset.
+    /// </summary>
+    [FluentExcluded("Host-level document object")]
     public EditableTextDocument Document
     {
         get => _document;
@@ -189,6 +193,7 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
     internal int MaterializedCharacterCount
         => _view?.MaterializedLines.Sum(static line => line.LogicalLine.Length) ?? 0;
     internal int MaterializedVisualLineCount
+    [FluentExcluded("Text view host event")]
         => _view?.MaterializedLines.Sum(static line => line.VisualLines.Count) ?? 0;
     internal bool IsVerticalScrollBarVisible => _verticalScrollBar.IsVisible;
     internal (double Value, double Maximum) VerticalScrollBarRange
@@ -633,9 +638,11 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
         InvalidateVisual();
     }
 
+    [FluentExcluded("Text view host event")]
     /// <inheritdoc/>
     public double ExtentHeight
     {
+    [FluentExcluded("Text view host event")]
         get
         {
             EnsureView();
@@ -1221,7 +1228,11 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
     public void EnterText(int start, int length, string? text)
         => _editor.EnterText(start, length, text);
 
-    /// <summary>Consulted before every edit. Null leaves the document fully editable.</summary>
+    /// <summary>
+    /// Gets or sets the provider consulted before every edit; null leaves the document fully
+    /// editable.
+    /// </summary>
+    [FluentExcluded("Host-level document object")]
     public IEditableRegionProvider? EditableRegions
     {
         get => _editableRegions;
@@ -1267,6 +1278,7 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
         SetVerticalOffset(
             TextViewScrolling.ResolveOffset(
                 _verticalOffset, _contentBounds.Height, documentRect.Y, documentRect.Height),
+    [FluentExcluded("Text view host event")]
             false);
         if (!Wrap)
         {

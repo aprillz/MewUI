@@ -13,6 +13,8 @@ public partial class Window
     /// </summary>
     public bool DevToolsBitmapCacheInvalidationOverlayEnabled { get; private set; }
 
+    /// <summary>Occurs when <see cref="DevToolsBitmapCacheInvalidationOverlayEnabled"/> changes.</summary>
+    [FluentExcluded("Diagnostics event")]
     public event Action<bool>? DevToolsBitmapCacheInvalidationOverlayChanged;
 
     private void InitializeBitmapCacheDiagnostics()

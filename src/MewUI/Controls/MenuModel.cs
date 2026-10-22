@@ -210,6 +210,7 @@ public sealed class MenuItem : MenuEntry
                 field = value;
                 ReevaluateCanClick();
             }
+    [FluentExcluded("Use Command for enablement")]
         }
     }
 

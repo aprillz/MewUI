@@ -114,6 +114,7 @@ public sealed partial class SyntaxViewer : Control, IVisualTreeHost, ITextViewHo
     public int SelectionLength => Math.Abs(_caret - _anchor);
     public string SelectedText => SelectionLength == 0
         ? string.Empty
+    [FluentExcluded("Text view host event")]
         : _document.GetText(SelectionStart, SelectionLength);
     public double VerticalOffset => _verticalOffset;
     public double HorizontalOffset => _horizontalOffset;
@@ -128,6 +129,8 @@ public sealed partial class SyntaxViewer : Control, IVisualTreeHost, ITextViewHo
             throw new ArgumentOutOfRangeException(nameof(start));
         _anchor = start;
         _caret = start + length;
+    /// <summary>Gets or sets an optional clipboard override for hosted editors and tests.</summary>
+    [FluentExcluded("Service injection")]
         EnsureSelectionVisibleAndInvalidate();
     }
 
@@ -280,9 +283,11 @@ public sealed partial class SyntaxViewer : Control, IVisualTreeHost, ITextViewHo
         EnsureView();
         _view?.InvalidateRange(offset, length);
         InvalidateVisual();
+    [FluentExcluded("Text view host event")]
     }
 
     /// <inheritdoc/>
+    [FluentExcluded("Text view host event")]
     public IReadOnlyList<TextLineLayout> VisibleTextLines
         => _view?.MaterializedLines ?? Array.Empty<TextLineLayout>();
 
@@ -541,6 +546,7 @@ public sealed partial class SyntaxViewer : Control, IVisualTreeHost, ITextViewHo
         }
         EnsureView();
         SetVerticalOffset(
+    [FluentExcluded("Text view host event")]
             TextViewScrolling.ResolveOffset(
                 _verticalOffset, _contentBounds.Height, documentRect.Y, documentRect.Height),
             false);

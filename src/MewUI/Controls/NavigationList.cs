@@ -74,7 +74,8 @@ public class NavigationList : ScrollableItemsBase, ISelector, IIndexedSelector
         ItemPadding = Theme.Metrics.ItemPadding;
     }
 
-    /// <summary>Gets or sets the items data source.</summary>
+    /// <summary>Gets or sets the items source.</summary>
+    [FluentExcluded("Configured through the Items builder")]
     public ISelectableItemsView ItemsSource
     {
         get => _itemsSource;

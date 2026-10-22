@@ -195,7 +195,8 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextC
     public event Action<TextCompositionEventArgs>? TextCompositionUpdate;
     public event Action<TextCompositionEventArgs>? TextCompositionEnd;
 
-    /// <summary>Optional clipboard override for hosted editors and tests.</summary>
+    /// <summary>Gets or sets an optional clipboard override for hosted editors and tests.</summary>
+    [FluentExcluded("Service injection")]
     public IClipboardService? ClipboardService { get; set; }
 
     /// <summary>
