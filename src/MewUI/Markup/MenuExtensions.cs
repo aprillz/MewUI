@@ -8,54 +8,6 @@ namespace Aprillz.MewUI;
 public static class MenuExtensions
 {
     /// <summary>
-    /// Sets the item height.
-    /// </summary>
-    /// <param name="menu">Target menu.</param>
-    /// <param name="itemHeight">Item height.</param>
-    /// <returns>The menu for chaining.</returns>
-    public static Menu ItemHeight(this Menu menu, double itemHeight)
-    {
-        menu.ItemHeight = itemHeight;
-        return menu;
-    }
-
-    /// <summary>
-    /// Sets the item padding.
-    /// </summary>
-    /// <param name="menu">Target menu.</param>
-    /// <param name="itemPadding">Item padding.</param>
-    /// <returns>The menu for chaining.</returns>
-    public static Menu ItemPadding(this Menu menu, Thickness? itemPadding)
-    {
-        menu.ItemPadding = itemPadding;
-        return menu;
-    }
-
-    /// <summary>
-    /// Sets whether the menu bar draws a bottom separator.
-    /// </summary>
-    /// <param name="bar">Target menu bar.</param>
-    /// <param name="value">Whether to draw the separator.</param>
-    /// <returns>The menu bar for chaining.</returns>
-    public static MenuBar DrawBottomSeparator(this MenuBar bar, bool value = true)
-    {
-        bar.DrawBottomSeparator = value;
-        return bar;
-    }
-
-    /// <summary>
-    /// Sets the spacing between menu items.
-    /// </summary>
-    /// <param name="bar">Target menu bar.</param>
-    /// <param name="spacing">Spacing value.</param>
-    /// <returns>The menu bar for chaining.</returns>
-    public static MenuBar Spacing(this MenuBar bar, double spacing)
-    {
-        bar.Spacing = spacing;
-        return bar;
-    }
-
-    /// <summary>
     /// Sets the menu items.
     /// </summary>
     /// <param name="bar">Target menu bar.</param>
@@ -138,36 +90,12 @@ public static class MenuExtensions
         return item;
     }
 
-    /// <summary>Sets the semantic command invoked by this item.</summary>
-    public static MenuItem Command(this MenuItem item, Command? command)
-    {
-        ArgumentNullException.ThrowIfNull(item);
-        item.Command = command;
-        return item;
-    }
-
     /// <summary>Binds the semantic command invoked by this item.</summary>
     public static MenuItem BindCommand(this MenuItem item, ObservableValue<Command?> source)
     {
         ArgumentNullException.ThrowIfNull(item);
         ArgumentNullException.ThrowIfNull(source);
         item.SetBinding(MenuItem.CommandProperty, source, BindingMode.OneWay);
-        return item;
-    }
-
-    /// <summary>Sets the menu item's icon presentation override.</summary>
-    public static MenuItem Icon(this MenuItem item, IconTemplate? icon)
-    {
-        ArgumentNullException.ThrowIfNull(item);
-        item.Icon = icon;
-        return item;
-    }
-
-    /// <summary>Sets the value the item hands its command as the invocation argument.</summary>
-    public static MenuItem CommandData(this MenuItem item, object? data)
-    {
-        ArgumentNullException.ThrowIfNull(item);
-        item.CommandData = data;
         return item;
     }
 
@@ -181,7 +109,7 @@ public static class MenuExtensions
     }
 
     /// <summary>
-    /// Sets the submenu.
+    /// Obsolete name of <see cref="SubMenu(MenuItem, Menu)"/>.
     /// </summary>
     /// <param name="item">Target menu item.</param>
     /// <param name="menu">Submenu.</param>
@@ -189,18 +117,6 @@ public static class MenuExtensions
     public static MenuItem Menu(this MenuItem item, Menu? menu)
     {
         item.SubMenu = menu;
-        return item;
-    }
-
-    /// <summary>
-    /// Sets whether the menu item is enabled.
-    /// </summary>
-    /// <param name="item">Target menu item.</param>
-    /// <param name="value">Whether the item is enabled.</param>
-    /// <returns>The menu item for chaining.</returns>
-    public static MenuItem IsEnabled(this MenuItem item, bool value = true)
-    {
-        item.IsEnabled = value;
         return item;
     }
 
@@ -230,30 +146,6 @@ public static class MenuExtensions
     }
 
     /// <summary>
-    /// Sets whether the menu item has a check slot. The slot takes the place of the item's icon.
-    /// </summary>
-    /// <param name="item">Target menu item.</param>
-    /// <param name="value">Whether the item has a check slot.</param>
-    /// <returns>The menu item for chaining.</returns>
-    public static MenuItem IsCheckable(this MenuItem item, bool value = true)
-    {
-        item.IsCheckable = value;
-        return item;
-    }
-
-    /// <summary>
-    /// Sets whether the check is shown. Only an item that is checkable shows it.
-    /// </summary>
-    /// <param name="item">Target menu item.</param>
-    /// <param name="value">Whether the check is shown.</param>
-    /// <returns>The menu item for chaining.</returns>
-    public static MenuItem IsChecked(this MenuItem item, bool value = true)
-    {
-        item.IsChecked = value;
-        return item;
-    }
-
-    /// <summary>
     /// Binds whether the check is shown to an observable value. Clicking the item does not write it back.
     /// </summary>
     public static MenuItem BindIsChecked(this MenuItem item, ObservableValue<bool> source)
@@ -279,10 +171,10 @@ public static class MenuExtensions
     }
 
     /// <summary>
-    /// Sets the nested submenu.
+    /// Sets the submenu the item opens. To detach a submenu, set <see cref="MenuItem.SubMenu"/> to null.
     /// </summary>
     /// <param name="item">Target menu item.</param>
-    /// <param name="value">Nested submenu.</param>
+    /// <param name="menu">Submenu.</param>
     /// <returns>The menu item for chaining.</returns>
     public static MenuItem SubMenu(this MenuItem item, Menu? value)
     {

@@ -9,6 +9,13 @@
 
     <!-- NuGet -->
     <PackageId>$(MewUITitle).Core</PackageId>
+
+    <!-- Conventional fluent extensions (same-name setters, On* subscriptions) come from the
+         generator; Markup/*.cs keeps only composites, shorthands, aliases, binders and helpers.
+         The interceptor namespace is allow-listed because the binding path generator runs in the
+         same analyzer assembly. -->
+    <MewUIGenerateFluentExtensions>true</MewUIGenerateFluentExtensions>
+    <InterceptorsNamespaces>$(InterceptorsNamespaces);Aprillz.MewUI.Generated</InterceptorsNamespaces>
   </PropertyGroup>
 
   <!-- Bundle the analyzer (built first by pack_mewui.cmd) as a build-time asset. Only our DLL goes in;
@@ -26,15 +33,16 @@
           Pack="true" PackagePath="analyzers/dotnet/roslyn4.12/cs" Visible="false" />
   </ItemGroup>
 
-  <!-- Build-order only: keeps the packed analyzer DLL above fresh even when packing outside
-       pack_mewui.cmd. Not loaded into this compilation (no OutputItemType) and not a package
-       dependency (PrivateAssets=all). The two projects demote the publish properties locally,
-       so they survive an AOT publish that walks this reference. -->
+  <!-- The analyzer reference is build-order only: it keeps the packed DLL above fresh even when
+       packing outside pack_mewui.cmd, is not loaded into this compilation (no OutputItemType) and
+       is not a package dependency (PrivateAssets=all). The generator is loaded as an analyzer so
+       this compilation gets its fluent extensions. The two projects demote the publish properties
+       locally, so they survive an AOT publish that walks this reference. -->
   <ItemGroup>
     <ProjectReference Include="..\MewUI.Analyzers\MewUI.Analyzers.csproj"
                       ReferenceOutputAssembly="false" PrivateAssets="all" />
     <ProjectReference Include="..\MewUI.Generators\MewUI.Generators.csproj"
-                      ReferenceOutputAssembly="false" PrivateAssets="all" />
+                      ReferenceOutputAssembly="false" PrivateAssets="all" OutputItemType="Analyzer" />
   </ItemGroup>
 
   <!-- Feature-switch substitutions let the trimmer drop optional framework graphs. -->

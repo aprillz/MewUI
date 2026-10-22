@@ -199,7 +199,7 @@ public static class ItemTemplateExtensions
         return itemsControl;
     }
 
-    /// <summary>Sets the row template.</summary>
+    /// <summary>Sets the item template.</summary>
     public static NavigationList ItemTemplate(this NavigationList navigationList, IDataTemplate template)
     {
         ArgumentNullException.ThrowIfNull(navigationList);
@@ -209,7 +209,7 @@ public static class ItemTemplateExtensions
         return navigationList;
     }
 
-    /// <summary>Sets the row template using delegate-based templating.</summary>
+    /// <summary>Sets the item template using delegate-based templating.</summary>
     /// <typeparam name="TItem">Item type.</typeparam>
     public static NavigationList ItemTemplate<TItem>(
         this NavigationList navigationList,
@@ -218,7 +218,7 @@ public static class ItemTemplateExtensions
         Action<FrameworkElement, TItem, int, TemplateContext>? unbind = null)
         => ItemTemplate(navigationList, new DelegateTemplate<TItem>(build, bind, unbind));
 
-    /// <summary>Sets the row template; the bind callback receives the root the build callback returned.</summary>
+    /// <summary>Sets the item template; the bind callback receives the root the build callback returned.</summary>
     /// <typeparam name="TItem">Item type.</typeparam>
     /// <typeparam name="TElement">Template root element type.</typeparam>
     public static NavigationList ItemTemplate<TItem, TElement>(
@@ -229,7 +229,7 @@ public static class ItemTemplateExtensions
         where TElement : FrameworkElement
         => ItemTemplate(navigationList, Typed(build, bind, unbind));
 
-    /// <summary>Sets the row template from a root element and a bind callback that needs only the item.</summary>
+    /// <summary>Sets the item template from a root element and a bind callback that needs only the item.</summary>
     /// <typeparam name="TItem">Item type.</typeparam>
     /// <typeparam name="TElement">Template root element type.</typeparam>
     public static NavigationList ItemTemplate<TItem, TElement>(

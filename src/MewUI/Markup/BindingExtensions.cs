@@ -9,8 +9,8 @@ namespace Aprillz.MewUI.Controls;
 public static class BindingExtensions
 {
     /// <summary>
-    /// Binds a <see cref="MewProperty{T}"/> to an <see cref="ObservableValue{T}"/>
-    /// and returns the element for fluent chaining.
+    /// Binds a <see cref="MewProperty{T}"/> to an <see cref="ObservableValue{T}"/> and returns the
+    /// element for chaining.
     /// </summary>
     /// <typeparam name="TElement">Target object type.</typeparam>
     /// <typeparam name="T">Property value type.</typeparam>
@@ -31,7 +31,7 @@ public static class BindingExtensions
 
     /// <summary>
     /// Binds a <see cref="MewProperty{T}"/> to another <see cref="MewObject"/>'s <see cref="MewProperty{T}"/>
-    /// and returns the element for fluent chaining.
+    /// and returns the element for chaining.
     /// </summary>
     /// <typeparam name="TElement">Target object type.</typeparam>
     /// <typeparam name="T">Property value type.</typeparam>
@@ -50,8 +50,8 @@ public static class BindingExtensions
     }
 
     /// <summary>
-    /// Binds a <see cref="MewProperty{TProp}"/> to an <see cref="ObservableValue{TSource}"/>
-    /// with type conversion and returns the element for fluent chaining.
+    /// Binds a <see cref="MewProperty{TProp}"/> to a converted <see cref="ObservableValue{TSource}"/> and
+    /// returns the element for chaining.
     /// </summary>
     /// <typeparam name="TElement">Target object type.</typeparam>
     /// <typeparam name="TProp">Target property value type.</typeparam>
@@ -77,8 +77,8 @@ public static class BindingExtensions
     }
 
     /// <summary>
-    /// Binds a <see cref="MewProperty{TProp}"/> to another <see cref="MewObject"/>'s <see cref="MewProperty{TSource}"/>
-    /// with type conversion and returns the element for fluent chaining.
+    /// Binds a <see cref="MewProperty{TProp}"/> to another <see cref="MewObject"/>'s converted
+    /// <see cref="MewProperty{TSource}"/> and returns the element for chaining.
     /// </summary>
     /// <typeparam name="TElement">Target object type.</typeparam>
     /// <typeparam name="TProp">Target property value type.</typeparam>
@@ -105,7 +105,7 @@ public static class BindingExtensions
     }
 
     /// <summary>
-    /// Binds a property to a reusable delegate-based path and returns the target for chaining.
+    /// Binds a property to a reusable delegate-based path and returns the element for chaining.
     /// </summary>
     public static TElement Bind<TElement, TRoot, T>(
         this TElement element,
@@ -123,8 +123,8 @@ public static class BindingExtensions
     }
 
     /// <summary>
-    /// Binds a property to a reusable delegate-based path with type conversion and returns the
-    /// target for chaining.
+    /// Binds a property to a converted reusable delegate-based path and returns the element for
+    /// chaining.
     /// </summary>
     public static TElement Bind<TElement, TProp, TRoot, TSource>(
         this TElement element,
@@ -144,8 +144,9 @@ public static class BindingExtensions
     }
 
     /// <summary>
-    /// Binds a property to a single notifying property of <paramref name="source"/> and returns
-    /// the target for chaining. Omitting <paramref name="setter"/> makes the binding OneWay.
+    /// Binds a property to a single notifying property of <paramref name="source"/> and returns the
+    /// element for chaining; omitting <paramref name="setter"/> makes the binding
+    /// <see cref="BindingMode.OneWay"/>.
     /// </summary>
     public static TElement Bind<TElement, TSource, T>(
         this TElement element,
@@ -164,8 +165,8 @@ public static class BindingExtensions
     }
 
     /// <summary>
-    /// Binds a property to a single notifying property of <paramref name="source"/> with type
-    /// conversion and returns the target for chaining.
+    /// Binds a property to a converted single notifying property of <paramref name="source"/> and
+    /// returns the element for chaining.
     /// </summary>
     public static TElement Bind<TElement, TProp, TSource, TValue>(
         this TElement element,
@@ -188,7 +189,7 @@ public static class BindingExtensions
 
     /// <summary>
     /// Binds a property to an <see cref="ObservableValue{T}"/> reached through
-    /// <paramref name="source"/> and returns the target for chaining.
+    /// <paramref name="source"/> and returns the element for chaining.
     /// </summary>
     public static TElement Bind<TElement, TSource, T>(
         this TElement element,

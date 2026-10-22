@@ -8,172 +8,16 @@ public static class ElementExtensions
     #region Common Properties
 
     /// <summary>
-    /// Sets whether the element participates in hit testing.
-    /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
-    /// <param name="element">Target element.</param>
-    /// <param name="value">Whether the element participates in hit testing.</param>
-    /// <returns>The element for chaining.</returns>
-    public static T IsHitTestVisible<T>(this T element, bool value = true) where T : UIElement
-    {
-        element.IsHitTestVisible = value;
-        return element;
-    }
-
-    /// <summary>
-    /// Sets whether viewport culling is skipped for the element.
-    /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
-    /// <param name="element">Target element.</param>
-    /// <param name="value">Whether viewport culling is skipped.</param>
-    /// <returns>The element for chaining.</returns>
-    public static T SkipViewportCull<T>(this T element, bool value = true) where T : UIElement
-    {
-        element.SkipViewportCull = value;
-        return element;
-    }
-
-    /// <summary>
-    /// Sets whether the element accepts drag-and-drop operations.
-    /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
-    /// <param name="element">Target element.</param>
-    /// <param name="value">Whether drop operations are accepted.</param>
-    /// <returns>The element for chaining.</returns>
-    public static T AllowDrop<T>(this T element, bool value = true) where T : UIElement
-    {
-        element.AllowDrop = value;
-        return element;
-    }
-
-    /// <summary>
-    /// Sets whether a drag operation can start from the element.
-    /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
-    /// <param name="element">Target element.</param>
-    /// <param name="value">Whether drag operations can start.</param>
-    /// <returns>The element for chaining.</returns>
-    public static T CanDrag<T>(this T element, bool value = true) where T : UIElement
-    {
-        element.CanDrag = value;
-        return element;
-    }
-
-    /// <summary>
-    /// Sets the application-defined tag.
-    /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
-    /// <param name="element">Target element.</param>
-    /// <param name="value">Tag value.</param>
-    /// <returns>The element for chaining.</returns>
-    public static T Tag<T>(this T element, object? value) where T : FrameworkElement
-    {
-        element.Tag = value;
-        return element;
-    }
-
-    /// <summary>
-    /// Sets the style sheet applied to the element.
-    /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
-    /// <param name="element">Target element.</param>
-    /// <param name="value">Style sheet.</param>
-    /// <returns>The element for chaining.</returns>
-    public static T StyleSheet<T>(this T element, StyleSheet? value) where T : FrameworkElement
-    {
-        element.StyleSheet = value;
-        return element;
-    }
-
-    /// <summary>
     /// Adds a size change handler.
     /// </summary>
     /// <typeparam name="T">Element type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="handler">Event handler.</param>
     /// <returns>The element for chaining.</returns>
-    public static T OnLayoutSizeChanged<T>(this T element, Action<SizeChangedEventArgs> handler)
+    public static T OnLayoutSizeChanged<T>(this T element, [FluentSetsMember(nameof(FrameworkElement.SizeChanged))] Action<SizeChangedEventArgs> handler)
         where T : FrameworkElement
     {
         element.SizeChanged += handler;
-        return element;
-    }
-
-    /// <summary>
-    /// Adds a drag-enter handler.
-    /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
-    /// <param name="element">Target element.</param>
-    /// <param name="handler">Event handler.</param>
-    /// <returns>The element for chaining.</returns>
-    public static T OnDragEnter<T>(this T element, Action<DragEventArgs> handler) where T : UIElement
-    {
-        element.DragEnter += handler;
-        return element;
-    }
-
-    /// <summary>
-    /// Adds a drag-over handler.
-    /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
-    /// <param name="element">Target element.</param>
-    /// <param name="handler">Event handler.</param>
-    /// <returns>The element for chaining.</returns>
-    public static T OnDragOver<T>(this T element, Action<DragEventArgs> handler) where T : UIElement
-    {
-        element.DragOver += handler;
-        return element;
-    }
-
-    /// <summary>
-    /// Adds a drag-leave handler.
-    /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
-    /// <param name="element">Target element.</param>
-    /// <param name="handler">Event handler.</param>
-    /// <returns>The element for chaining.</returns>
-    public static T OnDragLeave<T>(this T element, Action<DragEventArgs> handler) where T : UIElement
-    {
-        element.DragLeave += handler;
-        return element;
-    }
-
-    /// <summary>
-    /// Adds a drop handler.
-    /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
-    /// <param name="element">Target element.</param>
-    /// <param name="handler">Event handler.</param>
-    /// <returns>The element for chaining.</returns>
-    public static T OnDrop<T>(this T element, Action<DragEventArgs> handler) where T : UIElement
-    {
-        element.Drop += handler;
-        return element;
-    }
-
-    /// <summary>
-    /// Adds a drag-starting handler.
-    /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
-    /// <param name="element">Target element.</param>
-    /// <param name="handler">Event handler.</param>
-    /// <returns>The element for chaining.</returns>
-    public static T OnDragStarting<T>(this T element, Action<DragStartingEventArgs> handler) where T : UIElement
-    {
-        element.DragStarting += handler;
-        return element;
-    }
-
-    /// <summary>
-    /// Adds a drag-completed handler.
-    /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
-    /// <param name="element">Target element.</param>
-    /// <param name="handler">Event handler.</param>
-    /// <returns>The element for chaining.</returns>
-    public static T OnDragCompleted<T>(this T element, Action<DragCompletedEventArgs> handler) where T : UIElement
-    {
-        element.DragCompleted += handler;
         return element;
     }
 
@@ -307,6 +151,7 @@ public static class ElementExtensions
     /// <remarks>
     /// Do not call inside <c>OnBuild</c> - setting startup position after the window is shown throws an exception.
     /// </remarks>
+    [FluentSetsConstant(nameof(Window.StartupLocation), WindowStartupLocation.CenterScreen)]
     public static TWindow StartCenterScreen<TWindow>(this TWindow window) where TWindow : Window
     {
         window.StartupLocation = WindowStartupLocation.CenterScreen;
@@ -322,6 +167,7 @@ public static class ElementExtensions
     /// <remarks>
     /// Do not call inside <c>OnBuild</c> - setting startup position after the window is shown throws an exception.
     /// </remarks>
+    [FluentSetsConstant(nameof(Window.StartupLocation), WindowStartupLocation.CenterOwner)]
     public static Window StartCenterOwner(this Window window)
     {
         window.StartupLocation = WindowStartupLocation.CenterOwner;
@@ -347,126 +193,6 @@ public static class ElementExtensions
     }
 
     /// <summary>
-    /// Subscribes to <see cref="Window.WindowStateChanged"/>.
-    /// </summary>
-    /// <typeparam name="T">Window type.</typeparam>
-    /// <param name="window">Target window.</param>
-    /// <param name="handler">Event handler.</param>
-    /// <returns>The window for chaining.</returns>
-    public static T OnWindowStateChanged<T>(this T window, Action<WindowState> handler) where T : Window
-    {
-        window.WindowStateChanged += handler;
-        return window;
-    }
-
-    /// <summary>
-    /// Sets the window opacity (0.0 – 1.0).
-    /// </summary>
-    /// <typeparam name="T">Window type.</typeparam>
-    /// <param name="window">Target window.</param>
-    /// <param name="opacity">Window opacity.</param>
-    /// <returns>The window for chaining.</returns>
-    public static T Opacity<T>(this T window, double opacity) where T : Window
-    {
-        window.Opacity = opacity;
-        return window;
-    }
-
-    /// <summary>
-    /// Sets the window as topmost.
-    /// </summary>
-    /// <typeparam name="T">Window type.</typeparam>
-    /// <param name="window">Target window.</param>
-    /// <param name="topmost">Whether the window is topmost.</param>
-    /// <returns>The window for chaining.</returns>
-    public static T Topmost<T>(this T window, bool topmost = true) where T : Window
-    {
-        window.Topmost = topmost;
-        return window;
-    }
-
-    /// <summary>
-    /// Sets whether the window uses tool-window behavior.
-    /// </summary>
-    /// <typeparam name="T">Window type.</typeparam>
-    /// <param name="window">Target window.</param>
-    /// <param name="value">Whether tool-window behavior is enabled.</param>
-    /// <returns>The window for chaining.</returns>
-    public static T IsToolWindow<T>(this T window, bool value = true) where T : Window
-    {
-        window.IsToolWindow = value;
-        return window;
-    }
-
-    /// <summary>
-    /// Sets whether the window allows transparent content.
-    /// </summary>
-    /// <typeparam name="T">Window type.</typeparam>
-    /// <param name="window">Target window.</param>
-    /// <param name="value">Whether transparent content is allowed.</param>
-    /// <returns>The window for chaining.</returns>
-    public static T AllowsTransparency<T>(this T window, bool value = true) where T : Window
-    {
-        window.AllowsTransparency = value;
-        return window;
-    }
-
-    /// <summary>
-    /// Sets the height of the title bar extended into the client area.
-    /// </summary>
-    /// <typeparam name="T">Window type.</typeparam>
-    /// <param name="window">Target window.</param>
-    /// <param name="value">Extended title bar height.</param>
-    /// <returns>The window for chaining.</returns>
-    public static T ExtendClientAreaTitleBarHeight<T>(this T window, double value) where T : Window
-    {
-        window.ExtendClientAreaTitleBarHeight = value;
-        return window;
-    }
-
-    /// <summary>
-    /// Sets whether the entire native non-client area (title bar and border) is removed.
-    /// </summary>
-    /// <typeparam name="T">Window type.</typeparam>
-    /// <param name="window">Target window.</param>
-    /// <param name="value">Whether the window is borderless.</param>
-    /// <returns>The window for chaining.</returns>
-    public static T Borderless<T>(this T window, bool value = true) where T : Window
-    {
-        window.Borderless = value;
-        return window;
-    }
-
-    /// <summary>
-    /// Sets platform-specific window options.
-    /// </summary>
-    /// <typeparam name="T">Window type.</typeparam>
-    /// <param name="window">Target window.</param>
-    /// <param name="value">Platform-specific options.</param>
-    /// <returns>The window for chaining.</returns>
-    public static T PlatformOptions<T>(this T window, PlatformWindowOptions? value) where T : Window
-    {
-        window.PlatformOptions = value;
-        return window;
-    }
-
-    /// <summary>
-    /// Sets the window state.
-    /// </summary>
-    /// <typeparam name="T">Window type.</typeparam>
-    /// <param name="window">Target window.</param>
-    /// <param name="value">Window state.</param>
-    /// <returns>The window for chaining.</returns>
-    public static T WindowState<T>(
-        this T window,
-        global::Aprillz.MewUI.Controls.WindowState value)
-        where T : Window
-    {
-        window.WindowState = value;
-        return window;
-    }
-
-    /// <summary>
     /// Puts the window into fullscreen, or restores it to normal when <paramref name="value"/> is false.
     /// </summary>
     /// <typeparam name="T">Window type.</typeparam>
@@ -482,76 +208,12 @@ public static class ElementExtensions
     }
 
     /// <summary>
-    /// Sets whether the window can be minimized.
-    /// </summary>
-    /// <typeparam name="T">Window type.</typeparam>
-    /// <param name="window">Target window.</param>
-    /// <param name="value">Whether the window can be minimized.</param>
-    /// <returns>The window for chaining.</returns>
-    public static T CanMinimize<T>(this T window, bool value = true) where T : Window
-    {
-        window.CanMinimize = value;
-        return window;
-    }
-
-    /// <summary>
-    /// Sets whether the window can be maximized.
-    /// </summary>
-    /// <typeparam name="T">Window type.</typeparam>
-    /// <param name="window">Target window.</param>
-    /// <param name="value">Whether the window can be maximized.</param>
-    /// <returns>The window for chaining.</returns>
-    public static T CanMaximize<T>(this T window, bool value = true) where T : Window
-    {
-        window.CanMaximize = value;
-        return window;
-    }
-
-    /// <summary>
-    /// Sets whether the window can be closed.
-    /// </summary>
-    /// <typeparam name="T">Window type.</typeparam>
-    /// <param name="window">Target window.</param>
-    /// <param name="value">Whether the window can be closed.</param>
-    /// <returns>The window for chaining.</returns>
-    public static T CanClose<T>(this T window, bool value = true) where T : Window
-    {
-        window.CanClose = value;
-        return window;
-    }
-
-    /// <summary>
-    /// Sets whether the window appears in the taskbar.
-    /// </summary>
-    /// <typeparam name="T">Window type.</typeparam>
-    /// <param name="window">Target window.</param>
-    /// <param name="value">Whether the window appears in the taskbar.</param>
-    /// <returns>The window for chaining.</returns>
-    public static T ShowInTaskbar<T>(this T window, bool value = true) where T : Window
-    {
-        window.ShowInTaskbar = value;
-        return window;
-    }
-
-    /// <summary>
-    /// Sets whether layout values are rounded to device pixels.
-    /// </summary>
-    /// <typeparam name="T">Window type.</typeparam>
-    /// <param name="window">Target window.</param>
-    /// <param name="value">Whether layout rounding is enabled.</param>
-    /// <returns>The window for chaining.</returns>
-    public static T UseLayoutRounding<T>(this T window, bool value = true) where T : Window
-    {
-        window.UseLayoutRounding = value;
-        return window;
-    }
-
-    /// <summary>
     /// Sets the window state to minimized.
     /// </summary>
     /// <typeparam name="T">Window type.</typeparam>
     /// <param name="window">Target window.</param>
     /// <returns>The window for chaining.</returns>
+    [FluentSetsConstant(nameof(Window.WindowState), global::Aprillz.MewUI.Controls.WindowState.Minimized)]
     public static T Minimized<T>(this T window) where T : Window
     {
         window.WindowState = global::Aprillz.MewUI.Controls.WindowState.Minimized;
@@ -564,6 +226,7 @@ public static class ElementExtensions
     /// <typeparam name="T">Window type.</typeparam>
     /// <param name="window">Target window.</param>
     /// <returns>The window for chaining.</returns>
+    [FluentSetsConstant(nameof(Window.WindowState), global::Aprillz.MewUI.Controls.WindowState.Maximized)]
     public static T Maximized<T>(this T window) where T : Window
     {
         window.WindowState = global::Aprillz.MewUI.Controls.WindowState.Maximized;
@@ -611,32 +274,6 @@ public static class ElementExtensions
         => throw new NotSupportedException("Use .Resizable(w, h, maxHeight: ...) or assign WindowSize directly.");
 
     /// <summary>
-    /// Sets the width.
-    /// </summary>
-    /// <typeparam name="T">Visual type.</typeparam>
-    /// <param name="element">Target element.</param>
-    /// <param name="width">Width value.</param>
-    /// <returns>The element for chaining.</returns>
-    public static T Width<T>(this T element, double width) where T : FrameworkElement
-    {
-        element.Width = width;
-        return element;
-    }
-
-    /// <summary>
-    /// Sets the height.
-    /// </summary>
-    /// <typeparam name="T">Visual type.</typeparam>
-    /// <param name="element">Target element.</param>
-    /// <param name="height">Height value.</param>
-    /// <returns>The element for chaining.</returns>
-    public static T Height<T>(this T element, double height) where T : FrameworkElement
-    {
-        element.Height = height;
-        return element;
-    }
-
-    /// <summary>
     /// Sets the size.
     /// </summary>
     /// <typeparam name="T">Visual type.</typeparam>
@@ -644,7 +281,11 @@ public static class ElementExtensions
     /// <param name="width">Width value.</param>
     /// <param name="height">Height value.</param>
     /// <returns>The element for chaining.</returns>
-    public static T Size<T>(this T element, double width, double height) where T : FrameworkElement
+    public static T Size<T>(
+        this T element,
+        [FluentSetsMember(nameof(FrameworkElement.Width))] double width,
+        [FluentSetsMember(nameof(FrameworkElement.Height))] double height)
+        where T : FrameworkElement
     {
         element.Width = width;
         element.Height = height;
@@ -662,58 +303,6 @@ public static class ElementExtensions
     {
         element.Width = size;
         element.Height = size;
-        return element;
-    }
-
-    /// <summary>
-    /// Sets the minimum width.
-    /// </summary>
-    /// <typeparam name="T">Visual type.</typeparam>
-    /// <param name="element">Target element.</param>
-    /// <param name="minWidth">Minimum width.</param>
-    /// <returns>The element for chaining.</returns>
-    public static T MinWidth<T>(this T element, double minWidth) where T : FrameworkElement
-    {
-        element.MinWidth = minWidth;
-        return element;
-    }
-
-    /// <summary>
-    /// Sets the minimum height.
-    /// </summary>
-    /// <typeparam name="T">Visual type.</typeparam>
-    /// <param name="element">Target element.</param>
-    /// <param name="minHeight">Minimum height.</param>
-    /// <returns>The element for chaining.</returns>
-    public static T MinHeight<T>(this T element, double minHeight) where T : FrameworkElement
-    {
-        element.MinHeight = minHeight;
-        return element;
-    }
-
-    /// <summary>
-    /// Sets the maximum width.
-    /// </summary>
-    /// <typeparam name="T">Visual type.</typeparam>
-    /// <param name="element">Target element.</param>
-    /// <param name="maxWidth">Maximum width.</param>
-    /// <returns>The element for chaining.</returns>
-    public static T MaxWidth<T>(this T element, double maxWidth) where T : FrameworkElement
-    {
-        element.MaxWidth = maxWidth;
-        return element;
-    }
-
-    /// <summary>
-    /// Sets the maximum height.
-    /// </summary>
-    /// <typeparam name="T">Visual type.</typeparam>
-    /// <param name="element">Target element.</param>
-    /// <param name="maxHeight">Maximum height.</param>
-    /// <returns>The element for chaining.</returns>
-    public static T MaxHeight<T>(this T element, double maxHeight) where T : FrameworkElement
-    {
-        element.MaxHeight = maxHeight;
         return element;
     }
 
@@ -775,19 +364,6 @@ public static class ElementExtensions
     /// </summary>
     /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
-    /// <param name="value">Margin value.</param>
-    /// <returns>The element for chaining.</returns>
-    public static T Margin<T>(this T element, Thickness value) where T : FrameworkElement
-    {
-        element.Margin = value;
-        return element;
-    }
-
-    /// <summary>
-    /// Sets the margin uniformly.
-    /// </summary>
-    /// <typeparam name="T">Visual type.</typeparam>
-    /// <param name="element">Target element.</param>
     /// <param name="uniform">Uniform margin value.</param>
     /// <returns>The element for chaining.</returns>
     public static T Margin<T>(this T element, double uniform) where T : FrameworkElement
@@ -829,19 +405,6 @@ public static class ElementExtensions
     #endregion
 
     #region Padding
-
-    /// <summary>
-    /// Sets the padding.
-    /// </summary>
-    /// <typeparam name="T">Visual type.</typeparam>
-    /// <param name="element">Target element.</param>
-    /// <param name="padding">Padding thickness.</param>
-    /// <returns>The element for chaining.</returns>
-    public static T Padding<T>(this T element, Thickness padding) where T : Control
-    {
-        element.Padding = padding;
-        return element;
-    }
 
     /// <summary>
     /// Sets the padding uniformly.
@@ -891,37 +454,13 @@ public static class ElementExtensions
     #region Alignment
 
     /// <summary>
-    /// Sets the horizontal alignment.
-    /// </summary>
-    /// <typeparam name="T">Visual type.</typeparam>
-    /// <param name="element">Target element.</param>
-    /// <param name="alignment">Horizontal alignment.</param>
-    /// <returns>The element for chaining.</returns>
-    public static T HorizontalAlignment<T>(this T element, HorizontalAlignment alignment) where T : FrameworkElement
-    {
-        element.HorizontalAlignment = alignment;
-        return element;
-    }
-
-    /// <summary>
-    /// Sets the vertical alignment.
-    /// </summary>
-    /// <typeparam name="T">Visual type.</typeparam>
-    /// <param name="element">Target element.</param>
-    /// <param name="alignment">Vertical alignment.</param>
-    /// <returns>The element for chaining.</returns>
-    public static T VerticalAlignment<T>(this T element, VerticalAlignment alignment) where T : FrameworkElement
-    {
-        element.VerticalAlignment = alignment;
-        return element;
-    }
-
-    /// <summary>
     /// Centers the element horizontally and vertically.
     /// </summary>
     /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <returns>The element for chaining.</returns>
+    [FluentSetsConstant(nameof(FrameworkElement.HorizontalAlignment), MewUI.HorizontalAlignment.Center, 0)]
+    [FluentSetsConstant(nameof(FrameworkElement.VerticalAlignment), MewUI.VerticalAlignment.Center, 1)]
     public static T Center<T>(this T element) where T : FrameworkElement
     {
         element.HorizontalAlignment = MewUI.HorizontalAlignment.Center;
@@ -935,6 +474,7 @@ public static class ElementExtensions
     /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <returns>The element for chaining.</returns>
+    [FluentSetsConstant(nameof(FrameworkElement.HorizontalAlignment), MewUI.HorizontalAlignment.Center)]
     public static T CenterHorizontal<T>(this T element) where T : FrameworkElement
     {
         element.HorizontalAlignment = MewUI.HorizontalAlignment.Center;
@@ -947,6 +487,7 @@ public static class ElementExtensions
     /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <returns>The element for chaining.</returns>
+    [FluentSetsConstant(nameof(FrameworkElement.VerticalAlignment), MewUI.VerticalAlignment.Center)]
     public static T CenterVertical<T>(this T element) where T : FrameworkElement
     {
         element.VerticalAlignment = MewUI.VerticalAlignment.Center;
@@ -959,6 +500,7 @@ public static class ElementExtensions
     /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <returns>The element for chaining.</returns>
+    [FluentSetsConstant(nameof(FrameworkElement.HorizontalAlignment), MewUI.HorizontalAlignment.Left)]
     public static T Left<T>(this T element) where T : FrameworkElement
     {
         element.HorizontalAlignment = MewUI.HorizontalAlignment.Left;
@@ -971,6 +513,7 @@ public static class ElementExtensions
     /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <returns>The element for chaining.</returns>
+    [FluentSetsConstant(nameof(FrameworkElement.HorizontalAlignment), MewUI.HorizontalAlignment.Right)]
     public static T Right<T>(this T element) where T : FrameworkElement
     {
         element.HorizontalAlignment = MewUI.HorizontalAlignment.Right;
@@ -983,6 +526,7 @@ public static class ElementExtensions
     /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <returns>The element for chaining.</returns>
+    [FluentSetsConstant(nameof(FrameworkElement.VerticalAlignment), MewUI.VerticalAlignment.Top)]
     public static T Top<T>(this T element) where T : FrameworkElement
     {
         element.VerticalAlignment = MewUI.VerticalAlignment.Top;
@@ -995,6 +539,7 @@ public static class ElementExtensions
     /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <returns>The element for chaining.</returns>
+    [FluentSetsConstant(nameof(FrameworkElement.VerticalAlignment), MewUI.VerticalAlignment.Bottom)]
     public static T Bottom<T>(this T element) where T : FrameworkElement
     {
         element.VerticalAlignment = MewUI.VerticalAlignment.Bottom;
@@ -1007,6 +552,7 @@ public static class ElementExtensions
     /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <returns>The element for chaining.</returns>
+    [FluentSetsConstant(nameof(FrameworkElement.HorizontalAlignment), MewUI.HorizontalAlignment.Stretch)]
     public static T StretchHorizontal<T>(this T element) where T : FrameworkElement
     {
         element.HorizontalAlignment = MewUI.HorizontalAlignment.Stretch;
@@ -1019,6 +565,7 @@ public static class ElementExtensions
     /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <returns>The element for chaining.</returns>
+    [FluentSetsConstant(nameof(FrameworkElement.VerticalAlignment), MewUI.VerticalAlignment.Stretch)]
     public static T StretchVertical<T>(this T element) where T : FrameworkElement
     {
         element.VerticalAlignment = MewUI.VerticalAlignment.Stretch;
@@ -1154,20 +701,6 @@ public static class ElementExtensions
     }
 
     /// <summary>
-    /// Sets the render-cache policy. Pass a <see cref="BitmapCache"/> to cache the element's
-    /// rendered output to an offscreen bitmap; pass <see langword="null"/> to render live.
-    /// </summary>
-    /// <typeparam name="T">Visual type.</typeparam>
-    /// <param name="element">Target element.</param>
-    /// <param name="cacheMode">The cache policy, or null for live rendering.</param>
-    /// <returns>The element for chaining.</returns>
-    public static T CacheMode<T>(this T element, CacheMode? cacheMode) where T : UIElement
-    {
-        element.CacheMode = cacheMode;
-        return element;
-    }
-
-    /// <summary>
     /// Enables (or disables) bitmap caching of the element's rendered output. The cached bitmap is
     /// blitted each frame until the element's content, size, or DPI changes; the visual tree stays
     /// live. Equivalent to assigning a <see cref="BitmapCache"/> to <see cref="UIElement.CacheMode"/>.
@@ -1251,23 +784,6 @@ public static class ElementExtensions
         Canvas.SetLeft(element, left);
         Canvas.SetTop(element, top);
         return element;
-    }
-
-    #endregion
-
-    #region Style
-
-    /// <summary>
-    /// Sets the style name for named style resolution from the nearest <see cref="StyleSheet"/>.
-    /// </summary>
-    /// <typeparam name="T">Control type.</typeparam>
-    /// <param name="control">Target control.</param>
-    /// <param name="name">Style name.</param>
-    /// <returns>The control for chaining.</returns>
-    public static T StyleName<T>(this T control, string name) where T : Control
-    {
-        control.StyleName = name;
-        return control;
     }
 
     #endregion

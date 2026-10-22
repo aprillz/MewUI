@@ -10,18 +10,6 @@ namespace Aprillz.MewUI;
 public static class ImageExtensions
 {
     /// <summary>
-    /// Sets the image source.
-    /// </summary>
-    /// <param name="image">Target image.</param>
-    /// <param name="source">Image source.</param>
-    /// <returns>The image for chaining.</returns>
-    public static Image Source(this Image image, IImageSource? source)
-    {
-        image.Source = source;
-        return image;
-    }
-
-    /// <summary>
     /// Sets the image source from a file path.
     /// </summary>
     /// <param name="image">Target image.</param>
@@ -60,37 +48,16 @@ public static class ImageExtensions
     }
 
     /// <summary>
-    /// Sets the stretch mode.
-    /// </summary>
-    /// <param name="image">Target image.</param>
-    /// <param name="stretch">Stretch mode.</param>
-    /// <returns>The image for chaining.</returns>
-    public static Image StretchMode(this Image image, Stretch stretch)
-    {
-        image.StretchMode = stretch;
-        return image;
-    }
-
-    /// <summary>
-    /// Sets the image scale quality.
-    /// </summary>
-    /// <param name="image">Target image.</param>
-    /// <param name="mode">Scale quality mode.</param>
-    /// <returns>The image for chaining.</returns>
-    public static Image ImageScaleQuality(this Image image, ImageScaleQuality mode)
-    {
-        image.ImageScaleQuality = mode;
-        return image;
-    }
-
-    /// <summary>
     /// Sets the view box and units.
     /// </summary>
     /// <param name="image">Target image.</param>
     /// <param name="viewBox">View box rectangle.</param>
     /// <param name="units">View box units.</param>
     /// <returns>The image for chaining.</returns>
-    public static Image ViewBox(this Image image, Rect? viewBox, ImageViewBoxUnits units = ImageViewBoxUnits.Pixels)
+    public static Image ViewBox(
+        this Image image,
+        [FluentSetsMember(nameof(Image.ViewBox))] Rect? viewBox,
+        [FluentSetsMember(nameof(Image.ViewBoxUnits))] ImageViewBoxUnits units = ImageViewBoxUnits.Pixels)
     {
         image.ViewBox = viewBox;
         image.ViewBoxUnits = units;
@@ -103,7 +70,8 @@ public static class ImageExtensions
     /// <param name="image">Target image.</param>
     /// <param name="viewBox">View box rectangle.</param>
     /// <returns>The image for chaining.</returns>
-    public static Image ViewBoxPixels(this Image image, Rect? viewBox)
+    [FluentSetsConstant(nameof(Image.ViewBoxUnits), ImageViewBoxUnits.Pixels)]
+    public static Image ViewBoxPixels(this Image image, [FluentSetsMember(nameof(Image.ViewBox))] Rect? viewBox)
     {
         image.ViewBox = viewBox;
         image.ViewBoxUnits = ImageViewBoxUnits.Pixels;
@@ -116,34 +84,11 @@ public static class ImageExtensions
     /// <param name="image">Target image.</param>
     /// <param name="viewBox">View box rectangle.</param>
     /// <returns>The image for chaining.</returns>
-    public static Image ViewBoxRelative(this Image image, Rect? viewBox)
+    [FluentSetsConstant(nameof(Image.ViewBoxUnits), ImageViewBoxUnits.RelativeToBoundingBox)]
+    public static Image ViewBoxRelative(this Image image, [FluentSetsMember(nameof(Image.ViewBox))] Rect? viewBox)
     {
         image.ViewBox = viewBox;
         image.ViewBoxUnits = ImageViewBoxUnits.RelativeToBoundingBox;
-        return image;
-    }
-
-    /// <summary>
-    /// Sets the horizontal alignment.
-    /// </summary>
-    /// <param name="image">Target image.</param>
-    /// <param name="alignment">Horizontal alignment.</param>
-    /// <returns>The image for chaining.</returns>
-    public static Image AlignmentX(this Image image, ImageAlignmentX alignment)
-    {
-        image.AlignmentX = alignment;
-        return image;
-    }
-
-    /// <summary>
-    /// Sets the vertical alignment.
-    /// </summary>
-    /// <param name="image">Target image.</param>
-    /// <param name="alignment">Vertical alignment.</param>
-    /// <returns>The image for chaining.</returns>
-    public static Image AlignmentY(this Image image, ImageAlignmentY alignment)
-    {
-        image.AlignmentY = alignment;
         return image;
     }
 }

@@ -48,6 +48,13 @@
     <NoWarn>$(NoWarn);1591</NoWarn>
   </PropertyGroup>
 
+  <!-- Fluent extension generator switches, visible to Aprillz.MewUI.Generators in every repo
+       compilation; Aprillz.MewUI.Core.targets exposes the same two to package consumers. -->
+  <ItemGroup>
+    <CompilerVisibleProperty Include="MewUIGenerateFluentExtensions" />
+    <CompilerVisibleProperty Include="MewUIFluentExtensionsNamespace" />
+  </ItemGroup>
+
   <!-- Shared icon + third-party notices in every package. -->
   <ItemGroup>
     <None Include="$(MSBuildThisFileDirectory)..\assets\logo\logo_c-256.png" Pack="true" PackagePath="\" Visible="false" />

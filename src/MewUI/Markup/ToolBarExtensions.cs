@@ -39,45 +39,6 @@ public static class ToolBarExtensions
     }
 
     /// <summary>
-    /// Sets how entries show their commands unless an entry overrides it.
-    /// </summary>
-    /// <param name="bar">Target toolbar.</param>
-    /// <param name="presentation">Presentation mode.</param>
-    /// <returns>The toolbar for chaining.</returns>
-    public static ToolBar ItemPresentation(this ToolBar bar, CommandPresentationMode presentation)
-    {
-        ArgumentNullException.ThrowIfNull(bar);
-        bar.ItemPresentation = presentation;
-        return bar;
-    }
-
-    /// <summary>
-    /// Sets what entries build a tooltip from when they supply none of their own.
-    /// </summary>
-    /// <param name="bar">Target toolbar.</param>
-    /// <param name="mode">Parts of the command to build from.</param>
-    /// <returns>The toolbar for chaining.</returns>
-    public static ToolBar ItemToolTipMode(this ToolBar bar, CommandToolTipMode mode)
-    {
-        ArgumentNullException.ThrowIfNull(bar);
-        bar.ItemToolTipMode = mode;
-        return bar;
-    }
-
-    /// <summary>
-    /// Sets whether groups may be dragged into a different place.
-    /// </summary>
-    /// <param name="bar">Target toolbar.</param>
-    /// <param name="value">Whether reordering is allowed.</param>
-    /// <returns>The toolbar for chaining.</returns>
-    public static ToolBar CanReorderGroups(this ToolBar bar, bool value = true)
-    {
-        ArgumentNullException.ThrowIfNull(bar);
-        bar.CanReorderGroups = value;
-        return bar;
-    }
-
-    /// <summary>
     /// Adds a group holding the given entries.
     /// </summary>
     /// <param name="band">Target band.</param>
@@ -274,33 +235,6 @@ public static class ToolBarExtensions
         return item;
     }
 
-    /// <summary>Sets the value this entry hands its command as the invocation argument.</summary>
-    public static T CommandData<T>(this T item, object? data)
-        where T : ToolBarItem
-    {
-        ArgumentNullException.ThrowIfNull(item);
-        item.CommandData = data;
-        return item;
-    }
-
-    /// <summary>Sets the text this entry shows instead of the command's own.</summary>
-    public static T Text<T>(this T item, string? text)
-        where T : ToolBarItem
-    {
-        ArgumentNullException.ThrowIfNull(item);
-        item.Text = text;
-        return item;
-    }
-
-    /// <summary>Sets the icon this entry shows instead of the command's own.</summary>
-    public static T Icon<T>(this T item, IconTemplate? icon)
-        where T : ToolBarItem
-    {
-        ArgumentNullException.ThrowIfNull(item);
-        item.Icon = icon;
-        return item;
-    }
-
     /// <summary>Binds the text this label entry shows.</summary>
     public static ToolBarLabelItem BindText(this ToolBarLabelItem item, ObservableValue<string> source)
     {
@@ -362,58 +296,5 @@ public static class ToolBarExtensions
         ArgumentNullException.ThrowIfNull(entry);
         entry.ToolTip = string.IsNullOrEmpty(text) ? null : new TextBlock { Text = text };
         return entry;
-    }
-
-    /// <summary>
-    /// Sets what this entry shows when the pointer rests on it, instead of what its command would say.
-    /// </summary>
-    /// <param name="entry">Target entry.</param>
-    /// <param name="content">Tooltip content, or null to go back to the command.</param>
-    /// <returns>The entry for chaining.</returns>
-    public static T ToolTip<T>(this T entry, Element? content)
-        where T : ToolBarEntry
-    {
-        ArgumentNullException.ThrowIfNull(entry);
-        entry.ToolTip = content;
-        return entry;
-    }
-
-    /// <summary>
-    /// Sets the menu the entry's chevron opens.
-    /// </summary>
-    /// <param name="item">Target entry.</param>
-    /// <param name="menu">Menu to open.</param>
-    /// <returns>The entry for chaining.</returns>
-    public static ToolBarSplitItem DropDownMenu(this ToolBarSplitItem item, Menu menu)
-    {
-        ArgumentNullException.ThrowIfNull(item);
-        item.DropDownMenu = menu;
-        return item;
-    }
-
-    /// <summary>
-    /// Sets the menu the entry opens.
-    /// </summary>
-    /// <param name="item">Target entry.</param>
-    /// <param name="menu">Menu to open.</param>
-    /// <returns>The entry for chaining.</returns>
-    public static ToolBarMenuItem DropDownMenu(this ToolBarMenuItem item, Menu menu)
-    {
-        ArgumentNullException.ThrowIfNull(item);
-        item.DropDownMenu = menu;
-        return item;
-    }
-
-    /// <summary>
-    /// Sets whether the entry reads as on.
-    /// </summary>
-    /// <param name="item">Target entry.</param>
-    /// <param name="value">Whether the entry is on.</param>
-    /// <returns>The entry for chaining.</returns>
-    public static ToolBarToggleItem IsChecked(this ToolBarToggleItem item, bool value = true)
-    {
-        ArgumentNullException.ThrowIfNull(item);
-        item.IsChecked = value;
-        return item;
     }
 }

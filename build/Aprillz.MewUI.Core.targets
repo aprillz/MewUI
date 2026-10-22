@@ -87,6 +87,19 @@
   </ItemGroup>
 
   <!--
+    UI automation: the peer tree that describes every control's role, name, state and actions.
+    Off by default; apps that need accessibility or automated UI tests turn it on. Trim="true" lets
+    ILLink remove the peers when it is off.
+  -->
+  <PropertyGroup>
+    <MewUIAutomation Condition="'$(MewUIAutomation)' == ''">false</MewUIAutomation>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Include="Aprillz.MewUI.Automation.Enabled" Value="$(MewUIAutomation)" Trim="true" />
+  </ItemGroup>
+
+  <!--
     Win32 text engine. Selects which of the two text paths the GDI and MewVG.Win32 backends keep:
     GDI (legacy family-name matching, no colour glyphs) or DirectWrite (typographic family matching,
     colour emoji). Trim="true" hands the value to the trimmer as well as the runtime, so a trimmed
@@ -128,6 +141,17 @@
     <InterceptorsPreviewNamespaces>$(InterceptorsPreviewNamespaces);Aprillz.MewUI.Generated</InterceptorsPreviewNamespaces>
     <InterceptorsNamespaces>$(InterceptorsNamespaces);Aprillz.MewUI.Generated</InterceptorsNamespaces>
   </PropertyGroup>
+
+  <!--
+    Fluent extension generator. Off by default; <MewUIGenerateFluentExtensions>true</MewUIGenerateFluentExtensions>
+    makes the generator emit same-name setters and On-prefixed event subscriptions for the markup
+    owner types declared in the consumer's own compilation. MewUIFluentExtensionsNamespace optionally
+    moves every generated class into one namespace instead of each owner's namespace.
+  -->
+  <ItemGroup>
+    <CompilerVisibleProperty Include="MewUIGenerateFluentExtensions" />
+    <CompilerVisibleProperty Include="MewUIFluentExtensionsNamespace" />
+  </ItemGroup>
 
 
   <!-- Editor preview session composition (see agent/preview-tooling/plan.md section 4.2). -->
