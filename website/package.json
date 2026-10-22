@@ -1,0 +1,18 @@
+{
+  "name": "mewui-website",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sync": "node scripts/sync-content.mjs",
+    "prebuild": "npm run sync",
+    "build": "astro build",
+    "dev": "astro dev",
+    "check-links": "node scripts/check-links.mjs"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "0.42.6",
+    "astro": "7.4.2",
+    "sharp": "0.35.5"
+  }
+}

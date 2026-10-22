@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.astro/
+public/assets/
+
+# Synced from ../docs by scripts/sync-content.mjs, and api/ from tools/docs/build_api_docs.cmd.
+# Only the hand-written landing pages are tracked.
+src/content/docs/**
+!src/content/docs/index.mdx
+!src/content/docs/ko/
+src/content/docs/ko/*
+!src/content/docs/ko/index.mdx

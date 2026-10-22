@@ -1,0 +1,15 @@
+/* MewUI brand accent (purple from the logo and README badges) applied to Starlight's accent tokens. */
+
+/* Dark mode (Starlight default) */
+:root {
+  --sl-color-accent-low: #2a1a4d;
+  --sl-color-accent: #8f54db;
+  --sl-color-accent-high: #cdb9f5;
+}
+
+/* Light mode */
+:root[data-theme='light'] {
+  --sl-color-accent-low: #e9ddfb;
+  --sl-color-accent: #7a3fcc;
+  --sl-color-accent-high: #3b1f6b;
+}
