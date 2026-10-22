@@ -18,6 +18,10 @@
          (the submodule is kept pristine). CS1591 (missing XML docs) is already in NoWarn via
          MewUI.Common.props; CS0649 = unassigned static fields in CoreMotionCanvas. -->
     <NoWarn>$(NoWarn);0649</NoWarn>
+
+    <!-- Same-name setters and On* subscriptions of the chart views come from the generator. -->
+    <MewUIGenerateFluentExtensions>true</MewUIGenerateFluentExtensions>
+    <InterceptorsNamespaces>$(InterceptorsNamespaces);Aprillz.MewUI.Generated</InterceptorsNamespaces>
   </PropertyGroup>
 
   <ItemGroup>
@@ -51,6 +55,8 @@
     </ProjectReference>
     
     <ProjectReference Include="..\..\src\MewUI\MewUI.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Generators\MewUI.Generators.csproj"
+                      ReferenceOutputAssembly="false" PrivateAssets="all" OutputItemType="Analyzer" />
   </ItemGroup>
 
 </Project>

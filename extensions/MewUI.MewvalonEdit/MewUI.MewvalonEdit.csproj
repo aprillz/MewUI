@@ -7,6 +7,10 @@
     <AssemblyName>Aprillz.MewUI.MewvalonEdit</AssemblyName>
     <PackageId>Aprillz.MewUI.MewvalonEdit</PackageId>
     <Description>AvalonEdit-compatible editing components built on the MewUI text engine.</Description>
+
+    <!-- Same-name setters and On* subscriptions of the editor controls come from the generator. -->
+    <MewUIGenerateFluentExtensions>true</MewUIGenerateFluentExtensions>
+    <InterceptorsNamespaces>$(InterceptorsNamespaces);Aprillz.MewUI.Generated</InterceptorsNamespaces>
   </PropertyGroup>
 
   <!-- The original's own syntax definitions and their schemas, read by HighlightingLoader. -->
@@ -17,6 +21,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\MewUI\MewUI.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Generators\MewUI.Generators.csproj"
+                      ReferenceOutputAssembly="false" PrivateAssets="all" OutputItemType="Analyzer" />
     <None Include="LICENSE.AvalonEdit" Pack="true" PackagePath="licenses\" />
   </ItemGroup>
 

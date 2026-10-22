@@ -7,10 +7,16 @@
     <AssemblyName>$(MewUITitle).Terminal</AssemblyName>
     <PackageId>$(MewUITitle).Terminal</PackageId>
     <Description>Terminal emulator control for MewUI, with the VT parser, buffer and input encoding ported from Windows Terminal.</Description>
+
+    <!-- Same-name setters and On* subscriptions of TerminalView come from the generator. -->
+    <MewUIGenerateFluentExtensions>true</MewUIGenerateFluentExtensions>
+    <InterceptorsNamespaces>$(InterceptorsNamespaces);Aprillz.MewUI.Generated</InterceptorsNamespaces>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\MewUI\MewUI.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Generators\MewUI.Generators.csproj"
+                      ReferenceOutputAssembly="false" PrivateAssets="all" OutputItemType="Analyzer" />
     <InternalsVisibleTo Include="Aprillz.MewUI.Terminal.Test" />
     <None Include="LICENSE.WindowsTerminal" Pack="true" PackagePath="licenses\" />
   </ItemGroup>

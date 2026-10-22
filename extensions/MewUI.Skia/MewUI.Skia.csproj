@@ -6,6 +6,10 @@
     <AssemblyName>$(MewUITitle).Skia</AssemblyName>
     <PackageId>$(MewUITitle).Skia</PackageId>
     <Description>Skia rendering integration for $(MewUITitle). Provides SkiaCanvasView and the ISkiaInteropProvider registry; ships a CPU upload fallback for any backend. Install a matching Aprillz.MewUI.Skia.Interop.* package for zero-copy GPU paths.</Description>
+
+    <!-- Same-name setters and On* subscriptions of SkiaCanvasView come from the generator. -->
+    <MewUIGenerateFluentExtensions>true</MewUIGenerateFluentExtensions>
+    <InterceptorsNamespaces>$(InterceptorsNamespaces);Aprillz.MewUI.Generated</InterceptorsNamespaces>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -20,6 +24,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\MewUI\MewUI.csproj" PrivateAssets="none" />
+    <ProjectReference Include="..\..\src\MewUI.Generators\MewUI.Generators.csproj"
+                      ReferenceOutputAssembly="false" PrivateAssets="all" OutputItemType="Analyzer" />
   </ItemGroup>
 
   <!-- Shared GL hosting source is compiled into each consuming Interop assembly. -->

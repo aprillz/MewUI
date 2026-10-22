@@ -11,12 +11,18 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 
     <PackageTags>webview2;win32;native;aot;gui;browser</PackageTags>
+
+    <!-- Same-name setters and On* subscriptions of WebView2 come from the generator. -->
+    <MewUIGenerateFluentExtensions>true</MewUIGenerateFluentExtensions>
+    <InterceptorsNamespaces>$(InterceptorsNamespaces);Aprillz.MewUI.Generated</InterceptorsNamespaces>
   </PropertyGroup>
-  
- 
+
+
   <ItemGroup>
     <ProjectReference Include="..\..\src\MewUI\MewUI.csproj" />
     <ProjectReference Include="..\..\src\MewUI.Platform.Win32\MewUI.Platform.Win32.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Generators\MewUI.Generators.csproj"
+                      ReferenceOutputAssembly="false" PrivateAssets="all" OutputItemType="Analyzer" />
   </ItemGroup>
  
   <ItemGroup>
