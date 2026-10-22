@@ -15,17 +15,17 @@ namespace Aprillz.MewUI.Svg;
 /// </summary>
 public sealed class SvgImageSource : MewObject, IVectorImageSource, INotifyImageChanged, IDisposable
 {
-    /// <summary>Recolors the SVG fill (monochrome icons). Null keeps the source colors.</summary>
+    /// <summary>The color the SVG fill is recolored with, for monochrome icons; null keeps the source colors.</summary>
     public static readonly MewProperty<Color?> TintProperty =
         MewProperty<Color?>.Register<SvgImageSource>(nameof(Tint), null,
             changed: (owner, _, _) => owner.OnVisualChanged());
 
-    /// <summary>Pixel width for the <see cref="CreateImage"/> raster fallback (null = intrinsic).</summary>
+    /// <summary>The pixel width of the <see cref="CreateImage"/> raster fallback; null uses the intrinsic width.</summary>
     public static readonly MewProperty<int?> RasterWidthProperty =
         MewProperty<int?>.Register<SvgImageSource>(nameof(RasterWidth), null,
             changed: (owner, _, _) => owner.OnVisualChanged());
 
-    /// <summary>Pixel height for the <see cref="CreateImage"/> raster fallback (null = intrinsic).</summary>
+    /// <summary>The pixel height of the <see cref="CreateImage"/> raster fallback; null uses the intrinsic height.</summary>
     public static readonly MewProperty<int?> RasterHeightProperty =
         MewProperty<int?>.Register<SvgImageSource>(nameof(RasterHeight), null,
             changed: (owner, _, _) => owner.OnVisualChanged());
@@ -71,24 +71,25 @@ public sealed class SvgImageSource : MewObject, IVectorImageSource, INotifyImage
     /// <inheritdoc />
     public event Action? Changed;
 
-    /// <summary>
-    /// Recolors the SVG fill, for monochrome icons whose elements inherit fill (no explicit per-element
-    /// fill). Null keeps the source colors. Changing it re-renders the hosting control.
-    /// </summary>
+    /// <summary>Gets or sets the color the SVG fill is recolored with, for monochrome icons whose elements inherit fill
+    /// (no explicit per-element fill); null keeps the source colors.</summary>
+    /// <remarks>Changing it re-renders the hosting control.</remarks>
     public Color? Tint
     {
         get => GetValue(TintProperty);
         set => SetValue(TintProperty, value);
     }
 
-    /// <summary>Pixel width for the <see cref="CreateImage"/> raster fallback. Null = intrinsic. Ignored by the vector path.</summary>
+    /// <summary>Gets or sets the pixel width of the <see cref="CreateImage"/> raster fallback; null uses the intrinsic width.</summary>
+    /// <remarks>The vector path ignores it.</remarks>
     public int? RasterWidth
     {
         get => GetValue(RasterWidthProperty);
         set => SetValue(RasterWidthProperty, value);
     }
 
-    /// <summary>Pixel height for the <see cref="CreateImage"/> raster fallback. Null = intrinsic. Ignored by the vector path.</summary>
+    /// <summary>Gets or sets the pixel height of the <see cref="CreateImage"/> raster fallback; null uses the intrinsic height.</summary>
+    /// <remarks>The vector path ignores it.</remarks>
     public int? RasterHeight
     {
         get => GetValue(RasterHeightProperty);
@@ -98,20 +99,19 @@ public sealed class SvgImageSource : MewObject, IVectorImageSource, INotifyImage
     /// <inheritdoc />
     public Size IntrinsicSize => new(Math.Max(0, _document.ViewBoxWidth), Math.Max(0, _document.ViewBoxHeight));
 
-    /// <summary>
-    /// Total SVG rasterizations across all instances (diagnostic - e.g. sampling rasters-per-second).
-    /// Incremented on each actual <see cref="Render"/> (SVG drawn to pixels). The host <see cref="Aprillz.MewUI.Controls.Image"/>
-    /// caches the rastered bitmap, so Render runs only on the host's cache miss (size/tint/DPI change).
-    /// </summary>
+    /// <summary>Gets the number of SVG rasterizations across all instances, for diagnostics such as sampling rasters per second.</summary>
+    /// <remarks>
+    /// The count grows on each <see cref="Render"/>; the host <see cref="Aprillz.MewUI.Controls.Image"/> caches the rasterized
+    /// bitmap, so a render happens only on the host's cache miss (size, tint or DPI change).
+    /// </remarks>
     public static long TotalRasterCount => System.Threading.Interlocked.Read(ref _rasterCount);
 
     private static long _rasterCount;
 
     /// <inheritdoc />
     /// <remarks>
-    /// Stateless direct draw - the SVG is drawn into <paramref name="context"/> at <paramref name="destRect"/>
-    /// every call. Any rasterized-bitmap caching is the host's concern (the <see cref="Aprillz.MewUI.Controls.Image"/>
-    /// vector path caches per control), so this stays free of per-source cache state.
+    /// The SVG is drawn into <paramref name="context"/> at <paramref name="destRect"/> on every call; rasterized-bitmap
+    /// caching is the host's concern (the <see cref="Aprillz.MewUI.Controls.Image"/> vector path caches per control).
     /// </remarks>
     public void Render(IGraphicsContext context, Rect destRect)
     {
