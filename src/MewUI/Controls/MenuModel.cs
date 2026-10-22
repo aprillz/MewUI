@@ -210,6 +210,7 @@ public sealed class MenuItem : MenuEntry
     /// only moment a row is about to be read; a condition that changes while the menu is up must be
     /// expressed as a binding to <see cref="IsEnabled"/> instead.
     /// </remarks>
+    [FluentExcluded("Use Command for enablement")]
     public Func<bool>? CanClick
     {
         get;
@@ -220,7 +221,6 @@ public sealed class MenuItem : MenuEntry
                 field = value;
                 ReevaluateCanClick();
             }
-    [FluentExcluded("Use Command for enablement")]
         }
     }
 

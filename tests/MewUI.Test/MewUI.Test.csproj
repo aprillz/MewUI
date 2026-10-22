@@ -37,8 +37,8 @@
   <!-- The browser platform targets net10.0 only; its key mapping is tested there. -->
   <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
     <ProjectReference Include="..\..\src\MewUI.Platform.Browser\MewUI.Platform.Browser.csproj" />
+    <!-- The markup audit library targets net10.0 only; the fluent audit tests are compiled there. -->
+    <ProjectReference Include="..\..\tools\MewUI.MarkupAudit\MewUI.MarkupAudit.Core\MewUI.MarkupAudit.Core.csproj" />
   </ItemGroup>
 
 </Project>
-    <!-- The markup audit library targets net10.0 only; the fluent audit tests are compiled there. -->
-    <ProjectReference Include="..\..\tools\MewUI.MarkupAudit\MewUI.MarkupAudit.Core\MewUI.MarkupAudit.Core.csproj" />

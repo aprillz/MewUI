@@ -644,8 +644,8 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     /// <summary>
     /// Gets or sets the window size configuration.
     /// </summary>
-    public WindowSize WindowSize
     [FluentExcluded("Computed; use MoveTo and the size helpers")]
+    public WindowSize WindowSize
     {
         get;
         set
@@ -1165,8 +1165,8 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     /// <summary>
     /// Gets or sets the window position in screen coordinates (DIPs).
     /// </summary>
-    public Point Position
     [FluentExcluded("Computed; use MoveTo and the size helpers")]
+    public Point Position
     {
         get
         {
@@ -1367,11 +1367,11 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     /// Raised before the framework processes a native platform message; set
     /// <see cref="NativeMessageEventArgs.Handled"/> to suppress default processing.
     /// </summary>
-    public event Action<NativeMessageEventArgs>? NativeMessage;
     /// <remarks>
     /// Cast the argument to the platform-specific subclass to access raw message data.
     /// </remarks>
     [FluentExcluded("Low-level platform interop event")]
+    public event Action<NativeMessageEventArgs>? NativeMessage;
 
     #endregion
 

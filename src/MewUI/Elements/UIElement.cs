@@ -331,19 +331,19 @@ public abstract partial class UIElement : Element
         set => SetValue(IsHitTestVisibleProperty, value);
     }
 
+    /// <summary>Gets or sets the position in the Tab order.</summary>
     public double TabIndex
     {
         get => GetValue(TabIndexProperty);
         set => SetValue(TabIndexProperty, value);
     }
-    /// <summary>Gets or sets the position in the Tab order.</summary>
 
+    /// <summary>Gets or sets whether the element participates in Tab traversal.</summary>
     public bool IsTabStop
     {
         get => GetValue(IsTabStopProperty);
         set => SetValue(IsTabStopProperty, value);
     }
-    /// <summary>Gets or sets whether the element participates in Tab traversal.</summary>
 
     /// <summary>
     /// Gets or sets the cursor shown while the mouse is over this element; null inherits from the
@@ -363,14 +363,14 @@ public abstract partial class UIElement : Element
     /// <summary>
     /// Gets whether this element or any of its descendants has keyboard focus.
     /// </summary>
+    /// <remarks>
+    /// Container visuals (a tab control outline, for example) and container-level focus navigation read this.
+    /// </remarks>
     public bool IsFocusWithin => GetValue(IsFocusWithinProperty);
 
     /// <summary>
     /// Gets whether the mouse is over this element.
     /// </summary>
-    /// <remarks>
-    /// Container visuals (a tab control outline, for example) and container-level focus navigation read this.
-    /// </remarks>
     public bool IsMouseOver => GetValue(IsMouseOverProperty);
 
     /// <summary>
@@ -482,14 +482,14 @@ public abstract partial class UIElement : Element
         set => _renderCullViewport = value;
     }
 
+    /// <summary>
+    /// Renders the element and its subtree unless it is invisible, fully transparent or outside the viewport.
+    /// </summary>
     public sealed override void Render(IGraphicsContext context)
     {
         if (!IsVisible)
         {
             return;
-    /// <summary>
-    /// Renders the element and its subtree unless it is invisible, fully transparent or outside the viewport.
-    /// </summary>
         }
 
         double opacity = Opacity;
@@ -625,15 +625,15 @@ public abstract partial class UIElement : Element
     /// Queues this element for visual-state reconciliation at the start of the next layout pass; call it
     /// when a property that feeds <see cref="Controls.Control.ComputeVisualState"/> changes.
     /// </summary>
+    /// <remarks>
+    /// Repeated calls before the pass runs are merged, and a detached element is skipped since
+    /// attach-time style resolution recomputes its state.
+    /// </remarks>
     public void InvalidateVisualState()
     {
         if (_visualStateDirty)
         {
             return;
-    /// <remarks>
-    /// Repeated calls before the pass runs are merged, and a detached element is skipped since
-    /// attach-time style resolution recomputes its state.
-    /// </remarks>
         }
 
         // Detached elements skip the queue: attach-time style resolution recomputes the state.
@@ -754,12 +754,12 @@ public abstract partial class UIElement : Element
     /// </summary>
     /// <param name="point">The point in element coordinates.</param>
     /// <returns>The point in screen coordinates in device pixels.</returns>
+    /// <exception cref="InvalidOperationException">The element is not connected to a shown window.</exception>
     public Point PointToScreen(Point point)
     {
         var root = FindVisualRoot();
         if (root is not Window window || window.Handle == 0)
         {
-    /// <exception cref="InvalidOperationException">The element is not connected to a shown window.</exception>
             throw new InvalidOperationException("The visual is not connected to a window.");
         }
 
@@ -773,12 +773,12 @@ public abstract partial class UIElement : Element
     /// </summary>
     /// <param name="point">The point in screen coordinates in device pixels.</param>
     /// <returns>The point in element coordinates.</returns>
+    /// <exception cref="InvalidOperationException">The element is not connected to a shown window.</exception>
     public Point PointFromScreen(Point point)
     {
         var root = FindVisualRoot();
         if (root is not Window window || window.Handle == 0)
         {
-    /// <exception cref="InvalidOperationException">The element is not connected to a shown window.</exception>
             throw new InvalidOperationException("The visual is not connected to a window.");
         }
 

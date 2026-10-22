@@ -303,6 +303,10 @@ public sealed class Application
     /// Gets the process-wide default graphics factory, which rendering code that may run before
     /// <see cref="Run(Window)"/> uses as a fallback.
     /// </summary>
+    /// <remarks>
+    /// Backend packages register the factory through <see cref="RegisterGraphicsFactory"/>; reading it
+    /// before any backend registered throws <see cref="InvalidOperationException"/>.
+    /// </remarks>
     public static IGraphicsFactory DefaultGraphicsFactory
     {
         // Application owns the single process-wide factory: the provider is invoked once and cached (no
@@ -310,10 +314,6 @@ public sealed class Application
         get => _defaultGraphicsFactory ??= (_graphicsFactoryProvider ?? throw new InvalidOperationException(
             "No graphics backend registered. Add a backend package (Aprillz.MewUI.Backend.Direct2D / Gdi / MewVG.*)."))();
         internal set
-    /// <remarks>
-    /// Backend packages register the factory through <see cref="RegisterGraphicsFactory"/>; reading it
-    /// before any backend registered throws <see cref="InvalidOperationException"/>.
-    /// </remarks>
         {
             ArgumentNullException.ThrowIfNull(value);
             EnsureNotRunning("graphics backend");
@@ -611,6 +611,9 @@ public sealed class Application
         }
     }
 
+    /// <summary>
+    /// Creates a builder with default <see cref="AppOptions"/>.
+    /// </summary>
     public static ApplicationBuilder Create() => new ApplicationBuilder(new AppOptions());
 
     private Application(IPlatformHost platformHost)
@@ -618,9 +621,6 @@ public sealed class Application
         PlatformHost = platformHost;
         _themeManager = new ThemeManager(platformHost, ThemeManager.Default);
     }
-    /// <summary>
-    /// Creates a builder with default <see cref="AppOptions"/>.
-    /// </summary>
 
     internal void NotifySystemThemeChanged()
     {

@@ -114,21 +114,23 @@ public sealed partial class SyntaxViewer : Control, IVisualTreeHost, ITextViewHo
     public TextViewExtensionPipeline Extensions { get; }
 
     /// <summary>Raised after the document was replaced by a <see cref="Text"/> change.</summary>
+    [FluentExcluded("Text view host event")]
     public event Action<ITextViewHost>? DocumentChanged;
 
-    public int SelectionStart => Math.Min(_anchor, _caret);
     /// <summary>Gets the selection start as a character index.</summary>
-    public int SelectionLength => Math.Abs(_caret - _anchor);
+    public int SelectionStart => Math.Min(_anchor, _caret);
     /// <summary>Gets the selection length in UTF-16 code units.</summary>
-    public string SelectedText => SelectionLength == 0
+    public int SelectionLength => Math.Abs(_caret - _anchor);
     /// <summary>Gets the currently selected text.</summary>
+    public string SelectedText => SelectionLength == 0
         ? string.Empty
-    [FluentExcluded("Text view host event")]
         : _document.GetText(SelectionStart, SelectionLength);
     /// <summary>Gets the vertical scroll offset in DIPs.</summary>
     public double VerticalOffset => _verticalOffset;
     /// <summary>Gets the horizontal scroll offset in DIPs.</summary>
     public double HorizontalOffset => _horizontalOffset;
+    /// <summary>Gets or sets an optional clipboard override for hosted editors and tests.</summary>
+    [FluentExcluded("Service injection")]
     public IClipboardService? ClipboardService { get; set; }
     internal int MaterializedLineCount => _view?.MaterializedLines.Count ?? 0;
     internal bool IsVerticalScrollBarVisible => _verticalScrollBar.IsVisible;
@@ -140,8 +142,6 @@ public sealed partial class SyntaxViewer : Control, IVisualTreeHost, ITextViewHo
             throw new ArgumentOutOfRangeException(nameof(start));
         _anchor = start;
         _caret = start + length;
-    /// <summary>Gets or sets an optional clipboard override for hosted editors and tests.</summary>
-    [FluentExcluded("Service injection")]
         EnsureSelectionVisibleAndInvalidate();
     }
 
@@ -283,9 +283,11 @@ public sealed partial class SyntaxViewer : Control, IVisualTreeHost, ITextViewHo
     }
 
     /// <inheritdoc/>
+    [FluentExcluded("Text view host event")]
     public event Action<ITextViewHost, int>? LineConstructionStarting;
 
     /// <inheritdoc/>
+    [FluentExcluded("Text view host event")]
     public event Action<ITextViewHost>? LinesChanged;
 
     /// <inheritdoc/>
@@ -294,11 +296,9 @@ public sealed partial class SyntaxViewer : Control, IVisualTreeHost, ITextViewHo
         EnsureView();
         _view?.InvalidateRange(offset, length);
         InvalidateVisual();
-    [FluentExcluded("Text view host event")]
     }
 
     /// <inheritdoc/>
-    [FluentExcluded("Text view host event")]
     public IReadOnlyList<TextLineLayout> VisibleTextLines
         => _view?.MaterializedLines ?? Array.Empty<TextLineLayout>();
 
@@ -546,6 +546,7 @@ public sealed partial class SyntaxViewer : Control, IVisualTreeHost, ITextViewHo
     public Point ScrollOffset => new(_horizontalOffset, _verticalOffset);
 
     /// <inheritdoc/>
+    [FluentExcluded("Text view host event")]
     public event Action<ITextViewHost>? ScrollOffsetChanged;
 
     /// <inheritdoc/>
@@ -557,7 +558,6 @@ public sealed partial class SyntaxViewer : Control, IVisualTreeHost, ITextViewHo
         }
         EnsureView();
         SetVerticalOffset(
-    [FluentExcluded("Text view host event")]
             TextViewScrolling.ResolveOffset(
                 _verticalOffset, _contentBounds.Height, documentRect.Y, documentRect.Height),
             false);

@@ -276,6 +276,7 @@ public abstract class FrameworkElement : UIElement, IDisposable
     /// <summary>
     /// Gets or sets the minimum width in DIPs.
     /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">The value is negative.</exception>
     public double MinWidth
     {
         get => GetValue(MinWidthProperty);
@@ -283,7 +284,6 @@ public abstract class FrameworkElement : UIElement, IDisposable
         {
             if (value < 0)
                 throw new ArgumentOutOfRangeException(nameof(value), "MinWidth must be 0 or greater.");
-    /// <exception cref="ArgumentOutOfRangeException">The value is negative.</exception>
             SetValue(MinWidthProperty, value);
         }
     }
@@ -291,6 +291,7 @@ public abstract class FrameworkElement : UIElement, IDisposable
     /// <summary>
     /// Gets or sets the minimum height in DIPs.
     /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">The value is negative.</exception>
     public double MinHeight
     {
         get => GetValue(MinHeightProperty);
@@ -298,7 +299,6 @@ public abstract class FrameworkElement : UIElement, IDisposable
         {
             if (value < 0)
                 throw new ArgumentOutOfRangeException(nameof(value), "MinHeight must be 0 or greater.");
-    /// <exception cref="ArgumentOutOfRangeException">The value is negative.</exception>
             SetValue(MinHeightProperty, value);
         }
     }
@@ -306,6 +306,7 @@ public abstract class FrameworkElement : UIElement, IDisposable
     /// <summary>
     /// Gets or sets the maximum width in DIPs; the default is no bound.
     /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">The value is negative.</exception>
     public double MaxWidth
     {
         get => GetValue(MaxWidthProperty);
@@ -313,7 +314,6 @@ public abstract class FrameworkElement : UIElement, IDisposable
         {
             if (value < 0)
                 throw new ArgumentOutOfRangeException(nameof(value), "MaxWidth must be 0 or greater.");
-    /// <exception cref="ArgumentOutOfRangeException">The value is negative.</exception>
             SetValue(MaxWidthProperty, value);
         }
     }
@@ -321,6 +321,7 @@ public abstract class FrameworkElement : UIElement, IDisposable
     /// <summary>
     /// Gets or sets the maximum height in DIPs; the default is no bound.
     /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">The value is negative.</exception>
     public double MaxHeight
     {
         get => GetValue(MaxHeightProperty);
@@ -328,7 +329,6 @@ public abstract class FrameworkElement : UIElement, IDisposable
         {
             if (value < 0)
                 throw new ArgumentOutOfRangeException(nameof(value), "MaxHeight must be 0 or greater.");
-    /// <exception cref="ArgumentOutOfRangeException">The value is negative.</exception>
             SetValue(MaxHeightProperty, value);
         }
     }
@@ -385,6 +385,9 @@ public abstract class FrameworkElement : UIElement, IDisposable
     /// <returns>The DPI value.</returns>
     public uint GetDpi() => GetDpiCached();
 
+    /// <summary>
+    /// Gets the theme in effect for this element.
+    /// </summary>
     protected Theme Theme => ThemeInternal;
 
     internal Theme ThemeInternal
@@ -392,9 +395,6 @@ public abstract class FrameworkElement : UIElement, IDisposable
         get
         {
             if (Application.IsRunning)
-    /// <summary>
-    /// Gets the theme in effect for this element.
-    /// </summary>
             {
                 if (GetValue(ThemeProperty) is null)
                 {
@@ -415,6 +415,9 @@ public abstract class FrameworkElement : UIElement, IDisposable
         set => SetValue(ThemeProperty, value);
     }
 
+    /// <summary>
+    /// Hides the tooltip, releases bindings and calls <see cref="OnDispose"/>; later calls do nothing.
+    /// </summary>
     public void Dispose()
     {
         if (_disposed)
@@ -422,9 +425,6 @@ public abstract class FrameworkElement : UIElement, IDisposable
             return;
         }
 
-    /// <summary>
-    /// Hides the tooltip, releases bindings and calls <see cref="OnDispose"/>; later calls do nothing.
-    /// </summary>
         _disposed = true;
 
         HideToolTip();

@@ -226,13 +226,14 @@ public abstract class ChartViewBase : Control, IChartView
 
     /// <summary>Occurs when the pointer goes down over a chart point, reporting the closest one; obsolete, use <see cref="DataPointerDown"/> instead.</summary>
     [Obsolete("Use DataPointerDown.")]
+    [FluentExcluded("Obsolete; OnDataPointerDown replaces it")]
     public event ChartPointHandler? ChartPointPointerDown;
 
-    public event VisualElementsHandler? VisualElementsPointerDown;
     /// <summary>Occurs when the pointer goes down over one or more visual elements.</summary>
+    public event VisualElementsHandler? VisualElementsPointerDown;
 
-    protected abstract Chart CreateCoreChart();
     /// <summary>Creates the LiveCharts engine core for this chart kind.</summary>
+    protected abstract Chart CreateCoreChart();
 
     private void InitializeChartControl()
     {
@@ -244,15 +245,15 @@ public abstract class ChartViewBase : Control, IChartView
         _observer = new ChartObserver(ConfigureObserver, () => CoreChart?.Update());
     }
 
-    protected virtual ChartObserver ConfigureObserver(ChartObserver observe) =>
     /// <summary>Registers the collections and properties whose changes update the chart.</summary>
+    protected virtual ChartObserver ConfigureObserver(ChartObserver observe) =>
         observe
             .Collection(nameof(Series), () => Series)
             .Collection(nameof(VisualElements), () => VisualElements)
             .Property(nameof(Title), () => Title!);
 
-    protected void OnObservedChanged(string propertyName, object? value, bool isSeries = false)
     /// <summary>Re-observes <paramref name="value"/> for the named property and updates the chart; ignored before the chart is loaded.</summary>
+    protected void OnObservedChanged(string propertyName, object? value, bool isSeries = false)
     {
         if (_observer is null || !_loaded) return;
         _observer[propertyName].Observer.Initialize(value!);
@@ -261,16 +262,16 @@ public abstract class ChartViewBase : Control, IChartView
     }
 
     // ----- IChartView methods -----
-    public IEnumerable<ChartPoint> GetPointsAt(
     /// <summary>Gets the chart points hit by the given point, resolving <see cref="FindingStrategy.Automatic"/> from the series.</summary>
+    public IEnumerable<ChartPoint> GetPointsAt(
         LvcPointD point, FindingStrategy strategy = FindingStrategy.Automatic, FindPointFor findPointFor = FindPointFor.HoverEvent)
     {
         if (strategy == FindingStrategy.Automatic) strategy = CoreChart.Series.GetFindingStrategy();
         return CoreChart.Series.SelectMany(series => series.FindHitPoints(CoreChart, new(point), strategy, findPointFor));
     }
 
-    public IEnumerable<IChartElement> GetVisualsAt(LvcPointD point) =>
     /// <summary>Gets the visual elements hit by the given point.</summary>
+    public IEnumerable<IChartElement> GetVisualsAt(LvcPointD point) =>
         CoreChart.VisualElements.SelectMany(visual => ((VisualElement)visual).IsHitBy(CoreChart, new(point)));
 
     void IChartView.OnDataPointerDown(IEnumerable<ChartPoint> points, LvcPoint pointer)

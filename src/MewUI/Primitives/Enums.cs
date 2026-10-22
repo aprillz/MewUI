@@ -110,6 +110,9 @@ public enum FontWeight
 /// <summary>
 /// Font style values.
 /// </summary>
+/// <remarks>
+/// Oblique, the slanted upright a family may carry beside a true italic, has no value of its own; a slanted face is requested as <see cref="Italic"/>.
+/// </remarks>
 public enum FontStyle
 {
     /// <summary>Upright.</summary>
@@ -123,9 +126,6 @@ public enum FontStyle
 /// </summary>
 public enum Orientation
 {
-/// <remarks>
-/// Oblique, the slanted upright a family may carry beside a true italic, has no value of its own; a slanted face is requested as <see cref="Italic"/>.
-/// </remarks>
     /// <summary>Horizontal layout.</summary>
     Horizontal,
     /// <summary>Vertical layout.</summary>
@@ -137,10 +137,15 @@ public enum Orientation
 /// </summary>
 public enum TextAlignment
 {
+    /// <summary>Align to the left (or top).</summary>
     Left,
+    /// <summary>Align to the center.</summary>
     Center,
+    /// <summary>Align to the right (or bottom).</summary>
     Right,
+    /// <summary>Align to the top; the same value as <see cref="Left"/>.</summary>
     Top = Left,
+    /// <summary>Align to the bottom; the same value as <see cref="Right"/>.</summary>
     Bottom = Right
 }
 
@@ -149,16 +154,14 @@ public enum TextAlignment
 /// </summary>
 public enum TextWrapping
 {
+    /// <summary>Text stays on one line and overflows.</summary>
     NoWrap,
-    /// <summary>Align to the left (or top).</summary>
+    /// <summary>Text breaks at word boundaries, and inside a word wider than the line.</summary>
     Wrap,
-    /// <summary>Align to the center.</summary>
+    /// <summary>Text breaks at word boundaries only; a word wider than the line overflows.</summary>
     WrapWithOverflow
-    /// <summary>Align to the right (or bottom).</summary>
 }
-    /// <summary>Align to the top; the same value as <see cref="Left"/>.</summary>
 
-    /// <summary>Align to the bottom; the same value as <see cref="Right"/>.</summary>
 /// <summary>
 /// Text trimming options for text that overflows its bounds.
 /// </summary>
@@ -167,9 +170,6 @@ public enum TextTrimming
     /// <summary>Text is not trimmed (may overflow bounds).</summary>
     None,
 
-    /// <summary>Text stays on one line and overflows.</summary>
     /// <summary>Text is trimmed at character boundary with an ellipsis (…).</summary>
-    /// <summary>Text breaks at word boundaries, and inside a word wider than the line.</summary>
     CharacterEllipsis,
-    /// <summary>Text breaks at word boundaries only; a word wider than the line overflows.</summary>
 }

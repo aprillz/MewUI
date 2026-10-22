@@ -191,9 +191,9 @@ public partial class Button : CommandSourceControl
     /// when <see cref="Window.RequerySuggested"/> is called; a condition that changes on its own must be
     /// pushed with one of those, or expressed as a binding to <see cref="UIElement.IsEnabled"/> instead.
     /// </remarks>
+    [FluentExcluded("Use Command for enablement")]
     public Func<bool>? CanClick
     {
-    [FluentExcluded("Use Command for enablement")]
         get;
         set
         {

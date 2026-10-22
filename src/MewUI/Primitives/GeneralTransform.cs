@@ -10,9 +10,9 @@ public abstract class GeneralTransform
     /// Transforms a point from the source coordinate space to the target coordinate space.
     /// </summary>
     /// <param name="point">The point to transform.</param>
+    /// <exception cref="InvalidOperationException">The transform cannot map points, such as the inverse of a zero scale.</exception>
     public abstract Point Transform(Point point);
 
-    /// <exception cref="InvalidOperationException">The transform cannot map points, such as the inverse of a zero scale.</exception>
     /// <summary>
     /// Transforms a rectangle and returns the axis-aligned bounding box of the result.
     /// </summary>

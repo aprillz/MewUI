@@ -193,18 +193,18 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
     public TextViewExtensionPipeline Extensions { get; }
 
     /// <summary>Raised after the document content changed or the document was replaced.</summary>
+    [FluentExcluded("Text view host event")]
     public event Action<ITextViewHost>? DocumentChanged;
-    public IReadOnlyList<TextLineLayout> VisibleTextLines
     /// <summary>Gets the line layouts currently materialized.</summary>
+    public IReadOnlyList<TextLineLayout> VisibleTextLines
         => _view?.MaterializedLines ?? Array.Empty<TextLineLayout>();
-    public Rect TextViewportBounds => _contentBounds;
     /// <summary>Gets the bounds the text is drawn in, in local coordinates.</summary>
+    public Rect TextViewportBounds => _contentBounds;
 
     internal int MaterializedLineCount => _view?.MaterializedLines.Count ?? 0;
     internal int MaterializedCharacterCount
         => _view?.MaterializedLines.Sum(static line => line.LogicalLine.Length) ?? 0;
     internal int MaterializedVisualLineCount
-    [FluentExcluded("Text view host event")]
         => _view?.MaterializedLines.Sum(static line => line.VisualLines.Count) ?? 0;
     internal bool IsVerticalScrollBarVisible => _verticalScrollBar.IsVisible;
     internal (double Value, double Maximum) VerticalScrollBarRange
@@ -638,9 +638,11 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
     }
 
     /// <inheritdoc/>
+    [FluentExcluded("Text view host event")]
     public event Action<ITextViewHost, int>? LineConstructionStarting;
 
     /// <inheritdoc/>
+    [FluentExcluded("Text view host event")]
     public event Action<ITextViewHost>? LinesChanged;
 
     /// <inheritdoc/>
@@ -651,11 +653,9 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
         InvalidateVisual();
     }
 
-    [FluentExcluded("Text view host event")]
     /// <inheritdoc/>
     public double ExtentHeight
     {
-    [FluentExcluded("Text view host event")]
         get
         {
             EnsureView();
@@ -1278,6 +1278,7 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
     public Point ScrollOffset => new(_horizontalOffset, _verticalOffset);
 
     /// <inheritdoc/>
+    [FluentExcluded("Text view host event")]
     public event Action<ITextViewHost>? ScrollOffsetChanged;
 
     /// <inheritdoc/>
@@ -1291,7 +1292,6 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
         SetVerticalOffset(
             TextViewScrolling.ResolveOffset(
                 _verticalOffset, _contentBounds.Height, documentRect.Y, documentRect.Height),
-    [FluentExcluded("Text view host event")]
             false);
         if (!Wrap)
         {

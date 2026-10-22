@@ -199,13 +199,13 @@ public abstract partial class Element : MewObject
     /// <see cref="Parent"/> directly.
     /// </summary>
     /// <param name="child">The child to attach.</param>
+    /// <exception cref="InvalidOperationException">The child already has a different parent.</exception>
     protected void AttachChild(Element child)
     {
         ArgumentNullException.ThrowIfNull(child);
 
         if (child.Parent == this)
         {
-    /// <exception cref="InvalidOperationException">The child already has a different parent.</exception>
             return;
         }
 
@@ -242,13 +242,13 @@ public abstract partial class Element : MewObject
     /// its visual <see cref="Parent"/>.
     /// </summary>
     /// <param name="child">The element to own logically.</param>
+    /// <exception cref="InvalidOperationException">The child is this element, already has a different logical parent, or is a logical ancestor of this element.</exception>
     protected void AttachLogicalChild(Element child)
     {
         ArgumentNullException.ThrowIfNull(child);
 
         if (ReferenceEquals(child, this))
         {
-    /// <exception cref="InvalidOperationException">The child is this element, already has a different logical parent, or is a logical ancestor of this element.</exception>
             throw new InvalidOperationException("An element cannot be its own logical child.");
         }
 
@@ -334,13 +334,13 @@ public abstract partial class Element : MewObject
     /// </summary>
     /// <param name="candidate">The proposed logical child; null is always valid.</param>
     /// <param name="allowTransfer">True when the caller adopts owned elements via <see cref="DetachFromCurrentLogicalOwner"/>.</param>
+    /// <exception cref="InvalidOperationException">The candidate is rejected for one of the reasons above.</exception>
     protected void ValidateLogicalChild(Element? candidate, bool allowTransfer = false)
     {
         if (candidate == null)
         {
             return;
         }
-    /// <exception cref="InvalidOperationException">The candidate is rejected for one of the reasons above.</exception>
 
         if (ReferenceEquals(candidate, this))
         {
@@ -908,13 +908,13 @@ public abstract partial class Element : MewObject
     /// Returns a transform from this element's coordinate space to the specified ancestor's coordinate space,
     /// including any transform an element between them applies to its children.
     /// </summary>
+    /// <exception cref="InvalidOperationException"><paramref name="ancestor"/> is not an ancestor of this element.</exception>
     public GeneralTransform TransformToAncestor(Element ancestor)
     {
         ArgumentNullException.ThrowIfNull(ancestor);
 
         if (ancestor == this)
         {
-    /// <exception cref="InvalidOperationException"><paramref name="ancestor"/> is not an ancestor of this element.</exception>
             return IdentityGeneralTransform.Instance;
         }
 
@@ -931,11 +931,11 @@ public abstract partial class Element : MewObject
     /// <summary>
     /// Returns a transform from this element's coordinate space to the specified descendant's coordinate space.
     /// </summary>
+    /// <exception cref="InvalidOperationException"><paramref name="descendant"/> is not a descendant of this element.</exception>
     public GeneralTransform TransformToDescendant(Element descendant)
     {
         ArgumentNullException.ThrowIfNull(descendant);
 
-    /// <exception cref="InvalidOperationException"><paramref name="descendant"/> is not a descendant of this element.</exception>
         if (descendant == this)
         {
             return IdentityGeneralTransform.Instance;
@@ -954,11 +954,11 @@ public abstract partial class Element : MewObject
     /// including any transform an element between them applies to its children.
     /// Both elements must be in the same visual tree.
     /// </summary>
+    /// <exception cref="InvalidOperationException">The elements are not in the same visual tree.</exception>
     public GeneralTransform TransformToVisual(Element visual)
     {
         ArgumentNullException.ThrowIfNull(visual);
 
-    /// <exception cref="InvalidOperationException">The elements are not in the same visual tree.</exception>
         if (visual == this)
         {
             return IdentityGeneralTransform.Instance;
@@ -978,12 +978,14 @@ public abstract partial class Element : MewObject
     /// <summary>
     /// Converts a point in this element's coordinate space to the specified element's coordinate space.
     /// </summary>
+    /// <exception cref="InvalidOperationException">The elements are not in the same visual tree.</exception>
     public Point TranslatePoint(Point point, Element relativeTo)
         => TransformToVisual(relativeTo).Transform(point);
 
     /// <summary>
     /// Converts a rectangle in this element's coordinate space to the specified element's coordinate space.
     /// </summary>
+    /// <exception cref="InvalidOperationException">The elements are not in the same visual tree.</exception>
     public Rect TranslateRect(Rect rect, Element relativeTo)
         => TransformToVisual(relativeTo).TransformBounds(rect);
 
@@ -1080,14 +1082,12 @@ public abstract partial class Element : MewObject
             // whole inherited epoch, which would destroy the remaining old entries.
             oldValues.Clear();
             for (int i = 0; i < inheritedIds.Count; i++)
-    /// <exception cref="InvalidOperationException">The elements are not in the same visual tree.</exception>
             {
                 var property = MewPropertyRegistry.GetProperty(inheritedIds[i]);
                 oldValues.Add(property != null ? element.PropertyStore.GetBoxedValue(property) : null);
             }
 
             for (int i = 0; i < inheritedIds.Count; i++)
-    /// <exception cref="InvalidOperationException">The elements are not in the same visual tree.</exception>
             {
                 var property = MewPropertyRegistry.GetProperty(inheritedIds[i]);
                 if (property == null)
