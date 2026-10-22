@@ -14,12 +14,14 @@ public static class SkiaInterop
     private static readonly ConcurrentDictionary<string, ISkiaInteropProvider> _providers
         = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Registers <paramref name="provider"/> for its backend identifier, replacing any provider registered for it before.</summary>
     public static void Register(ISkiaInteropProvider provider)
     {
         ArgumentNullException.ThrowIfNull(provider);
         _providers[provider.BackendIdentifier] = provider;
     }
 
+    /// <summary>Gets the provider registered for <paramref name="backendIdentifier"/>; returns false when there is none.</summary>
     public static bool TryResolve(string backendIdentifier, out ISkiaInteropProvider provider)
     {
         if (_providers.TryGetValue(backendIdentifier, out var found))

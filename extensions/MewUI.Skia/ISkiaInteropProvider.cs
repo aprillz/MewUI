@@ -9,9 +9,9 @@ namespace Aprillz.MewUI.Skia;
 /// </summary>
 public interface ISkiaInteropProvider
 {
-    /// <summary>Backend identifier this provider bridges to (matches <see cref="IGraphicsFactory.Backend"/>).</summary>
+    /// <summary>Gets the backend identifier this provider bridges to, which matches <see cref="IGraphicsFactory.Backend"/>.</summary>
     string BackendIdentifier { get; }
 
-    /// <summary>Creates a surface host bound to the given factory. May return <see langword="null"/> when the factory is not compatible at runtime (e.g. driver missing an extension).</summary>
+    /// <summary>Creates a surface host bound to <paramref name="factory"/>, or returns null when the factory is not compatible at runtime (for example a driver missing an extension).</summary>
     ISkiaSurfaceHost? TryCreateSurfaceHost(IGraphicsFactory factory);
 }

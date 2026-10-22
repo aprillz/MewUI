@@ -30,21 +30,21 @@ public class SkiaCanvasView : FrameworkElement, IPixelBufferSource
     private string? _gpuDemotionReason;
     private IGpuInteropInvalidationSource? _gpuInteropInvalidationSource;
 
-    /// <summary>Fires per render pass with the Skia canvas already sized to the current bounds.</summary>
+    /// <summary>Occurs on each render pass with the Skia canvas sized to the current bounds.</summary>
     public event Action<SKCanvas, SKImageInfo>? PaintSurface;
 
-    /// <summary>
-    /// When <see langword="true"/> (default), the control invalidates itself at the end of each
-    /// render so animated Skia content keeps repainting even when MewUI's AnimationManager flips
-    /// the global render loop back to OnRequest mode.
-    /// </summary>
+    /// <summary>Gets or sets whether the control invalidates itself at the end of each render so animated Skia content keeps
+    /// repainting without a render request; the default is true.</summary>
     public bool ContinuousAnimation { get; set; } = true;
 
+    /// <summary>Gets whether rendering still goes through the backend's surface host rather than the CPU upload path.</summary>
     public bool IsGpuPath => !_gpuDemoted;
 
-    /// <summary>Pre-paint clear color. <see langword="null"/> = Clear(Transparent). Opaque (A=255) unlocks fast present (GDI SRCCOPY).</summary>
+    /// <summary>Gets or sets the color the canvas is cleared with before painting; null clears to transparent, and a fully
+    /// opaque color allows the faster non-blended present.</summary>
     public Color? Background { get; set; }
 
+    /// <summary>Gets a description of the active render path for diagnostics.</summary>
     public string PathDescription => _gpuDemoted
         ? (_gpuDemotionReason is null
             ? "CPU upload (Skia → byte[] → backend)"
