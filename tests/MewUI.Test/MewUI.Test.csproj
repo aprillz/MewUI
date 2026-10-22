@@ -40,3 +40,5 @@
   </ItemGroup>
 
 </Project>
+    <!-- The markup audit library targets net10.0 only; the fluent audit tests are compiled there. -->
+    <ProjectReference Include="..\..\tools\MewUI.MarkupAudit\MewUI.MarkupAudit.Core\MewUI.MarkupAudit.Core.csproj" />
