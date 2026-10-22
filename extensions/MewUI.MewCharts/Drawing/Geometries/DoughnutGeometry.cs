@@ -4,14 +4,12 @@ using LiveChartsCore.Drawing;
 
 namespace Aprillz.MewUI.MewCharts.Drawing.Geometries;
 
-/// <summary>
-/// A pie/doughnut slice. The angular arcs are approximated by short line segments because the
-/// MewUI path API has no angle-sweep arc primitive; segment count scales with the sweep.
-/// </summary>
+/// <summary>A pie or doughnut slice.</summary>
 public class DoughnutGeometry : BaseDoughnutGeometry, IDrawnElement<MewDrawingContext>
 {
     private const double DegToRad = Math.PI / 180.0;
 
+    /// <summary>Draws the slice with the active paint, pushed outward from the center by its push-out distance.</summary>
     public virtual void Draw(MewDrawingContext context)
     {
         var centerX = CenterX;

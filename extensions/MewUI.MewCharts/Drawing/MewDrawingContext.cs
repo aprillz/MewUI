@@ -8,14 +8,12 @@ using LiveChartsCore.Painting;
 
 namespace Aprillz.MewUI.MewCharts.Drawing;
 
-/// <summary>
-/// LiveCharts <see cref="DrawingContext"/> that renders onto a MewUI <see cref="IGraphicsContext"/>.
-/// Replaces the SkiaSharp drawing backend with no SkiaSharp dependency.
-/// </summary>
+/// <summary>The LiveCharts <see cref="DrawingContext"/> that renders chart elements onto a MewUI <see cref="IGraphicsContext"/>.</summary>
 public sealed class MewDrawingContext : DrawingContext
 {
     private float _savedAlpha = 1f;
 
+    /// <summary>Initializes a drawing context for one frame of <paramref name="motionCanvas"/> on <paramref name="graphics"/>, with <paramref name="background"/> as the frame background and <paramref name="factory"/> for resources.</summary>
     public MewDrawingContext(CoreMotionCanvas motionCanvas, IGraphicsContext graphics, Color background, IGraphicsFactory factory)
     {
         MotionCanvas = motionCanvas;
@@ -24,16 +22,16 @@ public sealed class MewDrawingContext : DrawingContext
         Factory = factory;
     }
 
-    /// <summary>The owning motion canvas.</summary>
+    /// <summary>Gets the motion canvas being drawn.</summary>
     public CoreMotionCanvas MotionCanvas { get; }
 
-    /// <summary>The MewUI graphics context for the current frame.</summary>
+    /// <summary>Gets the graphics context of the current frame.</summary>
     public IGraphicsContext G { get; }
 
-    /// <summary>The graphics factory for the current backend.</summary>
+    /// <summary>Gets the graphics factory of the rendering backend.</summary>
     public IGraphicsFactory Factory { get; }
 
-    /// <summary>Frame background color.</summary>
+    /// <summary>Gets the frame background color.</summary>
     public Color Background { get; }
 
     // Resolved paint state, set by the active MewPaint in OnPaintStarted and read by geometry Draw helpers.
@@ -47,11 +45,14 @@ public sealed class MewDrawingContext : DrawingContext
     internal Brush? ActiveBrush { get; set; }
     internal Pen? ActivePen { get; set; }
 
-    // Current draw area in local coords; gradient paints map their relative (0..1) coordinates
-    // to this. Set to the element bounds by the host and to the active clip zone while drawing.
+    /// <summary>
+    /// Gets or sets the draw area, in local coordinates, that gradient paints map their relative (0..1)
+    /// coordinates to; the host sets it to the element bounds and it narrows to the active clip zone while drawing.
+    /// </summary>
     public Rect DrawArea { get; set; }
     private Rect _previousDrawArea;
 
+    /// <summary>Ignores the log text; the MewUI backend has no on-canvas diagnostics overlay.</summary>
     public override void LogOnCanvas(string log) { /* diagnostics overlay, not implemented yet */ }
 
     internal override void OnBeginDraw()
@@ -182,6 +183,7 @@ public sealed class MewDrawingContext : DrawingContext
 
     private bool IsStroke => ActiveStyle.HasFlag(PaintStyle.Stroke);
 
+    /// <summary>Fills or strokes the rectangle with the active paint.</summary>
     public void DrawRectangle(Rect rect)
     {
         if (IsStroke)
@@ -193,6 +195,7 @@ public sealed class MewDrawingContext : DrawingContext
         else G.FillRectangle(rect, ActiveColor);
     }
 
+    /// <summary>Fills or strokes the rounded rectangle with the active paint.</summary>
     public void DrawRoundedRectangle(Rect rect, double radiusX, double radiusY)
     {
         if (IsStroke)
@@ -204,6 +207,7 @@ public sealed class MewDrawingContext : DrawingContext
         else G.FillRoundedRectangle(rect, radiusX, radiusY, ActiveColor);
     }
 
+    /// <summary>Fills or strokes the ellipse inscribed in the bounds with the active paint.</summary>
     public void DrawEllipse(Rect bounds)
     {
         if (IsStroke)
@@ -215,12 +219,14 @@ public sealed class MewDrawingContext : DrawingContext
         else G.FillEllipse(bounds, ActiveColor);
     }
 
+    /// <summary>Strokes a line between the two points with the active paint.</summary>
     public void DrawLine(Point start, Point end)
     {
         if (ActivePen is not null) G.DrawLine(start, end, ActivePen);
         else G.DrawLine(start, end, ActiveColor, ActiveStrokeThickness, pixelSnap: ActivePixelSnap);
     }
 
+    /// <summary>Fills or strokes the path with the active paint.</summary>
     public void DrawPath(PathGeometry path)
     {
         if (IsStroke)

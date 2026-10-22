@@ -5,20 +5,16 @@ using LiveChartsCore.Painting;
 
 namespace Aprillz.MewUI.MewCharts.Painting;
 
-/// <summary>
-/// Base <see cref="Paint"/> for the MewUI drawing backend. Subclasses resolve their visual
-/// state into <see cref="MewDrawingContext"/> in <c>OnPaintStarted</c>.
-/// </summary>
+/// <summary>Base <see cref="Paint"/> for the MewUI drawing backend, whose subclasses write their resolved state into the <see cref="MewDrawingContext"/> when painting starts.</summary>
 public abstract class MewPaint : Paint
 {
+    /// <summary>Initializes the paint with the given stroke thickness and miter limit.</summary>
     protected MewPaint(float strokeThickness = 1f, float strokeMiter = 0f)
         : base(strokeThickness, strokeMiter)
     { }
 
-    /// <summary>
-    /// Gets or sets whether axis-aligned strokes should be aligned to device pixels.
-    /// Keep this disabled for data series; enable it for chart frames, axes and grid lines.
-    /// </summary>
+    /// <summary>Gets or sets whether axis-aligned strokes are aligned to device pixels; the default is false.</summary>
+    /// <remarks>Keep it disabled for data series and enable it for chart frames, axes and grid lines.</remarks>
     public bool PixelSnap { get; set; }
 
     internal override void OnPaintFinished(DrawingContext drawingContext, IDrawnElement? drawnElement) { }

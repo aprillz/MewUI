@@ -6,6 +6,7 @@ namespace Aprillz.MewUI.MewCharts.Drawing.Geometries;
 /// <summary>A text label geometry (axis labels, data labels, titles), honoring <see cref="Padding"/>.</summary>
 public class LabelGeometry : BaseLabelGeometry, IDrawnElement<MewDrawingContext>
 {
+    /// <summary>Measures the text plus padding, rotated by the label rotation.</summary>
     public override LvcSize Measure()
     {
         var text = MewChartsText.Measure(Text, TextSize);
@@ -14,6 +15,7 @@ public class LabelGeometry : BaseLabelGeometry, IDrawnElement<MewDrawingContext>
         return new LvcSize(width, height).GetRotatedSize(RotateTransform);
     }
 
+    /// <summary>Draws the text aligned around the label position and inset by its padding; empty text draws nothing.</summary>
     public virtual void Draw(MewDrawingContext context)
     {
         if (string.IsNullOrEmpty(Text)) return;

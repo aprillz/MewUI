@@ -15,11 +15,7 @@ using LiveChartsCore.VisualElements;
 
 namespace Aprillz.MewUI.MewCharts.Views;
 
-/// <summary>
-/// Base MewUI chart control. Hosts a <see cref="CoreMotionCanvas"/> and renders it through a
-/// <see cref="MewDrawingContext"/> each frame. Implements the LiveCharts <see cref="IChartView"/>
-/// surface; the SkiaSharp view shared code, ported to MewUI.
-/// </summary>
+/// <summary>Base chart control that hosts a LiveCharts <see cref="CoreMotionCanvas"/> and implements <see cref="IChartView"/>.</summary>
 public abstract class ChartViewBase : Control, IChartView
 {
     private ChartObserver? _observer;
@@ -29,12 +25,13 @@ public abstract class ChartViewBase : Control, IChartView
 
     static ChartViewBase() => LiveChartsMewUI.EnsureInitialized();
 
+    /// <summary>Initializes the control and creates its engine core via <see cref="CreateCoreChart"/>.</summary>
     protected ChartViewBase() => InitializeChartControl();
 
-    /// <inheritdoc cref="IDrawnView.CoreCanvas"/>
+    /// <summary>Gets the motion canvas that holds the chart's drawn elements.</summary>
     public CoreMotionCanvas CoreCanvas { get; } = new();
 
-    /// <inheritdoc cref="IChartView.CoreChart"/>
+    /// <summary>Gets the LiveCharts engine core behind this view.</summary>
     public Chart CoreChart { get; private set; } = null!;
 
     // Background / FontFamily / FontSize / Foreground are inherited from Control (MewProperty,
@@ -52,118 +49,157 @@ public abstract class ChartViewBase : Control, IChartView
 
     // Bindable view state (DependencyProperty-equivalent MewProperties), matching the WPF/Avalonia
     // view surface so these can be bound/styled like the rest of the chart properties.
+    /// <summary>The theme applied to the chart; null (the default) uses the global LiveCharts theme.</summary>
     public static readonly MewProperty<LiveChartsCore.Themes.Theme?> ChartThemeProperty =
         MewProperty<LiveChartsCore.Themes.Theme?>.Register<ChartViewBase>(nameof(ChartTheme), null,
             changed: (owner, _, _) => owner.CoreChart?.Update());
 
+    /// <summary>Gets or sets the theme applied to the chart; null (the default) uses the global LiveCharts theme.</summary>
     public LiveChartsCore.Themes.Theme? ChartTheme { get => GetValue(ChartThemeProperty); set => SetValue(ChartThemeProperty, value); }
 
+    /// <summary>The tooltip shown for hovered points; null (the default) uses the theme's default tooltip.</summary>
     public static readonly MewProperty<IChartTooltip?> TooltipProperty =
         MewProperty<IChartTooltip?>.Register<ChartViewBase>(nameof(Tooltip), null);
 
+    /// <summary>Gets or sets the tooltip shown for hovered points; null (the default) uses the theme's default tooltip.</summary>
     public IChartTooltip? Tooltip { get => GetValue(TooltipProperty); set => SetValue(TooltipProperty, value); }
 
+    /// <summary>The legend listing the series; null (the default) uses the theme's default legend.</summary>
     public static readonly MewProperty<IChartLegend?> LegendProperty =
         MewProperty<IChartLegend?>.Register<ChartViewBase>(nameof(Legend), null,
             changed: (owner, _, _) => owner.CoreChart?.Update());
 
+    /// <summary>Gets or sets the legend listing the series; null (the default) uses the theme's default legend.</summary>
     public IChartLegend? Legend { get => GetValue(LegendProperty); set => SetValue(LegendProperty, value); }
 
+    /// <summary>The minimum interval between chart updates; defaults to <see cref="LiveChartsSettings.UpdateThrottlingTimeout"/>.</summary>
     public static readonly MewProperty<TimeSpan> UpdaterThrottlerProperty =
         MewProperty<TimeSpan>.Register<ChartViewBase>(nameof(UpdaterThrottler), LiveCharts.DefaultSettings.UpdateThrottlingTimeout);
 
+    /// <summary>Gets or sets the minimum interval between chart updates; defaults to <see cref="LiveChartsSettings.UpdateThrottlingTimeout"/>.</summary>
     public TimeSpan UpdaterThrottler { get => GetValue(UpdaterThrottlerProperty); set => SetValue(UpdaterThrottlerProperty, value); }
 
+    /// <summary>Whether the chart updates itself when its data or properties change; the default is true.</summary>
     public static readonly MewProperty<bool> AutoUpdateEnabledProperty =
         MewProperty<bool>.Register<ChartViewBase>(nameof(AutoUpdateEnabled), true);
 
+    /// <summary>Gets or sets whether the chart updates itself when its data or properties change; the default is true.</summary>
     public bool AutoUpdateEnabled { get => GetValue(AutoUpdateEnabledProperty); set => SetValue(AutoUpdateEnabledProperty, value); }
 
     // SyncContext stays a plain property: it needs a per-instance default lock object, which a
     // shared MewProperty default value cannot provide.
+    /// <summary>Gets or sets the object locked while the chart measures and draws; defaults to a per-instance lock object.</summary>
     public object SyncContext { get => field ??= new(); set { field = value; CoreCanvas.Sync = value; CoreChart?.Update(); } }
 
     // Bindable MewProperty surface (the LiveCharts UIProperty equivalents).
+    /// <summary>The series plotted by the chart; the default is empty.</summary>
     public static readonly MewProperty<IEnumerable<ISeries>> SeriesProperty =
         MewProperty<IEnumerable<ISeries>>.Register<ChartViewBase>(nameof(Series), Array.Empty<ISeries>(),
             changed: (owner, _, value) => owner.OnObservedChanged(nameof(Series), value, isSeries: true));
 
+    /// <summary>Gets or sets the series plotted by the chart; the default is empty.</summary>
     public IEnumerable<ISeries> Series { get => GetValue(SeriesProperty); set => SetValue(SeriesProperty, value); }
 
+    /// <summary>The visual elements drawn over the chart; the default is empty.</summary>
     public static readonly MewProperty<IEnumerable<IChartElement>> VisualElementsProperty =
         MewProperty<IEnumerable<IChartElement>>.Register<ChartViewBase>(nameof(VisualElements), Array.Empty<IChartElement>(),
             changed: (owner, _, value) => owner.OnObservedChanged(nameof(VisualElements), value));
 
+    /// <summary>Gets or sets the visual elements drawn over the chart; the default is empty.</summary>
     public IEnumerable<IChartElement> VisualElements { get => GetValue(VisualElementsProperty); set => SetValue(VisualElementsProperty, value); }
 
+    /// <summary>The title element drawn above the plot; null (the default) draws no title.</summary>
     public static readonly MewProperty<IChartElement?> TitleProperty =
         MewProperty<IChartElement?>.Register<ChartViewBase>(nameof(Title), null,
             changed: (owner, _, value) => owner.OnObservedChanged(nameof(Title), value));
 
+    /// <summary>Gets or sets the title element drawn above the plot; null (the default) draws no title.</summary>
     public IChartElement? Title { get => GetValue(TitleProperty); set => SetValue(TitleProperty, value); }
 
+    /// <summary>The margin between the control bounds and the plot area; null (the default) lets the chart compute it.</summary>
     public static readonly MewProperty<Margin?> DrawMarginProperty =
         MewProperty<Margin?>.Register<ChartViewBase>(nameof(DrawMargin), null,
             changed: (owner, _, _) => owner.CoreChart?.Update());
 
+    /// <summary>Gets or sets the margin between the control bounds and the plot area; null (the default) lets the chart compute it.</summary>
     public Margin? DrawMargin { get => GetValue(DrawMarginProperty); set => SetValue(DrawMarginProperty, value); }
 
+    /// <summary>The legend position; defaults to <see cref="LiveChartsSettings.LegendPosition"/>.</summary>
     public static readonly MewProperty<LegendPosition> LegendPositionProperty =
         MewProperty<LegendPosition>.Register<ChartViewBase>(nameof(LegendPosition), LiveCharts.DefaultSettings.LegendPosition,
             changed: (owner, _, _) => owner.CoreChart?.Update());
 
+    /// <summary>Gets or sets the legend position; defaults to <see cref="LiveChartsSettings.LegendPosition"/>.</summary>
     public LegendPosition LegendPosition { get => GetValue(LegendPositionProperty); set => SetValue(LegendPositionProperty, value); }
 
+    /// <summary>The tooltip position relative to the hovered points; defaults to <see cref="LiveChartsSettings.TooltipPosition"/>.</summary>
     public static readonly MewProperty<TooltipPosition> TooltipPositionProperty =
         MewProperty<TooltipPosition>.Register<ChartViewBase>(nameof(TooltipPosition), LiveCharts.DefaultSettings.TooltipPosition,
             changed: (owner, _, _) => owner.CoreChart?.Update());
 
+    /// <summary>Gets or sets the tooltip position relative to the hovered points; defaults to <see cref="LiveChartsSettings.TooltipPosition"/>.</summary>
     public TooltipPosition TooltipPosition { get => GetValue(TooltipPositionProperty); set => SetValue(TooltipPositionProperty, value); }
 
+    /// <summary>The paint for legend text; null uses the theme paint.</summary>
     public static readonly MewProperty<Paint?> LegendTextPaintProperty =
         MewProperty<Paint?>.Register<ChartViewBase>(nameof(LegendTextPaint), LiveCharts.DefaultSettings.LegendTextPaint,
             changed: OnTextPaintChanged);
 
+    /// <summary>Gets or sets the paint for legend text; null uses the theme paint.</summary>
     public Paint? LegendTextPaint { get => GetValue(LegendTextPaintProperty); set => SetValue(LegendTextPaintProperty, value); }
 
+    /// <summary>The paint for the legend background; null uses the theme paint.</summary>
     public static readonly MewProperty<Paint?> LegendBackgroundPaintProperty =
         MewProperty<Paint?>.Register<ChartViewBase>(nameof(LegendBackgroundPaint), LiveCharts.DefaultSettings.LegendBackgroundPaint,
             changed: (owner, _, _) => owner.CoreChart?.Update());
 
+    /// <summary>Gets or sets the paint for the legend background; null uses the theme paint.</summary>
     public Paint? LegendBackgroundPaint { get => GetValue(LegendBackgroundPaintProperty); set => SetValue(LegendBackgroundPaintProperty, value); }
 
+    /// <summary>The legend text size; a negative value (the default) uses the theme size.</summary>
     public static readonly MewProperty<double> LegendTextSizeProperty =
         MewProperty<double>.Register<ChartViewBase>(nameof(LegendTextSize), LiveCharts.DefaultSettings.LegendTextSize,
             changed: (owner, _, _) => owner.CoreChart?.Update());
 
+    /// <summary>Gets or sets the legend text size; a negative value (the default) uses the theme size.</summary>
     public double LegendTextSize { get => GetValue(LegendTextSizeProperty); set => SetValue(LegendTextSizeProperty, value); }
 
+    /// <summary>The paint for tooltip text; null uses the theme paint.</summary>
     public static readonly MewProperty<Paint?> TooltipTextPaintProperty =
         MewProperty<Paint?>.Register<ChartViewBase>(nameof(TooltipTextPaint), LiveCharts.DefaultSettings.TooltipTextPaint,
             changed: OnTextPaintChanged);
 
+    /// <summary>Gets or sets the paint for tooltip text; null uses the theme paint.</summary>
     public Paint? TooltipTextPaint { get => GetValue(TooltipTextPaintProperty); set => SetValue(TooltipTextPaintProperty, value); }
 
+    /// <summary>The paint for the tooltip background; null uses the theme paint.</summary>
     public static readonly MewProperty<Paint?> TooltipBackgroundPaintProperty =
         MewProperty<Paint?>.Register<ChartViewBase>(nameof(TooltipBackgroundPaint), LiveCharts.DefaultSettings.TooltipBackgroundPaint,
             changed: (owner, _, _) => owner.CoreChart?.Update());
 
+    /// <summary>Gets or sets the paint for the tooltip background; null uses the theme paint.</summary>
     public Paint? TooltipBackgroundPaint { get => GetValue(TooltipBackgroundPaintProperty); set => SetValue(TooltipBackgroundPaintProperty, value); }
 
+    /// <summary>The tooltip text size; a negative value (the default) uses the theme size.</summary>
     public static readonly MewProperty<double> TooltipTextSizeProperty =
         MewProperty<double>.Register<ChartViewBase>(nameof(TooltipTextSize), LiveCharts.DefaultSettings.TooltipTextSize,
             changed: (owner, _, _) => owner.CoreChart?.Update());
 
+    /// <summary>Gets or sets the tooltip text size; a negative value (the default) uses the theme size.</summary>
     public double TooltipTextSize { get => GetValue(TooltipTextSizeProperty); set => SetValue(TooltipTextSizeProperty, value); }
 
+    /// <summary>The duration of chart animations; defaults to <see cref="LiveChartsSettings.AnimationsSpeed"/>.</summary>
     public static readonly MewProperty<TimeSpan> AnimationsSpeedProperty =
         MewProperty<TimeSpan>.Register<ChartViewBase>(nameof(AnimationsSpeed), LiveCharts.DefaultSettings.AnimationsSpeed);
 
+    /// <summary>Gets or sets the duration of chart animations; defaults to <see cref="LiveChartsSettings.AnimationsSpeed"/>.</summary>
     public TimeSpan AnimationsSpeed { get => GetValue(AnimationsSpeedProperty); set => SetValue(AnimationsSpeedProperty, value); }
 
+    /// <summary>The easing function of chart animations; defaults to <see cref="LiveChartsSettings.EasingFunction"/>.</summary>
     public static readonly MewProperty<Func<float, float>?> EasingFunctionProperty =
         MewProperty<Func<float, float>?>.Register<ChartViewBase>(nameof(EasingFunction), LiveCharts.DefaultSettings.EasingFunction);
 
+    /// <summary>Gets or sets the easing function of chart animations; defaults to <see cref="LiveChartsSettings.EasingFunction"/>.</summary>
     public Func<float, float>? EasingFunction { get => GetValue(EasingFunctionProperty); set => SetValue(EasingFunctionProperty, value); }
 
     private static void OnTextPaintChanged(ChartViewBase owner, Paint? oldValue, Paint? newValue)
@@ -173,22 +209,30 @@ public abstract class ChartViewBase : Control, IChartView
     }
 
     // ----- events -----
+    /// <summary>Occurs before the chart is measured, at the start of an update.</summary>
     public event ChartEventHandler? Measuring;
 
+    /// <summary>Occurs when a chart update starts.</summary>
     public event ChartEventHandler? UpdateStarted;
 
+    /// <summary>Occurs when a chart update finishes.</summary>
     public event ChartEventHandler? UpdateFinished;
 
+    /// <summary>Occurs when the pointer goes down over one or more chart points.</summary>
     public event ChartPointsHandler? DataPointerDown;
 
+    /// <summary>Occurs when the set of hovered chart points changes.</summary>
     public event ChartPointHoverHandler? HoveredPointsChanged;
 
+    /// <summary>Occurs when the pointer goes down over a chart point, reporting the closest one; obsolete, use <see cref="DataPointerDown"/> instead.</summary>
     [Obsolete("Use DataPointerDown.")]
     public event ChartPointHandler? ChartPointPointerDown;
 
     public event VisualElementsHandler? VisualElementsPointerDown;
+    /// <summary>Occurs when the pointer goes down over one or more visual elements.</summary>
 
     protected abstract Chart CreateCoreChart();
+    /// <summary>Creates the LiveCharts engine core for this chart kind.</summary>
 
     private void InitializeChartControl()
     {
@@ -201,12 +245,14 @@ public abstract class ChartViewBase : Control, IChartView
     }
 
     protected virtual ChartObserver ConfigureObserver(ChartObserver observe) =>
+    /// <summary>Registers the collections and properties whose changes update the chart.</summary>
         observe
             .Collection(nameof(Series), () => Series)
             .Collection(nameof(VisualElements), () => VisualElements)
             .Property(nameof(Title), () => Title!);
 
     protected void OnObservedChanged(string propertyName, object? value, bool isSeries = false)
+    /// <summary>Re-observes <paramref name="value"/> for the named property and updates the chart; ignored before the chart is loaded.</summary>
     {
         if (_observer is null || !_loaded) return;
         _observer[propertyName].Observer.Initialize(value!);
@@ -216,6 +262,7 @@ public abstract class ChartViewBase : Control, IChartView
 
     // ----- IChartView methods -----
     public IEnumerable<ChartPoint> GetPointsAt(
+    /// <summary>Gets the chart points hit by the given point, resolving <see cref="FindingStrategy.Automatic"/> from the series.</summary>
         LvcPointD point, FindingStrategy strategy = FindingStrategy.Automatic, FindPointFor findPointFor = FindPointFor.HoverEvent)
     {
         if (strategy == FindingStrategy.Automatic) strategy = CoreChart.Series.GetFindingStrategy();
@@ -223,6 +270,7 @@ public abstract class ChartViewBase : Control, IChartView
     }
 
     public IEnumerable<IChartElement> GetVisualsAt(LvcPointD point) =>
+    /// <summary>Gets the visual elements hit by the given point.</summary>
         CoreChart.VisualElements.SelectMany(visual => ((VisualElement)visual).IsHitBy(CoreChart, new(point)));
 
     void IChartView.OnDataPointerDown(IEnumerable<ChartPoint> points, LvcPoint pointer)
@@ -260,10 +308,7 @@ public abstract class ChartViewBase : Control, IChartView
         if (_loaded) CoreChart?.Update();
     }
 
-    /// <summary>
-    /// Pointer position in the chart's coordinate space. Both <see cref="MouseEventArgs.GetPosition"/>
-    /// and the chart's <c>ControlSize</c> are in MewUI's DIP coordinates, so they map 1:1.
-    /// </summary>
+    /// <summary>Converts the pointer position to the chart's coordinate space, which is the control's DIP space.</summary>
     protected LvcPoint ToChartPoint(MouseEventArgs e)
     {
         var point = e.GetPosition(this);

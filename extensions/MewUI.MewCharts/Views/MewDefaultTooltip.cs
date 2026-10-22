@@ -14,7 +14,7 @@ namespace Aprillz.MewUI.MewCharts.Views;
 
 /// <summary>
 /// The default MewUI tooltip: a rounded panel listing the hovered points' series and values,
-/// positioned next to the pointer. (No wedge; simplified from the SkiaSharp tooltip.)
+/// positioned next to the pointer.
 /// </summary>
 public class MewDefaultTooltip : Container<RoundedRectangleGeometry>, IChartTooltip
 {
@@ -22,6 +22,7 @@ public class MewDefaultTooltip : Container<RoundedRectangleGeometry>, IChartTool
     private object? _themeId;
     private DrawnTask? _drawnTask;
 
+    /// <summary>Builds the tooltip content for the points, positions it next to them and adds it to the canvas.</summary>
     public virtual void Show(IEnumerable<ChartPoint> foundPoints, Chart chart)
     {
         var theme = chart.GetTheme();
@@ -52,6 +53,7 @@ public class MewDefaultTooltip : Container<RoundedRectangleGeometry>, IChartTool
         chart.Canvas.Invalidate();
     }
 
+    /// <summary>Fades the tooltip out and invalidates the canvas; a null chart is ignored.</summary>
     public virtual void Hide(Chart chart)
     {
         if (chart is null) return;
@@ -60,6 +62,7 @@ public class MewDefaultTooltip : Container<RoundedRectangleGeometry>, IChartTool
         chart.Canvas.Invalidate();
     }
 
+    /// <summary>Builds the layout listing each point's series miniature, name and value.</summary>
     protected virtual Layout<MewDrawingContext> GetLayout(IEnumerable<ChartPoint> foundPoints, Chart chart)
     {
         var theme = chart.GetTheme();
@@ -145,6 +148,7 @@ public class MewDefaultTooltip : Container<RoundedRectangleGeometry>, IChartTool
         return stackLayout;
     }
 
+    /// <summary>Applies the corner radius and the tooltip background paint from the view or the theme.</summary>
     protected virtual void Initialize(Chart chart)
     {
         Geometry.BorderRadius = new LvcPoint(6, 6);

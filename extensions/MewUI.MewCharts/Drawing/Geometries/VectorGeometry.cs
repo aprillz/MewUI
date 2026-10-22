@@ -5,18 +5,19 @@ using LiveChartsCore.Drawing.Segments;
 
 namespace Aprillz.MewUI.MewCharts.Drawing.Geometries;
 
-/// <summary>
-/// Base for path-based geometries (lines, areas). Builds a MewUI <see cref="PathGeometry"/>
-/// from the <see cref="BaseVectorGeometry.Commands"/> segments and paints it.
-/// </summary>
+/// <summary>Base class for path-based geometries (lines and areas) built from the <see cref="BaseVectorGeometry.Commands"/> segments.</summary>
 public abstract class VectorGeometry : BaseVectorGeometry, IDrawnElement<MewDrawingContext>
 {
+    /// <summary>Starts the path at the first segment according to the closing method.</summary>
     protected abstract void OnOpen(MewDrawingContext context, PathGeometry path, Segment segment);
 
+    /// <summary>Finishes the path after the last segment according to the closing method.</summary>
     protected abstract void OnClose(MewDrawingContext context, PathGeometry path, Segment segment);
 
+    /// <summary>Appends one segment to the path.</summary>
     protected abstract void OnDrawSegment(MewDrawingContext context, PathGeometry path, Segment segment);
 
+    /// <summary>Draws the path built from the segments with the active paint and removes segments flagged for removal once they complete; no segments draws nothing.</summary>
     public void Draw(MewDrawingContext context)
     {
         if (Commands.Count == 0) return;

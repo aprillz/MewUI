@@ -19,6 +19,7 @@ public class MewDefaultLegend : Container, IChartLegend
     private object? _themeId;
     private DrawnTask? _drawnTask;
 
+    /// <summary>Places the legend at the chart's legend position and adds it to the canvas, or removes it when the legend position is hidden.</summary>
     public void Draw(Chart chart)
     {
         var theme = chart.GetTheme();
@@ -47,12 +48,14 @@ public class MewDefaultLegend : Container, IChartLegend
         }
     }
 
+    /// <summary>Builds the legend layout for the chart's series and returns its size.</summary>
     public LvcSize Measure(Chart chart)
     {
         Content = (IDrawnElement<MewDrawingContext>)GetLayout(chart);
         return Measure();
     }
 
+    /// <summary>Removes the legend from the chart canvas.</summary>
     public void Hide(Chart chart)
     {
         if (_drawnTask is not null)
@@ -62,6 +65,7 @@ public class MewDefaultLegend : Container, IChartLegend
         }
     }
 
+    /// <summary>Builds the layout listing each visible series' miniature and name.</summary>
     protected virtual Layout<MewDrawingContext> GetLayout(Chart chart)
     {
         var theme = chart.GetTheme();
@@ -118,6 +122,7 @@ public class MewDefaultLegend : Container, IChartLegend
         return stackLayout;
     }
 
+    /// <summary>Applies the legend background paint from the view or the theme.</summary>
     protected virtual void Initialize(Chart chart)
     {
         Geometry.Fill = chart.View.LegendBackgroundPaint ?? chart.GetTheme().LegendBackgroundPaint;

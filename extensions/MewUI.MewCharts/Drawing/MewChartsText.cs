@@ -3,25 +3,26 @@ using Aprillz.MewUI.Text;
 
 namespace Aprillz.MewUI.MewCharts.Drawing;
 
-/// <summary>
-/// Ambient retained text layouts for chart geometries. LiveCharts measures label geometries
-/// without a live frame context, so the owning graphics factory is captured when a chart attaches.
-/// </summary>
+/// <summary>Ambient text layouts for chart geometries, available outside a frame.</summary>
+/// <remarks>
+/// LiveCharts measures label geometries without a frame context, so layouts come from the graphics
+/// factory captured by <see cref="EnsureInitialized"/> when the first chart attaches to a window.
+/// </remarks>
 public static class MewChartsText
 {
     private static readonly object _lock = new();
     private static IGraphicsFactory? _factory;
 
-    /// <summary>Font family for chart text; set from the chart's (inherited) <c>Control.FontFamily</c>.</summary>
+    /// <summary>Gets or sets the font family for chart text; defaults to the system font family, and each chart assigns its inherited <see cref="Controls.TextElement.FontFamily"/> before drawing.</summary>
     public static string FontFamily { get; set; } = ThemeMetrics.SystemFontFamily;
 
     /// <summary>
-    /// Multiplier applied to every text size, set from the chart's <c>Control.FontSize</c> relative
-    /// to the default (12). Lets the theme's per-role sizes scale with the inherited font size.
+    /// Gets or sets the multiplier applied to every chart text size; defaults to 1, and each chart assigns
+    /// its inherited <see cref="Controls.TextElement.FontSize"/> divided by the theme's 16 reference size before drawing.
     /// </summary>
     public static double FontScale { get; set; } = 1;
 
-    /// <summary>Wires the ambient text resources to a graphics factory (idempotent).</summary>
+    /// <summary>Captures the graphics factory used to build text layouts; the first factory wins and later calls are ignored.</summary>
     public static void EnsureInitialized(IGraphicsFactory factory)
     {
         if (_factory is not null) return;
@@ -32,7 +33,7 @@ public static class MewChartsText
         }
     }
 
-    /// <summary>Gets a retained layout of the given size, or <see langword="null"/> before init.</summary>
+    /// <summary>Gets a cached layout of the text at the given size, or <see langword="null"/> before <see cref="EnsureInitialized"/> has run or when the text is empty.</summary>
     public static ITextLayout? GetLayout(string text, float size)
     {
         if (_factory is null || string.IsNullOrEmpty(text)) return null;
@@ -51,7 +52,7 @@ public static class MewChartsText
         }
     }
 
-    /// <summary>Measures text without a frame context; returns zero size before init.</summary>
+    /// <summary>Measures the text at the given size; returns <see cref="Size.Empty"/> before <see cref="EnsureInitialized"/> has run.</summary>
     public static Size Measure(string text, float size)
     {
         return GetLayout(text, size)?.MeasuredSize ?? Size.Empty;

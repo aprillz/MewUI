@@ -4,14 +4,12 @@ using LiveChartsCore.Drawing;
 
 namespace Aprillz.MewUI.MewCharts.Drawing.Geometries;
 
-/// <summary>
-/// An open arc stroke (used by angular-gauge ticks). The sweep is approximated by short line
-/// segments because the MewUI path API has no angle-sweep arc primitive.
-/// </summary>
+/// <summary>An open arc stroke, used for angular-gauge ticks.</summary>
 public class ArcGeometry : BaseArcGeometry, IDrawnElement<MewDrawingContext>
 {
     private const double DegToRad = Math.PI / 180.0;
 
+    /// <summary>Strokes the arc from the start angle through the sweep angle with the active paint.</summary>
     public virtual void Draw(MewDrawingContext context)
     {
         var centerX = CenterX;

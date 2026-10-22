@@ -5,7 +5,7 @@ using LiveChartsCore.Kernel.Sketches;
 
 namespace Aprillz.MewUI.MewCharts;
 
-/// <inheritdoc cref="ICartesianAxis" />
+/// <summary>A Cartesian axis rendered with the MewUI backend.</summary>
 public class Axis : CoreAxis<LabelGeometry, LineGeometry>
 {
     static Axis() => LiveChartsMewUI.EnsureInitialized();

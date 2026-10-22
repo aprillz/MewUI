@@ -11,16 +11,17 @@ using LiveChartsCore.VisualStates;
 
 namespace Aprillz.MewUI.MewCharts;
 
-/// <summary>
-/// Entry point that configures LiveCharts to use the MewUI backend. The MewUI analog of
-/// <c>LiveChartsSkiaSharp</c>. Called from chart control static constructors.
-/// </summary>
+/// <summary>Configures LiveCharts to use the MewUI backend.</summary>
+/// <remarks>
+/// Chart controls and axes call <see cref="EnsureInitialized"/> from their static constructors, so no
+/// explicit setup is required.
+/// </remarks>
 public static class LiveChartsMewUI
 {
     private static bool _initialized;
     private static readonly object _lock = new();
 
-    /// <summary>Configures LiveCharts with the MewUI provider, default theme and mappers (idempotent).</summary>
+    /// <summary>Applies <see cref="UseMewDefaults"/> to the global LiveCharts settings on the first call and returns them; later calls return the settings unchanged.</summary>
     public static LiveChartsSettings EnsureInitialized()
     {
         if (_initialized) return LiveCharts.DefaultSettings;
@@ -33,7 +34,7 @@ public static class LiveChartsMewUI
         return LiveCharts.DefaultSettings;
     }
 
-    /// <summary>Applies the MewUI backend defaults: provider, theme and mappers.</summary>
+    /// <summary>Registers the <see cref="MewChartEngine"/>, the MewUI theme and the default mappers on the settings, skipping each one that is already defined.</summary>
     public static LiveChartsSettings UseMewDefaults(this LiveChartsSettings settings)
     {
         if (!LiveCharts.DefaultSettings.HasBackedDefined) _ = settings.HasProvider(new MewChartEngine());
@@ -42,7 +43,7 @@ public static class LiveChartsMewUI
         return settings;
     }
 
-    /// <summary>Registers a minimal default theme (colors, animation, axis and line-series rules).</summary>
+    /// <summary>Registers the MewUI default theme (palette, animation, tooltip and legend paints, and per-series rules) on the settings.</summary>
     public static LiveChartsSettings AddMewTheme(this LiveChartsSettings settings) =>
         settings.HasTheme(theme =>
         {

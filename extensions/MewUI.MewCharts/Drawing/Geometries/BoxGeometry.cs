@@ -6,6 +6,7 @@ namespace Aprillz.MewUI.MewCharts.Drawing.Geometries;
 /// <summary>A box-and-whisker geometry (min/first/median/third/max).</summary>
 public class BoxGeometry : BaseBoxGeometry, IDrawnElement<MewDrawingContext>
 {
+    /// <summary>Draws the box between the first and third quartiles, plus the whiskers and median line when the active paint strokes.</summary>
     public virtual void Draw(MewDrawingContext context)
     {
         var width = Width;

@@ -4,13 +4,14 @@ using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.MewCharts.Drawing;
 
-/// <summary>
-/// Parses the SVG path "d" mini-language into a MewUI <see cref="PathGeometry"/>. Supports the
-/// M/L/H/V/C/S/Q/T/Z commands (absolute and relative); elliptical arcs (A) are approximated by
-/// line segments. Used by <see cref="Geometries.SvgGeometry"/> for SVG-based chart markers.
-/// </summary>
+/// <summary>Parses SVG path data (the "d" attribute) into a MewUI <see cref="PathGeometry"/>.</summary>
+/// <remarks>
+/// The M, L, H, V, C, S, Q, T and Z commands are supported in absolute and relative form; elliptical
+/// arcs (A) are approximated by line segments. <see cref="Geometries.SvgGeometry"/> uses it for SVG point markers.
+/// </remarks>
 public static class SvgPathData
 {
+    /// <summary>Parses the path data into a new <see cref="PathGeometry"/>; empty or whitespace input yields an empty geometry, and unreadable numbers parse as 0.</summary>
     public static PathGeometry Parse(string data)
     {
         var path = new PathGeometry();

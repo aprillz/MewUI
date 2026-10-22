@@ -6,10 +6,7 @@ using LiveChartsCore.Painting;
 
 namespace Aprillz.MewUI.MewCharts.Painting;
 
-/// <summary>
-/// Paints geometries with a radial gradient centered in the current draw area. Center/radius are
-/// relative (0..1) to the draw area and resolved to absolute coordinates at paint time.
-/// </summary>
+/// <summary>Paints geometries with a radial gradient whose center and radius are relative (0..1) to the current draw area.</summary>
 public class RadialGradientPaint : MewPaint
 {
     private readonly GradientStop[] _stops;
@@ -18,6 +15,7 @@ public class RadialGradientPaint : MewPaint
     private Brush? _brush;
     private Pen? _pen;
 
+    /// <summary>Initializes a gradient with explicit stops and a relative center and radius.</summary>
     public RadialGradientPaint(GradientStop[] stops, Point center, double radius)
     {
         _stops = stops;
@@ -25,8 +23,10 @@ public class RadialGradientPaint : MewPaint
         _radius = radius;
     }
 
+    /// <summary>Initializes a gradient centered in the draw area with evenly spaced stops for the given colors.</summary>
     public RadialGradientPaint(Color[] colors) : this(BuildStops(colors), new Point(0.5, 0.5), 0.5) { }
 
+    /// <summary>Initializes a gradient centered in the draw area from <paramref name="center"/> to <paramref name="outer"/>.</summary>
     public RadialGradientPaint(Color center, Color outer)
         : this([new GradientStop(0, center), new GradientStop(1, outer)], new Point(0.5, 0.5), 0.5) { }
 
@@ -41,6 +41,7 @@ public class RadialGradientPaint : MewPaint
         return stops;
     }
 
+    /// <summary>Returns a new paint with the same gradient and paint settings.</summary>
     public override Paint CloneTask() =>
         new RadialGradientPaint(_stops, _center, _radius)
         {

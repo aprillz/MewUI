@@ -9,7 +9,9 @@ namespace Aprillz.MewUI.MewCharts.Views;
 public class CandlesticksSeries<TModel>
     : CoreFinancialSeries<TModel, CandlestickGeometry, LabelGeometry, CircleGeometry>
 {
+    /// <summary>Initializes a series with no values.</summary>
     public CandlesticksSeries() : base(null) { }
 
+    /// <summary>Initializes a series that plots the given collection; null plots nothing.</summary>
     public CandlesticksSeries(IReadOnlyCollection<TModel>? values) : base(values) { }
 }

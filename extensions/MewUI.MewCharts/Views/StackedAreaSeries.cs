@@ -9,17 +9,22 @@ namespace Aprillz.MewUI.MewCharts.Views;
 public class StackedAreaSeries<TModel>
     : CoreStackedAreaSeries<TModel, CircleGeometry, LabelGeometry, CubicBezierAreaGeometry, LineGeometry>
 {
+    /// <summary>Initializes a series with no values.</summary>
     public StackedAreaSeries() : base(null) { }
 
+    /// <summary>Initializes a series that plots the given collection; null plots nothing.</summary>
     public StackedAreaSeries(IReadOnlyCollection<TModel>? values) : base(values) { }
 
+    /// <summary>Initializes a series that plots the given values.</summary>
     public StackedAreaSeries(params TModel[] values) : base(values) { }
 }
 
 /// <summary>A stacked area series of <see cref="double"/> values.</summary>
 public class StackedAreaSeries : StackedAreaSeries<double>
 {
+    /// <summary>Initializes a series with no values.</summary>
     public StackedAreaSeries() { }
 
+    /// <summary>Initializes a series that plots the given values.</summary>
     public StackedAreaSeries(params double[] values) : base(values) { }
 }

@@ -9,7 +9,9 @@ namespace Aprillz.MewUI.MewCharts.Views;
 public class BoxSeries<TModel>
     : CoreBoxSeries<TModel, BoxGeometry, LabelGeometry, CircleGeometry>
 {
+    /// <summary>Initializes a series with no values.</summary>
     public BoxSeries() : base(null) { }
 
+    /// <summary>Initializes a series that plots the given collection; null plots nothing.</summary>
     public BoxSeries(IReadOnlyCollection<TModel>? values) : base(values) { }
 }

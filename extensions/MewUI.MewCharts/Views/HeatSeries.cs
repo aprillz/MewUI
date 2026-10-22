@@ -9,7 +9,9 @@ namespace Aprillz.MewUI.MewCharts.Views;
 public class HeatSeries<TModel>
     : CoreHeatSeries<TModel, ColoredRectangleGeometry, LabelGeometry>
 {
+    /// <summary>Initializes a series with no values.</summary>
     public HeatSeries() : base(null) { }
 
+    /// <summary>Initializes a series that plots the given collection; null plots nothing.</summary>
     public HeatSeries(IReadOnlyCollection<TModel>? values) : base(values) { }
 }

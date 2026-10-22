@@ -5,7 +5,7 @@ using LiveChartsCore.Drawing.Layouts;
 
 namespace Aprillz.MewUI.MewCharts.Drawing.Layouts;
 
-/// <summary>A stack layout of drawn elements (the MewUI backend binding of the core layout).</summary>
+/// <summary>A stack layout of drawn elements.</summary>
 public class StackLayout : CoreStackLayout<MewDrawingContext> { }
 
 /// <summary>An absolute layout of drawn elements.</summary>

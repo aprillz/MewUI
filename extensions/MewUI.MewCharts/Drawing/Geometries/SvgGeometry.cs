@@ -4,18 +4,17 @@ using LiveChartsCore.Drawing;
 
 namespace Aprillz.MewUI.MewCharts.Drawing.Geometries;
 
-/// <summary>
-/// A geometry whose shape is defined by an SVG path string, scaled to fit the geometry bounds.
-/// Used as a custom point marker (set the series' <c>GeometrySvg</c> property).
-/// </summary>
+/// <summary>A point-marker geometry whose shape is an SVG path scaled to fit the geometry bounds.</summary>
+/// <remarks>Series select it through <see cref="LiveChartsCore.ISeries.GeometrySvg"/>.</remarks>
 public class SvgGeometry : BoundedDrawnGeometry, IDrawnElement<MewDrawingContext>, IVariableSvgPath
 {
     private PathGeometry? _path;
     private Rect _bounds;
 
-    /// <summary>When true, fits both axes independently (may distort); otherwise preserves aspect.</summary>
+    /// <summary>Gets or sets whether the path is stretched to fill the bounds on both axes; false (the default) preserves the aspect ratio.</summary>
     public bool FitToSize { get; set; }
 
+    /// <summary>Gets or sets the SVG path data that defines the shape; null or empty draws nothing.</summary>
     public string? SVGPath
     {
         get;
@@ -35,6 +34,7 @@ public class SvgGeometry : BoundedDrawnGeometry, IDrawnElement<MewDrawingContext
         }
     }
 
+    /// <summary>Draws the path centered in the bounds and scaled to fit them with the active paint; draws nothing until a path is set.</summary>
     public virtual void Draw(MewDrawingContext context)
     {
         if (_path is null || _bounds.Width <= 0 || _bounds.Height <= 0) return;

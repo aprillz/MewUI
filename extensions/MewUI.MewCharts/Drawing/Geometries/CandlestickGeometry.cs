@@ -5,6 +5,7 @@ namespace Aprillz.MewUI.MewCharts.Drawing.Geometries;
 /// <summary>A candlestick (OHLC) geometry: high/low wicks plus the open-close body.</summary>
 public class CandlestickGeometry : BaseCandlestickGeometry, IDrawnElement<MewDrawingContext>
 {
+    /// <summary>Draws the open-close body and the high and low wicks with the active paint.</summary>
     public virtual void Draw(MewDrawingContext context)
     {
         var width = Width;

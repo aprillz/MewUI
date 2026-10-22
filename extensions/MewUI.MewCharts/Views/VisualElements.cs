@@ -18,9 +18,7 @@ public class DrawMarginFrame : CoreDrawMarginFrame<RectangleGeometry>
 {
     private bool _pixelSnap;
 
-    /// <summary>
-    /// Gets or sets whether the frame stroke is inset and aligned to device pixels.
-    /// </summary>
+    /// <summary>Gets or sets whether the frame stroke is inset and aligned to device pixels; the default is false.</summary>
     public bool PixelSnap
     {
         get => _pixelSnap;
@@ -31,7 +29,7 @@ public class DrawMarginFrame : CoreDrawMarginFrame<RectangleGeometry>
         }
     }
 
-    /// <summary>Gets or sets the frame stroke.</summary>
+    /// <summary>Gets or sets the frame stroke paint, which receives this frame's <see cref="PixelSnap"/> setting.</summary>
     public new Paint? Stroke
     {
         get => base.Stroke;

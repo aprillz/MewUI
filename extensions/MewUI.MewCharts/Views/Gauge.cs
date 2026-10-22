@@ -6,14 +6,16 @@ using LiveChartsCore.Kernel;
 
 namespace Aprillz.MewUI.MewCharts.Views;
 
-/// <summary>Gauge build options.</summary>
+/// <summary>The kind of gauge to build.</summary>
 public enum GaugeOptions { None, Solid, Angular }
 
 /// <summary>An item in a gauge built by <see cref="GaugeGenerator"/>.</summary>
 public class GaugeItem
 {
+    /// <summary>Gets the sentinel value that marks an item as the builder of the gauge background series.</summary>
     public static double Background { get; } = double.MaxValue;
 
+    /// <summary>Initializes an item for the given value with an optional series builder; <see cref="Background"/> as the value makes it the background builder.</summary>
     public GaugeItem(double value, Action<PieSeries<ObservableValue>>? builder = null)
     {
         Value = new ObservableValue(value);
@@ -21,17 +23,18 @@ public class GaugeItem
         if (value == Background) IsFillSeriesBuilder = true;
     }
 
+    /// <summary>Gets or sets the observable value the item plots.</summary>
     public ObservableValue Value { get; set; }
+    /// <summary>Gets or sets the callback that customizes the item's pie series; null applies no customization.</summary>
     public Action<PieSeries<ObservableValue>>? Builder { get; set; }
+    /// <summary>Gets whether the item configures the gauge background series instead of a value slice.</summary>
     public bool IsFillSeriesBuilder { get; internal set; }
 }
 
-/// <summary>
-/// Builds gauge series (solid radial gauges) as pie series, ported from the LiveCharts
-/// SkiaSharp GaugeGenerator. Reuses the <c>PieChartEngine</c> to render gauges.
-/// </summary>
+/// <summary>Builds solid and angular gauges as <see cref="PieSeries{TModel}"/> collections for a <see cref="PieChart"/>.</summary>
 public static class GaugeGenerator
 {
+    /// <summary>Builds the series of a solid gauge from the items, appending a background item when none is given.</summary>
     public static PieSeries<ObservableValue>[] BuildSolidGauge(params GaugeItem[] items)
     {
         if (!items.Any(x => x.IsFillSeriesBuilder))
@@ -39,6 +42,7 @@ public static class GaugeGenerator
         return Build(GaugeOptions.Solid, items);
     }
 
+    /// <summary>Builds the series of an angular gauge's sections from the items, appending a background item when none is given.</summary>
     public static PieSeries<ObservableValue>[] BuildAngularGaugeSections(params GaugeItem[] items)
     {
         if (!items.Any(x => x.IsFillSeriesBuilder))

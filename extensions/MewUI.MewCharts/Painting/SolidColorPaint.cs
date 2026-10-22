@@ -13,22 +13,26 @@ public class SolidColorPaint : MewPaint
 {
     private Pen? _pen;
 
+    /// <summary>Initializes a paint with the default color.</summary>
     public SolidColorPaint() { }
 
+    /// <summary>Initializes a paint of the given color.</summary>
     public SolidColorPaint(Color color) => Color = color;
 
+    /// <summary>Initializes a paint of the given color and stroke thickness.</summary>
     public SolidColorPaint(Color color, float strokeThickness)
         : base(strokeThickness) => Color = color;
 
-    /// <summary>The fill/stroke color.</summary>
+    /// <summary>Gets or sets the fill and stroke color.</summary>
     public Color Color { get; set; }
 
-    /// <summary>Optional dash pattern (in stroke-width units, like SVG/Skia). Null = solid stroke.</summary>
+    /// <summary>Gets or sets the dash pattern in stroke-width units; null (the default) strokes solid.</summary>
     public double[]? DashArray { get; set; }
 
-    /// <summary>Dash phase offset (in stroke-width units).</summary>
+    /// <summary>Gets or sets the dash phase offset in stroke-width units.</summary>
     public double DashOffset { get; set; }
 
+    /// <summary>Returns a new paint with the same color, dash and paint settings.</summary>
     public override Paint CloneTask()
     {
         var clone = new SolidColorPaint(Color)
@@ -91,5 +95,6 @@ public class SolidColorPaint : MewPaint
         return this;
     }
 
+    /// <summary>Returns the color components as text.</summary>
     public override string ToString() => $"({Color.R}, {Color.G}, {Color.B}, {Color.A})";
 }

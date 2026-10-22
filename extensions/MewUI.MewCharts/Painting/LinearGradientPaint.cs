@@ -6,10 +6,7 @@ using LiveChartsCore.Painting;
 
 namespace Aprillz.MewUI.MewCharts.Painting;
 
-/// <summary>
-/// Paints geometries with a linear gradient. Start/end are relative (0..1) to the current draw
-/// area and resolved to absolute coordinates at paint time.
-/// </summary>
+/// <summary>Paints geometries with a linear gradient whose start and end points are relative (0..1) to the current draw area.</summary>
 public class LinearGradientPaint : MewPaint
 {
     private static readonly Point DefaultStart = new(0, 0);
@@ -21,6 +18,7 @@ public class LinearGradientPaint : MewPaint
     private Brush? _brush;
     private Pen? _pen;
 
+    /// <summary>Initializes a gradient with explicit stops and relative start and end points.</summary>
     public LinearGradientPaint(GradientStop[] stops, Point start, Point end)
     {
         _stops = stops;
@@ -28,8 +26,10 @@ public class LinearGradientPaint : MewPaint
         _end = end;
     }
 
+    /// <summary>Initializes a top-to-bottom gradient with evenly spaced stops for the given colors.</summary>
     public LinearGradientPaint(Color[] colors) : this(BuildStops(colors), DefaultStart, DefaultEnd) { }
 
+    /// <summary>Initializes a top-to-bottom gradient from <paramref name="start"/> to <paramref name="end"/>.</summary>
     public LinearGradientPaint(Color start, Color end)
         : this([new GradientStop(0, start), new GradientStop(1, end)], DefaultStart, DefaultEnd) { }
 
@@ -44,6 +44,7 @@ public class LinearGradientPaint : MewPaint
         return stops;
     }
 
+    /// <summary>Returns a new paint with the same gradient and paint settings.</summary>
     public override Paint CloneTask() =>
         new LinearGradientPaint(_stops, _start, _end)
         {

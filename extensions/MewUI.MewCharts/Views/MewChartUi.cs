@@ -5,20 +5,25 @@ using LiveChartsCore.Kernel.Sketches;
 
 namespace Aprillz.MewUI.MewCharts.Views;
 
-/// <summary>Placeholder no-op tooltip. Replaced by a real MewUI tooltip in a later milestone.</summary>
+/// <summary>A tooltip that shows nothing; assign it to <see cref="ChartViewBase.Tooltip"/> to suppress tooltips.</summary>
 public sealed class MewTooltip : IChartTooltip
 {
+    /// <summary>Does nothing.</summary>
     public void Show(IEnumerable<ChartPoint> foundPoints, Chart chart) { }
 
+    /// <summary>Does nothing.</summary>
     public void Hide(Chart chart) { }
 }
 
-/// <summary>Placeholder no-op legend (takes no space). Replaced by a real MewUI legend later.</summary>
+/// <summary>A legend that draws nothing and takes no space; assign it to <see cref="ChartViewBase.Legend"/> to suppress the legend.</summary>
 public sealed class MewLegend : IChartLegend
 {
+    /// <summary>Does nothing.</summary>
     public void Draw(Chart chart) { }
 
+    /// <summary>Returns an empty size.</summary>
     public LvcSize Measure(Chart chart) => new(0, 0);
 
+    /// <summary>Does nothing.</summary>
     public void Hide(Chart chart) { }
 }

@@ -7,8 +7,10 @@ namespace Aprillz.MewUI.MewCharts.Drawing.Geometries;
 /// <summary>An angular-gauge needle: a triangle pointing from the pivot outward, plus a pivot disc.</summary>
 public class NeedleGeometry : BaseNeedleGeometry, IDrawnElement<MewDrawingContext>
 {
+    /// <summary>Initializes a needle whose transform origin is its pivot.</summary>
     public NeedleGeometry() => TransformOrigin = new LvcPoint(0f, 0f);
 
+    /// <summary>Draws the needle triangle and the pivot disc with the active paint.</summary>
     public virtual void Draw(MewDrawingContext context)
     {
         var halfWidth = Width / 2f;
