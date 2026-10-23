@@ -425,7 +425,7 @@ var editMenu = new Menu()
     .Item(StandardCommands.Paste);
 
 var menuBar = new MenuBar()
-    .Items(new MenuItem("_Edit").Menu(editMenu));
+    .Items(new MenuItem("_Edit").SubMenu(editMenu));
 ```
 
 The menus do not copy the TextBox handlers. The connection is decided by the **command target** at the moment a menu opens or a key is pressed. The keyboard starts at the focused TextBox and finds the effective `InputMap`; the TextBox context menu captures the right-clicked TextBox as its target; the MenuBar Edit menu preserves the target focused just before it opened. All three share the same `CanExecute` results: with no selection, `Cut` and `Copy` are disabled in both menus, and in a read-only TextBox `Cut` and `Paste` are disabled. Shortcut labels are reverse lookups against the current target, so remapping a key needs no menu edits.

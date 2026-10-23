@@ -62,7 +62,7 @@ public static class MenuExtensions
     public static MenuBar Item(this MenuBar bar, string text, Menu menu)
     {
         ArgumentNullException.ThrowIfNull(menu);
-        bar.Add(new MenuItem(text).Menu(menu));
+        bar.Add(new MenuItem(text).SubMenu(menu));
         return bar;
     }
 
@@ -114,6 +114,7 @@ public static class MenuExtensions
     /// <param name="item">Target menu item.</param>
     /// <param name="menu">Submenu.</param>
     /// <returns>The menu item for chaining.</returns>
+    [Obsolete("Use SubMenu(menu), named after the MenuItem.SubMenu property it sets.")]
     public static MenuItem Menu(this MenuItem item, Menu? menu)
     {
         item.SubMenu = menu;
@@ -174,11 +175,12 @@ public static class MenuExtensions
     /// Sets the submenu the item opens. To detach a submenu, set <see cref="MenuItem.SubMenu"/> to null.
     /// </summary>
     /// <param name="item">Target menu item.</param>
-    /// <param name="value">Submenu, or null to detach the current one.</param>
+    /// <param name="menu">Submenu.</param>
     /// <returns>The menu item for chaining.</returns>
-    public static MenuItem SubMenu(this MenuItem item, Menu? value)
+    public static MenuItem SubMenu(this MenuItem item, Menu menu)
     {
-        item.SubMenu = value;
+        ArgumentNullException.ThrowIfNull(menu);
+        item.SubMenu = menu;
         return item;
     }
 

@@ -425,7 +425,7 @@ var editMenu = new Menu()
     .Item(StandardCommands.Paste);
 
 var menuBar = new MenuBar()
-    .Items(new MenuItem("_Edit").Menu(editMenu));
+    .Items(new MenuItem("_Edit").SubMenu(editMenu));
 ```
 
 이 예제에서 메뉴 객체가 TextBox의 명령 처리기를 복제하는 것은 아닙니다. 실제 연결은 메뉴를 열거나 키를 누른 시점의 **command target**으로 결정됩니다. 키보드는 포커스된 TextBox에서 시작해 유효한 `InputMap`을 찾고, TextBox의 ContextMenu는 우클릭한 TextBox를 타깃으로 캡처하며, MenuBar의 Edit 메뉴는 메뉴를 열기 직전의 포커스 타깃을 보존합니다. 세 경로는 같은 `CanExecute` 결과도 공유합니다. 선택 영역이 없으면 `Cut`과 `Copy`가 ContextMenu와 Edit 메뉴에서 모두 비활성화되고, `IsReadOnly`인 TextBox에서는 `Cut`과 `Paste`가 비활성화됩니다. 메뉴의 단축키 표시는 현재 타깃에서 유효한 `InputMap`을 역조회하므로 키를 재매핑해도 메뉴에 별도 단축키 문자열을 수정할 필요가 없습니다.

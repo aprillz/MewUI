@@ -237,4 +237,34 @@ public sealed class FluentExtensionCoverageTests
         Assert.AreSame(first, ((MenuItem)menuBar.Items[0]).Command);
         Assert.AreSame(second, ((MenuItem)menuBar.Items[1]).Command);
     }
+
+    [TestMethod]
+    public void ContextMenuAdd_AppendsABuiltEntryAnywhereInTheChain()
+    {
+        var first = new Command("test.first", "First");
+        var checkable = new MenuItem("Checkable").IsCheckable();
+        var last = new Command("test.last", "Last");
+
+        var menu = new ContextMenu()
+            .Item(first)
+            .Add(checkable)
+            .Separator()
+            .Item(last);
+
+        Assert.AreEqual(4, menu.Items.Count);
+        Assert.AreSame(first, ((MenuItem)menu.Items[0]).Command);
+        Assert.AreSame(checkable, menu.Items[1]);
+        Assert.IsInstanceOfType<MenuSeparator>(menu.Items[2]);
+        Assert.AreSame(last, ((MenuItem)menu.Items[3]).Command);
+    }
+
+    [TestMethod]
+    public void MenuItemSubMenu_SetsTheSubMenuProperty()
+    {
+        var subMenu = new Menu().Item("Child");
+
+        var item = new MenuItem("_File").SubMenu(subMenu);
+
+        Assert.AreSame(subMenu, item.SubMenu);
+    }
 }
