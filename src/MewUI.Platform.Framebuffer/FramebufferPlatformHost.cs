@@ -213,7 +213,17 @@ internal sealed class FramebufferPlatformHost : IPlatformHost, IFramebufferInput
         string failure = string.Empty;
         if (_options.Session != FramebufferSessionKind.Direct)
         {
-            session = SeatFramebufferSession.TryOpen(out failure);
+            var seat = SeatFramebufferSession.TryOpen(out failure);
+            if (seat != null && !seat.IsActive && _options.Session == FramebufferSessionKind.Auto)
+            {
+                // A seat manager accepts a session that is not the active one on the seat (an ssh login, say) but
+                // hands it no devices; the direct access the process would have had without the seat is used instead.
+                seat.Dispose();
+                seat = null;
+                failure = "the session is not the active one on the seat";
+            }
+
+            session = seat;
         }
 
         if (session == null)
@@ -231,30 +241,10 @@ internal sealed class FramebufferPlatformHost : IPlatformHost, IFramebufferInput
             session = new DirectFramebufferSession();
         }
 
-        _session = Attach(session);
-        Console.Error.WriteLine($"[MewUI.Framebuffer] session: {session.Description}");
-        return session;
-    }
-
-    private IFramebufferSession ReplaceSession(IFramebufferSession replacement)
-    {
-        var previous = _session;
-        if (previous != null)
-        {
-            previous.Disabling -= OnSessionDisabling;
-            previous.Enabled -= OnSessionEnabled;
-            previous.Dispose();
-        }
-
-        _session = Attach(replacement);
-        _sessionActive = true;
-        return replacement;
-    }
-
-    private IFramebufferSession Attach(IFramebufferSession session)
-    {
         session.Disabling += OnSessionDisabling;
         session.Enabled += OnSessionEnabled;
+        _session = session;
+        Console.Error.WriteLine($"[MewUI.Framebuffer] session: {session.Description}");
         return session;
     }
 
@@ -271,15 +261,6 @@ internal sealed class FramebufferPlatformHost : IPlatformHost, IFramebufferInput
         if (_options.Output != FramebufferOutputKind.Fbdev)
         {
             var drm = DrmKmsOutput.TryOpen(_options, session, out drmFailure);
-            if (drm == null && _options.Session == FramebufferSessionKind.Auto && session is SeatFramebufferSession)
-            {
-                // A seat manager accepts a process whose session is not active on the seat (an ssh login, say) but
-                // hands it no devices; the direct access it would have had without the seat is tried instead.
-                Console.Error.WriteLine($"[MewUI.Framebuffer] session: the seat gave no DRM device ({drmFailure}); opening devices directly");
-                session = ReplaceSession(new DirectFramebufferSession());
-                drm = DrmKmsOutput.TryOpen(_options, session, out drmFailure);
-            }
-
             if (drm != null)
             {
                 drm.FlipCompleted += OnFlipCompleted;

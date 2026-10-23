@@ -92,6 +92,7 @@ internal sealed unsafe class SeatFramebufferSession : IFramebufferSession
     private static readonly EnvDebugLogger Logger = new("MEWUI_FB_DEBUG", "[FB][Seat]");
 
     private const int EACCES = 13;
+    private const int SEAT_ENABLE_WAIT_MS = 200;
 
     private readonly LibSeatListener* _listener;
     private readonly Dictionary<int, int> _deviceIds = [];
@@ -145,6 +146,9 @@ internal sealed unsafe class SeatFramebufferSession : IFramebufferSession
 
         session._seat = seat;
         session.Description = $"seat '{LibSeat.SeatName(seat)}' through libseat";
+
+        // The manager enables the seat through the first dispatch when the calling session is the active one on it.
+        LibSeat.Dispatch(seat, SEAT_ENABLE_WAIT_MS);
         failure = string.Empty;
         return session;
     }
