@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <SelfContained>true</SelfContained>
+    <PublishAot>true</PublishAot>
+    <TrimMode>full</TrimMode>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\MewUI.Headless\MewUI.Headless.csproj" />
+  </ItemGroup>
+
+  <!-- One graphics backend per operating system, chosen by the publish RID. -->
+  <ItemGroup Condition="$(RuntimeIdentifier.StartsWith('win'))">
+    <ProjectReference Include="..\..\..\src\MewUI.Backend.Gdi\MewUI.Backend.Gdi.csproj"
+                      Condition="'$(MewUIBackend)' == '' Or '$(MewUIBackend)' == 'Gdi'" />
+    <ProjectReference Include="..\..\..\src\MewUI.Backend.Direct2D\MewUI.Backend.Direct2D.csproj"
+                      Condition="'$(MewUIBackend)' == 'Direct2D'" />
+  </ItemGroup>
+  <ItemGroup Condition="$(RuntimeIdentifier.StartsWith('linux'))">
+    <ProjectReference Include="..\..\..\src\MewUI.Backend.MewVG.X11\MewUI.Backend.MewVG.X11.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="$(RuntimeIdentifier.StartsWith('osx'))">
+    <ProjectReference Include="..\..\..\src\MewUI.Backend.MewVG.MacOS\MewUI.Backend.MewVG.MacOS.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup Condition="$(RuntimeIdentifier.StartsWith('win'))">
+    <DefineConstants>$(DefineConstants);MEWUI_WINDOWS</DefineConstants>
+    <DefineConstants Condition="'$(MewUIBackend)' == 'Direct2D'">$(DefineConstants);MEWUI_DIRECT2D</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup Condition="$(RuntimeIdentifier.StartsWith('linux'))">
+    <DefineConstants>$(DefineConstants);MEWUI_LINUX</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup Condition="$(RuntimeIdentifier.StartsWith('osx'))">
+    <DefineConstants>$(DefineConstants);MEWUI_MACOS</DefineConstants>
+  </PropertyGroup>
+
+  <!-- Carries the feature switches the trimmer folds optional features with, as every package consumer gets. -->
+  <Import Project="..\..\..\build\Aprillz.MewUI.targets" />
+</Project>

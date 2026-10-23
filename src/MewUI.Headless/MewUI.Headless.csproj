@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="..\..\build\MewUI.Common.props" />
+
+  <PropertyGroup>
+    <AssemblyName>$(MewUITitle).Headless</AssemblyName>
+    <PackageId>$(MewUITitle).Headless</PackageId>
+    <RootNamespace>Aprillz.MewUI.Headless</RootNamespace>
+    <Description>Headless test host for $(MewUITitle): runs windows, input and layout without a display server, with an optional offscreen render mode.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MewUI\MewUI.csproj" />
+    <InternalsVisibleTo Include="Aprillz.MewUI.Headless.Test" />
+  </ItemGroup>
+
+</Project>

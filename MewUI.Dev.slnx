@@ -40,6 +40,7 @@
     <Project Path="src/MewUI.Backend.MewVG.Win32/MewUI.Backend.MewVG.Win32.csproj" />
     <Project Path="src/MewUI.Backend.MewVG.X11/MewUI.Backend.MewVG.X11.csproj" />
     <Project Path="src/MewUI.Generators/MewUI.Generators.csproj" />
+    <Project Path="src/MewUI.Headless/MewUI.Headless.csproj" />
     <Project Path="src/MewUI.Platform.Browser/MewUI.Platform.Browser.csproj" />
     <Project Path="src/MewUI.Platform.MacOS/MewUI.Platform.MacOS.csproj" />
     <Project Path="src/MewUI.Platform.Framebuffer/MewUI.Platform.Framebuffer.csproj" />
@@ -86,6 +87,7 @@
     <Project Path="tests/MewUI.Analyzers.Test/MewUI.Analyzers.Test.csproj" />
     <Project Path="tests/MewUI.Generators.Test/MewUI.Generators.Test.csproj" />
     <Project Path="tests/MewUI.Geometry.Test/MewUI.Geometry.Test.csproj" />
+    <Project Path="tests/MewUI.Headless.Test/MewUI.Headless.Test.csproj" />
     <Project Path="tests/MewUI.GraphicsBackendTest/MewUI.GraphicsBackendTest.csproj" />
     <Project Path="tests/MewUI.GridLayoutTest/MewUI.GridLayoutTest.csproj" />
     <Project Path="tests/MewUI.MewDock.Test/MewUI.MewDock.Test.csproj" />
