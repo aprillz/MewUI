@@ -74,6 +74,9 @@ internal sealed partial class TabHeaderButton : ContentControl
         RefreshVisualState();
     }
 
+    /// <summary>The TabControl this header belongs to; the header sits in its header row, not directly under it.</summary>
+    internal TabControl? OwnerTabControl => FindOwnerTabControl();
+
     private TabControl? FindOwnerTabControl()
     {
         for (Element? current = Parent; current != null; current = current.Parent)

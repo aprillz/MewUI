@@ -155,13 +155,12 @@ public sealed class TabControlPlacementTests
     private static List<TabHeaderButton> GetHeaders(TabControl tabControl)
     {
         var result = new List<TabHeaderButton>();
-        ((IVisualTreeHost)tabControl).VisitChildren(child =>
+        VisualTree.Visit(tabControl, element =>
         {
-            if (child is TabHeaderButton header)
+            if (element is TabHeaderButton header)
             {
                 result.Add(header);
             }
-            return true;
         });
         return result;
     }

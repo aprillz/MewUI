@@ -23,9 +23,6 @@ public sealed class TemplateAcceptanceTests
         [typeof(TreeView)] = "T4",
         [typeof(GridView)] = "T4",
         [typeof(NavigationList)] = "T4",
-        [typeof(TabControl)] = "T5",
-        [typeof(SegmentedControl)] = "T5",
-        [typeof(ButtonGroup)] = "T5",
         [typeof(MenuBar)] = "T5",
         [typeof(ToolBar)] = "T5",
         [typeof(Calendar)] = "T5",
@@ -55,6 +52,9 @@ public sealed class TemplateAcceptanceTests
             ctx.Register(SplitButton.PART_PRIMARY_BUTTON, new Button());
             ctx.Register(SplitButton.PART_DROP_DOWN_BUTTON, new Button());
         },
+        [typeof(SegmentedControl)] = ctx => ctx.Register(SegmentedBase.PART_ITEMS_HOST, new Border()),
+        [typeof(ButtonGroup)] = ctx => ctx.Register(SegmentedBase.PART_ITEMS_HOST, new Border()),
+        [typeof(TabControl)] = ctx => ctx.Register(TabControl.PART_HEADERS_HOST, new Border()),
     };
 
     private static IEnumerable<Type> PublicControls()

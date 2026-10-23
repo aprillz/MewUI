@@ -13,10 +13,23 @@ public sealed partial class TabControl : Control, ISelector, IIndexedSelector, I
     private static readonly bool _defaultStyleRegistered =
         DefaultStyles.Register<TabControl>(DefaultStyles.CreateTabControlStyle);
 
+    /// <summary>
+    /// The host part of a template: a <see cref="Border"/> the control puts its row of tab headers into, with the
+    /// overflow button. The control keeps laying the headers out, so a template without this part cannot show them.
+    /// The selected tab's content is shown by a <see cref="ContentPresenter"/> anywhere in the template.
+    /// </summary>
+    public const string PART_HEADERS_HOST = "PART_HeadersHost";
+
+    // The selected tab's content, the slot a template's ContentPresenter projects.
+    internal static readonly MewProperty<Element?> SelectedContentProperty =
+        MewProperty<Element?>.Register<TabControl>("SelectedContent", null, MewPropertyOptions.None);
+
     private const double HeaderSpacing = 2.0;
 
     private readonly List<TabItem> _tabs = new();
     private readonly List<TabHeaderButton> _headers = new();
+    private readonly TabHeaderStrip _headerStrip;
+    private Border? _headersHost;
     private static DelegateControlTemplate<DropDownButton>? _overflowButtonTemplate;
 
     private static DelegateControlTemplate<DropDownButton> OverflowButtonTemplate
@@ -170,8 +183,51 @@ public sealed partial class TabControl : Control, ISelector, IIndexedSelector, I
             IsTabStop = false,
         };
         _overflowButton.DropDownOpening += RebuildOverflowMenu;
-        _overflowButton.Parent = this;
+        _headerStrip = new TabHeaderStrip(this) { Parent = this };
+        _overflowButton.Parent = _headerStrip;
     }
+
+    private protected override MewProperty<Element?>? DefaultContentSource => SelectedContentProperty;
+
+    private protected override void OnTemplateInstanceAttached()
+    {
+        base.OnTemplateInstanceAttached();
+
+        _headersHost = GetTemplateChild<Border>(PART_HEADERS_HOST)
+            ?? throw new InvalidOperationException(
+                $"The {nameof(TabControl)} template must register a {nameof(Border)} part named '{PART_HEADERS_HOST}'.");
+        _headerStrip.Parent = null;
+        _headersHost.Child = _headerStrip;
+
+        // Without a presenter in the template the selected content keeps its logical owner and no visual place.
+        var content = GetValue(SelectedContentProperty);
+        if (content != null && content.Parent == this)
+        {
+            content.Parent = null;
+        }
+    }
+
+    private protected override void OnTemplateInstanceDetached()
+    {
+        base.OnTemplateInstanceDetached();
+
+        if (_headersHost != null && ReferenceEquals(_headersHost.Child, _headerStrip))
+        {
+            _headersHost.Child = null;
+        }
+
+        _headersHost = null;
+        _headerStrip.Parent = this;
+
+        var content = GetValue(SelectedContentProperty);
+        if (content != null && content.Parent == null)
+        {
+            content.Parent = this;
+        }
+    }
+
+    /// <summary>Lays the header row out again, wherever it is hosted; the control's own layout follows from it.</summary>
+    private void InvalidateHeaderStrip() => _headerStrip.InvalidateMeasure();
 
     private bool IsHorizontalPlacement =>
         TabPlacement is TabPlacement.Top or TabPlacement.Bottom;
@@ -183,6 +239,7 @@ public sealed partial class TabControl : Control, ISelector, IIndexedSelector, I
             _headers[i].Placement = TabPlacement;
         }
 
+        InvalidateHeaderStrip();
         InvalidateMeasure();
         InvalidateVisual();
     }
@@ -312,6 +369,23 @@ public sealed partial class TabControl : Control, ISelector, IIndexedSelector, I
 
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
     {
+        var templateRoot = TemplateVisualRoot;
+        if (templateRoot != null)
+        {
+            return visitor(templateRoot);
+        }
+
+        if (!visitor(_headerStrip))
+        {
+            return false;
+        }
+
+        var content = SelectedTab?.Content;
+        return content == null || visitor(content);
+    }
+
+    internal bool VisitHeaderStrip(Func<Element, bool> visitor)
+    {
         for (int i = 0; i < _headers.Count; i++)
         {
             if (!visitor(_headers[i]))
@@ -320,13 +394,7 @@ public sealed partial class TabControl : Control, ISelector, IIndexedSelector, I
             }
         }
 
-        if (!visitor(_overflowButton))
-        {
-            return false;
-        }
-
-        var content = SelectedTab?.Content;
-        return content == null || visitor(content);
+        return visitor(_overflowButton);
     }
 
     Element? IFocusTraversalScope.ActiveTraversalRoot => SelectedTab?.Content;
@@ -399,12 +467,17 @@ public sealed partial class TabControl : Control, ISelector, IIndexedSelector, I
 
     protected override Size MeasureContent(Size availableSize)
     {
+        if (HasTemplateInstance)
+        {
+            return base.MeasureContent(availableSize);
+        }
+
         var borderInset = GetBorderVisualInset();
         var border = borderInset > 0 ? new Thickness(borderInset) : Thickness.Zero;
 
         var inner = availableSize.Deflate(border);
 
-        MeasureHeaders(inner);
+        _headerStrip.Measure(inner);
 
         double headerSize = IsHorizontalPlacement
             ? _headerDesiredSize.Height
@@ -438,22 +511,42 @@ public sealed partial class TabControl : Control, ISelector, IIndexedSelector, I
 
     protected override void ArrangeContent(Rect bounds)
     {
+        if (HasTemplateInstance)
+        {
+            base.ArrangeContent(bounds);
+            return;
+        }
+
         var borderInset = GetBorderVisualInset();
         var border = borderInset > 0 ? new Thickness(borderInset) : Thickness.Zero;
 
         var inner = bounds.Deflate(border);
 
         var (headerBounds, contentBounds) = GetLayoutRects(inner);
-        ArrangeHeaders(headerBounds);
+        _headerStrip.Arrange(headerBounds);
         SelectedTab?.Content?.Arrange(contentBounds.Deflate(Padding));
     }
 
+    internal Size MeasureHeaderStrip(Size availableSize)
+    {
+        MeasureHeaders(availableSize);
+        return _headerDesiredSize;
+    }
+
+    internal void ArrangeHeaderStrip(Rect bounds) => ArrangeHeaders(bounds);
+
     protected override void OnRender(IGraphicsContext context)
     {
+        // A template owns the control's entire visuals; the drawn frame would double-render.
+        if (HasTemplateInstance)
+        {
+            return;
+        }
+
         // Header must render BEFORE content background so the background
         // paints over the header's bottom edge, visually connecting the
         // selected tab to the content area.
-        RenderHeaders(context);
+        _headerStrip.Render(context);
 
         var bounds = GetSnappedBorderBounds(Bounds);
         var borderInset = GetBorderVisualInset();
@@ -487,22 +580,48 @@ public sealed partial class TabControl : Control, ISelector, IIndexedSelector, I
 
     protected override void RenderSubtree(IGraphicsContext context)
     {
+        if (HasTemplateInstance)
+        {
+            base.RenderSubtree(context);
+            return;
+        }
+
         SelectedTab?.Content?.Render(context);
     }
 
     internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
     {
+        if (HasTemplateInstance)
+        {
+            base.WriteComposition(builder);
+            return;
+        }
+
         builder.Content(0);
         builder.Child(SelectedTab?.Content);
     }
 
-    protected override UIElement? OnHitTest(Point point)
+    internal void RenderHeaderStrip(IGraphicsContext context) => RenderHeaders(context);
+
+    internal void WriteHeaderStripComposition(Rendering.Retained.CompositionPlanBuilder builder)
     {
-        if (!IsVisible || !IsHitTestVisible || !IsEffectivelyEnabled)
+        for (int i = 0; i < _headers.Count; i++)
         {
-            return null;
+            if (!_hiddenHeaders.Contains(_headers[i]))
+            {
+                builder.Child(_headers[i]);
+            }
         }
 
+        if (_overflowActive)
+        {
+            builder.Child(_overflowButton);
+        }
+    }
+
+    /// <summary>The header or overflow button under the point; null over the row's empty space, so it falls through.</summary>
+    internal UIElement? HitTestHeaderStrip(Point point)
+    {
         if (_overflowActive && _overflowButton.HitTest(point) is UIElement overflowHit)
         {
             return overflowHit;
@@ -521,6 +640,26 @@ public sealed partial class TabControl : Control, ISelector, IIndexedSelector, I
             {
                 return headerHit;
             }
+        }
+
+        return null;
+    }
+
+    protected override UIElement? OnHitTest(Point point)
+    {
+        if (HasTemplateInstance)
+        {
+            return base.OnHitTest(point);
+        }
+
+        if (!IsVisible || !IsHitTestVisible || !IsEffectivelyEnabled)
+        {
+            return null;
+        }
+
+        if (_headerStrip.HitTest(point) is UIElement headerHit)
+        {
+            return headerHit;
         }
 
         if (SelectedTab?.Content is UIElement uiContent)
@@ -549,7 +688,7 @@ public sealed partial class TabControl : Control, ISelector, IIndexedSelector, I
                 IsEnabled = tab.IsEnabled,
                 Content = tab.Header!,
                 Placement = TabPlacement,
-                Parent = this,
+                Parent = _headerStrip,
             };
             header.ClickedCallback = idx =>
             {
@@ -631,6 +770,7 @@ public sealed partial class TabControl : Control, ISelector, IIndexedSelector, I
         _headers.Clear();
         _hiddenHeaders.Clear();
         _overflowActive = false;
+        InvalidateHeaderStrip();
     }
 
     private void OnTabItemChanged(TabItem tab, TabItemChange change)
@@ -996,8 +1136,30 @@ public sealed partial class TabControl : Control, ISelector, IIndexedSelector, I
     {
         if (_lastContent != null)
         {
-            _lastContent.Parent = null;
+            ShowSelectedContent(_lastContent, null);
             _lastContent = null;
+        }
+    }
+
+    /// <summary>
+    /// Moves the visual place from the outgoing content to the incoming one: the template's presenter holds it
+    /// when a template is applied, this control otherwise.
+    /// </summary>
+    private void ShowSelectedContent(Element? oldContent, Element? newContent)
+    {
+        if (oldContent != null && oldContent.Parent == this)
+        {
+            oldContent.Parent = null;
+        }
+
+        SetValue(SelectedContentProperty, newContent);
+        if (HasTemplateInstance)
+        {
+            RefreshTemplatePresenters(SelectedContentProperty);
+        }
+        else if (newContent != null)
+        {
+            newContent.Parent = this;
         }
     }
 
@@ -1034,18 +1196,13 @@ public sealed partial class TabControl : Control, ISelector, IIndexedSelector, I
         var selectedContent = selected?.Content;
         if (!ReferenceEquals(_lastTab, selected) || !ReferenceEquals(_lastContent, selectedContent))
         {
-            if (oldContent != null)
-            {
-                oldContent.Parent = null;
-            }
-            if (selectedContent != null)
-            {
-                selectedContent.Parent = this;
-            }
+            ShowSelectedContent(oldContent, selectedContent);
             _lastTab = selected;
             _lastContent = selectedContent;
         }
 
+        // Which headers fit next to the overflow button follows the selection.
+        InvalidateHeaderStrip();
         InvalidateMeasure();
         InvalidateVisual();
 

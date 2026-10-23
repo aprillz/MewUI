@@ -115,6 +115,10 @@ nud.Template = new DelegateControlTemplate<NumericUpDown>((owner, ctx) =>
 
 `ScrollBar.PART_TRACK` takes a `Track`: the control pushes its range, value, viewport and orientation into the track, maps the drags of the track's `Thumb` to the value, and pages by `LargeChange` on a press in the track's decrease or increase element (or on their `Click` when they are `RepeatButton`s). The track places its `Thumb`, `DecreaseElement` and `IncreaseElement` and draws nothing itself, so the template gives those elements their look. Without the part, a templated scroll bar still scrolls by the wheel and from code.
 
+`SegmentedControl` and `ButtonGroup` require a `Border` registered as `SegmentedBase.PART_ITEMS_HOST`: the control puts its segment strip into the host's `Child`, keeps building and selecting the segments itself, and the strip draws its own dividers and pins the end segments to the host's edges. Applying a template without the part throws, because the strip is the control's whole content.
+
+`TabControl` requires a `Border` registered as `TabControl.PART_HEADERS_HOST`, which receives the row of tab headers and the overflow button; the control keeps measuring, arranging and selecting them. A `ContentPresenter` anywhere in the template shows the selected tab's content without naming a source, and the tabs' contents stay logically owned by the `TabControl`.
+
 ### <a id="presenter"></a>ContentPresenter: projecting logical slots
 
 A `ContentPresenter` marks the spot inside a template tree where "the control's content

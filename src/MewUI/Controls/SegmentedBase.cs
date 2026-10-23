@@ -25,10 +25,17 @@ public abstract class SegmentedBase : Control, IVisualTreeHost
         MewProperty<Thickness>.Register<SegmentedBase>(nameof(ItemPadding), new Thickness(12, 4),
             MewPropertyOptions.AffectsLayout);
 
+    /// <summary>
+    /// The host part of a template: a <see cref="Border"/> the control puts its segment strip into. The strip
+    /// is the control's own working element, so a template without this part cannot show the segments.
+    /// </summary>
+    public const string PART_ITEMS_HOST = "PART_ItemsHost";
+
     private readonly IDataTemplate _defaultTemplate;
     private readonly List<TemplateContext> _contexts = new();
 
     private Panel _panel;
+    private Border? _itemsHost;
     private SegmentSizing _sizing;
     private ISelectableItemsView _itemsSource = ItemsView.EmptySelectable;
     private IDataTemplate? _itemTemplate;
@@ -39,7 +46,7 @@ public abstract class SegmentedBase : Control, IVisualTreeHost
         _sizing = defaultSizing;
         _defaultTemplate = CreateDefaultItemTemplate();
         _panel = CreatePanel(_sizing);
-        _panel.Parent = this;
+        HostPanel();
 
         _itemsSource.SelectionChanged += OnItemsViewSelectionChangedCore;
         _itemsSource.Changed += OnItemsViewChangedCore;
@@ -167,21 +174,74 @@ public abstract class SegmentedBase : Control, IVisualTreeHost
         InvalidateVisual();
     }
 
-    private static Panel CreatePanel(SegmentSizing sizing)
-        => sizing == SegmentSizing.Uniform
-            ? new UniformGrid { Rows = 1, Spacing = 0 }
-            : new StackPanel { Orientation = Orientation.Horizontal, Spacing = 0 };
+    private Panel CreatePanel(SegmentSizing sizing)
+    {
+        Panel panel = sizing == SegmentSizing.Uniform
+            ? new UniformSegmentPanel { Rows = 1, Spacing = 0 }
+            : new StackSegmentPanel { Orientation = Orientation.Horizontal, Spacing = 0 };
+        ((ISegmentStrip)panel).ChromeSource = CreateChrome;
+        return panel;
+    }
 
     private void RebuildPanel()
     {
         _panel.Clear();
-        _panel.Parent = null;
+        UnhostPanel();
 
         _panel = CreatePanel(_sizing);
-        _panel.Parent = this;
+        HostPanel();
 
         RebuildSegments();
         OnSegmentsRebuilt();
+    }
+
+    private void HostPanel()
+    {
+        if (_itemsHost != null)
+        {
+            _itemsHost.Child = _panel;
+        }
+        else
+        {
+            _panel.Parent = this;
+        }
+    }
+
+    private void UnhostPanel()
+    {
+        if (_itemsHost != null && ReferenceEquals(_itemsHost.Child, _panel))
+        {
+            _itemsHost.Child = null;
+        }
+        else
+        {
+            _panel.Parent = null;
+        }
+    }
+
+    private protected override void OnTemplateInstanceAttached()
+    {
+        base.OnTemplateInstanceAttached();
+
+        _itemsHost = GetTemplateChild<Border>(PART_ITEMS_HOST)
+            ?? throw new InvalidOperationException(
+                $"The {GetType().Name} template must register a {nameof(Border)} part named '{PART_ITEMS_HOST}'.");
+        _panel.Parent = null;
+        HostPanel();
+    }
+
+    private protected override void OnTemplateInstanceDetached()
+    {
+        base.OnTemplateInstanceDetached();
+
+        if (_itemsHost == null)
+        {
+            return;
+        }
+
+        UnhostPanel();
+        _itemsHost = null;
+        HostPanel();
     }
 
     /// <summary>Rebuilds every segment container from the items view.</summary>
@@ -256,6 +316,11 @@ public abstract class SegmentedBase : Control, IVisualTreeHost
 
     protected override Size MeasureContent(Size availableSize)
     {
+        if (HasTemplateInstance)
+        {
+            return base.MeasureContent(availableSize);
+        }
+
         var borderInset = GetBorderVisualInset();
         var border = borderInset > 0 ? new Thickness(borderInset) : Thickness.Zero;
 
@@ -267,6 +332,12 @@ public abstract class SegmentedBase : Control, IVisualTreeHost
 
     protected override void ArrangeContent(Rect bounds)
     {
+        if (HasTemplateInstance)
+        {
+            base.ArrangeContent(bounds);
+            return;
+        }
+
         var borderInset = GetBorderVisualInset();
         var border = borderInset > 0 ? new Thickness(borderInset) : Thickness.Zero;
 
@@ -274,78 +345,79 @@ public abstract class SegmentedBase : Control, IVisualTreeHost
         _panel.Arrange(inner);
     }
 
-    protected override void OnRender(IGraphicsContext context)
+    private SegmentStripChrome CreateChrome()
     {
-        var bounds = GetSnappedBorderBounds(Bounds);
-
         // Match the snapped inner edge of the container border (same formula as ListBox's clip radius)
         // so the rounded segment ends line up with the border at fractional DPI.
         var dpiScale = GetDpi() / 96.0;
         double borderInset = GetBorderVisualInset();
-        double segmentRadius = Math.Max(0, LayoutRounding.RoundToPixel(CornerRadius, dpiScale) - borderInset);
-
-        // Inner edges of the container's snapped border. Pin the first/last segment background to these so
-        // the strip fills the frame; only when no container padding separates the strip from the border.
-        double innerLeft = bounds.Left + borderInset + Padding.Left;
-        double innerRight = bounds.Right - borderInset - Padding.Right;
-        for (int i = 0; i < _panel.Count; i++)
+        var chrome = new SegmentStripChrome
         {
-            if (_panel[i] is SegmentButton btn)
-            {
-                btn.Radius = segmentRadius;
-                btn.StripLeft = btn.IsFirst && Padding.Left <= 0 ? innerLeft : null;
-                btn.StripRight = btn.IsLast && Padding.Right <= 0 ? innerRight : null;
-            }
+            SegmentRadius = Math.Max(0, LayoutRounding.RoundToPixel(CornerRadius, dpiScale) - borderInset),
+            DividerColor = Theme.Palette.ControlBorder,
+            DividerThickness = BorderThickness,
+        };
+
+        if (HasTemplateInstance)
+        {
+            // The host part frames the strip, so the end segments pin to the strip's own edges.
+            chrome.PinToOwnEdges = true;
+        }
+        else
+        {
+            // Inner edges of the container's snapped border. Pin the first/last segment background to these so
+            // the strip fills the frame; only when no container padding separates the strip from the border.
+            var snapped = GetSnappedBorderBounds(Bounds);
+            chrome.StripLeft = Padding.Left <= 0 ? snapped.Left + borderInset + Padding.Left : null;
+            chrome.StripRight = Padding.Right <= 0 ? snapped.Right - borderInset - Padding.Right : null;
         }
 
-        DrawBackgroundAndBorder(context, bounds, GetValue(BackgroundProperty), GetValue(BorderBrushProperty),
-            BorderThickness, CornerRadius);
-
-        // Segments paint over the container background, then dividers are drawn on top.
-        _panel.Render(context);
-        DrawDividers(context);
+        return chrome;
     }
 
-    protected override void RenderSubtree(IGraphicsContext context)
+    protected override void OnRender(IGraphicsContext context)
     {
-        // The segment panel is rendered inside OnRender so dividers can be layered above it.
-    }
-
-    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder) => builder.Content(0);
-
-    private void DrawDividers(IGraphicsContext context)
-    {
-        if (_panel.Count < 2 || BorderThickness <= 0)
+        // A template owns the control's entire visuals; the frame and strip would double-render.
+        if (HasTemplateInstance)
         {
             return;
         }
 
-        var color = Theme.Palette.ControlBorder;
+        var bounds = GetSnappedBorderBounds(Bounds);
+        DrawBackgroundAndBorder(context, bounds, GetValue(BackgroundProperty), GetValue(BorderBrushProperty),
+            BorderThickness, CornerRadius);
 
-        // Draw each internal boundary at the RIGHT segment's left edge. Per-child layout rounding
-        // rounds X and Width independently, so at fractional cell widths (3+ items) a segment's
-        // snapped right edge can drift 1px from its neighbor's snapped left edge. Segments render
-        // in order (later on top), so the visible seam is the right neighbor's left edge - snap it
-        // the same way the segment background does so the divider lands exactly on the seam.
-        for (int i = 1; i < _panel.Count; i++)
+        // The strip paints its segments over the container background and its dividers on top of them.
+        _panel.Render(context);
+    }
+
+    protected override void RenderSubtree(IGraphicsContext context)
+    {
+        if (HasTemplateInstance)
         {
-            if (_panel[i] is not UIElement right)
-            {
-                continue;
-            }
+            base.RenderSubtree(context);
+        }
 
-            var b = GetSnappedBorderBounds(right.Bounds);
-            if (b.Width <= 0 || b.Height <= 0)
-            {
-                continue;
-            }
+        // Without a template the strip is rendered inside OnRender, under the same recording as the frame.
+    }
 
-            double x = b.Left;
-            context.DrawLine(new Point(x, b.Top), new Point(x, b.Bottom), color, BorderThickness, true);
+    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
+    {
+        if (HasTemplateInstance)
+        {
+            base.WriteComposition(builder);
+        }
+        else
+        {
+            builder.Content(0);
         }
     }
 
-    bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor) => visitor(_panel);
+    bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
+    {
+        var templateRoot = TemplateVisualRoot;
+        return templateRoot != null ? visitor(templateRoot) : visitor(_panel);
+    }
 
     protected override void OnDispose()
     {
