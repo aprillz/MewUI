@@ -246,12 +246,19 @@ public sealed class Application
     public IReadOnlyList<Window> AllWindows => _runtime?.Windows ?? (IReadOnlyList<Window>)Array.Empty<Window>();
 
     private CommandScope? _commands;
+    private CommandRouter? _commandRouter;
     private InputMap? _inputMap;
 
     /// <summary>
     /// Gets the application-level command scope, the last stage of command routing.
     /// </summary>
     public CommandScope Commands => _commands ??= new CommandScope();
+
+    /// <summary>
+    /// Gets the router for surfaces that run commands without a window, such as a tray icon's menu. It resolves the
+    /// target's scope chain and then <see cref="Commands"/>; handlers receive a null <see cref="CommandContext.Window"/>.
+    /// </summary>
+    public CommandRouter CommandRouter => _commandRouter ??= new CommandRouter(window: null);
 
     /// <summary>
     /// Gets the application-level input map, pre-populated with the standard edit gestures.

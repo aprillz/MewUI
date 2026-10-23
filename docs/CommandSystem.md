@@ -34,7 +34,7 @@ The registration shapes differ by what they bind. They are all called `Register`
 | What is bound | Shape | Meaning |
 |---|---|---|
 | Delegates | `Register(cmd, Action, Func<bool>?)` | Execute and can-execute |
-| The invocation context | `Register(cmd, Action<CommandContext>, Func<CommandContext, bool>?)` | When the window, the source element, or the cancellation token is needed. An asynchronous `Func<CommandContext, ValueTask>` form exists too |
+| The invocation context | `Register(cmd, Action<CommandContext>, Func<CommandContext, bool>?)` | When the window, the source element, or the cancellation token is needed. `Window` is null when the command runs without a window (see the section on running without a window). An asynchronous `Func<CommandContext, ValueTask>` form exists too |
 | A target object | `Register(cmd, target, static t => ..., static t => ...)` | Closure-free static lambdas |
 | An argument type | `Register(cmd, (Item item) => ..., (Item item) => ...)` | A handler that receives the invocation argument (see the argument section) |
 
@@ -57,6 +57,7 @@ Each surface picks its target differently.
 | ContextMenu | The placement target (`PlacementTarget`) captured when it opens. The menu takes focus, but commands still run against the element it opened over, and submenus inherit the same target |
 | MenuBar | The element focused just before the menu opened |
 | A dynamic menu with a standalone scope | `menu.SetCommandTarget(CommandTarget.From(scope))` |
+| A surface with no window, such as a tray icon's menu | A scope, run through `Application.Current.CommandRouter` |
 
 A surface that lives outside the document, such as a toolbar, reaches the active document's handlers only when the shell points `CommandRouter.FallbackTarget` at that document. Handlers never learn what the target was and do not need to. The same handler is meant to run with the same meaning whether a menu or a shortcut invoked it, which is why `CommandContext` does not expose the target. When a handler needs the thing it was invoked on, the argument section provides it.
 
@@ -70,6 +71,22 @@ menu.Item(select);
 menu.SetCommandTarget(CommandTarget.From(scope));
 menu.Show(owner);
 ```
+
+### Running without a window
+
+Each window routes commands through its own `Window.CommandRouter`. A surface that has no window, such as the menu of a tray icon in an app with no window open, uses `Application.Current.CommandRouter` instead. It has no focus and no window scope: it walks the target's scope chain, then the `Application` scope. Without a target it starts at the `Application` scope. Handlers it runs receive a `CommandContext` whose `Window` is null.
+
+```csharp
+Application.Current.Commands.Register(exit, Application.Shutdown);
+
+var router = Application.Current.CommandRouter;
+if (router.CanExecute(exit))
+{
+    await router.ExecuteAsync(exit);
+}
+```
+
+A surface whose items carry `CommandData` passes it with `CanExecute(command, target, argument)` and `ExecuteAsync(command, target, argument, source)`, which use the given argument instead of looking for one from the target.
 
 ## Argument: what it acts on
 

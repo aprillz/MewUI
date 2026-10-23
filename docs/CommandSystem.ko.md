@@ -34,7 +34,7 @@ window.InputMap.Map(save, new KeyGesture(Key.S, ModifierKeys.Primary));
 | 결합하는 것 | 모양 | 뜻 |
 |---|---|---|
 | 델리게이트 | `Register(cmd, Action, Func<bool>?)` | 실행과 가능 여부 |
-| 호출 문맥 | `Register(cmd, Action<CommandContext>, Func<CommandContext, bool>?)` | 창, 호출 출처 요소, 취소 토큰이 필요할 때. 비동기 형태 `Func<CommandContext, ValueTask>`도 있습니다 |
+| 호출 문맥 | `Register(cmd, Action<CommandContext>, Func<CommandContext, bool>?)` | 창, 호출 출처 요소, 취소 토큰이 필요할 때. 창 없이 실행된 명령에서는 `Window`가 null입니다(창 없이 실행하기 절). 비동기 형태 `Func<CommandContext, ValueTask>`도 있습니다 |
 | 대상 객체 | `Register(cmd, target, static t => ..., static t => ...)` | 클로저 없는 정적 람다 |
 | 인자 타입 | `Register(cmd, (Item item) => ..., (Item item) => ...)` | 호출 인자를 받는 처리기 (인자 절) |
 
@@ -57,6 +57,7 @@ window.InputMap.Map(save, new KeyGesture(Key.S, ModifierKeys.Primary));
 | ContextMenu | 열릴 때의 배치 타깃(`PlacementTarget`)을 캡처. 메뉴가 포커스를 가져가도 원래 요소를 대상으로 실행하며 하위 메뉴는 같은 타깃을 물려받음 |
 | MenuBar | 메뉴를 열기 직전의 포커스 요소 |
 | 독립 스코프를 쓰는 동적 메뉴 | `menu.SetCommandTarget(CommandTarget.From(scope))` |
+| 트레이 아이콘 메뉴처럼 창이 없는 표면 | 스코프. `Application.Current.CommandRouter`로 실행 |
 
 툴바처럼 문서 밖에 있는 표면이 활성 문서의 처리기에 닿으려면 셸이 `CommandRouter.FallbackTarget`을 활성 문서로 가리켜야 합니다. 처리기는 타깃이 무엇이었는지 알지 못하고 알 필요도 없습니다. 같은 처리기가 메뉴에서 호출되든 단축키로 호출되든 같은 뜻으로 실행되는 것이 목표이며, 그래서 `CommandContext`는 타깃을 노출하지 않습니다. 호출된 대상이 필요하면 인자 절의 방법을 씁니다.
 
@@ -70,6 +71,22 @@ menu.Item(select);
 menu.SetCommandTarget(CommandTarget.From(scope));
 menu.Show(owner);
 ```
+
+### 창 없이 실행하기
+
+창은 저마다 `Window.CommandRouter`로 명령을 실행합니다. 열린 창이 없는 앱의 트레이 아이콘 메뉴처럼 창이 없는 표면은 대신 `Application.Current.CommandRouter`를 씁니다. 이 라우터에는 포커스와 창 스코프가 없어서, 타깃의 스코프 사슬을 본 다음 `Application` 스코프를 봅니다. 타깃이 없으면 `Application` 스코프에서 시작합니다. 이 라우터가 실행한 처리기가 받는 `CommandContext`의 `Window`는 null입니다.
+
+```csharp
+Application.Current.Commands.Register(exit, Application.Shutdown);
+
+var router = Application.Current.CommandRouter;
+if (router.CanExecute(exit))
+{
+    await router.ExecuteAsync(exit);
+}
+```
+
+항목에 `CommandData`가 있는 표면은 `CanExecute(command, target, argument)`와 `ExecuteAsync(command, target, argument, source)`로 그 값을 넘깁니다. 두 메서드는 타깃에서 인자를 찾지 않고 받은 값을 씁니다.
 
 ## 인자: 무엇에 대해 실행하는가
 

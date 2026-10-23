@@ -10,16 +10,20 @@ namespace Aprillz.MewUI;
 /// Resolution order: the explicit or focused target's context chain, then
 /// <see cref="FallbackTarget"/>, then the window scope, then the application scope. The nearest
 /// handler ends the search even when its CanExecute returns false (disabled shadowing).
+/// <para>Each window has a router (<see cref="Window.CommandRouter"/>). <see cref="Application.CommandRouter"/> serves
+/// surfaces that run without a window, such as a tray icon's menu: it has no focus and no window scope, so it resolves
+/// the target's scope chain and then the application scope.</para>
 /// </remarks>
 public sealed class CommandRouter
 {
     // Defensive bound for context-parent walks; mirrors focus-chain traversal guards.
     private const int MAX_CHAIN_LENGTH = 256;
 
-    private readonly Window _window;
+    // Null for the application's router.
+    private readonly Window? _window;
     private CommandTarget? _fallbackTarget;
 
-    internal CommandRouter(Window window) => _window = window;
+    internal CommandRouter(Window? window) => _window = window;
 
     /// <summary>
     /// Gets or sets the target consulted when the focused context has no handler; a shell layer
@@ -36,14 +40,15 @@ public sealed class CommandRouter
             }
 
             _fallbackTarget = value;
-            _window.RequestCommandStateEvaluation();
+            _window?.RequestCommandStateEvaluation();
         }
     }
 
     /// <summary>
-    /// Captures the current focused context (or the window itself) as a reusable target snapshot.
+    /// Captures the current focused context (or the window itself) as a reusable target snapshot. The application's
+    /// router has no focus and returns an empty target, which resolves to the application scope.
     /// </summary>
-    public CommandTarget CaptureTarget() => CommandTarget.From(ResolveFocusedOrigin());
+    public CommandTarget CaptureTarget() => _window == null ? default : CommandTarget.From(ResolveFocusedOrigin(_window));
 
     /// <summary>
     /// Captures the given element as a target snapshot.
@@ -72,11 +77,14 @@ public sealed class CommandRouter
     }
 
     /// <summary>
-    /// Queries with an operand captured earlier (a menu snapshots it when it opens) instead of
-    /// resolving one from the target now.
+    /// Queries whether the command can execute for the given target with a given operand (a menu item's
+    /// <see cref="MenuItem.CommandData"/>, or one a menu snapshotted when it opened) instead of one
+    /// resolved from the target.
     /// </summary>
-    internal bool CanExecute(Command command, CommandTarget target, object? argument)
+    public bool CanExecute(Command command, CommandTarget target, object? argument)
     {
+        ArgumentNullException.ThrowIfNull(command);
+
         if (!TryResolve(command, target, out var handler))
         {
             return false;
@@ -107,6 +115,31 @@ public sealed class CommandRouter
         }
 
         var context = new CommandContext(_window, source, cancellationToken, ResolveArgument(handler, target));
+        if (!handler.CanExecute(in context))
+        {
+            return false;
+        }
+
+        await handler.ExecuteAsync(in context).ConfigureAwait(true);
+        return true;
+    }
+
+    /// <summary>
+    /// Executes the command for the given target with a given operand (a menu item's
+    /// <see cref="MenuItem.CommandData"/>) instead of one resolved from the target; returns false when no handler
+    /// exists or CanExecute rejects the invocation.
+    /// </summary>
+    public async ValueTask<bool> ExecuteAsync(Command command, CommandTarget target, object? argument, Element? source,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        if (!TryResolve(command, target, out var handler))
+        {
+            return false;
+        }
+
+        var context = new CommandContext(_window, source, cancellationToken, argument);
         if (!handler.CanExecute(in context))
         {
             return false;
@@ -179,7 +212,7 @@ public sealed class CommandRouter
             return true;
         }
 
-        if (_window.TryGetCommandScope() is CommandScope windowScope &&
+        if (_window?.TryGetCommandScope() is CommandScope windowScope &&
             TryResolveScopeChain(windowScope, command, out handler))
         {
             return true;
@@ -266,15 +299,15 @@ public sealed class CommandRouter
         return false;
     }
 
-    private Element ResolveFocusedOrigin()
+    private static Element ResolveFocusedOrigin(Window window)
     {
-        var focused = _window.FocusManager.FocusedElement;
-        if (focused != null && !ReferenceEquals(focused.FindVisualRoot(), _window))
+        var focused = window.FocusManager.FocusedElement;
+        if (focused != null && !ReferenceEquals(focused.FindVisualRoot(), window))
         {
             focused = null;
         }
 
-        return (Element?)focused ?? _window;
+        return (Element?)focused ?? window;
     }
 
     private static async void ObserveAsyncCompletion(ValueTask pending)
