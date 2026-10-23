@@ -170,7 +170,9 @@ internal sealed partial class MewVGWin32GraphicsContext
         => EnsureMeasureContext().MeasureText(text, font, maxWidth);
 
     protected override TextInkOverhang MeasureRunInkOverhang(ReadOnlySpan<char> text, IFont font, BackendTextLayout layout)
-        => font is IWin32TextFace face ? face.GetRunInkOverhang(text) : TextInkOverhang.None;
+        => font is IWin32TextFace face
+            ? Win32TextFaceRuns.ShiftInkOverhang(face.GetRunInkOverhang(text), layout.RasterOriginOffsetY)
+            : TextInkOverhang.None;
 
     public override Size MeasureText(ReadOnlySpan<char> text, IFont font)
         => MeasureTextCore(text, font);
@@ -216,7 +218,8 @@ internal sealed partial class MewVGWin32GraphicsContext
             MeasuredSize = measured,
             EffectiveBounds = effectiveBounds,
             EffectiveMaxWidth = effectiveMaxWidth,
-            ContentHeight = measured.Height
+            ContentHeight = measured.Height,
+            RasterOriginOffsetY = Win32TextFaceRuns.ResolveOriginOffsetY(text, format.Font, format.Wrapping, DpiScale)
         };
     }
 
@@ -264,6 +267,10 @@ internal sealed partial class MewVGWin32GraphicsContext
         }
         double insetLeftDip = inkInset.Left / DpiScale;
         double insetTopDip = inkInset.Top / DpiScale;
+        // A text-engine run is pulled back to the baseline the engine placed it on, by whole pixels.
+        double originOffsetDip = layout.InkOverhang.HasValue
+            ? RenderingUtil.RoundToPixelInt(layout.RasterOriginOffsetY, DpiScale) / DpiScale
+            : 0;
 
         widthPx = ClampTextRasterExtent(widthPx, boundsPx, axis: 0);
         heightPx = ClampTextRasterExtent(heightPx, boundsPx, axis: 1);
@@ -275,7 +282,7 @@ internal sealed partial class MewVGWin32GraphicsContext
             // Transform the full text rect (rotation/skew aware, not just translation) before the clip test, so
             // rotated text is not wrongly culled and skipped.
             var worldText = TransformRectToWorldAABB(new Rect(
-                bounds.X - insetLeftDip, bounds.Y - insetTopDip, widthPx / DpiScale, heightPx / DpiScale));
+                bounds.X - insetLeftDip, bounds.Y - insetTopDip + originOffsetDip, widthPx / DpiScale, heightPx / DpiScale));
             if (worldText.Right <= c.X || worldText.X >= c.Right || worldText.Bottom <= c.Y || worldText.Y >= c.Bottom)
                 return;
         }
@@ -331,6 +338,7 @@ internal sealed partial class MewVGWin32GraphicsContext
         // The raster origin sits one inset up and left of the layout origin.
         drawX -= insetLeftDip;
         drawY -= insetTopDip;
+        drawY += originOffsetDip;
 
         bool needsLinear = NeedsLinearFilter();
         var textHash = string.GetHashCode(text);

@@ -121,6 +121,55 @@ internal static unsafe class DirectWriteTextMeasure
         }
     }
 
+    /// <summary>
+    /// Baseline of the first line of <paramref name="text"/> laid out single-line and top-aligned, in
+    /// device-independent units from the top. A fallback glyph can lift it above the font's own baseline.
+    /// </summary>
+    internal static bool TryGetRunBaseline(nint factory, DirectWriteFont font, DWriteTextFormatCache? formatCache,
+        ReadOnlySpan<char> text, float pixelsPerDip, out double baseline)
+    {
+        baseline = 0;
+        if (text.IsEmpty || factory == 0)
+        {
+            return false;
+        }
+
+        nint textFormat = AcquireTextFormat(factory, font, formatCache, TextWrapping.NoWrap, out bool ownFormat);
+        if (textFormat == 0)
+        {
+            return false;
+        }
+
+        nint textLayout = 0;
+        try
+        {
+            int hr = DWriteVTable.CreateGdiCompatibleTextLayout(
+                (IDWriteFactory*)factory, text, textFormat, float.MaxValue, float.MaxValue, pixelsPerDip,
+                useGdiNatural: false, out textLayout);
+            if (hr < 0 || textLayout == 0)
+            {
+                return false;
+            }
+
+            ApplyCustomFontFallback(factory, textLayout, font);
+            if (DWriteVTable.GetFirstLineMetrics(textLayout, out var line) < 0)
+            {
+                return false;
+            }
+
+            baseline = line.baseline;
+            return baseline > 0;
+        }
+        finally
+        {
+            ComHelpers.Release(textLayout);
+            if (ownFormat)
+            {
+                ComHelpers.Release(textFormat);
+            }
+        }
+    }
+
     /// <summary>Ink of a single-line run that falls outside its layout box, in device-independent units.</summary>
     internal static TextInkOverhang GetRunInkOverhang(nint factory, DirectWriteFont font,
         DWriteTextFormatCache? formatCache, ReadOnlySpan<char> text, float pixelsPerDip)

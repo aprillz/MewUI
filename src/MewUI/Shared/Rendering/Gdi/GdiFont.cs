@@ -154,6 +154,13 @@ internal sealed partial class GdiFont : FontBase, IGlyphOutlineFont, IWin32TextF
         return TextInkOverhang.FromEdges(left * scale, above * scale, right * scale, below * scale);
     }
 
+    public bool TryGetRunBaseline(ReadOnlySpan<char> text, double dpiScale, out double baseline)
+    {
+        // Font linking keeps linked glyphs on the base font's baseline, so a run never moves.
+        baseline = 0;
+        return false;
+    }
+
     public bool TryGetPrefixAdvances(ReadOnlySpan<char> text, double dpiScale, Span<double> destination)
     {
         if (destination.Length < text.Length)

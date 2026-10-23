@@ -30,6 +30,13 @@ internal interface IWin32TextFace
     Size Measure(ReadOnlySpan<char> text, double maxWidthDip, TextWrapping wrapping, double dpiScale);
 
     /// <summary>
+    /// Baseline, in device-independent units from the top of a top-aligned single-line box, on which
+    /// <see cref="TryRasterize"/> lands the first line of <paramref name="text"/>. False when the face
+    /// draws every run on the font's own baseline, so a caller needs no correction.
+    /// </summary>
+    bool TryGetRunBaseline(ReadOnlySpan<char> text, double dpiScale, out double baseline);
+
+    /// <summary>
     /// Rasterizes a text box into a straight-alpha BGRA bitmap. Returns false when the face has no
     /// rasterizer of its own, leaving the backend to use its existing path.
     /// </summary>
@@ -42,6 +49,30 @@ internal interface IWin32TextFace
     /// </summary>
     bool TryRasterizeSubpixel(ReadOnlySpan<char> text, in Win32TextRasterizeRequest request,
         out Win32TextCoverage coverage);
+}
+
+/// <summary>Raster placement shared by the backends that draw an <see cref="IWin32TextFace"/> run from its bitmap.</summary>
+internal static class Win32TextFaceRuns
+{
+    /// <summary>
+    /// How far a run's raster is pulled back to the font's own baseline, the one the text engine placed
+    /// the run on; a fallback glyph makes the face lay the line out on a taller baseline. Zero when the
+    /// face keeps the font's baseline or the text wraps.
+    /// </summary>
+    public static double ResolveOriginOffsetY(ReadOnlySpan<char> text, IFont font, TextWrapping wrapping, double dpiScale)
+    {
+        if (wrapping != TextWrapping.NoWrap || font is not IWin32TextFace face
+            || !face.TryGetRunBaseline(text, dpiScale, out double runBaseline))
+        {
+            return 0;
+        }
+
+        return font.Ascent - runBaseline;
+    }
+
+    /// <summary>The ink overhang of a run whose raster is shifted by <paramref name="originOffsetY"/>.</summary>
+    public static TextInkOverhang ShiftInkOverhang(TextInkOverhang ink, double originOffsetY)
+        => TextInkOverhang.FromEdges(ink.Left, ink.Top - originOffsetY, ink.Right, ink.Bottom + originOffsetY);
 }
 
 /// <summary>

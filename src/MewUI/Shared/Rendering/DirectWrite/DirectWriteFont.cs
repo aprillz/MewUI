@@ -297,6 +297,18 @@ internal sealed unsafe partial class DirectWriteFont : FontBase, IGlyphOutlineFo
     public TextInkOverhang GetRunInkOverhang(ReadOnlySpan<char> text)
         => DirectWriteTextMeasure.GetRunInkOverhang(_dwriteFactoryHandle, this, null, text, PixelsPerDip);
 
+    public bool TryGetRunBaseline(ReadOnlySpan<char> text, double dpiScale, out double baseline)
+    {
+        baseline = 0;
+        if (text.IsEmpty || _dwriteFactoryHandle == 0)
+        {
+            return false;
+        }
+
+        return DirectWriteTextMeasure.TryGetRunBaseline(
+            _dwriteFactoryHandle, this, null, text, dpiScale > 0 ? (float)dpiScale : 1f, out baseline);
+    }
+
     public bool TryGetPrefixAdvances(ReadOnlySpan<char> text, double dpiScale, Span<double> destination)
     {
         if (destination.Length < text.Length)

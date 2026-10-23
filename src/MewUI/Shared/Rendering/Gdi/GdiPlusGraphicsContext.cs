@@ -1319,9 +1319,14 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
             MeasuredSize = measured,
             EffectiveBounds = safeBounds,
             EffectiveMaxWidth = effectiveMaxWidth,
-            ContentHeight = measured.Height
+            ContentHeight = measured.Height,
+            RasterOriginOffsetY = Win32TextFaceRuns.ResolveOriginOffsetY(text, format.Font, format.Wrapping, _dpiScale)
         };
     }
+
+    /// <summary>Whole-pixel shift of a run's raster; an immediate-mode layout keeps its box.</summary>
+    private int RasterOriginShiftPx(BackendTextLayout layout)
+        => layout.InkOverhang.HasValue ? (int)Math.Round(layout.RasterOriginOffsetY * _dpiScale) : 0;
 
     // Set while a transient run is drawn: text that changes every frame bypasses the text cache.
     private bool _transientText;
@@ -1626,7 +1631,14 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
     }
 
     protected override TextInkOverhang MeasureRunInkOverhang(ReadOnlySpan<char> text, IFont font, BackendTextLayout layout)
-        => font is IWin32TextFace face ? face.GetRunInkOverhang(text) : TextInkOverhang.None;
+    {
+        if (font is not IWin32TextFace face)
+        {
+            return TextInkOverhang.None;
+        }
+
+        return Win32TextFaceRuns.ShiftInkOverhang(face.GetRunInkOverhang(text), layout.RasterOriginOffsetY);
+    }
 
     // What a face rasterizes into, grown as needed and reused for every run.
     private byte[]? _faceRasterBuffer;
@@ -1652,6 +1664,12 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
         }
 
         var target = ToDeviceRect(InflateByInset(TransformRect(layout.EffectiveBounds), inkInset));
+        int shiftPx = RasterOriginShiftPx(layout);
+        if (shiftPx != 0)
+        {
+            target = RECT.FromLTRB(target.left, target.top + shiftPx, target.right, target.bottom + shiftPx);
+        }
+
         int widthPx = target.right - target.left;
         int heightPx = target.bottom - target.top;
         if (widthPx <= 0 || heightPx <= 0 || Gdi32.RectVisible(Hdc, ref target) == 0)
@@ -1726,6 +1744,12 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
         BackendTextLayout layout, Color color, IWin32TextFace face, TextInkInsetPx inkInset, XFORM transform)
     {
         var local = ToDeviceRect(InflateByInset(layout.EffectiveBounds, inkInset));
+        int shiftPx = RasterOriginShiftPx(layout);
+        if (shiftPx != 0)
+        {
+            local = RECT.FromLTRB(local.left, local.top + shiftPx, local.right, local.bottom + shiftPx);
+        }
+
         int sourceWidth = local.right - local.left;
         int sourceHeight = local.bottom - local.top;
         double determinant = transform.eM11 * transform.eM22 - transform.eM12 * transform.eM21;
