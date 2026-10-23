@@ -53,6 +53,8 @@ public sealed partial class MewVGX11GraphicsFactory : IPersistentFrameGraphicsFa
     private X11GLVisualInfo _workerVisualInfo;
     private bool _workerHasVisualInfo;
     private bool _workerInitFailed;
+    // The worker renders on a surfaceless EGL display of its own, which no window opens or closes.
+    private bool _workerIsSurfaceless;
     // Set while no window exists, because the platform host closes the X display once the last
     // one goes away and a scope still rendering on that display crashes inside the driver.
     private volatile bool _workerSuspended;
@@ -92,16 +94,9 @@ public sealed partial class MewVGX11GraphicsFactory : IPersistentFrameGraphicsFa
         lock (_workerCtxInitLock)
         {
             if (_worker != null || _workerInitFailed) return;
-            if (!_workerHasVisualInfo)
+            if (!_workerHasVisualInfo && !TryPrepareWindowlessWorker())
             {
-                // No window has been created yet - can't initialize without a visual. Editor
-                // preview sessions never create one, so they fall back to a self-owned display;
-                // normal apps keep the retry-after-first-window behavior so the worker shares
-                // the window's display connection.
-                if (!Design.IsPreviewMode || !TryCaptureWindowlessGLInfo())
-                {
-                    return;
-                }
+                return;
             }
 
             try
@@ -115,6 +110,31 @@ public sealed partial class MewVGX11GraphicsFactory : IPersistentFrameGraphicsFa
                 throw;
             }
         }
+    }
+
+    /// <summary>
+    /// Readies a worker context that no window precedes; false when the worker has to wait for the first
+    /// window, whose display connection it then shares.
+    /// </summary>
+    private bool TryPrepareWindowlessWorker()
+    {
+        if (Design.IsPreviewMode)
+        {
+            // Editor preview sessions never create a window, so the worker gets a self-owned display.
+            return TryCaptureWindowlessGLInfo();
+        }
+
+        if (Application.RendersWithoutDisplay)
+        {
+            // Nothing can open a display here: the worker renders on a surfaceless EGL device, and the
+            // registry switches with it so current-context lookups see EGL contexts instead of GLX ones.
+            X11GLBackendRegistry.Current = new EglSurfacelessBackend(GLBackend);
+            _workerIsSurfaceless = true;
+            _workerHasVisualInfo = true;
+            return true;
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -288,7 +308,8 @@ public sealed partial class MewVGX11GraphicsFactory : IPersistentFrameGraphicsFa
 
     partial void TryReleaseWindowResources(nint hwnd)
     {
-        if (!_windows.IsEmpty)
+        // A surfaceless worker has no display that closes with the last window.
+        if (!_windows.IsEmpty || _workerIsSurfaceless)
         {
             return;
         }
