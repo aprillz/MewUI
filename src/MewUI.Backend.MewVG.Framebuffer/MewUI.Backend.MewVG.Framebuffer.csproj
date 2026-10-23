@@ -38,6 +38,7 @@
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\MewVGTextCache.cs" LinkBase="Rendering\MewVG" />
 
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\IGLTextureSource.cs" LinkBase="Rendering\OpenGL" />
+    <Compile Include="..\MewUI\Shared\Rendering\OpenGL\IOpenGLWindowResources.cs" LinkBase="Rendering\OpenGL" />
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\OpenGLPixelRenderSurface.cs" LinkBase="Rendering\OpenGL" />
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\OpenGLGaussianBlur.cs" LinkBase="Rendering\OpenGL" />
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\OpenGLFilterPasses.cs" LinkBase="Rendering\OpenGL" />
