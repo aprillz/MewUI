@@ -25,6 +25,12 @@ internal abstract class ManagedUiDispatcher : SynchronizationContext, IDispatche
     // on pending work; re-pump up to this many passes per ProcessWorkItems call.
     protected abstract int MaxPumpIterations { get; }
 
+    /// <summary>
+    /// The clock timer expiry is measured against, in <see cref="Stopwatch"/> ticks; a host that
+    /// drives time itself overrides it and keeps the <see cref="Stopwatch.Frequency"/> unit.
+    /// </summary>
+    protected virtual long GetTimestamp() => Stopwatch.GetTimestamp();
+
     public DispatcherOperation BeginInvoke(Action action)
         => BeginInvoke(DispatcherPriority.Normal, action);
 
@@ -88,8 +94,8 @@ internal abstract class ManagedUiDispatcher : SynchronizationContext, IDispatche
         var handle = new TimerHandle(this, id);
 
         var dueAt = dueTime == TimeSpan.Zero
-            ? Stopwatch.GetTimestamp()
-            : Stopwatch.GetTimestamp() + (long)(dueTime.TotalSeconds * Stopwatch.Frequency);
+            ? GetTimestamp()
+            : GetTimestamp() + (long)(dueTime.TotalSeconds * Stopwatch.Frequency);
 
         lock (_timersGate)
         {
@@ -136,7 +142,7 @@ internal abstract class ManagedUiDispatcher : SynchronizationContext, IDispatche
 
             // Only treat timers as pending when they are due now; future timers must not stop the host
             // loop from blocking in its OS wait.
-            long now = Stopwatch.GetTimestamp();
+            long now = GetTimestamp();
             lock (_timersGate)
             {
                 for (int i = 0; i < _timers.Count; i++)
@@ -160,7 +166,7 @@ internal abstract class ManagedUiDispatcher : SynchronizationContext, IDispatche
             return 0;
         }
 
-        long now = Stopwatch.GetTimestamp();
+        long now = GetTimestamp();
         long? nextDue = null;
 
         lock (_timersGate)
@@ -208,7 +214,7 @@ internal abstract class ManagedUiDispatcher : SynchronizationContext, IDispatche
     {
         queueHasWork = _queue.HasWork;
 
-        long now = Stopwatch.GetTimestamp();
+        long now = GetTimestamp();
         int due = 0;
         int total = 0;
         lock (_timersGate)
@@ -236,7 +242,7 @@ internal abstract class ManagedUiDispatcher : SynchronizationContext, IDispatche
     private void ProcessDueTimers()
     {
         List<Action>? dueActions = null;
-        var now = Stopwatch.GetTimestamp();
+        var now = GetTimestamp();
 
         lock (_timersGate)
         {

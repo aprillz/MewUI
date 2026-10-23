@@ -18,5 +18,6 @@ using System.Runtime.CompilerServices;
 [assembly: InternalsVisibleTo("Aprillz.MewUI.Markdown.Test")]
 [assembly: InternalsVisibleTo("Aprillz.MewUI.WindowAutomationTest")]
 [assembly: InternalsVisibleTo("Aprillz.MewUI.Preview")]
+[assembly: InternalsVisibleTo("Aprillz.MewUI.Headless")]
 [assembly: InternalsVisibleTo("Aprillz.MewUI.Benchmarks")]
 [assembly: InternalsVisibleTo("Aprillz.MewUI.MewvalonEdit.Test")]

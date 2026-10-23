@@ -333,6 +333,15 @@ public sealed class Application
     // Register() call in Main; the wrap is applied when the host is finally resolved.
     internal static Func<IPlatformHost, IPlatformHost>? PlatformHostInterceptor { get; set; }
 
+    /// <summary>The surface family the registered graphics backend consumes, or null before a backend registered.</summary>
+    internal static PlatformSurfaceKind? RegisteredBackendSurfaceKind => _backendSurfaceKind;
+
+    /// <summary>
+    /// Whether the platform host draws every frame offscreen with no display connection, so a backend
+    /// that needs one for offscreen rendering brings its own device; set by a headless host for its session.
+    /// </summary>
+    internal static bool RendersWithoutDisplay { get; set; }
+
     internal static IPlatformHost DefaultPlatformHost
     {
         get
