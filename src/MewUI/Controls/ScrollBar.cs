@@ -162,7 +162,8 @@ public sealed partial class ScrollBar : RangeBase
 
         if (thumb.Width > 0 && thumb.Height > 0 && thumbColor.A > 0)
         {
-            double radius = Theme.Metrics.ScrollBarThickness / 2;
+            // The thumb rounds by the style's CornerRadius, capped at a half-circle end.
+            double radius = Math.Min(CornerRadius, Math.Min(thumb.Width, thumb.Height) / 2);
             context.FillRoundedRectangle(thumb, radius, radius, thumbColor);
         }
     }
