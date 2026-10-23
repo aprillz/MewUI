@@ -9,7 +9,7 @@ namespace MewUI.Test.Markup;
 [TestClass]
 public sealed class MarkupReferenceDocsTests
 {
-    private const string SOLUTION_FILE = "MewUI.Dev.slnx";
+    private const string REPOSITORY_MARKER = "build/MewUI.Common.props";
     private const string DOCS_DIRECTORY = "docs/markup";
     private const string SNIPPETS_FILE = "tests/MewUI.Test/Markup/DocSnippets.cs";
     private const string DEFAULT_EXCLUDED_TYPE = "Aprillz.MewUI.Controls.ControlTemplate";
@@ -163,13 +163,13 @@ public sealed class MarkupReferenceDocsTests
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory != null; directory = directory.Parent)
         {
-            if (File.Exists(Path.Combine(directory.FullName, SOLUTION_FILE)))
+            if (File.Exists(Path.Combine(directory.FullName, REPOSITORY_MARKER)))
             {
                 return directory.FullName;
             }
         }
 
-        Assert.Inconclusive($"{SOLUTION_FILE} was not found above {AppContext.BaseDirectory}.");
+        Assert.Inconclusive($"{REPOSITORY_MARKER} was not found above {AppContext.BaseDirectory}.");
         return string.Empty;
     }
 }

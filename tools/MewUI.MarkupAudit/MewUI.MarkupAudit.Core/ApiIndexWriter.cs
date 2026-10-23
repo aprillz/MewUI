@@ -11,7 +11,7 @@ public static class ApiIndexWriter
 {
     private const string INDEX_FILE = "index.md";
     private const string VERSION_FILE = "version.txt";
-    private const string SOLUTION_FILE = "MewUI.Dev.slnx";
+    private const string REPOSITORY_MARKER = "build/MewUI.Common.props";
     private const string COMMON_PROPS = "build/MewUI.Common.props";
     private const string PROJECT_PATTERN = "*.csproj";
     private const string EXTENSIONS_SUFFIX = "Extensions";
@@ -315,7 +315,7 @@ public static class ApiIndexWriter
     {
         for (var directory = new DirectoryInfo(startDirectory); directory != null; directory = directory.Parent)
         {
-            if (File.Exists(Path.Combine(directory.FullName, SOLUTION_FILE)))
+            if (File.Exists(Path.Combine(directory.FullName, REPOSITORY_MARKER)))
             {
                 return directory.FullName;
             }

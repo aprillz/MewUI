@@ -10,7 +10,7 @@ namespace MewUI.Test.Infrastructure;
 /// </summary>
 internal sealed class FluentAuditScope
 {
-    private const string SOLUTION_FILE = "MewUI.Dev.slnx";
+    private const string REPOSITORY_MARKER = "build/MewUI.Common.props";
     private const string DEFAULT_EXCLUDED_TYPE = "Aprillz.MewUI.Controls.ControlTemplate";
     private const string HINT_CODE_PREFIX = "hint-";
     private const int MAX_LISTED_ROWS = 50;
@@ -188,7 +188,7 @@ internal sealed class FluentAuditScope
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory != null; directory = directory.Parent)
         {
-            if (File.Exists(Path.Combine(directory.FullName, SOLUTION_FILE)))
+            if (File.Exists(Path.Combine(directory.FullName, REPOSITORY_MARKER)))
             {
                 return directory.FullName;
             }

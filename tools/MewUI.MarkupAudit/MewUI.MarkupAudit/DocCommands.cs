@@ -103,7 +103,7 @@ internal sealed class DocCommandOptions
 /// <summary>Runs the documentation commands and returns the process exit code.</summary>
 internal static class DocCommands
 {
-    private const string SOLUTION_FILE = "MewUI.Dev.slnx";
+    private const string REPOSITORY_MARKER = "build/MewUI.Common.props";
 
     public static int Run(DocCommandOptions options, IReadOnlyList<string> assemblyPaths, bool failOnMissing)
     {
@@ -177,7 +177,7 @@ internal static class DocCommands
             var repositoryRoot = FindRepositoryRoot();
             if (repositoryRoot == null)
             {
-                Console.Error.WriteLine($"--changed-since needs {SOLUTION_FILE} above the current directory to locate the repository.");
+                Console.Error.WriteLine($"--changed-since needs {REPOSITORY_MARKER} above the current directory to locate the repository.");
                 return 2;
             }
 
@@ -266,7 +266,7 @@ internal static class DocCommands
         {
             for (var directory = new DirectoryInfo(start); directory != null; directory = directory.Parent)
             {
-                if (File.Exists(Path.Combine(directory.FullName, SOLUTION_FILE)))
+                if (File.Exists(Path.Combine(directory.FullName, REPOSITORY_MARKER)))
                 {
                     return directory.FullName;
                 }

@@ -1,7 +1,7 @@
 using Aprillz.MewUI.MarkupAudit;
 using Aprillz.MewUI.MarkupAudit.Cli;
 
-const string SOLUTION_FILE = "MewUI.Dev.slnx";
+const string REPOSITORY_MARKER = "build/MewUI.Common.props";
 const string DEFAULT_ASSEMBLY = "src/MewUI/bin/Debug/net10.0/Aprillz.MewUI.dll";
 const string DEFAULT_EXCLUDED_TYPE = "Aprillz.MewUI.Controls.ControlTemplate";
 
@@ -105,7 +105,7 @@ if (assemblyPaths.Count == 0 && (!docCommand.IsSet || docCommand.NeedsAssemblies
     var repositoryRoot = FindRepositoryRoot();
     if (repositoryRoot == null)
     {
-        Console.Error.WriteLine($"No assembly given and {SOLUTION_FILE} was not found above the current directory.");
+        Console.Error.WriteLine($"No assembly given and {REPOSITORY_MARKER} was not found above the current directory.");
         Environment.ExitCode = 2;
         return;
     }
@@ -207,7 +207,7 @@ static string? FindRepositoryRoot()
     {
         for (var directory = new DirectoryInfo(start); directory != null; directory = directory.Parent)
         {
-            if (File.Exists(Path.Combine(directory.FullName, SOLUTION_FILE)))
+            if (File.Exists(Path.Combine(directory.FullName, REPOSITORY_MARKER)))
             {
                 return directory.FullName;
             }
