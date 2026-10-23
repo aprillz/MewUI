@@ -1181,6 +1181,15 @@ public abstract class MewObject : IPropertyOwner
         public object? LastSuccessfulTargetValue;
         public BindingError? Error;
     }
+
+    /// <summary>Reads a property declared by another class for any holder, such as an automation name.</summary>
+    internal T GetAttachedValue<T>(MewProperty<T> property) => GetValue(property);
+
+    /// <summary>Writes a property declared by another class for any holder, such as an automation name.</summary>
+    internal void SetAttachedValue<T>(MewProperty<T> property, T value) => SetValue(property, value);
+
+    /// <summary>Commits a value an automation client set, the way the control commits a user's change.</summary>
+    internal void CommitFromAutomation<T>(MewProperty<T> property, T value) => CommitTargetValue(property, value);
 }
 
 /// <summary>

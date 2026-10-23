@@ -27,6 +27,7 @@ At build time each property is written into `runtimeconfig.json` as an `AppConte
 | `MewUIHotReload` | `true`, `false` | `true` | `Aprillz.MewUI.HotReload.Enabled` | no |
 | `MewUIEnvironmentDebugLogging` | `true`, `false` | `true` in Debug, `false` in Release | `Aprillz.MewUI.EnvironmentDebugLogging.Enabled` | yes |
 | `MewUITouch` | `true`, `false` | `true` | `Aprillz.MewUI.Touch.Enabled` | yes |
+| `MewUIAutomation` | `true`, `false` | `false` | `Aprillz.MewUI.Automation.Enabled` | yes |
 
 Set the MSBuild property rather than the runtime switch. A switch changed by hand in `runtimeconfig.json` or with `AppContext.SetSwitch` does not reach the trimmer, so in a trimmed publish the code it asks for may already be gone.
 
@@ -104,3 +105,13 @@ Set a variable to `1` or `true` before starting the app. The lines go to standar
 On Windows, on Linux (X11) and in the browser MewUI reads touch input itself, and pen input on Windows and in the browser. A tap clicks. Dragging a finger more than a few pixels scrolls the content under it, and the content keeps moving for a moment when the finger lifts while still moving. Holding a finger still for half a second right-clicks, which opens a context menu. Only the first finger down takes part; a second finger is ignored. A pen behaves like a mouse: it hovers, clicks and drags. On X11, while a popup such as a drop-down is open, touches arrive as mouse input, so a finger can tap items and drag the scroll bar but does not scroll the list.
 
 Setting the property to `false` removes this from a trimmed or NativeAOT publish, which saves about 21 KB on Windows. Touch and pen then arrive the way the operating system or X server turns them into mouse input: a tap still clicks, but a drag selects or drags instead of scrolling, and on Windows the system's own press-and-hold supplies the right click.
+
+---
+
+## 9. MewUIAutomation
+
+Setting the property to `true` builds the automation tree. Every standard control gets an automation peer that reports its role (button, edit box, list, list item, menu item and so on), its name, its state, and the actions it supports: invoke, toggle, set a value, select, expand or collapse, and scroll. Code reads the tree from `UIElement.GetAutomationPeer()` and walks it with `GetChildren()` and `GetParent()`; an action is reached through `GetProvider<T>()`, for example `GetProvider<IInvokeProvider>()`. An action runs the same path as the user's input, so it commits to bindings and runs commands the way a click or a keystroke does.
+
+A control's name is `AutomationProperties.Name` when set, otherwise the text of the element named by `AutomationProperties.LabeledBy`, otherwise the control's own text: a button's content, a text box's placeholder, a tab's header, a menu item's text without its access key marker. Panels and borders are not in the tree; their children appear in their place. `AutomationProperties.AccessibilityView` set to `Raw` leaves an element out. The open popups of a window, such as a drop-down list or a menu, are children of the window.
+
+With the default `false`, `GetAutomationPeer()` returns null and a trimmed or NativeAOT publish leaves the automation code out.

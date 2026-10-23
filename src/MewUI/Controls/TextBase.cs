@@ -573,6 +573,10 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextC
             currentText ??= _document.ToString();
             RaiseTextChanged(currentText);
         }
+        if (Automation.AutomationGate.IsSupported)
+        {
+            (AutomationPeerIfCreated as Automation.TextBoxAutomationPeer)?.OnOwnerTextChanged();
+        }
         InvalidateMeasure();
         InvalidateVisual();
     }

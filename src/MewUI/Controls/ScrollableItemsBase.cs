@@ -379,4 +379,6 @@ public abstract partial class ScrollableItemsBase : Control, ISubtreeInvalidatio
             Math.Max(0, bottom - top));
         return bounds.Height > 0;
     }
+
+    internal ScrollViewer ScrollHost => _scrollViewer;
 }

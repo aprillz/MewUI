@@ -382,4 +382,6 @@ public abstract partial class TextBlockBase : TextElement, IDisposable
         public TextWrapping Wrapping;
         public uint Dpi;
     }
+
+    internal string DisplayTextInternal => DisplayText;
 }

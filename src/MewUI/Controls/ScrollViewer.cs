@@ -997,4 +997,7 @@ public sealed class ScrollViewer : ContentControl
             return clock;
         }
     }
+
+    /// <summary>The content size the offsets scroll over, for an automation client's scroll percent.</summary>
+    internal Size Extent => _extent;
 }

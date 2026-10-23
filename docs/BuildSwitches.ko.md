@@ -27,6 +27,7 @@
 | `MewUIHotReload` | `true`, `false` | `true` | `Aprillz.MewUI.HotReload.Enabled` | 아니오 |
 | `MewUIEnvironmentDebugLogging` | `true`, `false` | Debug는 `true`, Release는 `false` | `Aprillz.MewUI.EnvironmentDebugLogging.Enabled` | 예 |
 | `MewUITouch` | `true`, `false` | `true` | `Aprillz.MewUI.Touch.Enabled` | 예 |
+| `MewUIAutomation` | `true`, `false` | `false` | `Aprillz.MewUI.Automation.Enabled` | 예 |
 
 런타임 스위치가 아니라 MSBuild 속성을 설정한다. `runtimeconfig.json`을 직접 고치거나 `AppContext.SetSwitch`로 바꾼 값은 트리머에 전달되지 않으므로, 트림 게시에서는 그 스위치가 요구하는 코드가 이미 제거되어 있을 수 있다.
 
@@ -104,3 +105,13 @@ Hot Reload는 선언 없이 `dotnet watch`나 IDE의 Hot Reload 세션에서 동
 Windows, Linux(X11), 브라우저에서 MewUI는 터치 입력을 직접 해석하고, Windows와 브라우저에서는 펜 입력도 직접 해석한다. 탭하면 클릭된다. 손가락을 몇 픽셀 이상 끌면 그 아래 콘텐츠가 스크롤되고, 움직이던 중에 손가락을 떼면 콘텐츠가 잠시 더 미끄러진다. 손가락을 반 초 동안 가만히 누르고 있으면 우클릭이 되어 컨텍스트 메뉴가 열린다. 처음 닿은 손가락만 동작하고 두 번째 손가락은 무시된다. 펜은 마우스처럼 호버, 클릭, 드래그한다. X11에서는 드롭다운 같은 팝업이 열려 있는 동안 터치가 마우스 입력으로 들어오므로, 손가락으로 항목을 탭하고 스크롤 막대를 끌 수는 있지만 목록을 끌어 스크롤할 수는 없다.
 
 속성을 `false`로 두면 트림·NativeAOT 게시에서 이 기능이 제거되어 Windows에서 약 21 KB가 줄어든다. 이때 터치와 펜은 운영체제나 X 서버가 마우스 입력으로 바꿔 보내는 대로 들어온다. 탭은 여전히 클릭되지만 끌기는 스크롤 대신 선택이나 드래그가 되고, Windows에서는 우클릭을 시스템의 길게 누르기가 맡는다.
+
+---
+
+## 9. MewUIAutomation
+
+속성을 `true`로 두면 오토메이션 트리가 만들어진다. 표준 컨트롤마다 오토메이션 피어가 생겨 역할(버튼, 편집 상자, 목록, 목록 항목, 메뉴 항목 등), 이름, 상태, 지원하는 동작을 알려 준다. 동작은 실행, 토글, 값 설정, 선택, 펼치기와 접기, 스크롤이다. 코드는 `UIElement.GetAutomationPeer()`로 트리를 읽고 `GetChildren()`과 `GetParent()`로 탐색하며, 동작은 `GetProvider<T>()`로 얻는다(예: `GetProvider<IInvokeProvider>()`). 동작은 사용자 입력과 같은 경로로 실행되므로 클릭이나 키 입력처럼 바인딩에 값을 반영하고 명령을 실행한다.
+
+컨트롤의 이름은 `AutomationProperties.Name`을 설정했으면 그 값이고, 아니면 `AutomationProperties.LabeledBy`가 가리키는 요소의 텍스트, 그것도 없으면 컨트롤 자신의 텍스트다. 버튼은 내용, 텍스트 상자는 플레이스홀더, 탭은 헤더, 메뉴 항목은 액세스 키 표시를 뺀 텍스트를 쓴다. 패널과 테두리는 트리에 나타나지 않고 그 자식이 그 자리에 보인다. `AutomationProperties.AccessibilityView`를 `Raw`로 두면 요소가 트리에서 빠진다. 드롭다운 목록이나 메뉴처럼 창에 열린 팝업은 창의 자식이다.
+
+기본값 `false`에서는 `GetAutomationPeer()`가 null을 돌려주고, 트림·NativeAOT 게시에서 오토메이션 코드가 빠진다.

@@ -128,6 +128,12 @@ public abstract partial class Element : MewObject
                 BumpContextVersionDeep();
                 OnParentChanged();
 
+                if (Automation.AutomationGate.IsSupported)
+                {
+                    UIElement.NotifyAutomationStructureChanged(previousParent);
+                    UIElement.NotifyAutomationStructureChanged(value);
+                }
+
                 // Which children a visual draws, and in what order, is its composition.
                 (previousParent as UIElement)?.RaiseRenderDirty(Rendering.Retained.RenderDirtyKind.Composition);
                 (value as UIElement)?.RaiseRenderDirty(Rendering.Retained.RenderDirtyKind.Composition);

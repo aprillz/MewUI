@@ -153,6 +153,11 @@ public abstract partial class UIElement : Element
     /// </summary>
     protected override void OnMewPropertyChanged(MewProperty property)
     {
+        if (Automation.AutomationGate.IsSupported)
+        {
+            AutomationPeerIfCreated?.NotifyOwnerPropertyChanged(property);
+        }
+
         if (property.AffectsLayout)
             InvalidateMeasure();
         else if (property == OpacityProperty)
