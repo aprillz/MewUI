@@ -90,7 +90,8 @@ internal static unsafe class DirectWriteTextMeasure
             return false;
         }
 
-        nint textFormat = AcquireTextFormat(factory, font, null, TextWrapping.NoWrap, out bool ownFormat);
+        // The natural line is what the pinned spacing is derived from, so this format is left unpinned.
+        nint textFormat = AcquireTextFormat(factory, font, null, TextWrapping.NoWrap, out bool ownFormat, fontLineSpacing: false);
         if (textFormat == 0)
         {
             return false;
@@ -338,7 +339,7 @@ internal static unsafe class DirectWriteTextMeasure
     /// <paramref name="ownFormat"/> reports.
     /// </summary>
     private static nint AcquireTextFormat(nint factory, DirectWriteFont font,
-        DWriteTextFormatCache? formatCache, TextWrapping wrapping, out bool ownFormat)
+        DWriteTextFormatCache? formatCache, TextWrapping wrapping, out bool ownFormat, bool fontLineSpacing = true)
     {
         ownFormat = false;
         if (formatCache is not null)
@@ -361,7 +362,25 @@ internal static unsafe class DirectWriteTextMeasure
 
         DWriteVTable.SetWordWrapping(textFormat,
             wrapping == TextWrapping.NoWrap ? DWRITE_WORD_WRAPPING.NO_WRAP : DWRITE_WORD_WRAPPING.WRAP);
+        if (fontLineSpacing)
+        {
+            ApplyFontLineSpacing(textFormat, font);
+        }
+
         ownFormat = true;
         return textFormat;
+    }
+
+    /// <summary>
+    /// Pins the format's line spacing to the font's own line height and baseline. Without it DirectWrite
+    /// sizes a line by the tallest font that drew a glyph in it, so one fallback glyph grows the line and
+    /// moves every glyph down; the FreeType and CoreText engines never do that.
+    /// </summary>
+    internal static void ApplyFontLineSpacing(nint textFormat, DirectWriteFont font)
+    {
+        if (textFormat != 0 && font.TryGetNaturalLineSpacing(out float lineHeight, out float baseline))
+        {
+            DWriteVTable.SetLineSpacing(textFormat, DWRITE_LINE_SPACING_METHOD.UNIFORM, lineHeight, baseline);
+        }
     }
 }

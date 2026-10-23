@@ -64,6 +64,13 @@ internal enum DWRITE_WORD_WRAPPING : uint
     CHARACTER = 4
 }
 
+internal enum DWRITE_LINE_SPACING_METHOD : uint
+{
+    DEFAULT = 0,
+    UNIFORM = 1,
+    PROPORTIONAL = 2
+}
+
 internal enum DWRITE_TRIMMING_GRANULARITY : uint
 {
     NONE = 0,

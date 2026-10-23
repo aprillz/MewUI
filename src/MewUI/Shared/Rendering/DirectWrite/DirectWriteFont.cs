@@ -249,7 +249,7 @@ internal sealed unsafe partial class DirectWriteFont : FontBase, IGlyphOutlineFo
         ApplyMetrics(metrics, Size);
         // The face metrics round each size on their own; the layout the rasterizer draws is what places
         // the baseline, and at some sizes the two land a device pixel apart.
-        if (DirectWriteTextMeasure.TryGetLineMetrics(_dwriteFactoryHandle, this, PixelsPerDip, out double baseline, out double lineHeight))
+        if (TryGetNaturalLineSpacing(out float lineHeight, out float baseline))
         {
             Ascent = baseline;
             Descent = Math.Max(0, lineHeight - baseline);
@@ -293,6 +293,32 @@ internal sealed unsafe partial class DirectWriteFont : FontBase, IGlyphOutlineFo
     /// has to match the surface the text is drawn on; 96 DPI leaves the layout unhinted.
     /// </summary>
     private float PixelsPerDip => _outlineDpi > 0 ? _outlineDpi / 96f : 1f;
+
+    private bool _naturalLineResolved;
+    private float _naturalLineHeight;
+    private float _naturalLineBaseline;
+
+    /// <summary>
+    /// Height and baseline, in DIPs, of a line set in this font alone. Every layout of this font pins its
+    /// line spacing to these, so a glyph drawn from a fallback font neither grows the line nor moves the
+    /// baseline, as the FreeType and CoreText engines keep it.
+    /// </summary>
+    internal bool TryGetNaturalLineSpacing(out float lineHeight, out float baseline)
+    {
+        if (!_naturalLineResolved)
+        {
+            _naturalLineResolved = true;
+            if (DirectWriteTextMeasure.TryGetLineMetrics(_dwriteFactoryHandle, this, PixelsPerDip, out double naturalBaseline, out double naturalHeight))
+            {
+                _naturalLineHeight = (float)naturalHeight;
+                _naturalLineBaseline = (float)naturalBaseline;
+            }
+        }
+
+        lineHeight = _naturalLineHeight;
+        baseline = _naturalLineBaseline;
+        return lineHeight > 0 && baseline > 0;
+    }
 
     public TextInkOverhang GetRunInkOverhang(ReadOnlySpan<char> text)
         => DirectWriteTextMeasure.GetRunInkOverhang(_dwriteFactoryHandle, this, null, text, PixelsPerDip);

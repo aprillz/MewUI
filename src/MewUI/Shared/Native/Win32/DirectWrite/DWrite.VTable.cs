@@ -236,6 +236,15 @@ internal static unsafe class DWriteVTable
         return fn(textFormat, wrapping);
     }
 
+    /// <summary>IDWriteTextFormat::SetLineSpacing (vtable index 10); spacing and baseline are in DIPs.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int SetLineSpacing(nint textFormat, DWRITE_LINE_SPACING_METHOD method, float lineSpacing, float baseline)
+    {
+        var vtbl = *(nint**)textFormat;
+        var fn = (delegate* unmanaged[Stdcall]<nint, DWRITE_LINE_SPACING_METHOD, float, float, int>)vtbl[10];
+        return fn(textFormat, method, lineSpacing, baseline);
+    }
+
     /// <summary>
     /// IDWriteTextFormat::SetTrimming (vtable index 9).
     /// </summary>

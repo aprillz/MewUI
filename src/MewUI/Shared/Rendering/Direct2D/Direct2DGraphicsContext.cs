@@ -1948,6 +1948,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITra
 
         DWriteVTable.SetWordWrapping(textFormat,
             wrapping == TextWrapping.NoWrap ? DWRITE_WORD_WRAPPING.NO_WRAP : DWRITE_WORD_WRAPPING.WRAP);
+        DirectWriteTextMeasure.ApplyFontLineSpacing(textFormat, font);
         return textFormat;
     }
 

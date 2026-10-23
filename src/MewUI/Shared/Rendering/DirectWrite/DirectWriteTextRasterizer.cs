@@ -652,6 +652,7 @@ internal static unsafe class DirectWriteTextRasterizer
             TextAlignment.Bottom => DWRITE_PARAGRAPH_ALIGNMENT.FAR,
             _ => DWRITE_PARAGRAPH_ALIGNMENT.NEAR,
         });
+        DirectWriteTextMeasure.ApplyFontLineSpacing(textFormat, font);
         return textFormat;
     }
 }

@@ -59,6 +59,7 @@ internal sealed unsafe class Direct2DMeasurementContext : MeasureGraphicsContext
                 if (hr2 < 0 || textFormat == 0) return null;
                 DWriteVTable.SetWordWrapping(textFormat,
                     format.Wrapping == TextWrapping.NoWrap ? DWRITE_WORD_WRAPPING.NO_WRAP : DWRITE_WORD_WRAPPING.WRAP);
+                DirectWriteTextMeasure.ApplyFontLineSpacing(textFormat, dwFont);
                 ownFormat = true;
             }
             if (textFormat == 0) return null;
