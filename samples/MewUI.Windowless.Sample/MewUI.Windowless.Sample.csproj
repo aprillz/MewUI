@@ -22,6 +22,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="..\..\assets\icon\appicon.ico" LogicalName="Aprillz.MewUI.Windowless.Sample.appicon.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Tmds.DBus.Protocol" Version="0.94.2" />
     <PackageReference Include="Tmds.DBus.Generator" Version="0.94.2" PrivateAssets="all" />
   </ItemGroup>

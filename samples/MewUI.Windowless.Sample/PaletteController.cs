@@ -2,18 +2,17 @@ using Aprillz.MewUI.Controls;
 
 namespace Aprillz.MewUI.Windowless.Sample;
 
-internal sealed class PaletteController(Action exit)
+internal sealed class PaletteController(Action exit, IconSource icon, ObservableValue<bool> hideOnClose)
 {
     private Window? _palette;
     private bool _paletteVisible;
-    private bool _hideOnClose;
     private bool _exiting;
 
     public void Toggle()
     {
         if (_palette is { } openPalette && _paletteVisible)
         {
-            if (_hideOnClose)
+            if (hideOnClose.Value)
             {
                 Hide(openPalette);
             }
@@ -37,6 +36,7 @@ internal sealed class PaletteController(Action exit)
 
         var palette = new Window()
             .Title("MewUI Windowless Palette")
+            .Icon(icon)
             .Resizable(420, 220)
             .Content(
                 new StackPanel()
@@ -45,15 +45,15 @@ internal sealed class PaletteController(Action exit)
                     .Children(
                         new TextBlock().Text("The application started without a main window."),
                         new TextBlock().Text("Press Ctrl+Alt+Space again to close and reopen this palette."),
+                        new TextBlock().Text("The tray or menu bar icon toggles it too, and its menu exits."),
                         new CheckBox()
                             .Content("Hide instead of close")
-                            .IsChecked(_hideOnClose)
-                            .OnCheckedChanged(value => _hideOnClose = value == true),
+                            .BindIsChecked(hideOnClose),
                         new Button().Content("Exit application").OnClick(exit)));
 
         palette.Closing += args =>
         {
-            if (_hideOnClose && !_exiting)
+            if (hideOnClose.Value && !_exiting)
             {
                 args.Cancel = true;
                 Hide(palette);
@@ -72,6 +72,9 @@ internal sealed class PaletteController(Action exit)
         palette.Show();
         Console.Error.WriteLine($"[windowless] palette shown; user windows={Application.Current.AllWindows.Count}");
     }
+
+    /// <summary>Whether the palette is open on screen.</summary>
+    public bool IsVisible => _paletteVisible;
 
     public void PrepareToExit() => _exiting = true;
 
