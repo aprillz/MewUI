@@ -1,6 +1,6 @@
 # MewUI documentation site
 
-Astro + Starlight site published to GitHub Pages at the `/MewUI/` sub-path of https://www.aprillz.net. Node is used only inside this folder; the .NET build never touches it.
+Astro + Starlight site. It is deployed twice from the same sources: by this repository's `pages.yml` at the `/MewUI/` sub-path of https://www.aprillz.net, and by the landing site repository (`aprillz/mewui-site`, `scripts/build-docs.sh`) at https://mewui.aprillz.net/docs/. `PUBLIC_SITE_BASE` (default `/MewUI`) and `PUBLIC_SITE_URL` (default `https://www.aprillz.net`) select the deployment for `astro.config.mjs`, `scripts/sync-content.mjs` and `scripts/check-links.mjs`; the API pages are prepared for the same base with `MewUI.MarkupAudit --api-starlight --site-base`, which `tools/docs/build_api_docs.cmd` reads from `MEWUI_DOCS_SITE_BASE`. Node is used only inside this folder; the .NET build never touches it.
 
 ## Build
 

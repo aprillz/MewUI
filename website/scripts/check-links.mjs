@@ -1,13 +1,13 @@
 // Scans dist/**/*.html for internal hrefs under the site base and reports targets that no built
 // file satisfies (a directory index, the file itself, or <path>.html). Exits 1 when any is missing.
-// Targets under /MewUI/api/ and /MewUI/Gallery/ are skipped when those trees are absent in dist,
+// Targets under <base>/api/ and <base>/Gallery/ are skipped when those trees are absent in dist,
 // because the API reference and the Gallery are staged into the site by the Pages workflow.
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const SITE_BASE = '/MewUI/';
+const SITE_BASE = (process.env.PUBLIC_SITE_BASE ?? '/MewUI').trim().replace(/\/+$/, '') + '/';
 
 const websiteRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const distRoot = path.join(websiteRoot, 'dist');

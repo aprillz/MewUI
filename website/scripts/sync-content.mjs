@@ -14,7 +14,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const SITE_BASE = '/MewUI';
+const SITE_BASE = (process.env.PUBLIC_SITE_BASE ?? '/MewUI').trim().replace(/\/+$/, '');
 const GITHUB_BLOB = 'https://github.com/aprillz/MewUI/blob/dev/';
 const GITHUB_TREE = 'https://github.com/aprillz/MewUI/tree/dev/';
 const MAX_DESCRIPTION_LENGTH = 160;

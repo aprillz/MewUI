@@ -114,7 +114,9 @@ public static class ApiStarlightWriter
             var typeName = $"{segments[1]}.{segments[2][..^PAGE_EXTENSION.Length]}";
             if (guides.TryResolve(typeName, out var url, out var text))
             {
-                WriteGuideLine(lines, $"{GUIDE_PREFIX}[{text}]({url})");
+                // Guide links are stored relative to the site root so one file serves every deployment base.
+                var guideUrl = url.StartsWith('/') ? siteBase + url : url;
+                WriteGuideLine(lines, $"{GUIDE_PREFIX}[{text}]({guideUrl})");
                 counters.GuideLines++;
             }
         }

@@ -12,6 +12,8 @@ set ROOT=%~dp0..\..
 set BUILD_OUT=%ROOT%\.artifacts\api-build
 set PUBLISH_OUT=%ROOT%\.artifacts\api
 set SCOPE_FILE=%~dp0publish-scope.json
+REM Site base of the Starlight deployment that receives the pages: /MewUI on the repository Pages, /docs on mewui.aprillz.net.
+if "%MEWUI_DOCS_SITE_BASE%"=="" set MEWUI_DOCS_SITE_BASE=/MewUI
 set AUDIT_PROJECT=%ROOT%\tools\MewUI.MarkupAudit\MewUI.MarkupAudit\MewUI.MarkupAudit.csproj
 set AUDIT_DLL=%ROOT%\tools\MewUI.MarkupAudit\MewUI.MarkupAudit\bin\Release\net10.0\MewUI.MarkupAudit.dll
 set TFM=net10.0
@@ -114,7 +116,7 @@ if "!PUBLISH_DLLS!"=="" (
     exit /b 1
   )
   echo Preparing the publish set for Starlight ...
-  dotnet "%AUDIT_DLL%" --api-starlight "%PUBLISH_OUT%" --site-base /MewUI --guide-links "%~dp0guide-links.json"
+  dotnet "%AUDIT_DLL%" --api-starlight "%PUBLISH_OUT%" --site-base %MEWUI_DOCS_SITE_BASE% --guide-links "%~dp0guide-links.json"
   if errorlevel 1 (
     echo FAILED: api-starlight of the publish set
     exit /b 1

@@ -2,6 +2,13 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 
+const siteBase = normalizeBase(process.env.PUBLIC_SITE_BASE ?? '/MewUI');
+
+function normalizeBase(value) {
+  const trimmed = value.trim().replace(/\/+$/, '');
+  return trimmed.length === 0 ? '/' : (trimmed.startsWith('/') ? trimmed : '/' + trimmed);
+}
+
 // Sidebar groups follow agent/documentation/plan.md section 3. English labels are the default
 // locale; `translations.ko` carries the Korean group labels.
 const getStarted = ['installation', 'preview', 'hotreload', 'devtools', 'buildswitches'];
@@ -29,8 +36,9 @@ const architecture = [
 ];
 
 export default defineConfig({
-  site: 'https://www.aprillz.net',
-  base: '/MewUI',
+  site: process.env.PUBLIC_SITE_URL ?? 'https://www.aprillz.net',
+  // PUBLIC_SITE_BASE selects the deployment: '/MewUI' on the repository's own Pages, '/docs' on mewui.aprillz.net.
+  base: siteBase,
   integrations: [
     starlight({
       title: 'MewUI',
