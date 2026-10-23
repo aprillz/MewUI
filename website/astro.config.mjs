@@ -34,6 +34,11 @@ export default defineConfig({
   integrations: [
     starlight({
       title: 'MewUI',
+      logo: {
+        light: './src/assets/logo-light.svg',
+        dark: './src/assets/logo-dark.svg',
+        replacesTitle: true,
+      },
       // English lives at the content root so that the locale-neutral `api/` and `markup/` trees
       // are naturally English-only; Korean pages live under `ko/`.
       defaultLocale: 'root',

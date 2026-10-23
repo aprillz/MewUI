@@ -7,9 +7,15 @@
   --sl-color-accent-high: #cdb9f5;
 }
 
-/* Light mode */
+/* Light mode: the identity purple stays the same; only the low/high steps change. */
 :root[data-theme='light'] {
   --sl-color-accent-low: #e9ddfb;
-  --sl-color-accent: #7a3fcc;
+  --sl-color-accent: #8f54db;
   --sl-color-accent-high: #3b1f6b;
+}
+
+/* The wordmark logo replaces the site title; keep it at a readable height in the header. */
+.site-title img {
+  height: 2.25rem;
+  width: auto;
 }
