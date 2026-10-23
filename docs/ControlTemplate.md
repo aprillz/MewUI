@@ -111,6 +111,8 @@ nud.Template = new DelegateControlTemplate<NumericUpDown>((owner, ctx) =>
 
 `Expander.PART_HEADER_TOGGLE` is the same kind of contract: register a `ToggleButton` under this name and its `IsChecked` and the expander's `IsExpanded` follow each other in both directions. Without the part, a templated expander changes `IsExpanded` only from code or the keyboard.
 
+`ProgressBar.PART_TRACK` and `ProgressBar.PART_INDICATOR` let a template keep the bar's value logic: after the template arranges its tree, the control arranges the indicator again to the horizontal span of the value (or of the indeterminate sweep) within the track's width, keeping the vertical placement the template gave it. Leave the indicator's horizontal alignment at `Stretch` and its `Width` unset so that span applies; the template only puts the indicator inside the track and gives it a color. The fill color of the built-in bar and ring is `Foreground`, so a template usually binds the indicator's `Background` to it with `ctx.Bind(indicator, Control.BackgroundProperty, TextElement.ForegroundProperty)`.
+
 ### <a id="presenter"></a>ContentPresenter: projecting logical slots
 
 A `ContentPresenter` marks the spot inside a template tree where "the control's content

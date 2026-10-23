@@ -11,6 +11,17 @@ public sealed partial class ProgressBar : RangeBase
     private static readonly bool _defaultStyleRegistered =
         DefaultStyles.Register<ProgressBar>(DefaultStyles.CreateProgressBarStyle);
 
+    /// <summary>
+    /// The optional track part of a template; its arranged width is the full length of the bar.
+    /// </summary>
+    public const string PART_TRACK = "PART_Track";
+
+    /// <summary>
+    /// The optional indicator part of a template; after the template arranges it, the control arranges it
+    /// again to the horizontal span of the value or of the indeterminate sweep, keeping its vertical placement.
+    /// </summary>
+    public const string PART_INDICATOR = "PART_Indicator";
+
     public static readonly MewProperty<bool> IsIndeterminateProperty =
         MewProperty<bool>.Register<ProgressBar>(
             nameof(IsIndeterminate),
@@ -23,6 +34,8 @@ public sealed partial class ProgressBar : RangeBase
     private const double CYCLE_DURATION_MS = 2000;
 
     private AnimationClock? _clock;
+    private Element? _lengthPart;
+    private Element? _indicatorPart;
 
     static ProgressBar()
     {
@@ -56,14 +69,46 @@ public sealed partial class ProgressBar : RangeBase
         _clock = new AnimationClock(TimeSpan.FromMilliseconds(CYCLE_DURATION_MS), Easing.EaseInOutQuad)
             .AttachTo(this);
         _clock.RepeatCount = -1;
-        _clock.TickCallback = _ => InvalidateVisual();
+        _clock.TickCallback = _ => OnClockTick();
         _clock.Start();
     }
 
-    protected override Size MeasureContent(Size availableSize) => new Size(120, Height);
+    private void OnClockTick()
+    {
+        if (_indicatorPart != null)
+        {
+            InvalidateArrange();
+        }
+        else
+        {
+            InvalidateVisual();
+        }
+    }
+
+    protected override Size MeasureContent(Size availableSize)
+    {
+        if (HasTemplateInstance)
+        {
+            return base.MeasureContent(availableSize);
+        }
+
+        return new Size(120, Height);
+    }
+
+    protected override void ArrangeContent(Rect bounds)
+    {
+        base.ArrangeContent(bounds);
+        ArrangeIndicatorPart();
+    }
 
     protected override void OnRender(IGraphicsContext context)
     {
+        // A template owns the control's entire visuals; the built-in bar would double-render.
+        if (HasTemplateInstance)
+        {
+            return;
+        }
+
         var bounds = GetSnappedBorderBounds(Bounds);
         var borderInset = GetBorderVisualInset();
         var contentBounds = bounds.Deflate(Padding).Deflate(new Thickness(borderInset));
@@ -85,7 +130,7 @@ public sealed partial class ProgressBar : RangeBase
 
         if (fillRect.Width > 0)
         {
-            var fillColor = IsEffectivelyEnabled ? Theme.Palette.Accent : Theme.Palette.DisabledAccent;
+            var fillColor = Foreground;
             if (radius - 1 > 0)
             {
                 double rx = Math.Min(radius - 1, fillRect.Height / 2.0);
@@ -109,6 +154,59 @@ public sealed partial class ProgressBar : RangeBase
         double right = Math.Min(contentBounds.Right, contentBounds.X + travel + blockWidth);
 
         return new Rect(left, contentBounds.Y, Math.Max(0, right - left), contentBounds.Height);
+    }
+
+    private protected override void OnTemplateInstanceAttached()
+    {
+        base.OnTemplateInstanceAttached();
+
+        _indicatorPart = GetTemplateChild<Element>(PART_INDICATOR);
+        // The bar length is the track part, or the whole template when there is none.
+        _lengthPart = GetTemplateChild<Element>(PART_TRACK) ?? TemplateVisualRoot;
+    }
+
+    private protected override void OnTemplateInstanceDetached()
+    {
+        base.OnTemplateInstanceDetached();
+
+        _indicatorPart = null;
+        _lengthPart = null;
+    }
+
+    protected override void OnMewPropertyChanged(MewProperty property)
+    {
+        base.OnMewPropertyChanged(property);
+
+        if (_indicatorPart != null
+            && (property == ValueProperty || property == MinimumProperty || property == MaximumProperty || property == IsIndeterminateProperty))
+        {
+            InvalidateArrange();
+        }
+    }
+
+    private void ArrangeIndicatorPart()
+    {
+        var indicator = _indicatorPart;
+        var lengthPart = _lengthPart;
+        if (indicator == null || lengthPart == null)
+        {
+            return;
+        }
+
+        // The template's own arrange settled the vertical placement; only the horizontal span is the value's.
+        var track = lengthPart.Bounds;
+        var slot = indicator.Bounds;
+        Rect span;
+        if (IsIndeterminate && _clock != null)
+        {
+            span = GetIndeterminateFillRect(track);
+        }
+        else
+        {
+            span = new Rect(track.X, track.Y, track.Width * GetNormalizedValue(), track.Height);
+        }
+
+        indicator.Arrange(new Rect(span.X, slot.Y, span.Width, slot.Height));
     }
 
     protected override void OnVisualRootChanged(Element? oldRoot, Element? newRoot)

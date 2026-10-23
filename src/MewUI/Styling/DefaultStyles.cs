@@ -530,6 +530,16 @@ public static class DefaultStyles
                 Setter.Create(Control.BackgroundProperty, t => t.Palette.ControlBackground),
                 Setter.Create(Control.BorderBrushProperty, t => t.Palette.ControlBorder),
                 Setter.Create(Control.BorderThicknessProperty, t => t.Metrics.ControlBorderThickness),
+                Setter.Create(TextElement.ForegroundProperty, t => t.Palette.Accent),
+            ],
+            Triggers =
+            [
+                new StateTrigger
+                {
+                    Match = VisualStateFlags.None,
+                    Exclude = VisualStateFlags.Enabled,
+                    Setters = [Setter.Create(TextElement.ForegroundProperty, t => t.Palette.DisabledAccent)],
+                },
             ],
         };
 
@@ -539,6 +549,16 @@ public static class DefaultStyles
             Setters =
             [
                 Setter.Create(Control.BackgroundProperty, t => t.Palette.ControlBorder.WithAlpha(128)),
+                Setter.Create(TextElement.ForegroundProperty, t => t.Palette.Accent),
+            ],
+            Triggers =
+            [
+                new StateTrigger
+                {
+                    Match = VisualStateFlags.None,
+                    Exclude = VisualStateFlags.Enabled,
+                    Setters = [Setter.Create(TextElement.ForegroundProperty, t => t.Palette.DisabledAccent)],
+                },
             ],
         };
 

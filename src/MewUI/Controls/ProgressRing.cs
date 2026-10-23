@@ -126,7 +126,7 @@ public sealed partial class ProgressRing : RangeBase
             return;
         }
 
-        var indicator = IsEffectivelyEnabled ? Theme.Palette.Accent : Theme.Palette.DisabledAccent;
+        var indicator = Foreground;
         if (sweepDegrees >= 360)
         {
             context.DrawEllipse(new Rect(centerX - radius, centerY - radius, radius * 2, radius * 2), indicator, thickness);
