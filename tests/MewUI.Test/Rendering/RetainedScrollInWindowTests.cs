@@ -82,6 +82,56 @@ public sealed class RetainedScrollInWindowTests
         }
     }
 
+    [TestMethod]
+    public void AScroll_ReplaysOnlyTheContainersTheViewportShows()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("GDI backend is Windows-only.");
+            return;
+        }
+
+        // A scroll repaints the whole window, and the whole frame must still leave out what the viewer's clip
+        // hides: a long list is scrolled by replaying the few containers in view, not all of them.
+        const int LONG_LIST = 60;
+        using var factory = new GdiGraphicsFactory();
+        Application.DefaultGraphicsFactory = factory;
+        var cards = new Card[LONG_LIST];
+        var content = new StackPanel { Orientation = Orientation.Vertical };
+        for (int index = 0; index < cards.Length; index++)
+        {
+            cards[index] = new Card
+            {
+                Height = 40,
+                Padding = new Thickness(6),
+                Content = new TextBlock { Text = "Card " + index },
+            };
+            content.Children(cards[index]);
+        }
+
+        var scroll = new ScrollViewer { VerticalScroll = ScrollMode.Visible, Content = content };
+        var window = HeadlessWindow.Create(WIDTH, HEIGHT);
+        window.Content = scroll;
+        using var surface = factory.CreateSurface(RenderSurfaceDescriptor.Offscreen(WIDTH, HEIGHT, 1.0, hasAlpha: false));
+        Frame(window, surface);
+
+        var statistics = window.RetainedStatistics!;
+        foreach (double offset in new[] { 17.0, 230.0, 1013.0 })
+        {
+            scroll.SetScrollOffsets(0, offset);
+            window.PerformLayout();
+            int replaysBefore = statistics.ContentReplayCount;
+            window.RenderFrameToSurface(surface);
+            int replayed = statistics.ContentReplayCount - replaysBefore;
+
+            // A card and its text are two recordings; the viewer and its bar are the rest.
+            int shown = cards.Count(card => card.Bounds.Bottom > 0 && card.Bounds.Y < HEIGHT);
+            int allowed = shown * 2 + 8;
+            Assert.IsTrue(replayed <= allowed, $"scrolling to {offset} replayed {replayed} recordings with {shown} cards in view (at most {allowed} expected)");
+            AssertMatchesReference(factory, window, surface, $"the frame scrolled to {offset}");
+        }
+    }
+
     private static void AssertMatchesReference(GdiGraphicsFactory factory, Window window, IRenderSurface surface, string what)
     {
         using var reference = factory.CreateSurface(RenderSurfaceDescriptor.Offscreen(WIDTH, HEIGHT, 1.0, hasAlpha: false));

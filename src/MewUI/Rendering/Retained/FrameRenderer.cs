@@ -85,7 +85,9 @@ internal static class FrameRenderer
             return;
         }
 
-        if (dirtyRect != null && !Intersects(node.SurfaceSubtreeBounds, dirtyRect.Value))
+        // A subtree the clips around it hide has no extent on the surface, so a whole frame leaves it out as a
+        // partial one does: a scroll replays the containers in the viewport, not the whole list behind it.
+        if (!HasExtent(node.SurfaceSubtreeBounds) || (dirtyRect != null && !node.SurfaceSubtreeBounds.IntersectsWith(dirtyRect.Value)))
         {
             return;
         }
@@ -203,8 +205,7 @@ internal static class FrameRenderer
         }
     }
 
-    private static bool Intersects(Rect bounds, Rect dirtyRect)
-        => bounds.Width > 0 && bounds.Height > 0 && bounds.IntersectsWith(dirtyRect);
+    private static bool HasExtent(Rect bounds) => bounds.Width > 0 && bounds.Height > 0;
 
     private static void ReplaySlot(
         RenderScene scene,
