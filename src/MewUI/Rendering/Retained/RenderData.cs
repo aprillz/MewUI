@@ -61,6 +61,9 @@ internal sealed class RenderData : IDisposable
     /// <summary>False when the commands replace, rotate or scale the transform, which a moved replay cannot carry.</summary>
     internal bool CanBePlaced { get; set; } = true;
 
+    /// <summary>True when the commands reset the clip they are replayed under, so they can ink outside it.</summary>
+    internal bool EscapesAmbientClip { get; set; }
+
     internal int CommandCount => _commands.Length;
 
     internal bool IsEmpty => _commands.Length == 0;
@@ -341,6 +344,8 @@ internal sealed class RenderDataBuilder
     // A transform set outright ignores what the replay put around it, and text inside a rotation or a
     // scale cannot take a move added to its origin, so neither kind of content can be moved.
     private bool _replacesTransform;
+    // A clip reset outside any Save of the slot's own drops the clip the replay draws it under.
+    private bool _escapesAmbientClip;
     private string? _rejectionReason;
 
     internal bool IsRejected => _rejectionReason != null;
@@ -473,6 +478,7 @@ internal sealed class RenderDataBuilder
 
         data = RenderData.Create([.. _commands], [.. _values], [.. _resources], [.. _leases], [.. _extents], _localBounds);
         data.CanBePlaced = !_replacesTransform;
+        data.EscapesAmbientClip = _escapesAmbientClip;
 
         // The built data owns the leases from here on, so they must be dropped without releasing.
         _leases.Clear();
@@ -500,6 +506,7 @@ internal sealed class RenderDataBuilder
         _localBounds = default;
         _hasBounds = false;
         _replacesTransform = false;
+        _escapesAmbientClip = false;
     }
 
     private void ClearStaging()
@@ -762,6 +769,7 @@ internal sealed class RenderDataBuilder
                 return true;
             case RenderCommandKind.ResetClip:
                 _clip = _transformDepth > 0 ? _clipStack[_transformDepth - 1] : null;
+                _escapesAmbientClip |= _transformDepth == 0;
                 return true;
             default:
                 return false;

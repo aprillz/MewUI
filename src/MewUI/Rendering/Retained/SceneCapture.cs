@@ -350,7 +350,7 @@ internal sealed class SceneCapture
 
         var bounds = default(BoundsAccumulator);
         var subtreeReach = RetainedGeometry.TransformRect(SlotBounds(update, node, OWN_CONTENT_SLOT), transform);
-        var subtreeExtent = Visible(subtreeReach);
+        var subtreeExtent = SlotVisible(update, node, OWN_CONTENT_SLOT, subtreeReach);
         update.StageSlotExtent(node, OWN_CONTENT_SLOT, subtreeExtent, subtreeReach, StaysInsideTheVisual(subtreeExtent, element, transform));
         StageChangeWithinSlot(update, node, OWN_CONTENT_SLOT, transform);
         bounds.Add(subtreeExtent);
@@ -394,7 +394,7 @@ internal sealed class SceneCapture
                     }
 
                     var slotReach = RetainedGeometry.TransformRect(SlotBounds(update, node, slotIndex), transform);
-                    var slotExtent = Visible(slotReach);
+                    var slotExtent = SlotVisible(update, node, slotIndex, slotReach);
                     update.StageSlotExtent(node, slotIndex, slotExtent, slotReach, StaysInsideTheVisual(slotExtent, node.Element, transform));
                     StageChangeWithinSlot(update, node, slotIndex, transform);
                     ownBounds.Add(slotExtent);
@@ -606,6 +606,21 @@ internal sealed class SceneCapture
             var reached = RetainedGeometry.TransformRect(change, transform);
             update.StageSlotChange(node, slotIndex, Visible(reached.IsEmpty ? reached : reached.Inflate(CHANGED_CALL_MARGIN, CHANGED_CALL_MARGIN)));
         }
+    }
+
+    /// <summary>
+    /// The part of a slot's reach that reaches the surface. A recording that resets the clip around it inks
+    /// past that clip, so the clip does not cut it down.
+    /// </summary>
+    private Rect SlotVisible(SceneUpdate update, VisualNode node, int slotIndex, Rect reach)
+    {
+        var data = update.TryGetStagedSlot(node, slotIndex, out var staged) ? staged : node.GetSlot(slotIndex);
+        if (data != null && data.EscapesAmbientClip)
+        {
+            return reach;
+        }
+
+        return Visible(reach);
     }
 
     /// <summary>The part of an extent that the clips around it let reach the surface.</summary>
