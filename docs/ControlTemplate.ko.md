@@ -104,6 +104,8 @@ nud.Template = new DelegateControlTemplate<NumericUpDown>((owner, ctx) =>
 - 파트가 등록되지 않으면 해당 기능이 비활성화될 뿐 예외는 없습니다
   (`BeginEdit`가 no-op이 되는 식).
 
+`Expander.PART_HEADER_TOGGLE`도 같은 계약입니다. 이 이름으로 `ToggleButton`을 등록하면 그 `IsChecked`와 확장기의 `IsExpanded`가 양방향으로 따라갑니다. 파트가 없으면 템플릿을 적용한 확장기는 코드나 키보드로만 `IsExpanded`가 바뀝니다.
+
 ### <a id="presenter"></a>ContentPresenter: logical 슬롯의 투영
 
 `ContentPresenter`는 템플릿 트리 안에서 "여기에 컨트롤의 콘텐츠가 나타난다"를

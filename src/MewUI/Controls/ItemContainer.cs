@@ -180,6 +180,12 @@ public class ItemContainer : ContentControl, ICommandArgumentSource
 
     protected override void OnRender(IGraphicsContext context)
     {
+        // A template owns the container's entire visuals; the row chrome would double-render.
+        if (HasTemplateInstance)
+        {
+            return;
+        }
+
         // The owner arranges a container inside its row, inset by the item padding. The background
         // belongs to the row, so it reaches back out over that padding.
         var row = Bounds.Inflate(RowPadding);

@@ -117,6 +117,61 @@ public sealed class ExpanderTemplateTests
         Assert.IsFalse(VisitsChild(expander, content), "collapsed content is not part of this frame's visual tree");
     }
 
+    private static DelegateControlTemplate<Expander> ToggleTemplate(ToggleButton toggle)
+        => new((owner, ctx) =>
+        {
+            ctx.Register(Expander.PART_HEADER_TOGGLE, toggle);
+            var contentPresenter = new ContentPresenter();
+            ctx.Bind(contentPresenter, ContentPresenter.IsVisibleProperty, Expander.IsExpandedProperty);
+            return new StackPanel().Children(toggle, contentPresenter);
+        });
+
+    [TestMethod]
+    public void HeaderTogglePart_FollowsAndDrivesIsExpanded()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("GDI backend is Windows-only.");
+            return;
+        }
+
+        var toggle = new ToggleButton();
+        var window = HeadlessWindow.Create();
+        var expander = new Expander { Content = new Border(), IsExpanded = true, Template = ToggleTemplate(toggle) };
+        window.Content = expander;
+        window.PerformLayout();
+
+        Assert.IsTrue(toggle.IsChecked, "the toggle part starts from the current IsExpanded");
+
+        toggle.IsChecked = false;
+        Assert.IsFalse(expander.IsExpanded, "unchecking the part collapses the expander");
+
+        expander.IsExpanded = true;
+        Assert.IsTrue(toggle.IsChecked, "expanding from code checks the part");
+    }
+
+    [TestMethod]
+    public void ClearTemplate_DisconnectsHeaderTogglePart()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("GDI backend is Windows-only.");
+            return;
+        }
+
+        var toggle = new ToggleButton();
+        var window = HeadlessWindow.Create();
+        var expander = new Expander { Content = new Border(), IsExpanded = true, Template = ToggleTemplate(toggle) };
+        window.Content = expander;
+        window.PerformLayout();
+
+        expander.Template = null;
+        window.PerformLayout();
+
+        toggle.IsChecked = false;
+        Assert.IsTrue(expander.IsExpanded, "a part from a discarded template no longer drives the expander");
+    }
+
     private static bool VisitsChild(IVisualTreeHost host, Element child)
     {
         bool visited = false;

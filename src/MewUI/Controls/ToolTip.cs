@@ -18,6 +18,12 @@ public sealed partial class ToolTip : ContentControl
 
     protected override void OnRender(IGraphicsContext context)
     {
+        // A template owns the control's entire visuals; the built-in chrome would double-render.
+        if (HasTemplateInstance)
+        {
+            return;
+        }
+
         var bounds = GetSnappedBorderBounds(Bounds);
         var dpiScale = GetDpi() / 96.0;
         double radius = LayoutRounding.RoundToPixel(CornerRadius, dpiScale);

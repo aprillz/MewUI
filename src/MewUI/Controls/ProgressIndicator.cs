@@ -82,7 +82,8 @@ public class ProgressIndicator : Control
     {
         base.OnRender(context);
 
-        if (!IsActive || _clock == null)
+        // A template owns the control's entire visuals; the dots would draw over it.
+        if (HasTemplateInstance || !IsActive || _clock == null)
         {
             return;
         }

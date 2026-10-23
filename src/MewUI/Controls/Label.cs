@@ -120,6 +120,11 @@ public partial class Label : Control, IVisualTreeHost
 
     protected override Size MeasureContent(Size availableSize)
     {
+        if (HasTemplateInstance)
+        {
+            return base.MeasureContent(availableSize);
+        }
+
         if (string.IsNullOrEmpty(Text))
         {
             return Padding.HorizontalThickness > 0 || Padding.VerticalThickness > 0
@@ -135,6 +140,12 @@ public partial class Label : Control, IVisualTreeHost
     protected override void ArrangeContent(Rect bounds)
     {
         base.ArrangeContent(bounds);
+
+        if (HasTemplateInstance)
+        {
+            return;
+        }
+
         _accessText.Arrange(bounds.Deflate(Padding));
     }
 
@@ -142,7 +153,8 @@ public partial class Label : Control, IVisualTreeHost
     {
         base.OnRender(context);
 
-        if (string.IsNullOrEmpty(Text))
+        // A template owns the control's entire visuals; the access text would draw over it.
+        if (HasTemplateInstance || string.IsNullOrEmpty(Text))
         {
             return;
         }
@@ -150,7 +162,16 @@ public partial class Label : Control, IVisualTreeHost
         _accessText.Render(context);
     }
 
-    bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor) => visitor(_accessText);
+    bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
+    {
+        var templateRoot = TemplateVisualRoot;
+        if (templateRoot != null)
+        {
+            return visitor(templateRoot);
+        }
+
+        return visitor(_accessText);
+    }
 
     protected override void OnDispose()
     {

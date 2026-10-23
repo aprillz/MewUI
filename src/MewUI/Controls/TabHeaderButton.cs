@@ -101,6 +101,12 @@ internal sealed partial class TabHeaderButton : ContentControl
 
     protected override void OnRender(IGraphicsContext context)
     {
+        // A template owns the header's entire visuals; the placement-shaped chrome would double-render.
+        if (HasTemplateInstance)
+        {
+            return;
+        }
+
         var bg = GetValue(BackgroundProperty);
         var borderBrush = GetValue(BorderBrushProperty);
         double r = CornerRadius;
@@ -130,7 +136,7 @@ internal sealed partial class TabHeaderButton : ContentControl
     {
         base.ArrangeContent(bounds);
 
-        if (Content == null)
+        if (HasTemplateInstance || Content == null)
         {
             return;
         }

@@ -109,6 +109,8 @@ nud.Template = new DelegateControlTemplate<NumericUpDown>((owner, ctx) =>
 - When the part is not registered, the feature is simply disabled - no exception
   (`BeginEdit` becomes a no-op, for example).
 
+`Expander.PART_HEADER_TOGGLE` is the same kind of contract: register a `ToggleButton` under this name and its `IsChecked` and the expander's `IsExpanded` follow each other in both directions. Without the part, a templated expander changes `IsExpanded` only from code or the keyboard.
+
 ### <a id="presenter"></a>ContentPresenter: projecting logical slots
 
 A `ContentPresenter` marks the spot inside a template tree where "the control's content

@@ -74,12 +74,23 @@ public sealed partial class ProgressRing : RangeBase
 
     protected override Size MeasureContent(Size availableSize)
     {
+        if (HasTemplateInstance)
+        {
+            return base.MeasureContent(availableSize);
+        }
+
         double side = Theme.Metrics.BaseControlHeight;
         return new Size(side, side).Inflate(Padding);
     }
 
     protected override void OnRender(IGraphicsContext context)
     {
+        // A template owns the control's entire visuals; the ring would draw over it.
+        if (HasTemplateInstance)
+        {
+            return;
+        }
+
         var contentBounds = Bounds.Deflate(Padding);
         double side = Math.Min(contentBounds.Width, contentBounds.Height);
         if (side <= 0)
