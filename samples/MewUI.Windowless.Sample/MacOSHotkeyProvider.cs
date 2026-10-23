@@ -27,10 +27,11 @@ internal sealed class MacOSHotkeyProvider : IHotkeyProvider
         _activated = activated;
         _handler = HandleEvent;
         var eventType = new EventTypeSpec { EventClass = EVENT_CLASS_KEYBOARD, EventKind = EVENT_HOT_KEY_PRESSED };
-        int status = InstallApplicationEventHandler(_handler, 1, ref eventType, 0, out _handlerRef);
+        // InstallApplicationEventHandler is a header macro over this call, so Carbon exports only InstallEventHandler.
+        int status = InstallEventHandler(GetApplicationEventTarget(), _handler, 1, ref eventType, 0, out _handlerRef);
         if (status != 0)
         {
-            throw new Win32Exception(status, "InstallApplicationEventHandler failed.");
+            throw new Win32Exception(status, "InstallEventHandler failed.");
         }
 
         var hotkeyId = new EventHotKeyId { Signature = SIGNATURE, Id = 1 };
@@ -93,7 +94,7 @@ internal sealed class MacOSHotkeyProvider : IHotkeyProvider
     private static extern nint GetApplicationEventTarget();
 
     [DllImport(Carbon)]
-    private static extern int InstallApplicationEventHandler(EventHandler handler, uint count,
+    private static extern int InstallEventHandler(nint target, EventHandler handler, nuint count,
         ref EventTypeSpec eventTypes, nint userData, out nint handlerRef);
 
     [DllImport(Carbon)]
