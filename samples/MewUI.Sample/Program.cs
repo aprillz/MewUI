@@ -226,9 +226,9 @@ Element MenuDemo()
 
     return new MenuBar()
         .Items(
-            new MenuItem("_File").Menu(fileMenu),
-            new MenuItem("_Edit").Menu(editMenu),
-            new MenuItem("_Help").Menu(helpMenu)
+            new MenuItem("_File").SubMenu(fileMenu),
+            new MenuItem("_Edit").SubMenu(editMenu),
+            new MenuItem("_Help").SubMenu(helpMenu)
         );
 }
 

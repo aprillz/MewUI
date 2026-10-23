@@ -316,9 +316,9 @@ partial class GalleryView
         var menu = new MenuBar()
                             .Height(28)
                             .Items(
-                                new MenuItem("_File").Menu(fileMenu),
-                                new MenuItem("_Edit").Menu(editMenu),
-                                new MenuItem("_View").Menu(viewMenu)
+                                new MenuItem("_File").SubMenu(fileMenu),
+                                new MenuItem("_Edit").SubMenu(editMenu),
+                                new MenuItem("_View").SubMenu(viewMenu)
                             );
         return menu;
     }
@@ -340,8 +340,8 @@ partial class GalleryView
         // No fixed Height: the bar auto-sizes to the (inherited) font so the font-size effect shows.
         return new MenuBar()
             .Items(
-                new MenuItem("File").Menu(fileMenu),
-                new MenuItem("Edit").Menu(editMenu)
+                new MenuItem("File").SubMenu(fileMenu),
+                new MenuItem("Edit").SubMenu(editMenu)
             );
     }
 

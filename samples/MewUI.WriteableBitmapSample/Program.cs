@@ -35,7 +35,7 @@ var root = new Window()
                     new MenuBar()
                         .DockTop()
                         .Items(
-                            new MenuItem("File").Menu(
+                            new MenuItem("File").SubMenu(
                                 new Menu()
                                     .Item(exitCommand)
                             )

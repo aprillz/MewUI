@@ -201,9 +201,9 @@ Element MenuDemo()
 
     return new MenuBar()
         .Items(
-            new MenuItem("File").Menu(fileMenu),
-            new MenuItem("Edit").Menu(editMenu),
-            new MenuItem("Help").Menu(helpMenu)
+            new MenuItem("File").SubMenu(fileMenu),
+            new MenuItem("Edit").SubMenu(editMenu),
+            new MenuItem("Help").SubMenu(helpMenu)
         );
 }
 
