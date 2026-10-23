@@ -12,6 +12,12 @@ public sealed partial class ScrollBar : RangeBase
     private static readonly bool _defaultStyleRegistered =
         DefaultStyles.Register<ScrollBar>(DefaultStyles.CreateScrollBarStyle);
 
+    /// <summary>
+    /// The optional track part of a template. The control pushes its range, value, viewport and orientation into
+    /// it, pages on a press in its regions and maps its thumb's drags to the value.
+    /// </summary>
+    public const string PART_TRACK = "PART_Track";
+
     private static readonly MewProperty<bool> IsDraggingProperty =
         MewProperty<bool>.Register<ScrollBar>(nameof(IsDragging), false,
             MewPropertyOptions.AffectsRender | MewPropertyOptions.AffectsVisualState);
@@ -31,6 +37,12 @@ public sealed partial class ScrollBar : RangeBase
     private double _dragStartPos;
     private double _dragStartValue;
     private WheelNotchAccumulator _wheelAccumulator;
+
+    private Track? _trackPart;
+    private Thumb? _thumbPart;
+    private RepeatButton? _decreasePart;
+    private RepeatButton? _increasePart;
+    private double _thumbDragStartValue;
 
     /// <summary>
     /// Gets or sets the multiplier on the rendered thumb alpha (0..1); layout and hit testing are
@@ -113,6 +125,11 @@ public sealed partial class ScrollBar : RangeBase
 
     protected override Size MeasureContent(Size availableSize)
     {
+        if (HasTemplateInstance)
+        {
+            return base.MeasureContent(availableSize);
+        }
+
         var thickness = Theme.Metrics.ScrollBarHitThickness;
         return Orientation == Orientation.Vertical
             ? new Size(thickness, availableSize.Height)
@@ -121,7 +138,8 @@ public sealed partial class ScrollBar : RangeBase
 
     protected override void OnRender(IGraphicsContext context)
     {
-        if (!IsEffectivelyEnabled)
+        // A template owns the control's entire visuals; the built-in thumb would double-render.
+        if (HasTemplateInstance || !IsEffectivelyEnabled)
         {
             return;
         }
@@ -135,19 +153,99 @@ public sealed partial class ScrollBar : RangeBase
         }
 
         var track = GetTrackRect(bounds, Theme);
-        var thumb = GetThumbRect(track, Theme);
+        var thumb = ComputeLayout(track).ThumbRect;
         var thumbColor = GetValue(BackgroundProperty);
         if (opacity < 1)
         {
             thumbColor = thumbColor.WithAlpha((byte)Math.Round(thumbColor.A * opacity));
         }
 
-        double radius = Theme.Metrics.ScrollBarThickness / 2;
         if (thumb.Width > 0 && thumb.Height > 0 && thumbColor.A > 0)
         {
+            double radius = Theme.Metrics.ScrollBarThickness / 2;
             context.FillRoundedRectangle(thumb, radius, radius, thumbColor);
         }
     }
+
+    private protected override void OnTemplateInstanceAttached()
+    {
+        base.OnTemplateInstanceAttached();
+
+        _trackPart = GetTemplateChild<Track>(PART_TRACK);
+        if (_trackPart == null)
+        {
+            return;
+        }
+
+        var context = TemplateContext!;
+        context.Bind(_trackPart, Track.MinimumProperty, MinimumProperty);
+        context.Bind(_trackPart, Track.MaximumProperty, MaximumProperty);
+        context.Bind(_trackPart, Track.ValueProperty, ValueProperty);
+        context.Bind(_trackPart, Track.ViewportSizeProperty, ViewportSizeProperty);
+        context.Bind(_trackPart, Track.OrientationProperty, OrientationProperty);
+
+        _thumbPart = _trackPart.Thumb;
+        if (_thumbPart != null)
+        {
+            _thumbPart.DragStarted += OnThumbDragStarted;
+            _thumbPart.DragDelta += OnThumbDragDelta;
+        }
+
+        _decreasePart = _trackPart.DecreaseElement as RepeatButton;
+        if (_decreasePart != null)
+        {
+            _decreasePart.Click += OnDecreaseClick;
+        }
+
+        _increasePart = _trackPart.IncreaseElement as RepeatButton;
+        if (_increasePart != null)
+        {
+            _increasePart.Click += OnIncreaseClick;
+        }
+    }
+
+    private protected override void OnTemplateInstanceDetached()
+    {
+        base.OnTemplateInstanceDetached();
+
+        if (_thumbPart != null)
+        {
+            _thumbPart.DragStarted -= OnThumbDragStarted;
+            _thumbPart.DragDelta -= OnThumbDragDelta;
+            _thumbPart = null;
+        }
+
+        if (_decreasePart != null)
+        {
+            _decreasePart.Click -= OnDecreaseClick;
+            _decreasePart = null;
+        }
+
+        if (_increasePart != null)
+        {
+            _increasePart.Click -= OnIncreaseClick;
+            _increasePart = null;
+        }
+
+        _trackPart = null;
+    }
+
+    private void OnThumbDragStarted() => _thumbDragStartValue = Value;
+
+    private void OnThumbDragDelta(Vector delta)
+    {
+        if (_trackPart == null)
+        {
+            return;
+        }
+
+        double distance = Orientation == Orientation.Vertical ? delta.Y : delta.X;
+        CommitValue(_thumbDragStartValue + _trackPart.ValueFromDistance(distance));
+    }
+
+    private void OnDecreaseClick() => CommitValue(Value - LargeChange);
+
+    private void OnIncreaseClick() => CommitValue(Value + LargeChange);
 
     protected override void OnMouseDown(MouseEventArgs e)
     {
@@ -158,14 +256,28 @@ public sealed partial class ScrollBar : RangeBase
             return;
         }
 
-        
+        if (HasTemplateInstance)
+        {
+            // The thumb handles its own press and a repeat button its own click; a press on a plain
+            // paging region bubbles up to here.
+            if (_trackPart == null || e.Handled)
+            {
+                return;
+            }
+
+            PageToward(_trackPart.ValueFromPoint(e.Position));
+            e.Handled = true;
+            return;
+        }
+
         var track = GetTrackRect(Bounds, Theme);
-        var thumb = GetThumbRect(track, Theme);
-        var thumbHit = GetThumbHitRect(thumb, Bounds);
+        var layout = ComputeLayout(track);
+        var thumbHit = GetThumbHitRect(layout.ThumbRect, Bounds);
 
-        double pos = Orientation == Orientation.Vertical ? e.Position.Y : e.Position.X;
+        var position = e.Position;
+        double pos = Orientation == Orientation.Vertical ? position.Y : position.X;
 
-        if (thumbHit.Contains(e.Position))
+        if (thumbHit.Contains(position))
         {
             IsDragging = true;
             _dragStartPos = pos;
@@ -181,9 +293,13 @@ public sealed partial class ScrollBar : RangeBase
             return;
         }
 
-        // Page up/down on track click
-        var clickValue = ValueFromPosition(track, Theme, pos);
-        if (clickValue < Value)
+        PageToward(layout.ValueFromPoint(position));
+        e.Handled = true;
+    }
+
+    private void PageToward(double targetValue)
+    {
+        if (targetValue < Value)
         {
             CommitValue(Value - LargeChange);
         }
@@ -191,34 +307,22 @@ public sealed partial class ScrollBar : RangeBase
         {
             CommitValue(Value + LargeChange);
         }
-
-        e.Handled = true;
     }
 
     protected override void OnMouseMove(MouseEventArgs e)
     {
         base.OnMouseMove(e);
 
-        if (!IsEffectivelyEnabled || !IsDragging || !IsMouseCaptured || !e.LeftButton)
+        if (HasTemplateInstance || !IsEffectivelyEnabled || !IsDragging || !IsMouseCaptured || !e.LeftButton)
         {
             return;
         }
 
-        
-        var track = GetTrackRect(Bounds, Theme);
-        var thumb = GetThumbRect(track, Theme);
+        var layout = ComputeLayout(GetTrackRect(Bounds, Theme));
+        var position = e.Position;
+        double pos = Orientation == Orientation.Vertical ? position.Y : position.X;
 
-        double pos = Orientation == Orientation.Vertical ? e.Position.Y : e.Position.X;
-        double deltaPx = pos - _dragStartPos;
-
-        double trackLength = Orientation == Orientation.Vertical ? track.Height : track.Width;
-        double thumbLength = Orientation == Orientation.Vertical ? thumb.Height : thumb.Width;
-        double scrollRange = GetScrollRange();
-
-        double usable = Math.Max(1, trackLength - thumbLength);
-        double deltaValue = scrollRange <= 0 ? 0 : deltaPx / usable * scrollRange;
-
-        CommitValue(_dragStartValue + deltaValue);
+        CommitValue(_dragStartValue + layout.ValueFromDistance(pos - _dragStartPos));
         e.Handled = true;
     }
 
@@ -266,46 +370,10 @@ public sealed partial class ScrollBar : RangeBase
         e.Handled = true;
     }
 
-    private double GetScrollRange()
-    {
-        double min = Math.Min(Minimum, Maximum);
-        double max = Math.Max(Minimum, Maximum);
-        return Math.Max(0, max - min);
-    }
-
-    private Rect GetThumbRect(Rect track, Theme theme)
-    {
-        double scrollRange = GetScrollRange();
-        double viewport = Math.Max(0, ViewportSize);
-
-        double length = Orientation == Orientation.Vertical ? track.Height : track.Width;
-        double thickness = Orientation == Orientation.Vertical ? track.Width : track.Height;
-
-        double minThumb = Math.Max(8, theme.Metrics.ScrollBarMinThumbLength);
-
-        // When viewport is known, use ratio; otherwise default to 1/4 of track.
-        double ratio = viewport > 0 && (scrollRange + viewport) > 0
-            ? viewport / (scrollRange + viewport)
-            : 0.25;
-
-        if (length < minThumb || thickness <= 0)
-            return Rect.Empty;
-
-        double thumbLength = Math.Clamp(length * ratio, minThumb, length);
-        double usable = Math.Max(1, length - thumbLength);
-
-        double min = Math.Min(Minimum, Maximum);
-        double max = Math.Max(Minimum, Maximum);
-        double t = (max - min) <= 0 ? 0 : Math.Clamp((Value - min) / (max - min), 0, 1);
-        double offset = usable * t;
-
-        if (Orientation == Orientation.Vertical)
-        {
-            return new Rect(track.X, track.Y + offset, thickness, thumbLength);
-        }
-
-        return new Rect(track.X + offset, track.Y, thumbLength, thickness);
-    }
+    private RangeTrackLayout ComputeLayout(Rect track)
+        => RangeTrackLayout.Compute(
+            track, Orientation, isDirectionReversed: false, Minimum, Maximum, Value, ViewportSize,
+            thumbLength: double.NaN, Math.Max(8, Theme.Metrics.ScrollBarMinThumbLength));
 
     private Rect GetTrackRect(Rect bounds, Theme theme)
     {
@@ -346,20 +414,5 @@ public sealed partial class ScrollBar : RangeBase
         }
 
         return new Rect(thumbVisual.X, hitBounds.Y, thumbVisual.Width, hitBounds.Height);
-    }
-
-    private double ValueFromPosition(Rect track, Theme theme, double pos)
-    {
-        var thumb = GetThumbRect(track, theme);
-        double length = Orientation == Orientation.Vertical ? track.Height : track.Width;
-        double thumbLength = Orientation == Orientation.Vertical ? thumb.Height : thumb.Width;
-        double usable = Math.Max(1, length - thumbLength);
-
-        double start = Orientation == Orientation.Vertical ? track.Y : track.X;
-        double t = Math.Clamp((pos - start - (thumbLength / 2)) / usable, 0, 1);
-
-        double min = Math.Min(Minimum, Maximum);
-        double max = Math.Max(Minimum, Maximum);
-        return min + (max - min) * t;
     }
 }

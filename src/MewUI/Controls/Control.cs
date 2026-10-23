@@ -398,6 +398,9 @@ public abstract partial class Control : TextElement
 
     internal bool HasTemplateInstance => _templateInstance != null;
 
+    /// <summary>The applied template's part registry, so a control can bind its own properties to parts; null without a template.</summary>
+    private protected ControlTemplateContext? TemplateContext => _templateInstance?.Context;
+
     /// <summary>
     /// The slot a <see cref="ContentPresenter"/> projects when its ContentSource is not set.
     /// Null leaves such a presenter empty.

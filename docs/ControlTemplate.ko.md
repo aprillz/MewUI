@@ -108,6 +108,8 @@ nud.Template = new DelegateControlTemplate<NumericUpDown>((owner, ctx) =>
 
 `ProgressBar.PART_TRACK`과 `ProgressBar.PART_INDICATOR`는 템플릿이 값 로직을 그대로 쓰게 합니다. 템플릿이 트리를 배치한 뒤 컨트롤이 표시 막대를 트랙 폭 안에서 값(미확정이면 이동 구간)의 가로 범위로 한 번 더 배치하고, 세로는 템플릿이 배치한 그대로 둡니다. 표시 막대의 가로 정렬은 `Stretch`로, `Width`는 비워 두어야 그 범위가 적용되며, 템플릿은 표시 막대를 트랙 안에 두고 색만 주면 됩니다. 내장 막대와 링의 채움 색은 `Foreground`이므로 보통 `ctx.Bind(indicator, Control.BackgroundProperty, TextElement.ForegroundProperty)`로 표시 막대의 `Background`를 묶습니다.
 
+`ScrollBar.PART_TRACK`은 `Track`을 받습니다. 컨트롤이 범위·값·뷰포트·방향을 트랙에 밀어 넣고, 트랙의 `Thumb`이 끌리면 값으로 바꾸며, 트랙의 감소·증가 요소를 누르면(그 요소가 `RepeatButton`이면 그 `Click`으로) `LargeChange`만큼 이동합니다. 트랙은 `Thumb`, `DecreaseElement`, `IncreaseElement`를 배치만 하고 아무것도 그리지 않으므로 모양은 템플릿이 그 요소들에 줍니다. 파트가 없으면 템플릿을 적용한 스크롤바는 휠과 코드로만 움직입니다.
+
 ### <a id="presenter"></a>ContentPresenter: logical 슬롯의 투영
 
 `ContentPresenter`는 템플릿 트리 안에서 "여기에 컨트롤의 콘텐츠가 나타난다"를

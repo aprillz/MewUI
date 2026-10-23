@@ -17,8 +17,6 @@ public sealed class TemplateAcceptanceTests
     private static readonly Dictionary<Type, string> _deferred = new()
     {
         [typeof(Slider)] = "T2",
-        [typeof(ScrollBar)] = "T2",
-        [typeof(ProgressBar)] = "T3",
         [typeof(ScrollViewer)] = "T4",
         [typeof(ItemsControl)] = "T4",
         [typeof(ListBox)] = "T4",

@@ -120,6 +120,23 @@ Receiver: `TextElement` and derived types (`where T : TextElement`).
 | `FontWeight(FontWeight value)` | `FontWeight` | Sets the font weight. |
 | `Foreground(Color value)` | `Foreground` | Sets the foreground (text) color. |
 
+### Track
+
+Receiver: `Track`.
+
+| Method | Sets | Summary |
+|---|---|---|
+| `DecreaseElement(Element value)` | `DecreaseElement` | Sets the element filling the region between the minimum end and the thumb. |
+| `IncreaseElement(Element value)` | `IncreaseElement` | Sets the element filling the region between the thumb and the maximum end. |
+| `IsDirectionReversed(bool value = true)` | `IsDirectionReversed` | Sets whether the minimum sits at the far end, as it does on a vertical slider. |
+| `Maximum(double value)` | `Maximum` | Sets the maximum value. |
+| `Minimum(double value)` | `Minimum` | Sets the minimum value. |
+| `Orientation(Orientation value)` | `Orientation` | Sets the axis the thumb travels along. |
+| `Thumb(Thumb value)` | `Thumb` | Sets the thumb element. |
+| `ThumbLength(double value)` | `ThumbLength` | Sets the thumb's length along the axis; NaN takes the thumb element's desired length. |
+| `Value(double value)` | `Value` | Sets the value the thumb is placed for. |
+| `ViewportSize(double value)` | `ViewportSize` | Sets the viewport size in value units, which sizes the thumb like a scroll bar; NaN keeps the thumb at ThumbLength, as a slider does. |
+
 ### Control
 
 Receiver: `Control` and derived types (`where T : Control`).
@@ -173,6 +190,16 @@ Receiver: `SyntaxViewer`.
 | `TabSize(int value)` | `TabSize` | Sets the tab width in space characters. |
 | `Text(string value)` | `Text` | Sets the text presented. |
 | `Wrap(bool value = true)` | `Wrap` | Sets whether lines wrap at the viewport width. |
+
+### Thumb
+
+Receiver: `Thumb`.
+
+| Method | Sets | Summary |
+|---|---|---|
+| `OnDragDelta(Action<Vector> handler)` | `event DragDelta` | Subscribes handler to DragDelta. Occurs on each pointer move during a drag, with the total distance from the press point. |
+| `OnDragEnded(Action<bool> handler)` | `event DragEnded` | Subscribes handler to DragEnded. Occurs when the drag ends; true when the capture was taken away instead of released. |
+| `OnDragStarted(Action handler)` | `event DragStarted` | Subscribes handler to DragStarted. Occurs when a press takes the mouse capture and a drag begins. |
 
 ### CommandSourceControl
 

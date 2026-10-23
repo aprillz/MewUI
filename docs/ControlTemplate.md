@@ -113,6 +113,8 @@ nud.Template = new DelegateControlTemplate<NumericUpDown>((owner, ctx) =>
 
 `ProgressBar.PART_TRACK` and `ProgressBar.PART_INDICATOR` let a template keep the bar's value logic: after the template arranges its tree, the control arranges the indicator again to the horizontal span of the value (or of the indeterminate sweep) within the track's width, keeping the vertical placement the template gave it. Leave the indicator's horizontal alignment at `Stretch` and its `Width` unset so that span applies; the template only puts the indicator inside the track and gives it a color. The fill color of the built-in bar and ring is `Foreground`, so a template usually binds the indicator's `Background` to it with `ctx.Bind(indicator, Control.BackgroundProperty, TextElement.ForegroundProperty)`.
 
+`ScrollBar.PART_TRACK` takes a `Track`: the control pushes its range, value, viewport and orientation into the track, maps the drags of the track's `Thumb` to the value, and pages by `LargeChange` on a press in the track's decrease or increase element (or on their `Click` when they are `RepeatButton`s). The track places its `Thumb`, `DecreaseElement` and `IncreaseElement` and draws nothing itself, so the template gives those elements their look. Without the part, a templated scroll bar still scrolls by the wheel and from code.
+
 ### <a id="presenter"></a>ContentPresenter: projecting logical slots
 
 A `ContentPresenter` marks the spot inside a template tree where "the control's content
