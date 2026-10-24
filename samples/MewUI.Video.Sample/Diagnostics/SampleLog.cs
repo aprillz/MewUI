@@ -1,22 +1,21 @@
-using System.Text;
-
 namespace Aprillz.MewUI.Video.Sample.Diagnostics;
 
 public static class SampleLog
 {
+    /// <summary>How many recent lines are kept for the log window; older lines are dropped.</summary>
+    public const int MAX_LINES = 1000;
+
     private static readonly object Gate = new();
-    private static readonly StringBuilder Buffer = new();
+    private static readonly Queue<string> Lines = new();
 
     public static event Action<string>? LineAppended;
 
-    public static string Snapshot
+    /// <summary>The kept lines, oldest first.</summary>
+    public static string[] GetLines()
     {
-        get
+        lock (Gate)
         {
-            lock (Gate)
-            {
-                return Buffer.ToString();
-            }
+            return [.. Lines];
         }
     }
 
@@ -26,7 +25,11 @@ public static class SampleLog
 
         lock (Gate)
         {
-            Buffer.AppendLine(line);
+            Lines.Enqueue(line);
+            if (Lines.Count > MAX_LINES)
+            {
+                Lines.Dequeue();
+            }
         }
 
         LineAppended?.Invoke(line);

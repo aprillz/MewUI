@@ -19,6 +19,11 @@ VideoPlayerWindow playerWindow = null!;
 Window? logWindow = null;
 MultiLineTextBox? logTextBox = null;
 
+// Length of each line shown in the log window, oldest first, so the oldest can be cut once the window holds
+// SampleLog.MAX_LINES. Lines are joined with LOG_LINE_BREAK, the break the text box stores whatever the platform's is.
+const string LOG_LINE_BREAK = "\n";
+var logLineLengths = new Queue<int>();
+
 ProcessStatistics processStats = new();
 
 SampleLog.LineAppended += AppendLogLine;
@@ -224,6 +229,7 @@ void EnsureLogWindow()
         return;
     }
 
+    string[] keptLines = Array.ConvertAll(SampleLog.GetLines(), ForLogBox);
     Window window = null!;
     MultiLineTextBox textBox = null!;
     window = new Window()
@@ -239,7 +245,7 @@ void EnsureLogWindow()
                             .Ref(out textBox)
                             .Wrap(true)
                             .FontFamily("Consolas")
-                            .Text(SampleLog.Snapshot)
+                            .Text(string.Join(LOG_LINE_BREAK, keptLines))
                     )
             )
         )
@@ -247,7 +253,17 @@ void EnsureLogWindow()
         {
             logWindow = null;
             logTextBox = null;
+            logLineLengths.Clear();
         });
+
+    // The log is only appended to: the reader cannot edit it, so there is nothing to undo and no history to keep.
+    textBox.IsReadOnly = true;
+    textBox.Document.UndoSizeLimit = 0;
+    logLineLengths.Clear();
+    foreach (string kept in keptLines)
+    {
+        logLineLengths.Enqueue(kept.Length);
+    }
 
     logWindow = window;
     logTextBox = textBox;
@@ -272,10 +288,21 @@ void AppendLogLine(string line)
             return;
         }
 
+        string shown = ForLogBox(line);
         logTextBox.AppendText(
-            string.IsNullOrEmpty(logTextBox.Text)
-                ? line
-                : Environment.NewLine + line,
+            logLineLengths.Count == 0
+                ? shown
+                : LOG_LINE_BREAK + shown,
             scrollToCaret: true);
+        logLineLengths.Enqueue(shown.Length);
+        if (logLineLengths.Count > SampleLog.MAX_LINES)
+        {
+            logTextBox.ReplaceRange(0, logLineLengths.Dequeue() + LOG_LINE_BREAK.Length, null);
+        }
     });
 }
+
+// A message can carry breaks of its own (an exception's stack, say); they are written as the text box stores them,
+// so the recorded length is the length the box holds.
+static string ForLogBox(string line)
+    => line.Replace("\r\n", LOG_LINE_BREAK, StringComparison.Ordinal).Replace("\r", LOG_LINE_BREAK, StringComparison.Ordinal);
