@@ -201,8 +201,6 @@ internal sealed class MarkdownBlockHost : Control, IVisualTreeHost, ILogicalTree
 
         EnsurePrefix();
         _pendingRealize = false;
-        // Raised from measure so the ancestor chain is arrange-dirty again for this pass.
-        InvalidateArrange();
         return new Size(double.IsFinite(availableSize.Width) ? width : maxWidth, Extent);
     }
 
