@@ -50,7 +50,6 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
     private int _pendingScrollIntoViewIndex = -1;
     private ItemsAnchor _anchor;
     private bool _followEndRequest;
-    private bool _pendingAnchorShiftArrange;
 
     // Tracks the DPI scale from the last layout pass so we can detect DPI changes
     // and invalidate prefix sums (which are DPI-dependent due to per-item pixel rounding).
@@ -297,12 +296,6 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
     protected override Size MeasureContent(Size availableSize)
     {
         RecomputeExtent();
-
-        if (_pendingAnchorShiftArrange)
-        {
-            _pendingAnchorShiftArrange = false;
-            InvalidateArrange();
-        }
 
         return new Size(
             Math.Max(0, availableSize.Width),
@@ -1106,9 +1099,8 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
         double onePixelDip = dpiScale > 0 ? 1.0 / dpiScale : 1.0;
         if (Math.Abs(GetAnchorShift() - previousShift) >= onePixelDip * 0.99)
         {
-            // Raising the arrange invalidation here would not survive: this also runs inside the
-            // arrange pass, which clears that flag when it ends. MeasureContent raises it instead.
-            _pendingAnchorShiftArrange = true;
+            // This also runs inside the arrange pass, which clears an arrange request when it ends; a measured
+            // element is arranged again, so the measure request carries it.
             InvalidateMeasure();
         }
     }
