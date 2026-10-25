@@ -252,10 +252,10 @@ internal sealed class MarkdownParagraph : TextElement, ISelectableText
 
     protected override void ArrangeContent(Rect bounds)
     {
+        // Lines follow the arranged width; a parent that measured at another width owns the height that leaves.
         if (Wrap && double.IsFinite(bounds.Width) && Math.Abs(bounds.Width - _width) > 0.01)
         {
             GetLayout(bounds.Width);
-            InvalidateMeasure();
         }
     }
 
