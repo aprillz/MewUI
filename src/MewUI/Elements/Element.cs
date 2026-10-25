@@ -478,10 +478,16 @@ public abstract partial class Element : MewObject
     protected abstract Size MeasureCore(Size availableSize);
 
     /// <summary>
-    /// Positions and sizes the element within the given bounds.
+    /// Positions and sizes the element within the given bounds, measuring it first when its measure is out of date.
     /// </summary>
     public void Arrange(Rect finalRect)
     {
+        // A host can arrange a child it did not measure, and no later pass would arrange it again once measured.
+        if (IsMeasureDirty)
+        {
+            Measure(_hasMeasureConstraint ? _lastMeasureConstraint : finalRect.Size);
+        }
+
         var arrangedRect = ApplyLayoutRounding(GetArrangedBounds(finalRect));
 
         if (!IsArrangeDirty && Bounds == arrangedRect)
