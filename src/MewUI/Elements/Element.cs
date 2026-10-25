@@ -452,6 +452,7 @@ public abstract partial class Element : MewObject
             return;
         }
 
+        MarkArrangeDirtyForMeasure();
         Size measured;
         using (DevToolsGate.IsSupported ? PerformanceProfiler.Instance.SampleElement(GetType(), ProfilerSampleCategory.Measure) : default)
         {
@@ -476,6 +477,16 @@ public abstract partial class Element : MewObject
     /// Measures the element's content for the available size.
     /// </summary>
     protected abstract Size MeasureCore(Size availableSize);
+
+    /// <summary>Marks this element and its ancestors for arranging, as a measured element is arranged again.</summary>
+    private void MarkArrangeDirtyForMeasure()
+    {
+        // An ancestor already waiting to arrange reaches this element; flags rather than InvalidateArrange ask no extra round.
+        for (Element? current = this; current != null && !current.IsArrangeDirty; current = current.Parent)
+        {
+            current.IsArrangeDirty = true;
+        }
+    }
 
     /// <summary>
     /// Positions and sizes the element within the given bounds, measuring it first when its measure is out of date.

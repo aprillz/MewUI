@@ -41,6 +41,29 @@ public sealed class ArrangeMeasureContractTests
     }
 
     [TestMethod]
+    public void TextViewRebuiltFromItsOwnLinesChanged_StillShowsItsLines()
+    {
+        var (window, text) = CreateCodeBlock();
+        bool rebuilt = false;
+        // The view raises LinesChanged while the box arranges it; rebuilding there drops the view being arranged.
+        text.LinesChanged += _ =>
+        {
+            if (!rebuilt)
+            {
+                rebuilt = true;
+                text.InvalidateTextView();
+            }
+        };
+
+        window.PerformLayout();
+
+        Assert.IsTrue(rebuilt, "the view raised no LinesChanged during layout");
+        Assert.AreEqual(LINE_COUNT, text.VisibleTextLines.Count);
+        Assert.IsFalse(text.IsMeasureDirty);
+        Assert.IsFalse(text.IsArrangeDirty);
+    }
+
+    [TestMethod]
     public void Arrange_OfMeasureDirtyElement_MeasuresWithTheLastConstraintFirst()
     {
         var element = new SizedElement { ContentSize = new Size(30, 10) };
