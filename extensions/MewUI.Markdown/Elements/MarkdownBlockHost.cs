@@ -233,13 +233,15 @@ internal sealed class MarkdownBlockHost : Control, IVisualTreeHost, ILogicalTree
         }
         if (_blocks.Count > 0 && !_pendingRealize)
         {
-            int first = FindIndexByY(offset);
-            int last = FindIndexByY(offset + viewportHeight);
+            // The window measure keeps, not just the viewport: a block measured before it scrolls in can anchor the
+            // correction when the blocks above it get their real heights.
+            int first = FindIndexByY(offset - viewportHeight * OVERSCAN);
+            int last = FindIndexByY(offset + viewportHeight * (1 + OVERSCAN));
             for (int index = first; index <= last; index++)
             {
                 if (_realized[index] == null || double.IsNaN(_heights[index]))
                 {
-                    // Wheel and thumb input only arrange; a measure pass creates what the viewport now needs.
+                    // Wheel and thumb input only arrange; a measure pass creates what the window now needs.
                     _pendingRealize = true;
                     InvalidateMeasure();
                     break;
