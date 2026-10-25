@@ -40,7 +40,6 @@ public abstract partial class TextBlockBase : TextElement, IDisposable
             MewPropertyOptions.AffectsLayout,
             static (self, _, _) => self.InvalidateTextLayout());
 
-    private double? _lastWrapMeasureWidth;
     private readonly List<TextPaintSpan> _paintSpans = [];
     private readonly List<GeometryStyleRun> _geometryRuns = [];
 
@@ -118,7 +117,6 @@ public abstract partial class TextBlockBase : TextElement, IDisposable
 
     protected void InvalidateTextLayout()
     {
-        _lastWrapMeasureWidth = null;
         _measureLayout.Layout = null;
         _renderLayout.Layout = null;
         _textRevision++;
@@ -226,7 +224,6 @@ public abstract partial class TextBlockBase : TextElement, IDisposable
             {
                 maxWidth = 1_000_000;
             }
-            _lastWrapMeasureWidth = maxWidth;
         }
 
         // Measuring against an unbounded height keeps trimming out of the desired size; it applies
@@ -247,28 +244,6 @@ public abstract partial class TextBlockBase : TextElement, IDisposable
         }
 
         return new Size(width, measured.Height);
-    }
-
-    protected override void ArrangeContent(Rect bounds)
-    {
-        base.ArrangeContent(bounds);
-
-        if (TextWrapping == TextWrapping.NoWrap)
-        {
-            return;
-        }
-
-        var contentWidth = bounds.Width;
-        if (double.IsNaN(contentWidth) || double.IsInfinity(contentWidth))
-        {
-            return;
-        }
-
-        if (!_lastWrapMeasureWidth.HasValue || !_lastWrapMeasureWidth.Value.Equals(contentWidth))
-        {
-            _lastWrapMeasureWidth = contentWidth;
-            InvalidateMeasure();
-        }
     }
 
     /// <summary>
