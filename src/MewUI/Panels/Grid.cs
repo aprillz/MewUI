@@ -830,8 +830,8 @@ public class Grid : Panel
             var beforeColumns = CaptureMeasureSizesInto(columns, ref _beforeColumnSizeScratch);
             var beforeRows = CaptureMeasureSizesInto(rows, ref _beforeRowSizeScratch);
 
-            var columnConstraints = CreateMeasureConstraints(columns, paddedSize.Width, spacing, PixelScale(), ref _columnConstraintScratch);
-            var rowConstraints = CreateMeasureConstraints(rows, paddedSize.Height, spacing, PixelScale(), ref _rowConstraintScratch);
+            var columnConstraints = CreateMeasureConstraints(columns, paddedSize.Width, spacing, ref _columnConstraintScratch);
+            var rowConstraints = CreateMeasureConstraints(rows, paddedSize.Height, spacing, ref _rowConstraintScratch);
 
             MeasurePlacements(placements, rows, columns, spacing, mode: MeasureMode.Constrained, targetGroup: CellGroup.Group2, columnConstraints, rowConstraints, finiteWidth, finiteHeight);
             MeasurePlacements(placements, rows, columns, spacing, mode: MeasureMode.Constrained, targetGroup: CellGroup.Group3, columnConstraints, rowConstraints, finiteWidth, finiteHeight);
@@ -843,15 +843,15 @@ public class Grid : Panel
             }
         }
 
-        var finalColumnConstraints = CreateMeasureConstraints(columns, paddedSize.Width, spacing, PixelScale(), ref _columnConstraintScratch);
-        var finalRowConstraints = CreateMeasureConstraints(rows, paddedSize.Height, spacing, PixelScale(), ref _rowConstraintScratch);
+        var finalColumnConstraints = CreateMeasureConstraints(columns, paddedSize.Width, spacing, ref _columnConstraintScratch);
+        var finalRowConstraints = CreateMeasureConstraints(rows, paddedSize.Height, spacing, ref _rowConstraintScratch);
 
         MeasurePlacements(placements, rows, columns, spacing, mode: MeasureMode.Constrained, targetGroup: CellGroup.Group2, finalColumnConstraints, finalRowConstraints, finiteWidth, finiteHeight);
         MeasurePlacements(placements, rows, columns, spacing, mode: MeasureMode.Constrained, targetGroup: CellGroup.Group3, finalColumnConstraints, finalRowConstraints, finiteWidth, finiteHeight);
         RecomputeMeasureSizes(columns, rows, placements);
 
-        var group4ColumnConstraints = CreateMeasureConstraints(columns, paddedSize.Width, spacing, PixelScale(), ref _columnConstraintScratch);
-        var group4RowConstraints = CreateMeasureConstraints(rows, paddedSize.Height, spacing, PixelScale(), ref _rowConstraintScratch);
+        var group4ColumnConstraints = CreateMeasureConstraints(columns, paddedSize.Width, spacing, ref _columnConstraintScratch);
+        var group4RowConstraints = CreateMeasureConstraints(rows, paddedSize.Height, spacing, ref _rowConstraintScratch);
         MeasurePlacements(placements, rows, columns, spacing, mode: MeasureMode.Constrained, targetGroup: CellGroup.Group4, group4ColumnConstraints, group4RowConstraints, finiteWidth, finiteHeight);
 
         RecomputeMeasureSizes(columns, rows, placements);
@@ -1306,14 +1306,16 @@ public class Grid : Panel
         CollectionPool.Return(pending);
     }
 
-    private static double[] CreateMeasureConstraints<T>(IReadOnlyList<T> definitions, double available, double spacing, double pixelScale, ref double[] scratch)
+    private static double[] CreateMeasureConstraints<T>(IReadOnlyList<T> definitions, double available, double spacing, ref double[] scratch)
         where T : GridDefinitionBase
     {
-        var sizes = double.IsPositiveInfinity(available)
-            ? CaptureMeasureSizesInto(definitions, ref scratch)
-            : CreateDistributedSizes(definitions, available, spacing, useMeasuredForStarWhenInfinite: false, starFloorIsMeasured: false, ref scratch);
-        SnapToPixels(sizes, definitions.Count, pixelScale);
-        return sizes;
+        // Measure keeps the unrounded tracks: arranged edges depend on where the grid lands, which measure cannot know.
+        if (double.IsPositiveInfinity(available))
+        {
+            return CaptureMeasureSizesInto(definitions, ref scratch);
+        }
+
+        return CreateDistributedSizes(definitions, available, spacing, useMeasuredForStarWhenInfinite: false, starFloorIsMeasured: false, ref scratch);
     }
 
     private static double[] CreateFinalSizes<T>(IReadOnlyList<T> definitions, double available, double spacing, double pixelScale, ref double[] scratch)
@@ -1333,7 +1335,7 @@ public class Grid : Panel
     /// <summary>Moves each track edge to a whole device pixel, keeping the total.</summary>
     private static void SnapToPixels(double[] sizes, int count, double pixelScale)
     {
-        // Arrange rounds every child's edges to device pixels; a child measured in an unrounded track is arranged wider or narrower than it measured.
+        // Arrange rounds every child's edges to device pixels; snapping the tracks first keeps the total and the cells seamless.
         if (pixelScale <= 0)
         {
             return;
