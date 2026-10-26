@@ -614,25 +614,26 @@ public abstract class FrameworkElement : UIElement, IDisposable
 
     protected override Rect GetArrangedBounds(Rect finalRect)
     {
-        var innerSlot = finalRect.Deflate(Margin);
+        var limits = GetLayoutLimits();
+        var innerSlot = finalRect.Deflate(limits.Margin);
 
         double availableWidth = Math.Max(0, innerSlot.Width);
         double availableHeight = Math.Max(0, innerSlot.Height);
 
         // If we have explicit size, use it; otherwise use desired (excluding margin)
-        double arrangeWidth = !double.IsNaN(Width) ? Width : DesiredSize.Width - Margin.Left - Margin.Right;
-        double arrangeHeight = !double.IsNaN(Height) ? Height : DesiredSize.Height - Margin.Top - Margin.Bottom;
+        double arrangeWidth = !double.IsNaN(limits.Width) ? limits.Width : DesiredSize.Width - limits.Margin.HorizontalThickness;
+        double arrangeHeight = !double.IsNaN(limits.Height) ? limits.Height : DesiredSize.Height - limits.Margin.VerticalThickness;
 
-        arrangeWidth = Math.Clamp(arrangeWidth, MinWidth, MaxWidth);
-        arrangeHeight = Math.Clamp(arrangeHeight, MinHeight, MaxHeight);
+        arrangeWidth = Math.Clamp(arrangeWidth, limits.MinWidth, limits.MaxWidth);
+        arrangeHeight = Math.Clamp(arrangeHeight, limits.MinHeight, limits.MaxHeight);
 
         // Auto-sized elements stretch to fill the slot. Otherwise preserve the explicit or
         // desired size after min/max constraints, even when it exceeds the available slot.
-        double width = (HorizontalAlignment == HorizontalAlignment.Stretch && double.IsNaN(Width))
+        double width = (HorizontalAlignment == HorizontalAlignment.Stretch && double.IsNaN(limits.Width))
             ? availableWidth
             : arrangeWidth;
 
-        double height = (VerticalAlignment == VerticalAlignment.Stretch && double.IsNaN(Height))
+        double height = (VerticalAlignment == VerticalAlignment.Stretch && double.IsNaN(limits.Height))
             ? availableHeight
             : arrangeHeight;
 
@@ -661,22 +662,62 @@ public abstract class FrameworkElement : UIElement, IDisposable
 
     protected override Size MeasureOverride(Size availableSize)
     {
+        var limits = GetLayoutLimits();
+
         // Available content space, after margin (used when Width/Height is auto).
-        var availableWidth = Math.Max(0, availableSize.Width - Margin.HorizontalThickness);
-        var availableHeight = Math.Max(0, availableSize.Height - Margin.VerticalThickness);
+        var availableWidth = Math.Max(0, availableSize.Width - limits.Margin.HorizontalThickness);
+        var availableHeight = Math.Max(0, availableSize.Height - limits.Margin.VerticalThickness);
 
         // Measure content with explicit Width/Height when set; otherwise use the available
         // content size. Clamp both cases to [Min, Max] so wrapped content respects MaxWidth.
-        var constrainedWidth = Math.Clamp(double.IsNaN(Width) ? availableWidth : Width, MinWidth, MaxWidth);
-        var constrainedHeight = Math.Clamp(double.IsNaN(Height) ? availableHeight : Height, MinHeight, MaxHeight);
+        var constrainedWidth = Math.Clamp(double.IsNaN(limits.Width) ? availableWidth : limits.Width, limits.MinWidth, limits.MaxWidth);
+        var constrainedHeight = Math.Clamp(double.IsNaN(limits.Height) ? availableHeight : limits.Height, limits.MinHeight, limits.MaxHeight);
 
-        var measured = MeasureContent(new Size(constrainedWidth, constrainedHeight));
+        var measured = MeasureContent(new Size(limits.Round(constrainedWidth), limits.Round(constrainedHeight)));
 
         // Desired size honors explicit Width/Height when set (else the measured size), clamped, plus margin.
-        var finalWidth = Math.Clamp(double.IsNaN(Width) ? measured.Width : Width, MinWidth, MaxWidth);
-        var finalHeight = Math.Clamp(double.IsNaN(Height) ? measured.Height : Height, MinHeight, MaxHeight);
+        var finalWidth = Math.Clamp(double.IsNaN(limits.Width) ? measured.Width : limits.Width, limits.MinWidth, limits.MaxWidth);
+        var finalHeight = Math.Clamp(double.IsNaN(limits.Height) ? measured.Height : limits.Height, limits.MinHeight, limits.MaxHeight);
 
-        return new Size(finalWidth + Margin.HorizontalThickness, finalHeight + Margin.VerticalThickness);
+        return new Size(
+            limits.Round(finalWidth) + limits.Margin.HorizontalThickness,
+            limits.Round(finalHeight) + limits.Margin.VerticalThickness);
+    }
+
+    /// <summary>Returns the margin, size and limits layout uses, on whole device pixels when the window rounds layout.</summary>
+    private LayoutLimits GetLayoutLimits()
+    {
+        // As in WPF, each is rounded on its own, so a box is a whole number of pixels and snapping its edges keeps its size.
+        double scale = LayoutRoundingScale;
+        var margin = Margin;
+        if (scale > 0)
+        {
+            margin = new Thickness(
+                LayoutRounding.RoundToPixel(margin.Left, scale),
+                LayoutRounding.RoundToPixel(margin.Top, scale),
+                LayoutRounding.RoundToPixel(margin.Right, scale),
+                LayoutRounding.RoundToPixel(margin.Bottom, scale));
+        }
+
+        var limits = new LayoutLimits(scale, margin, Width, Height, MinWidth, MaxWidth, MinHeight, MaxHeight);
+        return limits with
+        {
+            Width = limits.Round(limits.Width),
+            Height = limits.Round(limits.Height),
+            MinWidth = limits.Round(limits.MinWidth),
+            MaxWidth = limits.Round(limits.MaxWidth),
+            MinHeight = limits.Round(limits.MinHeight),
+            MaxHeight = limits.Round(limits.MaxHeight),
+        };
+    }
+
+    /// <summary>The margin, explicit size and limits one layout pass reads.</summary>
+    private readonly record struct LayoutLimits(
+        double Scale, Thickness Margin, double Width, double Height,
+        double MinWidth, double MaxWidth, double MinHeight, double MaxHeight)
+    {
+        /// <summary>Rounds a length to a whole device pixel when the window rounds layout; NaN and infinity pass through.</summary>
+        public double Round(double value) => Scale > 0 ? LayoutRounding.RoundToPixel(value, Scale) : value;
     }
 
     /// <summary>

@@ -1146,6 +1146,10 @@ public abstract partial class Element : MewObject
         });
     }
 
+    /// <summary>Gets the device pixel scale layout rounds to, or 0 when the window does not round layout.</summary>
+    internal double LayoutRoundingScale
+        => FindVisualRoot() is ILayoutRoundingHost host && host.UseLayoutRounding ? host.DpiScale : 0;
+
     private Size ApplyLayoutRounding(Size size)
     {
         var root = FindVisualRoot();
