@@ -6,10 +6,9 @@ namespace MewUI.Test.Controls;
 
 /// <summary>
 /// Arrange snaps an element's left and right edges to the device grid independently, so a box can
-/// land under the width its text measured. Render lays the text out again against that box, so a
-/// shortfall of even one device pixel turns one line into two, painting over whatever sits below
-/// and leaving hit-testing on the boxes layout handed out. The desired width carries the slack for
-/// it, and the gap widens with the scale: one device pixel is 0.67 DIP at 150%.
+/// land under the width its text measured. Wrapped text keeps the line breaks measure chose, so a
+/// shortfall of a device pixel never turns one line into two; text wraps narrower only when it is
+/// measured narrower.
 /// </summary>
 [TestClass]
 public sealed class TextBlockWrapSlackTests
@@ -71,12 +70,44 @@ public sealed class TextBlockWrapSlackTests
         window.Content = block;
         window.PerformLayout();
 
-        // Slack is for snapping, not for suppressing wrapping the caller asked for.
-        double halfWidth = block.DesiredSize.Width / 2;
+        // Keeping the measured line breaks must not suppress wrapping a narrower measure asks for.
+        double fullWidth = block.DesiredSize.Width;
+        double halfWidth = fullWidth / 2;
+        block.Measure(new Size(halfWidth, 200));
         block.Arrange(new Rect(0, 0, halfWidth, 200));
-        Assert.IsLessThan(block.DesiredSize.Width * 0.75, block.Bounds.Width,
+        Assert.IsLessThan(fullWidth * 0.75, block.Bounds.Width,
             "the arrange under test did not take effect");
 
         Assert.IsGreaterThan(1, block.GetRenderLayoutMetrics().LineCount);
+    }
+
+    [TestMethod]
+    [DataRow(96u)]
+    [DataRow(120u)]
+    [DataRow(144u)]
+    [DataRow(168u)]
+    [DataRow(192u)]
+    public void CenteredAtItsDesiredWidth_KeepsTheMeasuredLines(uint dpi)
+    {
+        if (!OperatingSystem.IsWindows()) { Assert.Inconclusive("GDI backend is Windows-only."); return; }
+
+        var window = HeadlessWindow.Create(296, 400);
+        window.SetDpi(dpi);
+
+        // Wrapping these words again at the widest measured line moves one to a third line at 125%.
+        var block = new TextBlock
+        {
+            Text = "hhhhhhhhh iiiiiii jjjjj kkk llllllllll mmmmmmmm nnnnnn oooo pp qqqqqqqqq rrrrrrr sssss ttt",
+            TextWrapping = TextWrapping.Wrap,
+            FontSize = 13,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Top,
+        };
+        window.Content = block;
+        window.PerformLayout();
+
+        var render = block.GetRenderLayoutMetrics();
+        Assert.IsLessThanOrEqualTo(block.Bounds.Height + 0.5 * 96 / dpi, render.ContentHeight,
+            $"dpi {dpi}: {render.LineCount} lines need {render.ContentHeight} in a box {block.Bounds.Height} tall at width {block.Bounds.Width}");
     }
 }

@@ -47,6 +47,9 @@ public abstract partial class TextBlockBase : TextElement, IDisposable
     // one shared slot would be built again for each whenever the element is measured.
     private readonly LayoutSlot _measureLayout = new();
     private readonly LayoutSlot _renderLayout = new();
+
+    // The width measure wrapped against; render keeps those line breaks at whatever width it is arranged.
+    private double _measuredWrapWidth = double.NaN;
     private long _textRevision;
     private long _breaksRevision = -1;
     private bool _hasExplicitLineBreaks;
@@ -229,13 +232,20 @@ public abstract partial class TextBlockBase : TextElement, IDisposable
         // Measuring against an unbounded height keeps trimming out of the desired size; it applies
         // at render time, where the arranged bounds are known.
         var measured = GetOrCreateTextLayout(_measureLayout, wrapping, maxWidth, double.PositiveInfinity).MeasuredSize;
+        double wrapWidth = wrapping == TextWrapping.NoWrap ? double.NaN : maxWidth;
+        if (!wrapWidth.Equals(_measuredWrapWidth))
+        {
+            _measuredWrapWidth = wrapWidth;
+
+            // The drawn lines follow this width, and a new one can break them differently in a box of the same size.
+            InvalidateVisual();
+        }
 
         // The desired width ceils to a device pixel, and wrapped text buys one more. Arrange snaps
         // the left and right edges independently and can land the box a device pixel under the
-        // measured width; render then lays the text out again against that box, so the gap turns
-        // one line into two, paints over what sits below, and leaves hit-testing on the boxes
-        // layout handed out. Text that cannot wrap is clipped instead of re-flowed, so it takes no
-        // slack and keeps measuring like the single-line inputs it sits next to.
+        // measured width, which would clip the last pixel of the widest line. Text that cannot wrap
+        // is clipped by design, so it takes no slack and keeps measuring like the single-line
+        // inputs it sits next to.
         double dpiScale = GetDpi() / 96.0;
         double width = Math.Ceiling(measured.Width * dpiScale) / dpiScale;
         if (wrapping != TextWrapping.NoWrap)
@@ -258,9 +268,30 @@ public abstract partial class TextBlockBase : TextElement, IDisposable
             return (0, 0);
         }
 
-        var bounds = Bounds;
-        var layout = GetOrCreateTextLayout(_renderLayout, ResolveWrapping(), bounds.Width, bounds.Height);
+        var layout = GetRenderLayout(Bounds, out _);
         return (layout.Lines.Count, layout.ContentHeight);
+    }
+
+    /// <summary>Returns the layout drawn in <paramref name="bounds"/>, with the offset that aligns its lines in them.</summary>
+    private ITextLayout GetRenderLayout(Rect bounds, out double alignmentOffset)
+    {
+        var wrapping = ResolveWrapping();
+        alignmentOffset = 0;
+        if (wrapping == TextWrapping.NoWrap || !double.IsFinite(_measuredWrapWidth))
+        {
+            return GetOrCreateTextLayout(_renderLayout, wrapping, bounds.Width, bounds.Height);
+        }
+
+        // As in WPF, lines break where measure broke them; a box a pixel narrower would push a word onto a line with no room.
+        var layout = GetOrCreateTextLayout(_renderLayout, wrapping, _measuredWrapWidth, bounds.Height);
+        double spare = _measuredWrapWidth - bounds.Width;
+        alignmentOffset = TextAlignment switch
+        {
+            TextAlignment.Center => spare / 2,
+            TextAlignment.Right => spare,
+            _ => 0,
+        };
+        return layout;
     }
 
     protected override void OnRender(IGraphicsContext context)
@@ -272,9 +303,10 @@ public abstract partial class TextBlockBase : TextElement, IDisposable
 
         var bounds = Bounds;
         ITextLayout layout;
+        double alignmentOffset;
         using (DevToolsGate.IsSupported ? ProfilerMarkers.TextLayout.Auto() : default)
         {
-            layout = GetOrCreateTextLayout(_renderLayout, ResolveWrapping(), bounds.Width, bounds.Height);
+            layout = GetRenderLayout(bounds, out alignmentOffset);
         }
 
         double y = VerticalTextAlignment switch
@@ -295,7 +327,7 @@ public abstract partial class TextBlockBase : TextElement, IDisposable
         using (DevToolsGate.IsSupported ? ProfilerMarkers.TextDraw.Auto() : default)
         {
             var options = new TextDrawOptions(Foreground, spans, Owner: this);
-            var origin = new Point(bounds.X, y);
+            var origin = new Point(bounds.X - alignmentOffset, y);
             // The engine draws from an origin with no extent of its own, so text longer than the
             // arranged box would paint over whatever sits next to it.
             if (layout.MeasuredSize.Width > bounds.Width + 0.5 || layout.ContentHeight > bounds.Height + 0.5)
