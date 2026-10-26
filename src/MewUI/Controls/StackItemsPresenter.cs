@@ -533,12 +533,14 @@ internal sealed class StackItemsPresenter : Control, IItemsPresenter
 
         double w = Math.Max(0, availableWidth);
         var measureSize = new Size(w, double.PositiveInfinity);
+        double verticalPadding = ItemPadding.VerticalThickness;
 
         for (int i = 0; i < _containers.Count; i++)
         {
             var container = _containers[i];
             container.Measure(measureSize);
-            double h = container.DesiredSize.Height;
+            // Arrange deflates each slot by the item padding, so the slot holds it on top of the container.
+            double h = container.DesiredSize.Height + verticalPadding;
             _measuredHeights.Add(h);
             _totalHeight += h;
         }
