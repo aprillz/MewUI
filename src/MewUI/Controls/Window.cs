@@ -121,9 +121,42 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     private ulong _layoutCompletedGeneration = ulong.MaxValue;
     private int _updatePassDepth;
 
+    // Elements that asked to be arranged while the content arranged; those still waiting get another round.
+    private readonly List<Element> _arrangeRequests = new();
+    private readonly HashSet<Element> _arrangeRequestsRetried = new();
+
     // A settled pass recorded its generation; an unsettled pass leaves it behind and posts
     // exactly one continuation.
     internal bool IsUpdatePassSettled => _updateGeneration == _layoutCompletedGeneration;
+
+    /// <summary>Gets whether an update pass is running.</summary>
+    internal bool IsInUpdatePass => _updatePassDepth > 0;
+
+    /// <summary>Gets whether the update pass is arranging the content.</summary>
+    internal bool IsArrangingContent { get; private set; }
+
+    /// <summary>Records an element that asked to be arranged while the content arranged.</summary>
+    internal void NoteArrangeRequest(Element element) => _arrangeRequests.Add(element);
+
+    /// <summary>Marks the noted elements still waiting to be arranged so the next round reaches them, and reports whether any did.</summary>
+    private bool SettleArrangeRequests()
+    {
+        bool waiting = false;
+        for (int index = 0; index < _arrangeRequests.Count; index++)
+        {
+            var element = _arrangeRequests[index];
+
+            // An element its host never arranges is retried once per layout, not every round.
+            if (element.IsArrangeDirty && ReferenceEquals(element.FindVisualRoot(), this) && _arrangeRequestsRetried.Add(element))
+            {
+                element.MarkArrangeDirtyThroughAncestors();
+                waiting = true;
+            }
+        }
+
+        _arrangeRequests.Clear();
+        return waiting;
+    }
 
     // Sizing transaction (spec -> desired -> requested -> applied): the fit branch submits a
     // target once per change and accepts whatever client size the platform applies.
@@ -2182,6 +2215,8 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         finally
         {
             _updatePassDepth--;
+            _arrangeRequests.Clear();
+            _arrangeRequestsRetried.Clear();
         }
     }
 
@@ -2338,11 +2373,24 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             {
                 // A hosted portal subtree is arranged at the owner's coordinates (HostedPortalOrigin);
                 // for regular windows the origin is zero and this is the plain client rect.
-                visualRoot.Arrange(new Rect(
-                    padding.Left + _hostedPortalOrigin.X,
-                    padding.Top + _hostedPortalOrigin.Y,
-                    contentSize.Width,
-                    contentSize.Height));
+                IsArrangingContent = true;
+                try
+                {
+                    visualRoot.Arrange(new Rect(
+                        padding.Left + _hostedPortalOrigin.X,
+                        padding.Top + _hostedPortalOrigin.Y,
+                        contentSize.Width,
+                        contentSize.Height));
+                }
+                finally
+                {
+                    IsArrangingContent = false;
+                }
+            }
+
+            if (SettleArrangeRequests())
+            {
+                _updateGeneration++;
             }
             if (profiling)
             {

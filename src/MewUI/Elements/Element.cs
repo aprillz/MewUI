@@ -453,6 +453,7 @@ public abstract partial class Element : MewObject
         }
 
         MarkArrangeDirtyForMeasure();
+        var previousDesiredSize = DesiredSize;
         Size measured;
         using (DevToolsGate.IsSupported ? PerformanceProfiler.Instance.SampleElement(GetType(), ProfilerSampleCategory.Measure) : default)
         {
@@ -471,12 +472,51 @@ public abstract partial class Element : MewObject
         IsMeasureDirty = false;
         _lastMeasureConstraint = availableSize;
         _hasMeasureConstraint = true;
+        OnMeasured(previousDesiredSize);
     }
 
     /// <summary>
     /// Measures the element's content for the available size.
     /// </summary>
     protected abstract Size MeasureCore(Size availableSize);
+
+    /// <summary>Makes sure a measure the window layout does not cover is arranged, as WPF queues every measured element.</summary>
+    private void OnMeasured(Size previousDesiredSize)
+    {
+        if (FindVisualRoot() is not Window window)
+        {
+            return;
+        }
+
+        if (window.IsArrangingContent)
+        {
+            window.NoteArrangeRequest(this);
+            return;
+        }
+
+        if (window.IsInUpdatePass)
+        {
+            return;
+        }
+
+        // Outside any pass nothing would arrange it, and a parent that did not ask for the new size must measure again.
+        MarkArrangeDirtyThroughAncestors();
+        if (DesiredSize != previousDesiredSize && Parent is Element parent)
+        {
+            parent.InvalidateMeasure();
+        }
+
+        window.RequestUpdatePass();
+    }
+
+    /// <summary>Marks this element and every ancestor for arranging, so the next window arrange reaches it.</summary>
+    internal void MarkArrangeDirtyThroughAncestors()
+    {
+        for (Element? current = this; current != null; current = current.Parent)
+        {
+            current.IsArrangeDirty = true;
+        }
+    }
 
     /// <summary>Marks this element and its ancestors for arranging, as a measured element is arranged again.</summary>
     private void MarkArrangeDirtyForMeasure()
@@ -631,6 +671,12 @@ public abstract partial class Element : MewObject
         if (!TakeLayoutInvalidationHandOff())
         {
             _ownLayoutInvalidated = true;
+
+            // An ancestor that already arranged it clears its own flag when it finishes, so the window has to come back.
+            if (FindVisualRoot() is Window window && !ReferenceEquals(window, this) && window.IsArrangingContent)
+            {
+                window.NoteArrangeRequest(this);
+            }
         }
 
         if (IsArrangeDirty)
