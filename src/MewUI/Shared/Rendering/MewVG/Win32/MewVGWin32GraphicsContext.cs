@@ -751,6 +751,7 @@ internal sealed partial class MewVGWin32GraphicsContext
             // on this NVG instance without racing a concurrent BeginFrame...EndFrame on the
             // window thread.
             _offscreenProvider.ReleasePendingImagesForVg(_offscreen.Vg);
+            TextCache.ReleasePendingDeletes();
             NvgStrokeHelper.ReleasePendingGradientLutDeletes(_offscreen.Vg);
             bool outermost = _offscreenProvider.ExitSession();
             if (outermost)

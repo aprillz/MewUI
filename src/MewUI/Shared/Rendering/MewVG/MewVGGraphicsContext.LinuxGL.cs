@@ -546,6 +546,7 @@ internal sealed partial class MewVGX11GraphicsContext
             // Per-NVG drain - only this offscreen NVG's pending image-id deletions, on its
             // own thread inside its EndFrame. Avoids racing the window NVG mid-frame.
             _offscreenProvider.ReleasePendingImagesForVg(_offscreen.Vg);
+            TextCache.ReleasePendingDeletes();
             NvgStrokeHelper.ReleasePendingGradientLutDeletes(_offscreen.Vg);
             if (_offscreenProvider.ExitSession())
             {
