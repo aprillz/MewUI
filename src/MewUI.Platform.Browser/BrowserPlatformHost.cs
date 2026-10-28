@@ -54,6 +54,11 @@ internal sealed class BrowserPlatformHost : IPlatformHost
     public bool EnablePerMonitorDpiAwareness() => true;
     public int GetSystemMetricsForDpi(int nIndex, uint dpi) => 0;
 
+    // The page canvas is the whole screen the app can use, with its top-left as the origin; it is unknown
+    // until the page has reported a frame size.
+    public Rect GetWorkAreaForPoint(Point screenPositionPx)
+        => _lastPixelWidth > 0 && _lastPixelHeight > 0 ? new Rect(0, 0, _lastPixelWidth, _lastPixelHeight) : default;
+
     public void Run(Application app, Window? mainWindow)
         => throw new NotSupportedException("MewUI Browser requires Application.RunAsync.");
 

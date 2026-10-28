@@ -149,7 +149,7 @@ internal sealed class NativePopupHost : IPopupHost
                 }
 
                 var screenPx = _ownerWindow.ClientToScreen(origin);
-                popupWindow.MoveToPx((int)Math.Round(screenPx.X), (int)Math.Round(screenPx.Y));
+                popupWindow.MoveToScreenPixels((int)Math.Round(screenPx.X), (int)Math.Round(screenPx.Y));
                 if (!_layoutAgain) break;
             }
         }
