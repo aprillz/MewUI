@@ -80,13 +80,13 @@ protected override Size MeasureContent(Size availableSize)
 - Controls with children must compute child rects in `ArrangeContent(Rect bounds)` and call `Arrange` for each child.
 - Arrange defines **where** children go inside the allotted space.
 - Always assume **DesiredSize from Measure** and **actual Bounds** can differ.
-- A control that hosts child elements itself does four things: attach each child with `AttachChild` / `DetachChild` (the `Parent` setter is not public), implement `IVisualTreeHost.VisitChildren` so the children are visited **topmost first** and only when they take part in the current frame, measure and arrange them in `MeasureContent` / `ArrangeContent`, and draw them in `RenderSubtree`. The base hit test probes children in `VisitChildren` order and takes the first hit.
+- A control that hosts child elements itself does four things: attach each child with `AttachChild` / `DetachChild` (the `Parent` setter is not public), implement `IVisualTreeHost.VisitChildren` so that every attached child is visited **in drawing order, back to front**, measure and arrange them in `MeasureContent` / `ArrangeContent`, and leave the drawing to the framework, which draws the children after `OnRender` and before `OnRenderOverlay`. A child is drawn only when it is attached, visible and laid out with an area, so arrange a child you do not want drawn to an empty rect. Clip children with `GetChildClip(child)`, transform them with `TryGetChildTransform`, and draw over them in `OnRenderOverlay`. The base hit test probes the drawn children from the last visited to the first and takes the first hit.
 - A child that belongs to the control logically but may be shown elsewhere (a content slot projected by a template) is owned with `AttachLogicalChild` / `DetachLogicalChild`, or replaced with `ChangeLogicalChild(oldChild, newChild)`. Reject invalid candidates in the property's `validate` callback with `ValidateLogicalChild`.
 - Prefer `ContentControl`, `Panel` or a template over hosting children by hand: they already implement all of the above.
 
 ### <a id="render"></a>Rendering (OnRender)
 
-- Override `OnRender(IGraphicsContext context)` only. `Render` is sealed; children are drawn in `RenderSubtree`, which runs after `OnRender`.
+- Override `OnRender(IGraphicsContext context)` only. `Render` is sealed; the framework draws the children after `OnRender`, and `OnRenderOverlay` runs after the children.
 - `Control.OnRender` draws `Background` and the border from `BorderBrush`, `BorderThickness` and `CornerRadius` (nothing when a template is applied). Call `base.OnRender(context)` for the standard chrome, or call `DrawBackgroundAndBorder` yourself.
 - `GetSnappedBorderBounds` and `LayoutRounding.SnapBoundsRectToPixels` ensure pixel alignment.
 - Render order: **background → border → content**.
@@ -100,7 +100,7 @@ protected override Size MeasureContent(Size availableSize)
 - When an element only moves, its recording is replayed at the new position without calling `OnRender`. Express every coordinate relative to `Bounds`.
 - Do not use `OnRender` as a per-frame tick and do not change state in it. Content that changes on every frame calls `InvalidateVisual()` on every frame from where the change happens; an element invalidated on every frame is drawn directly instead of being recorded, with no further work.
 - Keep `Save()` / `Restore()` balanced inside `OnRender`, and do not call `BeginFrame`, `EndFrame` or `Clear`. A drawing that does so cannot be recorded.
-- A control that draws its children in its own `RenderSubtree` override is recorded together with those children as one drawing, so an invalidation of any child draws the whole control again.
+- Every drawn child is recorded on its own, so a change in a child redraws that child only.
 
 ### <a id="visualstate"></a>Visual States and Styles
 

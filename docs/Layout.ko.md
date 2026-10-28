@@ -25,7 +25,7 @@ MewUI는 히트 테스트와 Measure/Arrange 결과를 프레임 간 재사용�
 
 1) **Measure**: DesiredSize 계산. 위에서 아래로 재귀합니다(부모의 `MeasureOverride`/`MeasureContent`가 자신의 크기를 반환하기 전에 자식들의 `Measure`를 호출).
 2) **Arrange**: Bounds 확정. 같은 방식으로 위에서 아래로 재귀합니다.
-3) **Render**: 무효화된 요소를 Bounds와 현재 visual 상태로 그리고(요소 자신의 시각 요소는 `OnRender`, 자식은 이어서 `RenderSubtree`), 나머지는 유지된 그리기를 재사용.
+3) **Render**: 무효화된 요소를 Bounds와 현재 visual 상태로 그리고(요소 자신의 시각 요소는 `OnRender`, 자식은 이어서 프레임워크가 `VisitChildren` 순서로 그리며, 그 위에 `OnRenderOverlay`), 나머지는 유지된 그리기를 재사용.
 
 ### 언제 어떤 패스가 실행되는가
 

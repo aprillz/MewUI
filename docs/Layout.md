@@ -25,7 +25,7 @@ The pass order is:
 
 1) **Measure**: computes `DesiredSize`, recursing top-down (a parent's `MeasureOverride`/`MeasureContent` calls `Measure` on its children before returning its own size).
 2) **Arrange**: assigns `Bounds`, recursing top-down the same way.
-3) **Render**: draws invalidated elements using `Bounds` and current visual state (`OnRender` for the element's own visuals, then `RenderSubtree` for children), and reuses the kept drawing of the rest.
+3) **Render**: draws invalidated elements using `Bounds` and current visual state (`OnRender` for the element's own visuals, then the children, which the framework draws in `VisitChildren` order, then `OnRenderOverlay` over them), and reuses the kept drawing of the rest.
 
 ### When each pass runs
 
