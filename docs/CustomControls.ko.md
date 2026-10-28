@@ -80,13 +80,13 @@ protected override Size MeasureContent(Size availableSize)
 - 자식이 있는 컨트롤은 `ArrangeContent(Rect bounds)`에서 child rect를 계산하고 자식마다 `Arrange`를 호출해야 합니다.
 - Arrange는 “컨트롤이 받은 공간에서 자식을 어디에 둘지”를 확정하는 단계입니다.
 - **Measure에서 계산한 DesiredSize**와 **실제 Bounds**가 다를 수 있다는 전제를 반드시 가져야 합니다.
-- 자식 요소를 직접 호스팅하는 컨트롤은 네 가지를 합니다. `AttachChild` / `DetachChild`로 자식을 연결하고(`Parent` setter는 공개되어 있지 않습니다), `IVisualTreeHost.VisitChildren`을 구현해 현재 프레임에 참여하는 자식만 **가장 위에 그려지는 자식부터** 방문하게 하고, `MeasureContent` / `ArrangeContent`에서 자식을 측정하고 배치하며, `RenderSubtree`에서 자식을 그립니다. 기본 히트 테스트는 `VisitChildren` 순서대로 자식을 검사해 첫 번째 히트를 사용합니다.
+- 자식 요소를 직접 호스팅하는 컨트롤은 네 가지를 합니다. `AttachChild` / `DetachChild`로 자식을 연결하고(`Parent` setter는 공개되어 있지 않습니다), `IVisualTreeHost.VisitChildren`을 구현해 연결된 모든 자식을 **그리는 순서대로(뒤에서 앞으로)** 방문하게 하고, `MeasureContent` / `ArrangeContent`에서 자식을 측정하고 배치하며, 그리기는 프레임워크에 맡깁니다. 프레임워크는 `OnRender` 다음, `OnRenderOverlay` 전에 자식을 그립니다. 자식은 연결되어 있고, 보이고, 넓이가 있게 배치되었을 때만 그려지므로, 그리지 않을 자식은 빈 사각형으로 배치합니다. 자식 클립은 `GetChildClip(child)`로, 자식 변환은 `TryGetChildTransform`으로 지정하고, 자식 위에 그릴 내용은 `OnRenderOverlay`에서 그립니다. 기본 히트 테스트는 그려진 자식을 마지막에 방문한 자식부터 거꾸로 검사해 첫 번째 히트를 사용합니다.
 - 논리적으로는 컨트롤에 속하지만 다른 곳에 표시될 수 있는 자식(템플릿이 투영하는 콘텐츠 슬롯)은 `AttachLogicalChild` / `DetachLogicalChild`로 소유하거나 `ChangeLogicalChild(oldChild, newChild)`로 교체합니다. 잘못된 후보는 속성의 `validate` 콜백에서 `ValidateLogicalChild`로 거부합니다.
 - 자식을 직접 호스팅하기보다 `ContentControl`, `Panel`, 템플릿을 우선 사용합니다. 위 내용이 이미 구현되어 있습니다.
 
 ### <a id="render"></a>렌더링 (OnRender)
 
-- `OnRender(IGraphicsContext context)`만 오버라이드합니다. `Render`는 sealed이며, 자식은 `OnRender` 다음에 실행되는 `RenderSubtree`에서 그립니다.
+- `OnRender(IGraphicsContext context)`만 오버라이드합니다. `Render`는 sealed이며, 프레임워크가 `OnRender` 다음에 자식을 그리고, 자식 다음에 `OnRenderOverlay`를 실행합니다.
 - `Control.OnRender`는 `Background`와, `BorderBrush`, `BorderThickness`, `CornerRadius`로 정해지는 보더를 그립니다(템플릿이 적용되어 있으면 아무것도 그리지 않습니다). 표준 크롬은 `base.OnRender(context)`를 호출해 그리거나 `DrawBackgroundAndBorder`를 직접 호출해 그립니다.
 - `GetSnappedBorderBounds`와 `LayoutRounding.SnapBoundsRectToPixels`로 픽셀 정렬을 보장합니다.
 - 렌더 순서: **배경 → 보더 → 콘텐츠**.
@@ -100,7 +100,7 @@ protected override Size MeasureContent(Size availableSize)
 - 요소가 이동만 한 경우에는 `OnRender`를 호출하지 않고 기록을 새 위치에 재생합니다. 모든 좌표를 `Bounds` 기준으로 계산합니다.
 - `OnRender`를 프레임마다 실행되는 틱으로 사용하지 않으며, `OnRender` 안에서 상태를 바꾸지 않습니다. 매 프레임 바뀌는 콘텐츠는 값이 바뀌는 곳에서 매 프레임 `InvalidateVisual()`을 호출합니다. 매 프레임 무효화되는 요소는 기록되지 않고 직접 그려지며, 추가 작업은 필요하지 않습니다.
 - `OnRender` 안에서 `Save()` / `Restore()`의 짝을 맞추고, `BeginFrame`, `EndFrame`, `Clear`를 호출하지 않습니다. 그렇게 그린 내용은 기록할 수 없습니다.
-- 자신의 `RenderSubtree` 오버라이드에서 자식을 그리는 컨트롤은 자식과 함께 하나의 그리기로 기록됩니다. 따라서 자식 하나가 무효화되면 컨트롤 전체를 다시 그립니다.
+- 그려지는 자식은 각각 따로 기록됩니다. 따라서 자식 하나가 바뀌면 그 자식만 다시 그립니다.
 
 ### <a id="visualstate"></a>시각 상태와 스타일
 
