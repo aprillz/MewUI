@@ -29,6 +29,9 @@ Separately managed packages (not included in the metapackages):
 - `Aprillz.MewUI.MewCharts` - cartesian, pie and polar charts
 - `Aprillz.MewUI.WebView2.Win32` - WebView2 integration (Windows only)
 - `Aprillz.MewUI.Skia` - SkiaCanvasView, with a GPU interop package per backend (`.Skia.Interop.Direct2D`, `.Skia.Interop.Gdi`, `.Skia.Interop.MewVG.Win32`, `.Skia.Interop.MewVG.X11`, `.Skia.Interop.MewVG.MacOS`) and the metapackages `.Skia.Windows`, `.Skia.Linux`, `.Skia.MacOS`, `.Skia.All`
+- `Aprillz.MewUI.Platform.Browser` - browser platform host (WebAssembly, net10.0 only)
+- `Aprillz.MewUI.Backend.MewVG.Browser` - WebGL 2 rendering backend for the browser host
+- `Aprillz.MewUI.Templates` - `dotnet new` templates for desktop and browser apps (section 2.4)
 
 ---
 
@@ -82,6 +85,26 @@ Add SVG or WebView2 support separately.
 dotnet add package Aprillz.MewUI.Svg
 dotnet add package Aprillz.MewUI.WebView2.Win32
 ```
+
+### 2.4 Project Templates
+
+`Aprillz.MewUI.Templates` creates a project that already references the packages and registers the platform host and backend.
+
+```bash
+dotnet new install Aprillz.MewUI.Templates
+
+# Desktop app for Windows, Linux and macOS, on Aprillz.MewUI (-f net8.0 for .NET 8)
+dotnet new mewui -o MyApp
+
+# Browser app on WebAssembly
+dotnet new mewui-browser -o MyBrowserApp
+```
+
+The created project references the MewUI packages of the same version as the template package.
+
+### 2.5 Browser Apps
+
+A browser app references `Aprillz.MewUI.Platform.Browser` and `Aprillz.MewUI.Backend.MewVG.Browser` instead of a metapackage; the all-in-one `Aprillz.MewUI` does not include them. Building one needs the WebAssembly build tools (`dotnet workload install wasm-tools`), and the app owns its page files. See [Browser Bootstrap](BrowserBootstrap.md) for the project setup and what the template creates.
 
 ---
 

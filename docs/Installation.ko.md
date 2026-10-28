@@ -29,6 +29,9 @@ Aprillz.MewUI                  ← 올인원 메타패키지 (모든 플랫폼 +
 - `Aprillz.MewUI.MewCharts` - 직교/파이/폴라 차트
 - `Aprillz.MewUI.WebView2.Win32` - WebView2 통합 (Windows 전용)
 - `Aprillz.MewUI.Skia` - SkiaCanvasView. 백엔드별 GPU interop 패키지(`.Skia.Interop.Direct2D`, `.Skia.Interop.Gdi`, `.Skia.Interop.MewVG.Win32`, `.Skia.Interop.MewVG.X11`, `.Skia.Interop.MewVG.MacOS`)와 메타패키지 `.Skia.Windows`, `.Skia.Linux`, `.Skia.MacOS`, `.Skia.All`가 함께 있다
+- `Aprillz.MewUI.Platform.Browser` - 브라우저 플랫폼 호스트 (WebAssembly, net10.0 전용)
+- `Aprillz.MewUI.Backend.MewVG.Browser` - 브라우저 호스트용 WebGL 2 렌더링 백엔드
+- `Aprillz.MewUI.Templates` - 데스크톱 앱과 브라우저 앱용 `dotnet new` 템플릿 (2.4절)
 
 ---
 
@@ -82,6 +85,26 @@ SVG나 WebView2가 필요하면 별도로 추가한다.
 dotnet add package Aprillz.MewUI.Svg
 dotnet add package Aprillz.MewUI.WebView2.Win32
 ```
+
+### 2.4 프로젝트 템플릿
+
+`Aprillz.MewUI.Templates`로 만든 프로젝트는 패키지를 이미 참조하고 플랫폼 호스트와 백엔드를 등록한 상태로 시작한다.
+
+```bash
+dotnet new install Aprillz.MewUI.Templates
+
+# Windows, Linux, macOS용 데스크톱 앱 (Aprillz.MewUI 기반, .NET 8은 -f net8.0)
+dotnet new mewui -o MyApp
+
+# WebAssembly 브라우저 앱
+dotnet new mewui-browser -o MyBrowserApp
+```
+
+만들어진 프로젝트는 템플릿 패키지와 같은 버전의 MewUI 패키지를 참조한다.
+
+### 2.5 브라우저 앱
+
+브라우저 앱은 메타패키지 대신 `Aprillz.MewUI.Platform.Browser`와 `Aprillz.MewUI.Backend.MewVG.Browser`를 참조한다. 올인원 `Aprillz.MewUI`에는 이 두 패키지가 들어 있지 않다. 빌드에는 WebAssembly 빌드 도구(`dotnet workload install wasm-tools`)가 필요하고, 페이지 파일은 앱이 소유한다. 프로젝트 설정과 템플릿이 만드는 파일은 [브라우저 부트스트랩](BrowserBootstrap.ko.md)을 참고한다.
 
 ---
 
