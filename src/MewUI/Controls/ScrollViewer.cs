@@ -470,33 +470,16 @@ public sealed class ScrollViewer : ContentControl
         }
     }
 
-    protected override void RenderSubtree(IGraphicsContext context)
+    /// <summary>The content is clipped to the viewport; the bars draw over it unclipped.</summary>
+    protected override ChildClip? GetChildClip(UIElement child)
     {
+        if (!ReferenceEquals(child, Content))
+        {
+            return null;
+        }
+
         GetContentClip(out var clip, out double clipRadius);
-
-        // Render content clipped to viewport.
-        context.Save();
-        if (clipRadius > 0)
-        {
-            context.SetClipRoundedRect(clip, clipRadius, clipRadius);
-        }
-        else
-        {
-            context.SetClip(clip);
-        }
-        Content?.Render(context);
-        context.Restore();
-
-        // Bars render on top (overlay).
-        if (_vBar.IsVisible)
-        {
-            _vBar.Render(context);
-        }
-
-        if (_hBar.IsVisible)
-        {
-            _hBar.Render(context);
-        }
+        return ChildClip.Rounded(clip, clipRadius);
     }
 
     private void GetContentClip(out Rect clip, out double clipRadius)
@@ -509,34 +492,6 @@ public sealed class ScrollViewer : ContentControl
         if (clipRadius > 0)
         {
             clipRadius = Math.Min(clipRadius, Math.Min(clip.Width, clip.Height) / 2);
-        }
-    }
-
-    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
-    {
-        builder.Content(0);
-
-        GetContentClip(out var clip, out double clipRadius);
-        if (clipRadius > 0)
-        {
-            builder.PushClipRoundedRect(clip, clipRadius, clipRadius);
-        }
-        else
-        {
-            builder.PushClipRect(clip);
-        }
-
-        builder.Child(Content);
-        builder.Pop();
-
-        if (_vBar.IsVisible)
-        {
-            builder.Child(_vBar);
-        }
-
-        if (_hBar.IsVisible)
-        {
-            builder.Child(_hBar);
         }
     }
 

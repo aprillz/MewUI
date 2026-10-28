@@ -55,34 +55,6 @@ internal static class TextViewLayerVisuals
         }
     }
 
-    internal static void Render(TextViewLayerVisual[] visuals, IGraphicsContext context, Rect clip)
-    {
-        context.Save();
-        try
-        {
-            context.SetClip(clip);
-            foreach (var visual in visuals)
-            {
-                visual.Render(context);
-            }
-        }
-        finally
-        {
-            context.Restore();
-        }
-    }
-
-    internal static void WriteComposition(TextViewLayerVisual[] visuals, Rendering.Retained.CompositionPlanBuilder builder, Rect clip)
-    {
-        builder.PushClipRect(clip);
-        foreach (var visual in visuals)
-        {
-            builder.Child(visual);
-        }
-
-        builder.Pop();
-    }
-
     internal static bool Visit(TextViewLayerVisual[] visuals, Func<Element, bool> visitor)
     {
         foreach (var visual in visuals)

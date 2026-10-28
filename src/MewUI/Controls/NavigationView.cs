@@ -508,7 +508,9 @@ public sealed partial class NavigationView : Control, IVisualTreeHost
         double paneWidth = minimal ? PaneWidth : inlinePane;
         double paneX = minimal ? inner.X - (1 - _overlayProgress) * PaneWidth : inner.X;
         _paneRect = new Rect(paneX, inner.Y, paneWidth, inner.Height);
-        _paneHost.Arrange(_paneRect);
+
+        // A closed overlay is not drawn, which the layout states by giving the pane no area.
+        _paneHost.Arrange(IsPaneDrawn ? _paneRect : Rect.Empty);
 
         // The hamburger stays pinned to the top-left in every mode.
         _paneToggle.Arrange(new Rect(inner.X, inner.Y, CompactSlot, CompactSlot));
@@ -529,47 +531,15 @@ public sealed partial class NavigationView : Control, IVisualTreeHost
             BorderThickness, CornerRadius);
     }
 
-    protected override void RenderSubtree(IGraphicsContext context)
+    /// <summary>Whether the pane is on screen: an inline pane, or the Minimal overlay while it is (partly) slid in.</summary>
+    private bool IsPaneDrawn => _effectiveMode != PaneDisplayMode.Overlay || _overlayProgress > 0.001;
+
+    protected override void OnRenderOverlay(IGraphicsContext context)
     {
-        _contentHost.Render(context);
-
-        // Inline pane, or the Minimal overlay while it is (partly) slid in.
-        if (_effectiveMode != PaneDisplayMode.Overlay || _overlayProgress > 0.001)
-        {
-            _paneHost.Render(context);
-            DrawPaneSeparator(context);
-        }
-
-        // The pinned hamburger always renders on top so it never moves and is never covered by the pane.
-        _paneToggle.Render(context);
-    }
-
-    private const int PANE_SEPARATOR_SLOT = 1;
-
-    internal override void WriteOwnContent(IGraphicsContext context, int slotIndex)
-    {
-        if (slotIndex == PANE_SEPARATOR_SLOT)
+        if (IsPaneDrawn)
         {
             DrawPaneSeparator(context);
         }
-        else
-        {
-            base.WriteOwnContent(context, slotIndex);
-        }
-    }
-
-    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
-    {
-        builder.Content(0);
-        builder.Child(_contentHost);
-
-        if (_effectiveMode != PaneDisplayMode.Overlay || _overlayProgress > 0.001)
-        {
-            builder.Child(_paneHost);
-            builder.Content(PANE_SEPARATOR_SLOT);
-        }
-
-        builder.Child(_paneToggle);
     }
 
     private void DrawPaneSeparator(IGraphicsContext context)
@@ -622,8 +592,9 @@ public sealed partial class NavigationView : Control, IVisualTreeHost
         }
     }
 
+    /// <summary>Visits in drawing order: the pane lies over the content, and the pinned hamburger over both.</summary>
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
-        => visitor(_paneHost) && visitor(_paneToggle) && visitor(_contentHost);
+        => visitor(_contentHost) && visitor(_paneHost) && visitor(_paneToggle);
 }
 
 /// <summary>

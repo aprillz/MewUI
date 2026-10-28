@@ -1,7 +1,5 @@
 using System.Numerics;
 
-using Aprillz.MewUI.Rendering;
-
 namespace Aprillz.MewUI.Controls;
 
 /// <summary>
@@ -93,13 +91,7 @@ public sealed class Viewbox : FrameworkElement, IVisualTreeHost
         Child.Arrange(new Rect(bounds.X, bounds.Y, childSize.Width, childSize.Height));
     }
 
-    protected override void RenderSubtree(IGraphicsContext context)
-        => TransformHost.Render(context, Child, ChildTransform());
-
-    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
-        => TransformHost.WriteComposition(builder, Child, ChildTransform());
-
-    internal override bool TryGetChildTransform(out Matrix3x2 transform)
+    protected override bool TryGetChildTransform(out Matrix3x2 transform)
     {
         transform = ChildTransform();
         return !transform.IsIdentity;

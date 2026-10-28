@@ -909,9 +909,21 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
         }
     }
 
-    // Topmost-first: the scroll viewer renders after (on top of) the header row.
+    // Drawing order: the scroll viewer is painted over the header row.
     protected override bool VisitScrollChildren(Func<Element, bool> visitor)
-        => visitor(_scrollViewer) && visitor(_header);
+        => visitor(_header) && visitor(_scrollViewer);
+
+    protected override ChildClip? GetChildClip(UIElement child)
+    {
+        var bounds = GetSnappedBorderBounds(Bounds);
+        double dpiScale = GetDpi() / 96.0;
+        double borderInset = GetBorderVisualInset();
+        var clipRect = LayoutRounding.MakeClipRect(
+            bounds.Deflate(new Thickness(borderInset)).Deflate(Padding), dpiScale);
+        double clipRadius = Math.Max(0, LayoutRounding.RoundToPixel(CornerRadius, dpiScale) - borderInset);
+        clipRadius = Math.Min(clipRadius, Math.Min(clipRect.Width, clipRect.Height) / 2);
+        return ChildClip.Rounded(clipRect, clipRadius);
+    }
 
     protected override Size MeasureContent(Size availableSize)
     {
@@ -1047,66 +1059,6 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
         var bg = GetValue(BackgroundProperty);
         var borderColor = GetValue(BorderBrushProperty);
         DrawBackgroundAndBorder(context, bounds, bg, borderColor, BorderThickness, CornerRadius);
-    }
-
-    protected override void RenderSubtree(IGraphicsContext context)
-    {
-        var bounds = GetSnappedBorderBounds(Bounds);
-        var dpiScale = GetDpi() / 96.0;
-        var borderInset = GetBorderVisualInset();
-
-        var contentBounds = bounds
-            .Deflate(new Thickness(borderInset))
-            .Deflate(Padding);
-
-        var clipRect = LayoutRounding.MakeClipRect(contentBounds, dpiScale);
-        var clipRadius = Math.Max(0, LayoutRounding.RoundToPixel(CornerRadius, dpiScale) - borderInset);
-        clipRadius = Math.Min(clipRadius, Math.Min(clipRect.Width, clipRect.Height) / 2);
-
-        context.Save();
-        if (clipRadius > 0)
-        {
-            context.SetClipRoundedRect(clipRect, clipRadius, clipRadius);
-        }
-        else
-        {
-            context.SetClip(clipRect);
-        }
-
-        try
-        {
-            _header.Render(context);
-            _scrollViewer.Render(context);
-        }
-        finally
-        {
-            context.Restore();
-        }
-    }
-
-    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
-    {
-        builder.Content(0);
-
-        var bounds = GetSnappedBorderBounds(Bounds);
-        double dpiScale = GetDpi() / 96.0;
-        double borderInset = GetBorderVisualInset();
-        var clipRect = LayoutRounding.MakeClipRect(
-            bounds.Deflate(new Thickness(borderInset)).Deflate(Padding), dpiScale);
-        double clipRadius = Math.Max(0, LayoutRounding.RoundToPixel(CornerRadius, dpiScale) - borderInset);
-        clipRadius = Math.Min(clipRadius, Math.Min(clipRect.Width, clipRect.Height) / 2);
-        if (clipRadius > 0)
-        {
-            builder.PushClipRoundedRect(clipRect, clipRadius, clipRadius);
-        }
-        else
-        {
-            builder.PushClipRect(clipRect);
-        }
-
-        builder.Child(_header);
-        builder.Child(_scrollViewer);
-        builder.Pop();
     }
 
     // Rows draw the grid lines, so they are told when the grid stops or starts showing them.
@@ -1688,32 +1640,9 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
             }
         }
 
-        protected override void RenderSubtree(IGraphicsContext context)
-        {
-            // Cells scrolled past the rows' inset stay hidden, as the rows under them do.
-            context.Save();
-            context.SetClip(ColumnsArea(Bounds));
-            try
-            {
-                base.RenderSubtree(context);
-            }
-            finally
-            {
-                context.Restore();
-            }
-        }
-
-        internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
-        {
-            builder.Content(0);
-            builder.PushClipRect(ColumnsArea(Bounds));
-            foreach (var child in Children)
-            {
-                builder.Child(child);
-            }
-
-            builder.Pop();
-        }
+        /// <summary>Cells scrolled past the rows' inset stay hidden, as the rows under them do.</summary>
+        protected override ChildClip? GetChildClip(UIElement child)
+            => new ChildClip(ColumnsArea(Bounds));
 
         private int HitTestColumn(double localX)
         {

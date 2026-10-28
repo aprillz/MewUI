@@ -1,7 +1,5 @@
 using System.Numerics;
 
-using Aprillz.MewUI.Rendering;
-
 namespace Aprillz.MewUI.Controls;
 
 /// <summary>
@@ -152,13 +150,7 @@ public sealed class TransformDecorator : FrameworkElement, IVisualTreeHost
         }
     }
 
-    protected override void RenderSubtree(IGraphicsContext context)
-        => TransformHost.Render(context, Child, ChildTransform());
-
-    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
-        => TransformHost.WriteComposition(builder, Child, ChildTransform());
-
-    internal override bool TryGetChildTransform(out Matrix3x2 transform)
+    protected override bool TryGetChildTransform(out Matrix3x2 transform)
     {
         transform = ChildTransform();
         return !transform.IsIdentity;

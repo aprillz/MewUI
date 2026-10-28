@@ -216,32 +216,9 @@ public sealed partial class SyntaxViewer : Control, IVisualTreeHost, ITextViewHo
 
     private Rect GetTextClip() => LayoutRounding.MakeClipRect(GetContentBounds(), GetDpi() / 96.0);
 
-    protected override void RenderSubtree(IGraphicsContext context)
-    {
-        TextViewLayerVisuals.Render(_layerVisuals, context, GetTextClip());
-        if (_verticalScrollBar.IsVisible)
-        {
-            _verticalScrollBar.Render(context);
-        }
-        if (_horizontalScrollBar.IsVisible)
-        {
-            _horizontalScrollBar.Render(context);
-        }
-    }
-
-    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
-    {
-        builder.Content(0);
-        TextViewLayerVisuals.WriteComposition(_layerVisuals, builder, GetTextClip());
-        if (_verticalScrollBar.IsVisible)
-        {
-            builder.Child(_verticalScrollBar);
-        }
-        if (_horizontalScrollBar.IsVisible)
-        {
-            builder.Child(_horizontalScrollBar);
-        }
-    }
+    /// <summary>The layer visuals draw under the text clip; the scroll bars lie over the frame unclipped.</summary>
+    protected override ChildClip? GetChildClip(UIElement child)
+        => child is TextViewLayerVisual ? new ChildClip(GetTextClip()) : null;
 
     protected override UIElement? OnHitTest(Point point)
     {

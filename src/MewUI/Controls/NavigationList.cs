@@ -323,14 +323,6 @@ public class NavigationList : ScrollableItemsBase, ISelector, IIndexedSelector
             BorderThickness, radius);
     }
 
-    protected override void RenderSubtree(IGraphicsContext context) => _scrollViewer.Render(context);
-
-    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
-    {
-        builder.Content(0);
-        builder.Child(_scrollViewer);
-    }
-
     private protected override bool IsItemSelectedForContainer(int index) => index == SelectedIndex;
 
     /// <summary>

@@ -320,17 +320,6 @@ public sealed partial class ItemsControl : ScrollableItemsBase
         DrawBackgroundAndBorder(context, bounds, bg, borderColor, BorderThickness, radius);
     }
 
-    protected override void RenderSubtree(IGraphicsContext context)
-    {
-        _scrollViewer.Render(context);
-    }
-
-    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
-    {
-        builder.Content(0);
-        builder.Child(_scrollViewer);
-    }
-
     protected override void OnMouseMove(MouseEventArgs e)
     {
         base.OnMouseMove(e);

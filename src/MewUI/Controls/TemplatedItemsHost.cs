@@ -1,5 +1,3 @@
-using Aprillz.MewUI.Rendering;
-
 namespace Aprillz.MewUI.Controls;
 
 internal sealed class TemplatedItemsHost : IDisposable
@@ -90,36 +88,6 @@ internal sealed class TemplatedItemsHost : IDisposable
     public bool VisitChildren(Func<Element, bool> visitor) => _presenter.VisitChildren(visitor);
 
     public void VisitRealized(Action<int, FrameworkElement> visitor) => _presenter.VisitRealized(visitor);
-
-    public void Render(IGraphicsContext context)
-    {
-        _presenter.RenderRange(
-            context,
-            Layout.ContentBounds,
-            Layout.First,
-            Layout.LastExclusive,
-            Layout.ItemHeight,
-            Layout.YStart,
-            Options.GetContainerRect,
-            Layout.ItemBindingGeneration);
-    }
-
-    public void RenderArranged(IGraphicsContext context)
-    {
-        _presenter.RenderArrangedRange(
-            context,
-            Layout.First,
-            Layout.LastExclusive);
-    }
-
-    /// <summary>Declares the realized containers of the arranged range in render order.</summary>
-    public void WriteArrangedComposition(Rendering.Retained.CompositionPlanBuilder builder)
-    {
-        _presenter.WriteArrangedRangeComposition(
-            builder,
-            Layout.First,
-            Layout.LastExclusive);
-    }
 
     public void Arrange()
     {

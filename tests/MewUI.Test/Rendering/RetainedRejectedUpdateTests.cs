@@ -32,7 +32,7 @@ public sealed class RetainedRejectedUpdateTests
         using var factory = new GdiGraphicsFactory();
         Application.DefaultGraphicsFactory = factory;
 
-        var faulty = new DeclaresItsSlotTwice { Width = 120, Height = 60, Fill = Color.FromArgb(255, 40, 90, 200) };
+        var faulty = new VisitsItsChildTwice { Width = 120, Height = 60, Fill = Color.FromArgb(255, 40, 90, 200) };
         var window = HeadlessWindow.Create(WIDTH, HEIGHT);
         window.Content = faulty;
         using var surface = factory.CreateSurface(RenderSurfaceDescriptor.Offscreen(WIDTH, HEIGHT, 1.0, hasAlpha: false));
@@ -83,19 +83,21 @@ public sealed class RetainedRejectedUpdateTests
         return differing;
     }
 
-    private sealed class DeclaresItsSlotTwice : Control
+    /// <summary>A host that, when faulty, visits its one child twice, so the scene is asked to stage the child's slot twice.</summary>
+    private sealed class VisitsItsChildTwice : FrameworkElement, IVisualTreeHost
     {
-        private Color _fill;
+        private readonly FilledBox _child = new();
         private bool _isFaulty;
+
+        public VisitsItsChildTwice()
+        {
+            AttachChild(_child);
+        }
 
         public Color Fill
         {
-            get => _fill;
-            set
-            {
-                _fill = value;
-                InvalidateVisual();
-            }
+            get => _child.Fill;
+            set => _child.Fill = value;
         }
 
         public bool IsFaulty
@@ -108,15 +110,39 @@ public sealed class RetainedRejectedUpdateTests
             }
         }
 
-        protected override void OnRender(IGraphicsContext context) => context.FillRectangle(Bounds, _fill);
-
-        internal override void WriteComposition(CompositionPlanBuilder builder)
+        protected override Size MeasureContent(Size availableSize)
         {
-            builder.Content(0);
-            if (_isFaulty)
+            _child.Measure(availableSize);
+            return _child.DesiredSize;
+        }
+
+        protected override void ArrangeContent(Rect bounds) => _child.Arrange(bounds);
+
+        bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
+        {
+            if (!visitor(_child))
             {
-                builder.Content(0);
+                return false;
+            }
+
+            return !_isFaulty || visitor(_child);
+        }
+    }
+
+    private sealed class FilledBox : FrameworkElement
+    {
+        private Color _fill;
+
+        public Color Fill
+        {
+            get => _fill;
+            set
+            {
+                _fill = value;
+                InvalidateVisual();
             }
         }
+
+        protected override void OnRender(IGraphicsContext context) => context.FillRectangle(Bounds, _fill);
     }
 }

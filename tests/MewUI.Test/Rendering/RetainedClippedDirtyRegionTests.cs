@@ -143,15 +143,11 @@ public sealed class RetainedClippedDirtyRegionTests
         protected override void ArrangeContent(Rect bounds)
             => _child.Arrange(new Rect(0, 0, _child.DesiredSize.Width, _child.DesiredSize.Height));
 
-        protected override void RenderSubtree(IGraphicsContext context)
+        protected override bool TryGetChildTransform(out System.Numerics.Matrix3x2 transform)
         {
-            context.Save();
-            var transform = System.Numerics.Matrix3x2.CreateScale((float)Zoom)
-                * System.Numerics.Matrix3x2.CreateTranslation((float)Bounds.X, (float)Bounds.Y)
-                * context.GetTransform();
-            context.SetTransform(transform);
-            _child.Render(context);
-            context.Restore();
+            transform = System.Numerics.Matrix3x2.CreateScale((float)Zoom)
+                * System.Numerics.Matrix3x2.CreateTranslation((float)Bounds.X, (float)Bounds.Y);
+            return true;
         }
 
         bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor) => visitor(_child);

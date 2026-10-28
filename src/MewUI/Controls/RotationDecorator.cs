@@ -1,5 +1,4 @@
 using System.Numerics;
-using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
 
@@ -92,51 +91,21 @@ public sealed class RotationDecorator : FrameworkElement, IVisualTreeHost
             desired.Height));
     }
 
-    protected override void RenderSubtree(IGraphicsContext context)
-    {
-        if (Child == null)
-        {
-            return;
-        }
-
-        double centerX = Bounds.X + Bounds.Width / 2;
-        double centerY = Bounds.Y + Bounds.Height / 2;
-
-        context.Save();
-        context.Translate(centerX, centerY);
-        context.Rotate(Angle);
-        context.Translate(-centerX, -centerY);
-        Child.Render(context);
-        context.Restore();
-    }
-
-    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
-    {
-        builder.Content(0);
-
-        if (Child == null)
-        {
-            return;
-        }
-
-        builder.PushTransform(ChildRotation());
-        builder.Child(Child);
-        builder.Pop();
-    }
-
-    internal override bool TryGetChildTransform(out Matrix3x2 transform)
+    protected override bool TryGetChildTransform(out Matrix3x2 transform)
     {
         transform = ChildRotation();
         return true;
     }
+
+    // A quarter turn carries whole pixels onto whole pixels, so glyphs stay aligned under it.
+    internal override bool KeepsTextPixelSnapUnderChildTransform(Matrix3x2 transform) => true;
 
     private Matrix3x2 ChildRotation()
     {
         double centerX = Bounds.X + Bounds.Width / 2;
         double centerY = Bounds.Y + Bounds.Height / 2;
 
-        // Matches the Translate/Rotate/Translate sequence of the immediate path, where each call
-        // pre-multiplies the current transform.
+        // Rotation about the centre: translate it to the origin, turn, translate back.
         return
             Matrix3x2.CreateTranslation((float)-centerX, (float)-centerY) *
             Matrix3x2.CreateRotation((float)Angle) *

@@ -1,5 +1,3 @@
-using Aprillz.MewUI.Rendering;
-
 namespace Aprillz.MewUI.Controls;
 
 /// <summary>
@@ -176,24 +174,6 @@ public class HeaderedContentControl : ContentControl
         }
     }
 
-    protected override void RenderSubtree(IGraphicsContext context)
-    {
-        base.RenderSubtree(context);
-        if (!HasTemplateInstance)
-        {
-            Header?.Render(context);
-        }
-    }
-
-    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
-    {
-        base.WriteComposition(builder);
-        if (!HasTemplateInstance)
-        {
-            builder.Child(Header);
-        }
-    }
-
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
     {
         var templateRoot = TemplateVisualRoot;
@@ -202,8 +182,9 @@ public class HeaderedContentControl : ContentControl
             return visitor(templateRoot);
         }
 
-        if (Header != null && !visitor(Header)) return false;
+        // Drawing order: the header is painted over the content.
         if (Content != null && !visitor(Content)) return false;
+        if (Header != null && !visitor(Header)) return false;
         return true;
     }
 

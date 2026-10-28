@@ -24,15 +24,13 @@ internal struct SegmentStripChrome
 /// <summary>A strip panel the segmented controls size their segments with; it draws the dividers over them.</summary>
 internal interface ISegmentStrip
 {
-    /// <summary>Asked each time the strip draws, so theme and layout changes reach the chrome without a new arrange.</summary>
+    /// <summary>Asked when the strip arranges its segments and when it draws its dividers.</summary>
     Func<SegmentStripChrome>? ChromeSource { get; set; }
 }
 
 /// <summary>Chrome drawing shared by the uniform and the auto-sized strip panel.</summary>
 internal static class SegmentStripRenderer
 {
-    public const int DIVIDER_SLOT = 1;
-
     /// <summary>Hands each segment its corner radius and pinned strip edge before it draws.</summary>
     public static void ApplyChrome(Panel panel, in SegmentStripChrome chrome)
     {
@@ -97,32 +95,14 @@ internal sealed class UniformSegmentPanel : UniformGrid, ISegmentStrip
 
     private SegmentStripChrome Chrome => ChromeSource?.Invoke() ?? default;
 
-    protected override void RenderSubtree(IGraphicsContext context)
+    protected override void ArrangeContent(Rect bounds)
     {
-        var chrome = Chrome;
-        SegmentStripRenderer.ApplyChrome(this, chrome);
-        base.RenderSubtree(context);
-        SegmentStripRenderer.DrawDividers(this, context, chrome, GetDpi() / 96.0);
+        base.ArrangeContent(bounds);
+        SegmentStripRenderer.ApplyChrome(this, Chrome);
     }
 
-    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
-    {
-        base.WriteComposition(builder);
-        builder.Content(SegmentStripRenderer.DIVIDER_SLOT);
-    }
-
-    internal override void WriteOwnContent(IGraphicsContext context, int slotIndex)
-    {
-        if (slotIndex == SegmentStripRenderer.DIVIDER_SLOT)
-        {
-            SegmentStripRenderer.DrawDividers(this, context, Chrome, GetDpi() / 96.0);
-        }
-        else
-        {
-            SegmentStripRenderer.ApplyChrome(this, Chrome);
-            base.WriteOwnContent(context, slotIndex);
-        }
-    }
+    protected override void OnRenderOverlay(IGraphicsContext context)
+        => SegmentStripRenderer.DrawDividers(this, context, Chrome, GetDpi() / 96.0);
 }
 
 /// <summary>The strip panel for <see cref="SegmentSizing.Auto"/>: each segment takes its own width.</summary>
@@ -132,30 +112,12 @@ internal sealed class StackSegmentPanel : StackPanel, ISegmentStrip
 
     private SegmentStripChrome Chrome => ChromeSource?.Invoke() ?? default;
 
-    protected override void RenderSubtree(IGraphicsContext context)
+    protected override void ArrangeContent(Rect bounds)
     {
-        var chrome = Chrome;
-        SegmentStripRenderer.ApplyChrome(this, chrome);
-        base.RenderSubtree(context);
-        SegmentStripRenderer.DrawDividers(this, context, chrome, GetDpi() / 96.0);
+        base.ArrangeContent(bounds);
+        SegmentStripRenderer.ApplyChrome(this, Chrome);
     }
 
-    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
-    {
-        base.WriteComposition(builder);
-        builder.Content(SegmentStripRenderer.DIVIDER_SLOT);
-    }
-
-    internal override void WriteOwnContent(IGraphicsContext context, int slotIndex)
-    {
-        if (slotIndex == SegmentStripRenderer.DIVIDER_SLOT)
-        {
-            SegmentStripRenderer.DrawDividers(this, context, Chrome, GetDpi() / 96.0);
-        }
-        else
-        {
-            SegmentStripRenderer.ApplyChrome(this, Chrome);
-            base.WriteOwnContent(context, slotIndex);
-        }
-    }
+    protected override void OnRenderOverlay(IGraphicsContext context)
+        => SegmentStripRenderer.DrawDividers(this, context, Chrome, GetDpi() / 96.0);
 }

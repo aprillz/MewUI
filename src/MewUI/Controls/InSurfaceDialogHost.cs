@@ -321,6 +321,5 @@ internal sealed class InSurfaceDialogHost : UIElement, IVisualTreeHost
     protected override void OnRender(IGraphicsContext context)
     {
         context.FillRectangle(Bounds, Color.FromArgb((byte)(SCRIM_ALPHA * _scrimProgress), 0, 0, 0));
-        _transition.Render(context);
     }
 }

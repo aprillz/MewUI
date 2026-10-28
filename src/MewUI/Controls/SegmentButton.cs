@@ -67,14 +67,52 @@ public sealed partial class SegmentButton : CommandSourceControl
     /// <summary>Whether this segment is the last in the strip (rounds the trailing corners).</summary>
     internal bool IsLast { get; set; } = true;
 
-    /// <summary>Corner radius (in DIPs) applied to the rounded ends. Set by the owner.</summary>
-    internal double Radius { get; set; }
+    private double _radius;
+    private double? _stripLeft;
+    private double? _stripRight;
 
-    // Snapped outer edge of the strip, set by the owner on the first/last segment. Aligns the leading
-    // (StripLeft) and trailing (StripRight) background edge to the container's inner border edge, so the
-    // strip fills the frame exactly - independent per-child pixel snapping can otherwise drift 1px.
-    internal double? StripLeft { get; set; }
-    internal double? StripRight { get; set; }
+    /// <summary>Corner radius (in DIPs) applied to the rounded ends. Set by the owner.</summary>
+    internal double Radius
+    {
+        get => _radius;
+        set
+        {
+            // The owner sets it from its arrange, outside any property change, so the recorded fill is dropped here.
+            if (_radius != value)
+            {
+                _radius = value;
+                InvalidateVisual();
+            }
+        }
+    }
+
+    /// <summary>Snapped strip edge the first segment pins its leading background edge to, so the strip fills the frame despite per-child pixel snapping.</summary>
+    internal double? StripLeft
+    {
+        get => _stripLeft;
+        set
+        {
+            if (_stripLeft != value)
+            {
+                _stripLeft = value;
+                InvalidateVisual();
+            }
+        }
+    }
+
+    /// <summary>Snapped strip edge the last segment pins its trailing background edge to.</summary>
+    internal double? StripRight
+    {
+        get => _stripRight;
+        set
+        {
+            if (_stripRight != value)
+            {
+                _stripRight = value;
+                InvalidateVisual();
+            }
+        }
+    }
 
     /// <summary>
     /// Single-owner callback raised on click, after <see cref="Click"/>. Used by

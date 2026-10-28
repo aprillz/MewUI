@@ -143,21 +143,6 @@ internal sealed class ToastPresenter : Control, IVisualTreeHost
 
     #endregion
 
-    #region Rendering
-
-    protected override void RenderSubtree(IGraphicsContext context)
-    {
-        _transition.Render(context);
-    }
-
-    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
-    {
-        builder.Content(0);
-        builder.Child(_transition);
-    }
-
-    #endregion
-
     #region HitTest
 
     protected override UIElement? OnHitTest(Point point) => null;

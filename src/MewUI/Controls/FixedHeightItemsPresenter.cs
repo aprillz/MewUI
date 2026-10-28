@@ -1,7 +1,5 @@
 namespace Aprillz.MewUI.Controls;
 
-using Aprillz.MewUI.Rendering;
-
 /// <summary>
 /// Fixed-height virtualizing items presenter intended to be hosted by a scroll owner
 /// (e.g. <see cref="ScrollViewer"/>) via <see cref="IScrollContent"/>.
@@ -270,6 +268,8 @@ internal sealed class FixedHeightItemsPresenter : Control, IItemsPresenter
     {
         if (ItemsSource.Count == 0)
         {
+            // Containers left over from the previous items would otherwise keep their old place and be drawn.
+            _itemsHost.RecycleAll();
             return;
         }
 
@@ -371,17 +371,6 @@ internal sealed class FixedHeightItemsPresenter : Control, IItemsPresenter
         };
 
         _itemsHost.Arrange();
-    }
-
-    protected override void OnRender(IGraphicsContext context)
-    {
-        _itemsHost.RenderArranged(context);
-    }
-
-    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
-    {
-        // No own content slot: OnRender draws only the realized containers.
-        _itemsHost.WriteArrangedComposition(builder);
     }
 
     protected override UIElement? OnHitTest(Point point)

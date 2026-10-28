@@ -355,11 +355,23 @@ public sealed class GridViewRow : Control, IVisualTreeHost, ICommandArgumentSour
         for (int i = 0; i < _cells.Count; i++)
         {
             double w = Math.Max(0, _owner._core.Columns[i].ActualWidth);
-            var cellRect = new Rect(
-                x + pad.Left,
-                bounds.Y + pad.Top,
-                Math.Max(0, w - pad.HorizontalThickness),
-                Math.Max(0, bounds.Height - pad.VerticalThickness));
+            Rect cellRect;
+            if (w <= 0.01)
+            {
+                // A collapsed column keeps its cell realized and bound so the column can be restored, but
+                // a bordered control laid out in a zero-width slot would show both edges as one vertical
+                // line, so the cell gets no area and is not drawn.
+                cellRect = new Rect(x, bounds.Y, 0, 0);
+            }
+            else
+            {
+                cellRect = new Rect(
+                    x + pad.Left,
+                    bounds.Y + pad.Top,
+                    Math.Max(0, w - pad.HorizontalThickness),
+                    Math.Max(0, bounds.Height - pad.VerticalThickness));
+            }
+
             _cells[i].View.Arrange(cellRect);
             x += w;
         }
@@ -447,37 +459,6 @@ public sealed class GridViewRow : Control, IVisualTreeHost, ICommandArgumentSour
         }
 
         return this;
-    }
-
-    protected override void RenderSubtree(IGraphicsContext context)
-    {
-        for (int i = 0; i < _cells.Count; i++)
-        {
-            // Keep collapsed cells realized and bound so their column can be restored,
-            // but do not render controls into a zero-width slot. Bordered controls would
-            // otherwise collapse both edges into a visible vertical line.
-            if (_owner._core.Columns[i].ActualWidth <= 0.01)
-            {
-                continue;
-            }
-
-            _cells[i].View.Render(context);
-        }
-    }
-
-    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
-    {
-        builder.Content(0);
-        for (int index = 0; index < _cells.Count; index++)
-        {
-            // The same cells RenderSubtree draws: a collapsed column keeps its cell but shows none of it.
-            if (_owner._core.Columns[index].ActualWidth <= 0.01)
-            {
-                continue;
-            }
-
-            builder.Child(_cells[index].View);
-        }
     }
 
     private sealed class Cell

@@ -7,9 +7,6 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public sealed partial class Border : Control, IVisualTreeHost, ILogicalTreeHost
 {
-    private const int BACKGROUND_SLOT = 0;
-    private const int BORDER_STROKE_SLOT = 1;
-
     static Border() { }
 
     private static readonly bool _defaultStyleRegistered =
@@ -147,7 +144,7 @@ public sealed partial class Border : Control, IVisualTreeHost, ILogicalTreeHost
 
         if (metrics.IsSimple)
         {
-            // Background only - border is drawn after subtree in RenderSubtree.
+            // Background only - the stroke is drawn over the child in OnRenderOverlay.
             if (bg.A == 0)
             {
                 return;
@@ -236,38 +233,25 @@ public sealed partial class Border : Control, IVisualTreeHost, ILogicalTreeHost
         }
     }
 
-    protected override void RenderSubtree(IGraphicsContext context)
+    protected override void OnRenderOverlay(IGraphicsContext context)
     {
         var metrics = CreateMetrics(Bounds);
-
-        if (Child != null)
-        {
-            if (ClipToBounds)
-            {
-                context.Save();
-                GetChildClip(in metrics, out var clipRect, out double radiusX, out double radiusY);
-                if (radiusX > 0 || radiusY > 0)
-                {
-                    context.SetClipRoundedRect(clipRect, radiusX, radiusY);
-                }
-                else
-                {
-                    context.SetClip(clipRect);
-                }
-
-                Child.Render(context);
-                context.Restore();
-            }
-            else
-            {
-                Child.Render(context);
-            }
-        }
-
         RenderBorderStroke(context, in metrics);
     }
 
-    private void GetChildClip(in BorderRenderMetrics metrics, out Rect clipRect, out double radiusX, out double radiusY)
+    protected override ChildClip? GetChildClip(UIElement child)
+    {
+        if (!ClipToBounds)
+        {
+            return null;
+        }
+
+        var metrics = CreateMetrics(Bounds);
+        ComputeChildClip(in metrics, out var clipRect, out double radiusX, out double radiusY);
+        return new ChildClip(clipRect, radiusX, radiusY);
+    }
+
+    private void ComputeChildClip(in BorderRenderMetrics metrics, out Rect clipRect, out double radiusX, out double radiusY)
     {
         if (metrics.IsSimple)
         {
@@ -330,50 +314,6 @@ public sealed partial class Border : Control, IVisualTreeHost, ILogicalTreeHost
                 context.DrawRectangle(bounds, borderBrush, thickness, strokeInset: true);
             }
         }
-    }
-
-    internal override void WriteOwnContent(IGraphicsContext context, int slotIndex)
-    {
-        if (slotIndex == BORDER_STROKE_SLOT)
-        {
-            var metrics = CreateMetrics(Bounds);
-            RenderBorderStroke(context, in metrics);
-        }
-        else
-        {
-            OnRender(context);
-        }
-    }
-
-    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
-    {
-        builder.Content(BACKGROUND_SLOT);
-
-        if (Child != null)
-        {
-            var metrics = CreateMetrics(Bounds);
-            if (ClipToBounds)
-            {
-                GetChildClip(in metrics, out var clipRect, out double radiusX, out double radiusY);
-                if (radiusX > 0 || radiusY > 0)
-                {
-                    builder.PushClipRoundedRect(clipRect, radiusX, radiusY);
-                }
-                else
-                {
-                    builder.PushClipRect(clipRect);
-                }
-
-                builder.Child(Child);
-                builder.Pop();
-            }
-            else
-            {
-                builder.Child(Child);
-            }
-        }
-
-        builder.Content(BORDER_STROKE_SLOT);
     }
 
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)

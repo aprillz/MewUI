@@ -60,17 +60,6 @@ internal sealed class ColorPickerPopup : Control, IVisualTreeHost
         _scrollViewer.Arrange(inner);
     }
 
-    protected override void RenderSubtree(IGraphicsContext context)
-    {
-        _scrollViewer.Render(context);
-    }
-
-    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
-    {
-        builder.Content(0);
-        builder.Child(_scrollViewer);
-    }
-
     protected override void OnRender(IGraphicsContext context)
     {
         base.OnRender(context);

@@ -848,27 +848,6 @@ public sealed partial class TreeView : Control, ISubtreeInvalidationHost, IFocus
         DrawBackgroundAndBorder(context, bounds, bg, borderColor, BorderThickness, radius);
     }
 
-    protected override void RenderSubtree(IGraphicsContext context)
-    {
-        // An empty tree draws its chrome only; the scroll viewer has nothing to show.
-        if (_itemsSource.Count == 0)
-        {
-            return;
-        }
-
-        _scrollViewer.Render(context);
-    }
-
-    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
-    {
-        builder.Content(0);
-
-        if (_itemsSource.Count > 0)
-        {
-            builder.Child(_scrollViewer);
-        }
-    }
-
     /// <summary>Re-derives the row corner radius from the control's own radius, before the rows bind.</summary>
     private void UpdateItemCornerRadius()
     {

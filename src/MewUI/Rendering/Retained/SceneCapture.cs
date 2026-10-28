@@ -95,11 +95,10 @@ internal sealed class SceneCapture
     private readonly List<UIElement> _withoutNodes = [];
 
     /// <summary>
-    /// A control may draw visuals of its own inside its own drawing instead of declaring them (the
-    /// headers of a tab control, the segments of a segmented control). Such a visual has no node, so a
-    /// change of it is a change of the recording that holds its pixels: the nearest visual above it that
-    /// has a node. A visual that is merely new gets its node in this pass; its parent then records
-    /// again for nothing, finds the same drawing and repaints nothing.
+    /// A visual under a bitmap-cached ancestor has no node of its own, so a change of it is a change of
+    /// the recording that holds its pixels: the nearest visual above it that has a node. A visual that is
+    /// merely new gets its node in this pass; its parent then records again for nothing, finds the same
+    /// drawing and repaints nothing.
     /// </summary>
     private void PromoteChangesOfVisualsWithoutNodes(RenderScene scene, RenderDirtyRegistry registry)
     {
@@ -231,19 +230,13 @@ internal sealed class SceneCapture
 
         // A cached element serves its pixels from its own bitmap inside its render path, so the scene
         // records that path as a whole instead of splitting it into slots.
-        if (!element.SupportsDeclaredComposition || element.HasBitmapCache)
+        if (element.HasBitmapCache)
         {
             return CaptureCompatibilitySubtree(
                 scene, update, element, node, recorder, dirty, attachmentChanged, transform);
         }
 
         var plan = BuildPlan(update, element, node, attachmentChanged);
-        if (plan.IsUnsupported)
-        {
-            return CaptureCompatibilitySubtree(
-                scene, update, element, node, recorder, dirty, attachmentChanged, transform);
-        }
-
         update.StageComposition(node, plan, state, stateBakedIntoContent: false);
 
         // A pass that only brings the scene up to date draws nothing, so it opens no scope on the
@@ -306,13 +299,14 @@ internal sealed class SceneCapture
     }
 
     /// <summary>
-    /// Asks the visual for its composition every pass. A declaration that has not changed returns the
-    /// plan the node already holds, so nothing is allocated and no dirty region is reported; that is what
-    /// lets a visual whose children or geometry did change be noticed without a separate signal.
+    /// Reads the visual's composition from its children, clips and transform every pass. A composition
+    /// that has not changed returns the plan the node already holds, so nothing is allocated and no dirty
+    /// region is reported; that is what lets a visual whose children or geometry did change be noticed
+    /// without a separate signal.
     /// </summary>
     private CompositionPlan BuildPlan(SceneUpdate update, UIElement element, VisualNode node, bool attachmentChanged)
     {
-        element.WriteComposition(_planBuilder);
+        element.WritePlan(_planBuilder);
         var plan = _planBuilder.Build(attachmentChanged ? null : node.Plan);
         update.StageConsumption(element, RenderDirtyKind.Composition | RenderDirtyKind.State | RenderDirtyKind.Placement);
         return plan;
@@ -495,6 +489,9 @@ internal sealed class SceneCapture
                     context.TextPixelSnap = false;
                 }
 
+                break;
+            case CompositionEntryKind.Alpha:
+                context.GlobalAlpha *= (float)entry.Alpha;
                 break;
             default:
                 throw new InvalidOperationException($"The composition entry {entry.Kind} is not a scope.");
@@ -693,7 +690,7 @@ internal sealed class SceneCapture
             }
             else
             {
-                node.Element.WriteOwnContent(recorder, slotIndex);
+                node.Element.RenderOwnSlot(recorder, slotIndex);
             }
         }
         finally

@@ -384,6 +384,7 @@ public sealed partial class TabControl : Control, ISelector, IIndexedSelector, I
         return content == null || visitor(content);
     }
 
+    /// <summary>Visits the row in drawing order: every header, hidden ones laid out empty, then the overflow button.</summary>
     internal bool VisitHeaderStrip(Func<Element, bool> visitor)
     {
         for (int i = 0; i < _headers.Count; i++)
@@ -543,20 +544,7 @@ public sealed partial class TabControl : Control, ISelector, IIndexedSelector, I
             return;
         }
 
-        // Header must render BEFORE content background so the background
-        // paints over the header's bottom edge, visually connecting the
-        // selected tab to the content area.
-        _headerStrip.Render(context);
-
-        var bounds = GetSnappedBorderBounds(Bounds);
-        var borderInset = GetBorderVisualInset();
-        var inner = bounds.Deflate(new Thickness(borderInset));
-
-        var contentBg = GetValue(BackgroundProperty);
-        var (_, contentRect) = GetLayoutRects(inner);
-
-        var outline = BorderBrush;
-
+        var contentRect = GetContentRect();
         if (contentRect.Width <= 0 || contentRect.Height <= 0)
         {
             return;
@@ -570,53 +558,31 @@ public sealed partial class TabControl : Control, ISelector, IIndexedSelector, I
             _ => new CornerRadius(0, 0, CornerRadius, CornerRadius),
         };
 
-        DrawBackgroundAndBorder(context, contentRect, contentBg, outline,
+        DrawBackgroundAndBorder(context, contentRect, GetValue(BackgroundProperty), BorderBrush,
             new Thickness(BorderThickness), cornerRadius);
+    }
+
+    /// <summary>Fills the seam between the selected header and the content border, over both of them.</summary>
+    protected override void OnRenderOverlay(IGraphicsContext context)
+    {
+        if (HasTemplateInstance)
+        {
+            return;
+        }
+
+        var borderInset = GetBorderVisualInset();
         if (borderInset > 0)
         {
-            DrawContentOutline(context, contentRect, contentBg, borderInset);
+            DrawContentOutline(context, GetContentRect(), GetValue(BackgroundProperty), borderInset);
         }
     }
 
-    protected override void RenderSubtree(IGraphicsContext context)
+    /// <summary>The content area inside the snapped border, as the arrange laid it out beside the header strip.</summary>
+    private Rect GetContentRect()
     {
-        if (HasTemplateInstance)
-        {
-            base.RenderSubtree(context);
-            return;
-        }
-
-        SelectedTab?.Content?.Render(context);
-    }
-
-    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
-    {
-        if (HasTemplateInstance)
-        {
-            base.WriteComposition(builder);
-            return;
-        }
-
-        builder.Content(0);
-        builder.Child(SelectedTab?.Content);
-    }
-
-    internal void RenderHeaderStrip(IGraphicsContext context) => RenderHeaders(context);
-
-    internal void WriteHeaderStripComposition(Rendering.Retained.CompositionPlanBuilder builder)
-    {
-        for (int i = 0; i < _headers.Count; i++)
-        {
-            if (!_hiddenHeaders.Contains(_headers[i]))
-            {
-                builder.Child(_headers[i]);
-            }
-        }
-
-        if (_overflowActive)
-        {
-            builder.Child(_overflowButton);
-        }
+        var inner = GetSnappedBorderBounds(Bounds).Deflate(new Thickness(GetBorderVisualInset()));
+        var (_, contentRect) = GetLayoutRects(inner);
+        return contentRect;
     }
 
     /// <summary>The header or overflow button under the point; null over the row's empty space, so it falls through.</summary>
@@ -1021,23 +987,6 @@ public sealed partial class TabControl : Control, ISelector, IIndexedSelector, I
 
         _overflowActive = _hiddenHeaders.Count > 0;
         return visible;
-    }
-
-    private void RenderHeaders(IGraphicsContext context)
-    {
-        for (int i = 0; i < _headers.Count; i++)
-        {
-            var header = _headers[i];
-            if (!_hiddenHeaders.Contains(header))
-            {
-                header.Render(context);
-            }
-        }
-
-        if (_overflowActive)
-        {
-            _overflowButton.Render(context);
-        }
     }
 
     private void RebuildOverflowMenu()

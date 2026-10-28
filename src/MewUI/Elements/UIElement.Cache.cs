@@ -201,8 +201,7 @@ public abstract partial class UIElement
 
         if (liveStream)
         {
-            OnRender(context);
-            RenderSubtree(context);
+            RenderContentAndChildren(context);
             return;
         }
 
@@ -212,8 +211,7 @@ public abstract partial class UIElement
         bool wouldCapture = _cache == null || _cache.Version != version;
         if (wouldCapture && window != null && !window.TryTakeCaptureBudget())
         {
-            OnRender(context);
-            RenderSubtree(context);
+            RenderContentAndChildren(context);
             window.RequestRender();
             return;
         }
@@ -244,8 +242,7 @@ public abstract partial class UIElement
         }
         else
         {
-            OnRender(context);
-            RenderSubtree(context);
+            RenderContentAndChildren(context);
         }
     }
 
@@ -453,10 +450,8 @@ public abstract partial class UIElement
             _cacheSnapshotDepth++;
             try
             {
-                // The element's full visual = its own OnRender plus its subtree; both must be
-                // captured because the cache blit replaces both.
-                OnRender(cacheContext);
-                RenderSubtree(cacheContext);
+                // The cache blit replaces the element's own drawing and its children, so both are captured.
+                RenderContentAndChildren(cacheContext);
             }
             finally
             {

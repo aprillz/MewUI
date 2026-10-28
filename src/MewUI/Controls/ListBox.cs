@@ -578,18 +578,6 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
             radius);
     }
 
-    protected override void RenderSubtree(IGraphicsContext context)
-    {
-        base.RenderSubtree(context);
-        _scrollViewer.Render(context);
-    }
-
-    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
-    {
-        base.WriteComposition(builder);
-        builder.Child(_scrollViewer);
-    }
-
     protected override void OnMouseMove(MouseEventArgs e)
     {
         base.OnMouseMove(e);

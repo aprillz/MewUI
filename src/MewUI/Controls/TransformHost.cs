@@ -1,13 +1,10 @@
 using System.Numerics;
 
-using Aprillz.MewUI.Rendering;
-using Aprillz.MewUI.Rendering.Retained;
-
 namespace Aprillz.MewUI.Controls;
 
 /// <summary>
-/// Drawing, recording, hit testing and layout math shared by the decorators that draw one child under a
-/// transform. Every matrix here maps window coordinates before the transform to window coordinates after it.
+/// Hit testing and layout math shared by the decorators that draw one child under a transform. Every
+/// matrix here maps window coordinates before the transform to window coordinates after it.
 /// </summary>
 internal static class TransformHost
 {
@@ -29,58 +26,6 @@ internal static class TransformHost
     /// <summary>True when glyphs drawn under <paramref name="transform"/> still land on whole pixels: translation and positive whole-number scale only.</summary>
     internal static bool KeepsTextPixelSnap(Matrix3x2 transform)
         => transform.M12 == 0 && transform.M21 == 0 && IsPositiveWholeNumber(transform.M11) && IsPositiveWholeNumber(transform.M22);
-
-    internal static void Render(IGraphicsContext context, UIElement? child, Matrix3x2 transform)
-    {
-        if (child == null)
-        {
-            return;
-        }
-
-        if (transform.IsIdentity)
-        {
-            child.Render(context);
-        }
-        else
-        {
-            context.Save();
-            try
-            {
-                context.SetTransform(transform * context.GetTransform());
-                if (!KeepsTextPixelSnap(transform))
-                {
-                    context.TextPixelSnap = false;
-                }
-
-                child.Render(context);
-            }
-            finally
-            {
-                context.Restore();
-            }
-        }
-    }
-
-    internal static void WriteComposition(CompositionPlanBuilder builder, UIElement? child, Matrix3x2 transform)
-    {
-        builder.Content(0);
-
-        if (child == null)
-        {
-            return;
-        }
-
-        if (transform.IsIdentity)
-        {
-            builder.Child(child);
-        }
-        else
-        {
-            builder.PushTransform(transform, disablesTextPixelSnap: !KeepsTextPixelSnap(transform));
-            builder.Child(child);
-            builder.Pop();
-        }
-    }
 
     /// <summary>
     /// Hit tests <paramref name="child"/> at the point the transform carried to <paramref name="point"/>, including the parts
