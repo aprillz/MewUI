@@ -751,7 +751,6 @@ public partial class MarkdownPresenter : Control, ISubtreeInvalidationHost, ILog
         FlushPendingLinkFocus();
     }
 
-    protected override void RenderSubtree(IGraphicsContext context) => DocumentRoot?.Render(context);
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor) => DocumentRoot is not Element root || visitor(root);
     bool ILogicalTreeHost.VisitLogicalChildren(Func<Element, bool> visitor) => DocumentRoot is not Element root || visitor(root);
 

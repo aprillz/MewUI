@@ -229,7 +229,7 @@ internal class FlexBorderBar : Control, IVisualTreeHost, IPaneContentOwner
     }
 
     // Explicit interface impl cannot be overridden; delegate to a protected virtual so the Extended layer can add
-    // its caption + bottom strip to the visual-tree walk.
+    // its caption to the visual-tree walk. The walk is the drawing order: buttons first, the splitter over them.
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor) => VisitChildrenCore(visitor);
 
     protected virtual bool VisitChildrenCore(Func<Element, bool> visitor)
@@ -439,17 +439,5 @@ internal class FlexBorderBar : Control, IVisualTreeHost, IPaneContentOwner
             seam = new Rect(edgeX - thickness, gapTop, thickness * 2, gapBottom - gapTop);
         }
         context.FillRectangle(seam, background);
-    }
-
-    protected override void RenderSubtree(IGraphicsContext context)
-    {
-        foreach (var button in _buttons)
-        {
-            button.Render(context);
-        }
-        if (Expanded)
-        {
-            _splitter.Render(context);
-        }
     }
 }
