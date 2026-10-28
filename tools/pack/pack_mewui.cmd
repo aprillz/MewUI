@@ -51,6 +51,12 @@ set PROJECTS=^
   src\MewUI.Backend.MewVG.X11\MewUI.Backend.MewVG.X11.csproj^
   src\MewUI.Backend.MewVG.MacOS\MewUI.Backend.MewVG.MacOS.csproj
 
+REM --- Linux framebuffer pair and the headless test host (no metapackage includes them) ---
+set PROJECTS=%PROJECTS%^
+  src\MewUI.Platform.Framebuffer\MewUI.Platform.Framebuffer.csproj^
+  src\MewUI.Backend.MewVG.Framebuffer\MewUI.Backend.MewVG.Framebuffer.csproj^
+  src\MewUI.Headless\MewUI.Headless.csproj
+
 REM --- Browser pair (net10.0 only; no metapackage includes them) ---
 set PROJECTS=%PROJECTS%^
   src\MewUI.Platform.Browser\MewUI.Platform.Browser.csproj^
@@ -74,6 +80,8 @@ set PROJECTS=%PROJECTS%^
   extensions\MewUI.Svg\MewUI.Svg.csproj^
   extensions\MewUI.MewCharts\MewUI.MewCharts.csproj^
   extensions\MewUI.Markdown\MewUI.Markdown.csproj^
+  extensions\MewUI.Terminal\MewUI.Terminal.csproj^
+  extensions\MewUI.MewvalonEdit\MewUI.MewvalonEdit.csproj^
   extensions\MewUI.WebView2.Win32\MewUI.WebView2.Win32.csproj^
   extensions\MewUI.Skia\MewUI.Skia.csproj^
   extensions\MewUI.Skia.Interop.Direct2D\MewUI.Skia.Interop.Direct2D.csproj^
@@ -106,8 +114,7 @@ if %FAILED%==1 (
 )
 
 REM --- Fluent coverage gate: the Release assemblies exist only after the pack loop, so it runs here ---
-REM Every packaged UI assembly is gated (Terminal and MewvalonEdit are not packaged yet, so their
-REM stale Release outputs are not audited here). Platform and backend assemblies declare no UI receivers.
+REM Every packaged UI assembly is gated. Platform, backend and headless host assemblies declare no UI receivers.
 set GATE_ASSEMBLIES=^
   src\MewUI\bin\Release\net10.0\Aprillz.MewUI.dll^
   extensions\MewUI.Geometry\bin\Release\net10.0\Aprillz.MewUI.Geometry.dll^
@@ -115,6 +122,8 @@ set GATE_ASSEMBLIES=^
   extensions\MewUI.Svg\bin\Release\net10.0\Aprillz.MewUI.Svg.dll^
   extensions\MewUI.MewCharts\bin\Release\net10.0\Aprillz.MewUI.MewCharts.dll^
   extensions\MewUI.Markdown\bin\Release\net10.0\Aprillz.MewUI.Markdown.dll^
+  extensions\MewUI.Terminal\bin\Release\net10.0\Aprillz.MewUI.Terminal.dll^
+  extensions\MewUI.MewvalonEdit\bin\Release\net10.0\Aprillz.MewUI.MewvalonEdit.dll^
   extensions\MewUI.WebView2.Win32\bin\Release\net10.0-windows\Aprillz.MewUI.WebView2.Win32.dll^
   extensions\MewUI.Skia\bin\Release\net10.0\Aprillz.MewUI.Skia.dll^
   extensions\MewUI.Skia.Interop.Direct2D\bin\Release\net10.0\Aprillz.MewUI.Skia.Interop.Direct2D.dll^
