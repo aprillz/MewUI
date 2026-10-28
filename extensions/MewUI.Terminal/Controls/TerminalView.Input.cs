@@ -259,6 +259,7 @@ public sealed partial class TerminalView
 
             if (string.IsNullOrEmpty(hyperlink))
             {
+                _selectionTouchdown = null;
                 if (e.ClickCount >= 3)
                 {
                     _terminal.MultiClickSelection(cell, SelectionExpansion.Line);
@@ -274,6 +275,7 @@ public sealed partial class TerminalView
                 else
                 {
                     _terminal.SetSelectionAnchor(cell);
+                    _selectionTouchdown = e.GetPosition(_surface);
                 }
 
                 _terminal.SetBlockSelection(e.AltKey);
@@ -298,9 +300,19 @@ public sealed partial class TerminalView
 
         if (_selecting)
         {
+            var position = e.GetPosition(_surface);
             using (_terminal.LockForWriting())
             {
-                _terminal.SetSelectionEnd(cell);
+                if (_selectionTouchdown.HasValue)
+                {
+                    StartDragSelection(_selectionTouchdown.Value, position);
+                }
+
+                if (!_selectionTouchdown.HasValue)
+                {
+                    // As in Windows Terminal, the end is the cell boundary nearest the pointer: a cell joins once the pointer passes its middle.
+                    _terminal.SetSelectionEnd(CellAt(position, roundToNearestCell: true));
+                }
             }
 
             RefreshScreen();
@@ -421,12 +433,41 @@ public sealed partial class TerminalView
     }
 
     /// <summary>The viewport cell under the mouse, possibly outside the grid while dragging.</summary>
-    private TilPoint CellAt(MouseEventArgs e)
+    private TilPoint CellAt(MouseEventArgs e) => CellAt(e.GetPosition(_surface), roundToNearestCell: false);
+
+    /// <summary>
+    /// The viewport cell at a point of the surface; with <paramref name="roundToNearestCell"/>, the column is the nearest
+    /// cell boundary instead of the cell the point is in.
+    /// </summary>
+    private TilPoint CellAt(Point position, bool roundToNearestCell)
     {
-        var position = e.GetPosition(_surface);
         double offsetX = position.X - (_surface.TextArea.X - _surface.Bounds.X);
         double offsetY = position.Y - (_surface.TextArea.Y - _surface.Bounds.Y);
-        return new TilPoint((int)Math.Floor(offsetX / CellWidth), (int)Math.Floor(offsetY / CellHeight));
+        double column = roundToNearestCell
+            ? Math.Round(offsetX / CellWidth, MidpointRounding.AwayFromZero)
+            : Math.Floor(offsetX / CellWidth);
+        return new TilPoint((int)column, (int)Math.Floor(offsetY / CellHeight));
+    }
+
+    /// <summary>
+    /// Anchors a plain click's selection once the pointer has moved a quarter of a cell from where it pressed, as Windows
+    /// Terminal does: on the pressed cell's left side for a drag to the right, its right side for a drag to the left.
+    /// </summary>
+    private void StartDragSelection(Point touchdown, Point position)
+    {
+        double deltaX = position.X - touchdown.X;
+        double deltaY = position.Y - touchdown.Y;
+        if ((deltaX * deltaX) + (deltaY * deltaY) >= CellWidth * CellWidth / 16)
+        {
+            var anchor = CellAt(touchdown, roundToNearestCell: false);
+            if (deltaX < 0)
+            {
+                anchor = anchor with { X = anchor.X + 1 };
+            }
+
+            _terminal.SetSelectionAnchor(anchor);
+            _selectionTouchdown = null;
+        }
     }
 
     private void CaptureMouse()

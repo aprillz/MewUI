@@ -98,6 +98,9 @@ public sealed partial class TerminalView : ContentControl, ITextInputClient, ITe
     private bool _cursorBlinkOn = true;
     private string? _composition;
     private bool _selecting;
+
+    // Where a plain click pressed, until the pointer has moved far enough from it to start a drag selection.
+    private Point? _selectionTouchdown;
     private bool _trackingButtonDown;
 
     // The cursor as of the last update, in viewport cells; row -1 when it is not shown.
