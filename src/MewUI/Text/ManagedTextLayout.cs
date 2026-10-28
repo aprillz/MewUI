@@ -67,7 +67,7 @@ internal sealed class ManagedTextLayout : ITextLayout
 
     internal bool IsFastPath { get; }
 
-    internal IFont GetDefaultFont() => _engine.GetFont(Snapshot.DefaultStyle, Snapshot.Dpi);
+    internal IFont GetDefaultFont() => _engine.GetFont(Snapshot.DefaultStyle, Snapshot);
 
     /// <summary>True once any line has built the runs its columns are read from.</summary>
     internal bool HasMaterializedColumns

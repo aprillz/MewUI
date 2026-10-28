@@ -58,18 +58,19 @@ public sealed partial class MewVGWin32GraphicsFactory : IPersistentFrameGraphics
         }
 
         family = GdiFont.SelectFamilyCandidate(family);
-        family = ResolveWin32FontFamilyOrFile(family);
+        family = ResolveWin32FontFamilyOrFile(family, weight, italic);
         return new GdiFont(family, size, weight, italic, underline, strikethrough, dpi);
     }
 
-    private static string ResolveWin32FontFamilyOrFile(string familyOrPath)
+    private static string ResolveWin32FontFamilyOrFile(string familyOrPath, FontWeight weight, bool italic)
     {
-        // 1. Check FontRegistry (registered via FontResources.Register)
+        // 1. Check FontRegistry (registered via FontResources.Register); GDI names one face, so pick it here.
         var resolved = FontRegistry.Resolve(familyOrPath);
         if (resolved != null)
         {
-            _ = Win32Fonts.EnsurePrivateFontFamily(resolved.Value.FilePath);
-            return GdiFamilyName(resolved.Value.FilePath, resolved.Value.FamilyName);
+            var face = resolved.Value.SelectFace(weight, italic);
+            _ = Win32Fonts.EnsurePrivateFontFamily(face.FilePath);
+            return GdiFamilyName(face.FilePath, resolved.Value.FamilyName);
         }
 
         // 2. Legacy: file path directly in FontFamily

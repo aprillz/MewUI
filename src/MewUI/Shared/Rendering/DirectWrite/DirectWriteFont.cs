@@ -33,9 +33,9 @@ internal sealed unsafe partial class DirectWriteFont : FontBase, IGlyphOutlineFo
     /// <summary>Names the <see cref="ListedFallbacks"/>, for caching what is built from them.</summary>
     internal string ListedFallbackKey { get; private init; } = string.Empty;
 
-    // Cache raw metrics per (family, weight, italic, isPrivate) - size-independent.
+    // Cache raw metrics per (family, weight, italic, collection) - size-independent. A family that gains a file gets a new collection.
     // Avoids repeated COM calls (FindFamilyName → GetFontFamily → GetFirstMatchingFont → GetMetrics).
-    private static readonly ConcurrentDictionary<(string family, FontWeight weight, bool italic, bool isPrivate), DWRITE_FONT_METRICS?> _metricsCache = new();
+    private static readonly ConcurrentDictionary<(string family, FontWeight weight, bool italic, nint collection), DWRITE_FONT_METRICS?> _metricsCache = new();
 
     // Native DWrite resources retained for the lifetime of this font for outline
     // extraction (IDWriteFontFace::GetGlyphRunOutline). Cached lazily on first use.
@@ -68,7 +68,7 @@ internal sealed unsafe partial class DirectWriteFont : FontBase, IGlyphOutlineFo
         PrivateFontCollection = privateFontCollection;
 
         var resolvedFamily = Family;
-        var cacheKey = (resolvedFamily, weight, italic, isPrivate: privateFontCollection != 0);
+        var cacheKey = (resolvedFamily, weight, italic, collection: privateFontCollection);
 
         if (_metricsCache.TryGetValue(cacheKey, out var cached))
         {
@@ -96,7 +96,7 @@ internal sealed unsafe partial class DirectWriteFont : FontBase, IGlyphOutlineFo
             var resolved = FontRegistry.Resolve(resolvedFamily);
             if (resolved != null)
             {
-                metrics = LoadMetricsFromFile(factory, resolved.Value.FilePath);
+                metrics = LoadMetricsFromFile(factory, resolved.Value.SelectFace(weight, italic).FilePath);
             }
         }
 

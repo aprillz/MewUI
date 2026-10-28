@@ -190,7 +190,7 @@ internal sealed partial class ManagedTextEngine
             int end = index + 1 < boundaries.Length ? boundaries[index + 1] : text.Length;
             int styleIndex = snapshot.GetStyleIndex(start);
             var style = snapshot.GetStyle(start);
-            var font = GetFont(style, snapshot.Dpi);
+            var font = GetFont(style, snapshot);
 
             if (snapshot.TryGetInline(start, out var inline))
             {

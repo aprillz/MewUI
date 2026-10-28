@@ -382,7 +382,16 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
         var resolved = FontRegistry.Resolve(familyOrPath);
         if (resolved != null)
         {
-            if (OperatingSystem.IsWindows() && Win32Fonts.EnsurePrivateFontFamily(resolved.Value.FilePath))
+            bool added = false;
+            if (OperatingSystem.IsWindows())
+            {
+                foreach (var filePath in resolved.Value.FilePaths)
+                {
+                    added |= Win32Fonts.EnsurePrivateFontFamily(filePath);
+                }
+            }
+
+            if (added)
             {
                 RefreshSystemFontCollection();
             }

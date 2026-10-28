@@ -64,10 +64,10 @@ internal static class LinuxFontResolver
             return File.Exists(family) ? family : null;
         }
 
-        var resolved = FontRegistry.Resolve(family);
-        if (resolved != null && File.Exists(resolved.Value.FilePath))
+        var registered = FontRegistry.Resolve(family)?.SelectFace(weight, italic).FilePath;
+        if (registered != null && File.Exists(registered))
         {
-            return resolved.Value.FilePath;
+            return registered;
         }
 
         return FontconfigResolve(family, weight, italic, requireFamily: !_genericFamilies.Contains(family));
@@ -87,10 +87,10 @@ internal static class LinuxFontResolver
         }
 
         // Check FontRegistry (fonts registered via FontResources.Register).
-        var resolved = FontRegistry.Resolve(family);
-        if (resolved != null && File.Exists(resolved.Value.FilePath))
+        var registered = FontRegistry.Resolve(family)?.SelectFace(weight, italic).FilePath;
+        if (registered != null && File.Exists(registered))
         {
-            return resolved.Value.FilePath;
+            return registered;
         }
 
 

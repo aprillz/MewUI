@@ -81,18 +81,19 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, ITextBackendFactory, 
         }
 
         family = GdiFont.SelectFamilyCandidate(family);
-        family = ResolveFontFamilyOrFile(family);
+        family = ResolveFontFamilyOrFile(family, weight, italic);
         return new GdiFont(family, size, weight, italic, underline, strikethrough, dpi);
     }
 
-    private static string ResolveFontFamilyOrFile(string familyOrPath)
+    private static string ResolveFontFamilyOrFile(string familyOrPath, FontWeight weight, bool italic)
     {
-        // 1. Check FontRegistry (registered via FontResources.Register)
+        // 1. Check FontRegistry (registered via FontResources.Register); GDI names one face, so pick it here.
         var resolved = FontRegistry.Resolve(familyOrPath);
         if (resolved != null)
         {
-            _ = Win32Fonts.EnsurePrivateFont(resolved.Value.FilePath);
-            return GdiFamilyName(resolved.Value.FilePath, resolved.Value.FamilyName);
+            var face = resolved.Value.SelectFace(weight, italic);
+            _ = Win32Fonts.EnsurePrivateFont(face.FilePath);
+            return GdiFamilyName(face.FilePath, resolved.Value.FamilyName);
         }
 
         // 2. Legacy: file path directly in FontFamily
