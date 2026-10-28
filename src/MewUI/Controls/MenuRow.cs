@@ -265,13 +265,5 @@ internal sealed class MenuRow : Control, IVisualTreeHost
         }
     }
 
-    protected override void RenderSubtree(IGraphicsContext context) => _icon?.Render(context);
-
-    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
-    {
-        builder.Content(0);
-        builder.Child(_icon);
-    }
-
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor) => _icon == null || visitor(_icon);
 }

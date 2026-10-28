@@ -1,5 +1,3 @@
-using Aprillz.MewUI.Rendering;
-
 namespace Aprillz.MewUI.Controls;
 
 /// <summary>
@@ -179,49 +177,8 @@ public abstract class Panel : FrameworkElement
     /// </summary>
     protected virtual void OnChildRemoved(Element child) { }
 
-    protected override void RenderSubtree(IGraphicsContext context)
-    {
-        if (ClipToBounds)
-        {
-            context.Save();
-            context.SetClip(Bounds);
-        }
-        try
-        {
-            foreach (var child in _children)
-            {
-                child.Render(context);
-            }
-        }
-        finally
-        {
-            if (ClipToBounds)
-            {
-                context.Restore();
-            }
-        }
-    }
-
-    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
-    {
-        builder.Content(0);
-
-        bool clipToBounds = ClipToBounds;
-        if (clipToBounds)
-        {
-            builder.PushClipRect(Bounds);
-        }
-
-        foreach (var child in _children)
-        {
-            builder.Child(child);
-        }
-
-        if (clipToBounds)
-        {
-            builder.Pop();
-        }
-    }
+    protected override ChildClip? GetChildClip(UIElement child)
+        => ClipToBounds ? new ChildClip(Bounds) : null;
 
     protected override UIElement? OnHitTest(Point point)
     {

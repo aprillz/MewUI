@@ -304,55 +304,6 @@ public sealed partial class ToolBar
             }
         }
 
-        internal void Render(IGraphicsContext context)
-        {
-            if (IsHidden)
-            {
-                return;
-            }
-
-            Plate.Render(context);
-            if (Grip.Bounds.Width > 0)
-            {
-                Grip.Render(context);
-            }
-
-            for (int i = 0; i < VisibleEntryCount; i++)
-            {
-                _entries[i].Render(context);
-            }
-
-            if (IsTruncated)
-            {
-                _overflowButton!.Render(context);
-            }
-        }
-
-        /// <summary>Declares what <see cref="Render"/> draws, in the same order.</summary>
-        internal void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
-        {
-            if (IsHidden)
-            {
-                return;
-            }
-
-            builder.Child(Plate);
-            if (Grip.Bounds.Width > 0)
-            {
-                builder.Child(Grip);
-            }
-
-            for (int index = 0; index < VisibleEntryCount; index++)
-            {
-                builder.Child(_entries[index]);
-            }
-
-            if (IsTruncated)
-            {
-                builder.Child(_overflowButton);
-            }
-        }
-
         internal UIElement? HitTest(Point point)
         {
             if (IsHidden)
@@ -381,9 +332,10 @@ public sealed partial class ToolBar
             return null;
         }
 
+        /// <summary>Visits the parts in drawing order: the plate, the grip, the entries and the overflow button over them.</summary>
         internal bool VisitChildren(Func<Element, bool> visitor)
         {
-            if (!visitor(Plate) || !visitor(Grip) || !visitor(_overflowButton!))
+            if (!visitor(Plate) || !visitor(Grip))
             {
                 return false;
             }
@@ -396,7 +348,7 @@ public sealed partial class ToolBar
                 }
             }
 
-            return true;
+            return visitor(_overflowButton!);
         }
     }
 
@@ -663,33 +615,6 @@ public sealed partial class ToolBar
         }
 
         private ulong _openedHiddenMask;
-
-        internal void Render(IGraphicsContext context)
-        {
-            foreach (var group in _groups)
-            {
-                group.Render(context);
-            }
-
-            if (IsOverflowing)
-            {
-                _overflow!.Render(context);
-            }
-        }
-
-        /// <summary>Declares what <see cref="Render"/> draws, in the same order.</summary>
-        internal void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
-        {
-            foreach (var group in _groups)
-            {
-                group.WriteComposition(builder);
-            }
-
-            if (IsOverflowing)
-            {
-                builder.Child(_overflow);
-            }
-        }
 
         internal UIElement? HitTest(Point point)
         {

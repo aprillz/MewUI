@@ -114,17 +114,6 @@ internal sealed class PopupChrome : FrameworkElement, IVisualTreeHost
             Color.FromArgb(alpha, 0, 0, 0));
     }
 
-    protected override void RenderSubtree(IGraphicsContext context)
-    {
-        _child.Render(context);
-    }
-
-    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
-    {
-        builder.Content(0);
-        builder.Child(_child);
-    }
-
     protected override UIElement? OnHitTest(Point point)
     {
         if (!IsVisible || !IsHitTestVisible || !IsEffectivelyEnabled)

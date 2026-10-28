@@ -239,7 +239,7 @@ public sealed class TransformDecoratorTests
         using var scene = new RenderScene();
         RenderSurface(factory, context => capture.Capture(scene, root, context));
         Assert.AreEqual(0, scene.Statistics.RejectedSlotCount);
-        Assert.IsFalse(scene.FindNode(root)!.Plan.IsUnsupported, "the decorator must declare its composition");
+        Assert.IsNotNull(scene.FindNode(leaf), "the child under the transform is a node of its own");
         int firstPassRecords = scene.Statistics.ContentRecordCount;
         scene.Statistics.Reset();
 
@@ -273,7 +273,7 @@ public sealed class TransformDecoratorTests
     private static CompositionPlan Plan(UIElement element)
     {
         var builder = new CompositionPlanBuilder();
-        element.WriteComposition(builder);
+        element.WritePlan(builder);
         return builder.Build();
     }
 

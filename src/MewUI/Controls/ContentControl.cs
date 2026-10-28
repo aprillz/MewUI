@@ -1,5 +1,3 @@
-using Aprillz.MewUI.Rendering;
-
 namespace Aprillz.MewUI.Controls;
 
 /// <summary>
@@ -227,29 +225,6 @@ public class ContentControl : Control
 
         var contentBounds = bounds.Deflate(Padding).Deflate(GetBorderVisualInset());
         displayed.Arrange(contentBounds);
-    }
-
-    protected override void RenderSubtree(IGraphicsContext context)
-    {
-        if (HasTemplateInstance)
-        {
-            base.RenderSubtree(context);
-            return;
-        }
-
-        EffectiveContent?.Render(context);
-    }
-
-    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
-    {
-        if (HasTemplateInstance)
-        {
-            base.WriteComposition(builder);
-            return;
-        }
-
-        builder.Content(0);
-        builder.Child(EffectiveContent);
     }
 
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)

@@ -205,6 +205,9 @@ internal static class FrameRenderer
                 }
 
                 break;
+            case CompositionEntryKind.Alpha:
+                context.GlobalAlpha *= (float)entry.Alpha;
+                break;
             default:
                 throw new InvalidOperationException($"The composition entry {entry.Kind} is not a scope.");
         }
@@ -233,7 +236,7 @@ internal static class FrameRenderer
         }
         else
         {
-            node.Element.WriteOwnContent(context, slotIndex);
+            node.Element.RenderOwnSlot(context, slotIndex);
         }
 
         scene.Statistics.LiveFallbackCount++;

@@ -594,14 +594,13 @@ public abstract partial class UIElement : Element
         // OnRender opens with an opaque fill, so everything after it - text above all - lands on
         // pixels the backend knows, which is what subpixel antialiasing needs on a surface that
         // carries per-pixel alpha (a popup). The scope has to start before OnRender: controls
-        // such as ContextMenu and ListBox draw their own text there rather than in the subtree.
+        // such as ContextMenu and ListBox draw their own text there rather than in a child.
         if (this is Control { Background.A: 255 })
         {
             OpaqueBackdropScope.Begin(context, Bounds);
             try
             {
-                OnRender(context);
-                RenderSubtree(context);
+                RenderContentAndChildren(context);
             }
             finally
             {
@@ -610,8 +609,7 @@ public abstract partial class UIElement : Element
         }
         else
         {
-            OnRender(context);
-            RenderSubtree(context);
+            RenderContentAndChildren(context);
         }
     }
 
@@ -668,12 +666,6 @@ public abstract partial class UIElement : Element
     protected override void OnRender(IGraphicsContext context) { }
 
     /// <summary>
-    /// Renders child elements and internal visual parts (content, chrome, scrollbars, etc.).
-    /// Called after <see cref="OnRender"/>.
-    /// </summary>
-    protected virtual void RenderSubtree(IGraphicsContext context) { }
-
-    /// <summary>
     /// Performs hit testing to find the element at the specified point.
     /// </summary>
     /// <param name="point">The point in window coordinates, the space of <see cref="Element.Bounds"/>.</param>
@@ -695,24 +687,10 @@ public abstract partial class UIElement : Element
             return null;
         }
 
-        // VisitChildren yields participating children topmost-first, so the first hit wins;
-        // hosts whose yield order is not front-to-back keep their own override.
-        if (this is IVisualTreeHost host)
+        // VisitChildren yields the drawn children in drawing order, so the last one drawn is probed first.
+        if (this is IVisualTreeHost host && HitTestChildren(host, point) is UIElement childHit)
         {
-            UIElement? childHit = null;
-            host.VisitChildren(child =>
-            {
-                if (child is UIElement childElement && childElement.HitTest(point) is UIElement hit)
-                {
-                    childHit = hit;
-                    return false;
-                }
-                return true;
-            });
-            if (childHit != null)
-            {
-                return childHit;
-            }
+            return childHit;
         }
 
         return this;

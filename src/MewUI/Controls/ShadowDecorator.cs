@@ -118,17 +118,6 @@ public sealed class ShadowDecorator : FrameworkElement, IVisualTreeHost
         context.DrawBoxShadow(cb, radius, blur, color, offsetY: oy);
     }
 
-    protected override void RenderSubtree(IGraphicsContext context)
-    {
-        Child?.Render(context);
-    }
-
-    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
-    {
-        builder.Content(0);
-        builder.Child(Child);
-    }
-
     protected override UIElement? OnHitTest(Point point)
     {
         if (!IsVisible || !IsHitTestVisible || !IsEffectivelyEnabled) return null;
@@ -136,5 +125,5 @@ public sealed class ShadowDecorator : FrameworkElement, IVisualTreeHost
     }
 
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
-        => Child != null && visitor(Child);
+        => Child == null || visitor(Child);
 }

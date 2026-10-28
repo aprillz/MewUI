@@ -18,11 +18,6 @@ internal static class PlanChange
         removed.Clear();
         var oldEntries = oldPlan.Entries;
         var newEntries = newPlan.Entries;
-        if (oldPlan.IsUnsupported != newPlan.IsUnsupported)
-        {
-            return false;
-        }
-
         if (!Walk(oldEntries, 0, oldEntries.Length, newEntries, 0, newEntries.Length, removed))
         {
             return false;
@@ -119,5 +114,6 @@ internal static class PlanChange
            first.Rect == second.Rect &&
            first.RadiusX == second.RadiusX &&
            first.RadiusY == second.RadiusY &&
-           first.Matrix == second.Matrix;
+           first.Matrix == second.Matrix &&
+           first.Alpha == second.Alpha;
 }

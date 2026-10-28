@@ -1,5 +1,3 @@
-using Aprillz.MewUI.Rendering;
-
 namespace Aprillz.MewUI.Controls;
 
 /// <summary>
@@ -147,19 +145,6 @@ public partial class Label : Control, IVisualTreeHost
         }
 
         _accessText.Arrange(bounds.Deflate(Padding));
-    }
-
-    protected override void OnRender(IGraphicsContext context)
-    {
-        base.OnRender(context);
-
-        // A template owns the control's entire visuals; the access text would draw over it.
-        if (HasTemplateInstance || string.IsNullOrEmpty(Text))
-        {
-            return;
-        }
-
-        _accessText.Render(context);
     }
 
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)

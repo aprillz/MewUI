@@ -77,7 +77,6 @@ public abstract partial class DropDownBase : PopupOwnerBase
         if (!HasTemplateInstance)
         {
             var bounds = GetSnappedBorderBounds(Bounds);
-            var borderInset = GetBorderVisualInset();
             double radius = CornerRadiusDip;
 
             DrawBackgroundAndBorder(
@@ -88,9 +87,7 @@ public abstract partial class DropDownBase : PopupOwnerBase
                 BorderThickness,
                 radius);
 
-            var headerHeight = ResolveAnchorHeight();
-            var headerRect = new Rect(bounds.X, bounds.Y, bounds.Width, headerHeight);
-            var innerHeaderRect = headerRect.Deflate(new Thickness(borderInset));
+            var (headerRect, innerHeaderRect) = GetHeaderRects(bounds);
 
             ArrowForeground = Foreground;
             var profiler = PerformanceProfiler.Instance;
@@ -98,12 +95,29 @@ public abstract partial class DropDownBase : PopupOwnerBase
             {
                 RenderHeaderContent(context, headerRect, innerHeaderRect);
             }
-
-            DrawArrow(context, innerHeaderRect, ArrowForeground, IsDropDownOpen);
         }
 
         // Popup bounds update lives on PopupOwnerBase.
         base.OnRender(context);
+    }
+
+    /// <summary>Draws the arrow over the header after the children, in the colour <see cref="RenderHeaderContent"/> chose this pass.</summary>
+    protected override void OnRenderOverlay(IGraphicsContext context)
+    {
+        if (HasTemplateInstance)
+        {
+            return;
+        }
+
+        var (_, innerHeaderRect) = GetHeaderRects(GetSnappedBorderBounds(Bounds));
+        DrawArrow(context, innerHeaderRect, ArrowForeground, IsDropDownOpen);
+    }
+
+    /// <summary>The header row of the snapped border bounds, and the same row inside the border.</summary>
+    private (Rect Header, Rect InnerHeader) GetHeaderRects(Rect bounds)
+    {
+        var headerRect = new Rect(bounds.X, bounds.Y, bounds.Width, ResolveAnchorHeight());
+        return (headerRect, headerRect.Deflate(new Thickness(GetBorderVisualInset())));
     }
 
     private void DrawArrow(IGraphicsContext context, Rect headerRect, Color color, bool isUp)

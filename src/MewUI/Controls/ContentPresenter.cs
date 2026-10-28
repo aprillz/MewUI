@@ -1,5 +1,3 @@
-using Aprillz.MewUI.Rendering;
-
 namespace Aprillz.MewUI.Controls;
 
 /// <summary>
@@ -108,18 +106,6 @@ public sealed class ContentPresenter : FrameworkElement, IVisualTreeHost
     {
         var projected = ActiveProjection;
         projected?.Arrange(bounds);
-    }
-
-    protected override void RenderSubtree(IGraphicsContext context)
-    {
-        var projected = ActiveProjection;
-        projected?.Render(context);
-    }
-
-    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
-    {
-        builder.Content(0);
-        builder.Child(ActiveProjection);
     }
 
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)

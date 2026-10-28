@@ -269,6 +269,12 @@ public sealed partial class ComboBox : DropDownBase, ISelector, IIndexedSelector
         BindHeaderView();
         InvalidateVisual();
 
+        // The header view is measured and placed only while an item is selected, so the selection decides its layout.
+        if (_headerView != null)
+        {
+            InvalidateMeasure();
+        }
+
         if (_popupList != null)
         {
             _popupList.SelectedIndex = index;
@@ -376,11 +382,16 @@ public sealed partial class ComboBox : DropDownBase, ISelector, IIndexedSelector
     {
         base.ArrangeContent(bounds);
 
+        // Without a selection the view is unbound and not drawn, which the layout states by giving it no area.
         if (_headerView != null && !HasTemplateInstance)
         {
-            _headerView.Arrange(GetHeaderContentRect(bounds));
+            _headerView.Arrange(HasSelectedItem ? GetHeaderContentRect(bounds) : Rect.Empty);
         }
     }
+
+    /// <summary>The header view is clipped to the text area it presents the selection in; a template root is not.</summary>
+    protected override ChildClip? GetChildClip(UIElement child)
+        => ReferenceEquals(child, _headerView) ? new ChildClip(GetHeaderContentRect(Bounds)) : null;
 
     protected override Size MeasureHeader(Size availableSize)
     {
@@ -426,42 +437,30 @@ public sealed partial class ComboBox : DropDownBase, ISelector, IIndexedSelector
 
     protected override void RenderHeaderContent(IGraphicsContext context, Rect headerRect, Rect innerHeaderRect)
     {
-        var textRect = new Rect(innerHeaderRect.X, innerHeaderRect.Y, innerHeaderRect.Width - ArrowAreaWidth, innerHeaderRect.Height)
-            .Deflate(Padding);
-
+        // A selected item is presented by the header view, which is drawn as a child between the chrome and the arrow.
         if (_headerView != null && HasSelectedItem)
         {
-            // Rendered here rather than through RenderSubtree so it sits between the chrome and the arrow.
-            context.Save();
-            try
-            {
-                context.IntersectClip(textRect);
-                _headerView.Render(context);
-            }
-            finally
-            {
-                context.Restore();
-            }
+            return;
         }
-        else
-        {
-            string text = SelectedText ?? string.Empty;
-            var state = CurrentVisualState;
-            var textColor = state.IsEnabled ? Foreground : Theme.Palette.DisabledText;
-            if (string.IsNullOrEmpty(text) && !string.IsNullOrEmpty(Placeholder) && !state.IsFocused)
-            {
-                text = Placeholder;
-                textColor = Theme.Palette.PlaceholderText;
-            }
 
-            if (!string.IsNullOrEmpty(text))
-            {
-                var style = GetTextRunStyle();
-                var layout = TextLayoutOperations.GetOrCreate(
-                    GetGraphicsFactory(), text, GetDpi(), in style, textRect.Width, textRect.Height);
-                TextLayoutOperations.DrawInBounds(
-                    context, layout, textRect, textColor, TextAlignment.Center, this);
-            }
+        var textRect = new Rect(innerHeaderRect.X, innerHeaderRect.Y, innerHeaderRect.Width - ArrowAreaWidth, innerHeaderRect.Height)
+            .Deflate(Padding);
+        string text = SelectedText ?? string.Empty;
+        var state = CurrentVisualState;
+        var textColor = state.IsEnabled ? Foreground : Theme.Palette.DisabledText;
+        if (string.IsNullOrEmpty(text) && !string.IsNullOrEmpty(Placeholder) && !state.IsFocused)
+        {
+            text = Placeholder;
+            textColor = Theme.Palette.PlaceholderText;
+        }
+
+        if (!string.IsNullOrEmpty(text))
+        {
+            var style = GetTextRunStyle();
+            var layout = TextLayoutOperations.GetOrCreate(
+                GetGraphicsFactory(), text, GetDpi(), in style, textRect.Width, textRect.Height);
+            TextLayoutOperations.DrawInBounds(
+                context, layout, textRect, textColor, TextAlignment.Center, this);
         }
     }
 

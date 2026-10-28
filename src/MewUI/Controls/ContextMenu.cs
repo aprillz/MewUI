@@ -1496,40 +1496,20 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
         return LayoutRounding.MakeClipRect(contentBounds, GetDpi() / 96.0);
     }
 
-    protected override void RenderSubtree(IGraphicsContext context)
+    protected override ChildClip? GetChildClip(UIElement child)
     {
+        // A viewport without area shows neither rows nor bar; otherwise the bar draws over the rows unclipped.
         if (GetRowClip() is not Rect clip)
         {
-            return;
+            return new ChildClip(Rect.Empty);
         }
 
-        context.Save();
-        context.SetClip(clip);
-        foreach (var row in _rows.Values)
+        if (ReferenceEquals(child, _vBar))
         {
-            row.Render(context);
+            return null;
         }
 
-        context.Restore();
-        _vBar.Render(context);
-    }
-
-    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
-    {
-        builder.Content(0);
-        if (GetRowClip() is not Rect clip)
-        {
-            return;
-        }
-
-        builder.PushClipRect(clip);
-        foreach (var row in _rows.Values)
-        {
-            builder.Child(row);
-        }
-
-        builder.Pop();
-        builder.Child(_vBar);
+        return new ChildClip(clip);
     }
 
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)

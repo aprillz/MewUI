@@ -379,18 +379,6 @@ internal sealed class BusyIndicatorPresenter : Control, IVisualTreeHost
         _child.Arrange(bounds);
     }
 
-    protected override void RenderSubtree(IGraphicsContext context)
-    {
-        base.RenderSubtree(context);
-        _child.Render(context);
-    }
-
-    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
-    {
-        builder.Content(0);
-        builder.Child(_child);
-    }
-
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor) => visitor(_child);
 
     internal void UpdateMessage(string message)

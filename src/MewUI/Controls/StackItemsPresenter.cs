@@ -1,5 +1,3 @@
-using Aprillz.MewUI.Rendering;
-
 namespace Aprillz.MewUI.Controls;
 
 /// <summary>
@@ -13,7 +11,6 @@ internal sealed class StackItemsPresenter : Control, IItemsPresenter
     private readonly TemplateContextTable _contexts = new();
     private readonly Dictionary<FrameworkElement, uint> _itemBindingGenerations = new();
     private readonly List<double> _measuredHeights = new();
-    private readonly List<int> _arrangedItems = new();
 
     private IItemsView _itemsSource = ItemsView.Empty;
     private IDataTemplate _itemTemplate;
@@ -344,8 +341,6 @@ internal sealed class StackItemsPresenter : Control, IItemsPresenter
 
     protected override void ArrangeContent(Rect bounds)
     {
-        _arrangedItems.Clear();
-
         int count = _containers.Count;
         if (count == 0)
         {
@@ -424,38 +419,8 @@ internal sealed class StackItemsPresenter : Control, IItemsPresenter
 
             var container = _containers[i];
             container.Arrange(containerRect);
-            _arrangedItems.Add(i);
 
             y += snappedH;
-        }
-    }
-
-    protected override void OnRender(IGraphicsContext context)
-    {
-        for (int i = 0; i < _arrangedItems.Count; i++)
-        {
-            int index = _arrangedItems[i];
-            if (index >= _containers.Count)
-            {
-                continue;
-            }
-
-            _containers[index].Render(context);
-        }
-    }
-
-    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
-    {
-        // No own content slot: OnRender draws only the arranged containers.
-        for (int ordinal = 0; ordinal < _arrangedItems.Count; ordinal++)
-        {
-            int index = _arrangedItems[ordinal];
-            if (index >= _containers.Count)
-            {
-                continue;
-            }
-
-            builder.Child(_containers[index]);
         }
     }
 

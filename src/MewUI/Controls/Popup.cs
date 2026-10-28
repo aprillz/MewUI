@@ -1,5 +1,3 @@
-using Aprillz.MewUI.Rendering;
-
 namespace Aprillz.MewUI.Controls;
 
 /// <summary>
@@ -225,14 +223,6 @@ public class Popup : FrameworkElement, IVisualTreeHost, ILogicalTreeHost
     }
 
     protected override void ArrangeContent(Rect bounds) => Content?.Arrange(bounds);
-
-    protected override void RenderSubtree(IGraphicsContext context) => Content?.Render(context);
-
-    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
-    {
-        builder.Content(0);
-        builder.Child(Content);
-    }
 
     protected override UIElement? OnHitTest(Point point)
     {

@@ -276,57 +276,15 @@ public sealed partial class Calendar : Control, IVisualTreeHost
         DrawBackgroundAndBorder(context, Bounds, Background, BorderBrush, BorderThickness, Math.Max(0, CornerRadius));
     }
 
-    private const int GRID_SLOT = 1;
-
-    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
+    protected override void OnRenderOverlay(IGraphicsContext context)
     {
-        builder.Content(0);
-        builder.Child(_prevButton);
-        builder.Child(_headerButton);
-        builder.Child(_nextButton);
-        builder.Content(GRID_SLOT);
-    }
-
-    internal override void WriteOwnContent(IGraphicsContext context, int slotIndex)
-    {
-        if (slotIndex == GRID_SLOT)
-        {
-            ComputeCellRects(GetInnerBounds());
-            RenderGrid(context);
-        }
-        else
-        {
-            base.WriteOwnContent(context, slotIndex);
-        }
+        // The mode may change between arrange and render, and the cell rects follow the mode.
+        ComputeCellRects(GetInnerBounds());
+        RenderGrid(context);
     }
 
     private void RenderGrid(IGraphicsContext context)
     {
-        switch (DisplayMode)
-        {
-            case CalendarMode.Month:
-                RenderMonthView(context);
-                break;
-            case CalendarMode.Year:
-                RenderYearView(context);
-                break;
-            case CalendarMode.Decade:
-                RenderDecadeView(context);
-                break;
-        }
-    }
-
-    protected override void RenderSubtree(IGraphicsContext context)
-    {
-        // Ensure cell rects match current display mode (mode may change between Arrange and Render).
-        ComputeCellRects(GetInnerBounds());
-
-        // Render header buttons
-        _prevButton.Render(context);
-        _headerButton.Render(context);
-        _nextButton.Render(context);
-
-        // Render grid
         switch (DisplayMode)
         {
             case CalendarMode.Month:
@@ -917,7 +875,7 @@ public sealed partial class Calendar : Control, IVisualTreeHost
     #endregion
 
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
-        => visitor(_prevButton) && visitor(_nextButton) && visitor(_headerButton);
+        => visitor(_prevButton) && visitor(_headerButton) && visitor(_nextButton);
 }
 
 /// <summary>

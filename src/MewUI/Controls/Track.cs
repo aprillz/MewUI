@@ -1,5 +1,3 @@
-using Aprillz.MewUI.Rendering;
-
 namespace Aprillz.MewUI.Controls;
 
 /// <summary>
@@ -205,23 +203,6 @@ public sealed class Track : FrameworkElement, IVisualTreeHost
         if (Thumb != null)
         {
             yield return Thumb;
-        }
-    }
-
-    protected override void RenderSubtree(IGraphicsContext context)
-    {
-        foreach (var slot in Slots())
-        {
-            slot.Render(context);
-        }
-    }
-
-    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
-    {
-        builder.Content(0);
-        foreach (var slot in Slots())
-        {
-            builder.Child(slot);
         }
     }
 

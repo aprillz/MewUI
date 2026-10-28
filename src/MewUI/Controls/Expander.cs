@@ -194,37 +194,6 @@ public partial class Expander : HeaderedContentControl, IVisualTreeHost
         Content.Arrange(new Rect(inner.X, y, inner.Width, Math.Max(0, inner.Bottom - y)));
     }
 
-    protected override void RenderSubtree(IGraphicsContext context)
-    {
-        if (HasTemplateInstance)
-        {
-            base.RenderSubtree(context);
-            return;
-        }
-
-        Header?.Render(context);
-        if (IsExpanded)
-        {
-            Content?.Render(context);
-        }
-    }
-
-    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
-    {
-        if (HasTemplateInstance)
-        {
-            base.WriteComposition(builder);
-            return;
-        }
-
-        builder.Content(0);
-        builder.Child(Header);
-        if (IsExpanded)
-        {
-            builder.Child(Content);
-        }
-    }
-
     protected override void OnRender(IGraphicsContext context)
     {
         if (HasTemplateInstance)

@@ -1044,11 +1044,14 @@ public abstract partial class Element : MewObject
     /// Gets the transform this element applies to its children when drawing them, mapping window coordinates
     /// before the transform to window coordinates after it; false when the children are drawn untransformed.
     /// </summary>
-    internal virtual bool TryGetChildTransform(out System.Numerics.Matrix3x2 transform)
+    protected virtual bool TryGetChildTransform(out System.Numerics.Matrix3x2 transform)
     {
         transform = System.Numerics.Matrix3x2.Identity;
         return false;
     }
+
+    /// <summary>The child transform as seen by the framework; same answer as <see cref="TryGetChildTransform"/>.</summary>
+    internal bool GetChildTransform(out System.Numerics.Matrix3x2 transform) => TryGetChildTransform(out transform);
 
     private static GeneralTransform CreateTransform(Element source, Element target, Element common)
     {

@@ -386,30 +386,16 @@ public abstract class SegmentedBase : Control, IVisualTreeHost
         var bounds = GetSnappedBorderBounds(Bounds);
         DrawBackgroundAndBorder(context, bounds, GetValue(BackgroundProperty), GetValue(BorderBrushProperty),
             BorderThickness, CornerRadius);
-
-        // The strip paints its segments over the container background and its dividers on top of them.
-        _panel.Render(context);
     }
 
-    protected override void RenderSubtree(IGraphicsContext context)
+    protected override void OnMewPropertyChanged(MewProperty property)
     {
-        if (HasTemplateInstance)
-        {
-            base.RenderSubtree(context);
-        }
+        base.OnMewPropertyChanged(property);
 
-        // Without a template the strip is rendered inside OnRender, under the same recording as the frame.
-    }
-
-    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
-    {
-        if (HasTemplateInstance)
+        // The segment radius is handed out when the strip arranges, and CornerRadius alone only repaints.
+        if (property.Id == CornerRadiusProperty.Id)
         {
-            base.WriteComposition(builder);
-        }
-        else
-        {
-            builder.Content(0);
+            _panel.InvalidateArrange();
         }
     }
 

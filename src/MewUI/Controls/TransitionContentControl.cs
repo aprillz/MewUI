@@ -1,3 +1,5 @@
+using System.Numerics;
+
 using Aprillz.MewUI.Animation;
 using Aprillz.MewUI.Rendering;
 
@@ -9,14 +11,22 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public class TransitionContentControl : Control, IVisualTreeHost
 {
-    private Element? _currentContent;
-    private Element? _oldContent;
+    private readonly TransitionSlot _exitSlot;
+    private readonly TransitionSlot _enterSlot;
     private AnimationClock? _delayClock;
     private AnimationClock? _clock;
     private double _progress = 1.0;
     // Starting alpha of the outgoing layer: 1.0 normally, but lower when a crossfade was interrupted so
     // the carried-out content continues from its current (partial) alpha instead of snapping to opaque.
     private double _oldContentAlpha = 1.0;
+
+    public TransitionContentControl()
+    {
+        _exitSlot = new TransitionSlot();
+        _enterSlot = new TransitionSlot();
+        AttachChild(_exitSlot);
+        AttachChild(_enterSlot);
+    }
 
     /// <summary>
     /// Gets or sets the transition applied when content changes.
@@ -29,16 +39,16 @@ public class TransitionContentControl : Control, IVisualTreeHost
     /// </summary>
     public double ContentOpacity =>
         _progress >= 1.0
-            ? (_currentContent != null ? 1.0 : 0.0)
-            : (_currentContent != null ? _progress : 1.0 - _progress);
+            ? (_enterSlot.Child != null ? 1.0 : 0.0)
+            : (_enterSlot.Child != null ? _progress : 1.0 - _progress);
 
     /// <summary>Gets or sets the content element; changing it plays the configured transition.</summary>
     public Element? Content
     {
-        get => _currentContent;
+        get => _enterSlot.Child;
         set
         {
-            if (ReferenceEquals(_currentContent, value))
+            if (ReferenceEquals(_enterSlot.Child, value))
             {
                 return;
             }
@@ -53,24 +63,14 @@ public class TransitionContentControl : Control, IVisualTreeHost
             _delayClock = null;
             _clock?.Stop();
             _clock = null;
-            if (_oldContent != null)
-            {
-                _oldContent.Parent = null;
-                _oldContent = null;
-            }
-
-            var oldContent = _currentContent;
-            _currentContent = value;
-
-            if (_currentContent != null)
-            {
-                _currentContent.Parent = this;
-            }
 
             // At least one of old/new is non-null here (an identical no-op set returned early above), so
             // there is always something to animate: exit old (if any) from carryAlpha, enter new (if any).
             // Content→null = exit-only fade-out; null→Content = enter-only fade-in.
-            _oldContent = oldContent;
+            var outgoing = _enterSlot.Child;
+            _enterSlot.Child = null;
+            _exitSlot.Child = outgoing;
+            _enterSlot.Child = value;
             _oldContentAlpha = carryAlpha;
             StartTransition();
 
@@ -88,6 +88,7 @@ public class TransitionContentControl : Control, IVisualTreeHost
         }
 
         _progress = 0.0;
+        ApplyProgress();
 
         if (transition.Delay > TimeSpan.Zero)
         {
@@ -120,7 +121,7 @@ public class TransitionContentControl : Control, IVisualTreeHost
     private void OnTransitionTick(double progress)
     {
         _progress = progress;
-        InvalidateVisual();
+        ApplyProgress();
     }
 
     /// <summary>
@@ -138,14 +139,13 @@ public class TransitionContentControl : Control, IVisualTreeHost
         _progress = 1.0;
         _oldContentAlpha = 1.0;
 
-        if (_oldContent != null)
+        bool hadOldContent = _exitSlot.Child != null;
+        ApplyProgress();
+        if (hadOldContent)
         {
-            _oldContent.Parent = null;
-            _oldContent = null;
             InvalidateMeasure();
         }
 
-        InvalidateVisual();
         TransitionCompleted?.Invoke();
     }
 
@@ -157,12 +157,24 @@ public class TransitionContentControl : Control, IVisualTreeHost
         _clock = null;
         _progress = 1.0;
         _oldContentAlpha = 1.0;
+        ApplyProgress();
+    }
 
-        if (_oldContent != null)
+    /// <summary>Puts the two slots where the progress has them: at rest only the entering content, upright and opaque.</summary>
+    private void ApplyProgress()
+    {
+        var transition = Transition;
+        if (_progress >= 1.0 || transition.Kind == ContentTransitionKind.None)
         {
-            _oldContent.Parent = null;
-            _oldContent = null;
+            _exitSlot.Child = null;
+            _exitSlot.Set(Matrix3x2.Identity, 1.0);
+            _enterSlot.Set(Matrix3x2.Identity, 1.0);
+            return;
         }
+
+        var bounds = Bounds;
+        _exitSlot.Set(ExitTransform(transition, _progress, bounds), _oldContentAlpha * (1.0 - _progress));
+        _enterSlot.Set(EnterTransform(transition, _progress, bounds), _progress);
     }
 
     #region Layout
@@ -170,21 +182,16 @@ public class TransitionContentControl : Control, IVisualTreeHost
     protected override Size MeasureContent(Size availableSize)
     {
         var inner = availableSize.Deflate(Padding);
-        var desired = Size.Empty;
-
-        if (_currentContent != null)
-        {
-            _currentContent.Measure(inner);
-            desired = _currentContent.DesiredSize;
-        }
+        _enterSlot.Measure(inner);
+        var desired = _enterSlot.DesiredSize;
 
         // Old content needs measuring for rendering during transition.
-        if (_oldContent != null)
+        if (_exitSlot.Child != null)
         {
-            _oldContent.Measure(inner);
+            _exitSlot.Measure(inner);
 
             // Use the larger of old/new so neither gets clipped during transition.
-            var oldSize = _oldContent.DesiredSize;
+            var oldSize = _exitSlot.DesiredSize;
             desired = new Size(
                 Math.Max(desired.Width, oldSize.Width),
                 Math.Max(desired.Height, oldSize.Height));
@@ -196,177 +203,72 @@ public class TransitionContentControl : Control, IVisualTreeHost
     protected override void ArrangeContent(Rect bounds)
     {
         var inner = bounds.Deflate(Padding);
-        _currentContent?.Arrange(inner);
-        _oldContent?.Arrange(inner);
+        _enterSlot.Arrange(inner);
+        // An empty slot is laid out without area, so it is neither drawn nor hit.
+        _exitSlot.Arrange(_exitSlot.Child != null ? inner : Rect.Empty);
+        if (_progress < 1.0)
+        {
+            // The slide and scale transforms are taken about the bounds, which the arrange may have moved.
+            ApplyProgress();
+        }
     }
 
     #endregion
 
-    #region Rendering
+    #region Transforms
 
-    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
-    {
-        // At rest this shows its content and nothing else. While a transition runs, two contents are
-        // drawn under transforms and alphas that change every frame, which is drawn as one.
-        if (_progress >= 1.0 || Transition.Kind == ContentTransitionKind.None)
-        {
-            builder.Content(0);
-            builder.Child(_currentContent);
-        }
-        else
-        {
-            builder.DrawnAsOneForNow();
-        }
-    }
-
-    protected override void RenderSubtree(IGraphicsContext context)
-    {
-        var transition = Transition;
-        double p = _progress;
-
-        // No transition or completed - render current content only.
-        if (p >= 1.0 || transition.Kind == ContentTransitionKind.None)
-        {
-            _currentContent?.Render(context);
-            return;
-        }
-
-        // Old content - exit animation
-        if (_oldContent != null)
-        {
-            context.Save();
-            try
-            {
-                context.TextPixelSnap = false;
-                ApplyExitTransform(context, transition, p, Bounds);
-                context.GlobalAlpha *= (float)(_oldContentAlpha * (1.0 - p));
-                _oldContent.Render(context);
-            }
-            finally
-            {
-                context.Restore();
-            }
-        }
-
-        // New content - enter animation
-        if (_currentContent != null)
-        {
-            context.Save();
-            try
-            {
-                context.TextPixelSnap = false;
-                ApplyEnterTransform(context, transition, p, Bounds);
-                // Multiply (not assign) so the entering content respects any inherited opacity, matching the
-                // exiting branch above. Identical to a plain assign when GlobalAlpha is 1 (the common case).
-                context.GlobalAlpha *= (float)p;
-                _currentContent.Render(context);
-            }
-            finally
-            {
-                context.Restore();
-            }
-        }
-    }
-
-    private static void ApplyExitTransform(IGraphicsContext context, ContentTransition transition, double progress, Rect bounds)
+    private static Matrix3x2 ExitTransform(ContentTransition transition, double progress, Rect bounds)
     {
         switch (transition.Kind)
         {
             case ContentTransitionKind.Slide:
-            {
-                double offset = progress;
-                switch (transition.Direction)
-                {
-                    case SlideDirection.Left:
-                        context.Translate(-offset * bounds.Width, 0);
-                        break;
-                    case SlideDirection.Right:
-                        context.Translate(offset * bounds.Width, 0);
-                        break;
-                    case SlideDirection.Up:
-                        context.Translate(0, -offset * bounds.Height);
-                        break;
-                    case SlideDirection.Down:
-                        context.Translate(0, offset * bounds.Height);
-                        break;
-                }
-                break;
-            }
-
+                return SlideTransform(transition.Direction, progress, bounds);
             case ContentTransitionKind.Scale:
-            {
-                double scale = 1.0 - progress; // 1→0
-                double cx = bounds.X + bounds.Width * 0.5;
-                double cy = bounds.Y + bounds.Height * 0.5;
-                context.Translate(cx, cy);
-                context.Scale(scale, scale);
-                context.Translate(-cx, -cy);
-                break;
-            }
-
+                return AboutCenter(Matrix3x2.CreateScale((float)(1.0 - progress)), bounds);
             case ContentTransitionKind.Rotate:
             {
-                double angle = progress * Math.PI * 0.5; // 0→90°
-                double cx = bounds.X + bounds.Width * 0.5;
-                double cy = bounds.Y + bounds.Height * 0.5;
-                context.Translate(cx, cy);
-                context.Rotate(angle);
-                context.Scale(1.0 - progress, 1.0 - progress);
-                context.Translate(-cx, -cy);
-                break;
+                float angle = (float)(progress * Math.PI * 0.5);
+                float scale = (float)(1.0 - progress);
+                return AboutCenter(Matrix3x2.CreateRotation(angle) * Matrix3x2.CreateScale(scale), bounds);
             }
+            default:
+                return Matrix3x2.Identity;
         }
     }
 
-    private static void ApplyEnterTransform(IGraphicsContext context, ContentTransition transition, double progress, Rect bounds)
+    private static Matrix3x2 EnterTransform(ContentTransition transition, double progress, Rect bounds)
     {
         switch (transition.Kind)
         {
             case ContentTransitionKind.Slide:
-            {
-                double offset = 1.0 - progress;
-                switch (transition.Direction)
-                {
-                    case SlideDirection.Left:
-                        context.Translate(offset * bounds.Width, 0);
-                        break;
-                    case SlideDirection.Right:
-                        context.Translate(-offset * bounds.Width, 0);
-                        break;
-                    case SlideDirection.Up:
-                        context.Translate(0, offset * bounds.Height);
-                        break;
-                    case SlideDirection.Down:
-                        context.Translate(0, -offset * bounds.Height);
-                        break;
-                }
-                break;
-            }
-
+                return SlideTransform(transition.Direction, -(1.0 - progress), bounds);
             case ContentTransitionKind.Scale:
-            {
-                double scale = progress; // 0→1
-                double cx = bounds.X + bounds.Width * 0.5;
-                double cy = bounds.Y + bounds.Height * 0.5;
-                context.Translate(cx, cy);
-                context.Scale(scale, scale);
-                context.Translate(-cx, -cy);
-                break;
-            }
-
+                return AboutCenter(Matrix3x2.CreateScale((float)progress), bounds);
             case ContentTransitionKind.Rotate:
             {
-                double angle = -(1.0 - progress) * Math.PI * 0.5; // -90°→0
-                double cx = bounds.X + bounds.Width * 0.5;
-                double cy = bounds.Y + bounds.Height * 0.5;
-                context.Translate(cx, cy);
-                context.Rotate(angle);
-                context.Scale(progress, progress);
-                context.Translate(-cx, -cy);
-                break;
+                float angle = (float)(-(1.0 - progress) * Math.PI * 0.5);
+                return AboutCenter(Matrix3x2.CreateRotation(angle) * Matrix3x2.CreateScale((float)progress), bounds);
             }
+            default:
+                return Matrix3x2.Identity;
         }
     }
+
+    /// <summary>The slide offset for <paramref name="fraction"/> of the bounds along the direction; negative moves against it.</summary>
+    private static Matrix3x2 SlideTransform(SlideDirection direction, double fraction, Rect bounds)
+    {
+        return direction switch
+        {
+            SlideDirection.Left => Matrix3x2.CreateTranslation((float)(-fraction * bounds.Width), 0),
+            SlideDirection.Right => Matrix3x2.CreateTranslation((float)(fraction * bounds.Width), 0),
+            SlideDirection.Up => Matrix3x2.CreateTranslation(0, (float)(-fraction * bounds.Height)),
+            SlideDirection.Down => Matrix3x2.CreateTranslation(0, (float)(fraction * bounds.Height)),
+            _ => Matrix3x2.Identity,
+        };
+    }
+
+    private static Matrix3x2 AboutCenter(Matrix3x2 transform, Rect bounds)
+        => TransformHost.About(transform, bounds.X + bounds.Width * 0.5, bounds.Y + bounds.Height * 0.5);
 
     #endregion
 
@@ -380,7 +282,7 @@ public class TransitionContentControl : Control, IVisualTreeHost
         }
 
         // Only current content is interactive; old content is fading out.
-        if (_currentContent is UIElement uiContent)
+        if (_enterSlot.Child is UIElement uiContent)
         {
             var result = uiContent.HitTest(point);
             if (result != null)
@@ -395,30 +297,91 @@ public class TransitionContentControl : Control, IVisualTreeHost
     #endregion
 
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
-    {
-        if (_oldContent != null && !visitor(_oldContent))
-        {
-            return false;
-        }
-
-        if (_currentContent != null && !visitor(_currentContent))
-        {
-            return false;
-        }
-
-        return true;
-    }
+        => visitor(_exitSlot) && visitor(_enterSlot);
 
     protected override void OnDispose()
     {
         FinishTransition();
+        _enterSlot.Child = null;
+        base.OnDispose();
+    }
 
-        if (_currentContent != null)
+    /// <summary>
+    /// Holds one content under the transform and alpha of a running transition. Both are framework data, so
+    /// the content stays a scene node of its own while it animates.
+    /// </summary>
+    private sealed class TransitionSlot : FrameworkElement, IVisualTreeHost
+    {
+        private Element? _child;
+        private Matrix3x2 _transform = Matrix3x2.Identity;
+        private double _alpha = 1.0;
+
+        internal Element? Child
         {
-            _currentContent.Parent = null;
-            _currentContent = null;
+            get => _child;
+            set
+            {
+                if (ReferenceEquals(_child, value))
+                {
+                    return;
+                }
+
+                if (_child != null)
+                {
+                    DetachChild(_child);
+                }
+
+                _child = value;
+                if (_child != null)
+                {
+                    // Content handed over from another host moves here, as it did before the slots existed.
+                    _child.Parent = this;
+                }
+
+                InvalidateMeasure();
+            }
         }
 
-        base.OnDispose();
+        internal void Set(Matrix3x2 transform, double alpha)
+        {
+            alpha = Math.Clamp(alpha, 0, 1);
+            if (_transform != transform || _alpha != alpha)
+            {
+                _transform = transform;
+                _alpha = alpha;
+                InvalidateVisual();
+            }
+        }
+
+        protected override Size MeasureContent(Size availableSize)
+        {
+            if (_child == null)
+            {
+                return Size.Empty;
+            }
+
+            _child.Measure(availableSize);
+            return _child.DesiredSize;
+        }
+
+        protected override void ArrangeContent(Rect bounds) => _child?.Arrange(bounds);
+
+        protected override bool TryGetChildTransform(out Matrix3x2 transform)
+        {
+            transform = _transform;
+            return !_transform.IsIdentity;
+        }
+
+        // Each call fades on its own, as the transition drew before it had slots; a group would blend the content once.
+        internal override double ChildAlpha => _alpha;
+
+        // The content moves between pixels every tick; snapping its glyphs would make them jitter.
+        internal override bool KeepsTextPixelSnapUnderChildTransform(Matrix3x2 transform) => false;
+
+        protected override UIElement? OnHitTest(Point point)
+            => TransformHost.HitTest(this, _child as UIElement, _transform, point);
+
+        bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
+            => _child == null || visitor(_child);
     }
 }

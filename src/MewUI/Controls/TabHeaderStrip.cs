@@ -1,5 +1,3 @@
-using Aprillz.MewUI.Rendering;
-
 namespace Aprillz.MewUI.Controls;
 
 /// <summary>
@@ -18,14 +16,6 @@ internal sealed class TabHeaderStrip : FrameworkElement, IVisualTreeHost
     protected override Size MeasureContent(Size availableSize) => _owner.MeasureHeaderStrip(availableSize);
 
     protected override void ArrangeContent(Rect bounds) => _owner.ArrangeHeaderStrip(bounds);
-
-    protected override void RenderSubtree(IGraphicsContext context) => _owner.RenderHeaderStrip(context);
-
-    internal override void WriteComposition(Rendering.Retained.CompositionPlanBuilder builder)
-    {
-        builder.Content(0);
-        _owner.WriteHeaderStripComposition(builder);
-    }
 
     protected override UIElement? OnHitTest(Point point) => _owner.HitTestHeaderStrip(point);
 
