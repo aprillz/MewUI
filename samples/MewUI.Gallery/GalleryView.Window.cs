@@ -245,6 +245,7 @@ partial class GalleryView
                     )
             ),
 
+            ScreenWorkAreaCard(),
             AsyncCloseCard(),
             NativeMessageHookCard(),
 
@@ -308,6 +309,116 @@ partial class GalleryView
 
             PromptDialogCard()
         );
+    }
+
+    private FrameworkElement ScreenWorkAreaCard()
+    {
+        var hostStatus = new ObservableValue<string>("Work area: -");
+        var sampleStatus = new ObservableValue<string>("Sample: -");
+        Window? sample = null;
+
+        static string FormatPx(Rect rect)
+            => rect.Width <= 0 || rect.Height <= 0
+                ? "unknown"
+                : $"({rect.X:0}, {rect.Y:0}) {rect.Width:0} x {rect.Height:0} px";
+
+        void ShowHostWorkArea()
+        {
+            // ClientToScreen returns top-left, Y-down device pixels on every platform: the space of the work area.
+            var originPx = window.ClientToScreen(new Point(0, 0));
+            var workArea = ScreenHelper.GetWorkAreaForPoint(originPx);
+            hostStatus.Value = $"Client origin: ({originPx.X:0}, {originPx.Y:0}) px\nWork area: {FormatPx(workArea)}";
+        }
+
+        void OpenSample()
+        {
+            if (sample != null)
+            {
+                sample.Activate();
+                return;
+            }
+
+            var sampleWindow = new Window()
+                .Title("Pixel move sample")
+                .Resizable(280, 120)
+                .Padding(12)
+                .Content(
+                    new TextBlock()
+                        .TextWrapping(TextWrapping.Wrap)
+                        .Text("Moved with Window.MoveToScreenPixels to a corner of its monitor's work area."));
+            sampleWindow.Closed += () => sample = null;
+
+            sample = sampleWindow;
+            sampleWindow.Show(window);
+        }
+
+        void MoveSample(bool alignRight, bool alignBottom)
+        {
+            if (sample == null)
+            {
+                sampleStatus.Value = "Sample: open the sample window first";
+                return;
+            }
+
+            var clientOriginPx = sample.ClientToScreen(new Point(0, 0));
+            var clientEndPx = sample.ClientToScreen(new Point(sample.ClientSize.Width, sample.ClientSize.Height));
+            var centerPx = new Point((clientOriginPx.X + clientEndPx.X) / 2, (clientOriginPx.Y + clientEndPx.Y) / 2);
+            var workArea = ScreenHelper.GetWorkAreaForPoint(centerPx);
+            if (workArea.Width <= 0 || workArea.Height <= 0)
+            {
+                sampleStatus.Value = "Sample: this platform reports no work area";
+                return;
+            }
+
+            // The frame is measured from the outer top-left; the right and bottom edges are assumed as thick as the left.
+            var outerOriginPx = new Point(Math.Round(sample.Position.X * sample.DpiScale), Math.Round(sample.Position.Y * sample.DpiScale));
+            double frameSide = Math.Max(0, clientOriginPx.X - outerOriginPx.X);
+            double frameTop = Math.Max(0, clientOriginPx.Y - outerOriginPx.Y);
+            double outerWidth = clientEndPx.X - clientOriginPx.X + frameSide * 2;
+            double outerHeight = clientEndPx.Y - clientOriginPx.Y + frameTop + frameSide;
+
+            int leftPx = (int)Math.Round(alignRight ? workArea.Right - outerWidth : workArea.X);
+            int topPx = (int)Math.Round(alignBottom ? workArea.Bottom - outerHeight : workArea.Y);
+            sample.MoveToScreenPixels(leftPx, topPx);
+            sampleStatus.Value = $"Sample: moved to ({leftPx}, {topPx}) px\nWork area: {FormatPx(workArea)}";
+        }
+
+        return Card(
+            "Work Area + Pixel Move",
+            new StackPanel()
+                .Vertical()
+                .Spacing(8)
+                .Children(
+                    new TextBlock()
+                        .FontSize(ThemeFontSize.Small)
+                        .Text("ScreenHelper.GetWorkAreaForPoint returns the monitor work area\nin device pixels (origin top-left, Y down)."),
+                    new Button()
+                        .Content("Show work area of this window")
+                        .OnClick(ShowHostWorkArea),
+                    new TextBlock()
+                        .BindText(hostStatus)
+                        .FontSize(ThemeFontSize.Small),
+                    new Button()
+                        .Content("Open sample window")
+                        .OnClick(OpenSample),
+                    new WrapPanel()
+                        .Spacing(6)
+                        .Children(
+                            new Button()
+                                .Content("Top left")
+                                .OnClick(() => MoveSample(alignRight: false, alignBottom: false)),
+                            new Button()
+                                .Content("Top right")
+                                .OnClick(() => MoveSample(alignRight: true, alignBottom: false)),
+                            new Button()
+                                .Content("Bottom left")
+                                .OnClick(() => MoveSample(alignRight: false, alignBottom: true)),
+                            new Button()
+                                .Content("Bottom right")
+                                .OnClick(() => MoveSample(alignRight: true, alignBottom: true))),
+                    new TextBlock()
+                        .BindText(sampleStatus)
+                        .FontSize(ThemeFontSize.Small)));
     }
 
     private FrameworkElement AsyncCloseCard()

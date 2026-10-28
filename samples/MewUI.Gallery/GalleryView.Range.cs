@@ -76,6 +76,38 @@ partial class GalleryView
                         new Slider().Minimum(0).Maximum(100).Value(25),
                         new Slider().Minimum(0).Maximum(100).Value(25).Disable()
                     )
-            )
+            ),
+
+            VerticalSliderCard()
         );
+
+    private FrameworkElement VerticalSliderCard()
+    {
+        var value = new ObservableValue<double>(30);
+
+        return Card(
+            "Slider (Vertical)",
+            new StackPanel()
+                .Horizontal()
+                .Spacing(16)
+                .Children(
+                    new Slider()
+                        .Orientation(Orientation.Vertical)
+                        .Height(160)
+                        .Minimum(0)
+                        .Maximum(100)
+                        .BindValue(value),
+                    new Slider()
+                        .Orientation(Orientation.Vertical)
+                        .Height(160)
+                        .Minimum(0)
+                        .Maximum(100)
+                        .Value(25)
+                        .Disable(),
+                    new TextBlock()
+                        .BindText(value, current => $"Value: {current:0}\nMinimum is at the bottom.\nUp/Right and wheel up increase.")
+                        .FontSize(ThemeFontSize.Small)
+                        .CenterVertical()
+                ));
+    }
 }
