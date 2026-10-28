@@ -43,10 +43,20 @@ internal sealed class ExtendedBorderBar : FlexBorderBar
         base.RefreshNames();
     }
 
-    // The caption stays attached (and visited, so it follows the window it is in); a closed bar gives it no place and
-    // does not draw or hit-test it.
+    // The caption stays attached (and visited, so it follows the window it is in); a closed bar gives it no place, so
+    // the framework neither draws nor hit-tests it. It is visited last because it is drawn over the strip.
     protected override bool VisitChildrenCore(Func<Element, bool> visitor)
-        => visitor(_caption) && base.VisitChildrenCore(visitor);
+        => base.VisitChildrenCore(visitor) && visitor(_caption);
+
+    protected override void ArrangeContent(Rect bounds)
+    {
+        base.ArrangeContent(bounds);
+        // The base arranges the panel only while it has a size; a caption left where it was would still be drawn.
+        if (PanelSize <= 0)
+        {
+            _caption.Arrange(Rect.Empty);
+        }
+    }
 
     protected override void MeasurePanel(Size panelSize)
     {
@@ -122,15 +132,6 @@ internal sealed class ExtendedBorderBar : FlexBorderBar
             flags |= VisualStateFlags.Focused;
         }
         return new VisualState { Flags = flags };
-    }
-
-    protected override void RenderSubtree(IGraphicsContext context)
-    {
-        base.RenderSubtree(context);
-        if (Expanded)
-        {
-            _caption.Render(context);
-        }
     }
 
     protected override UIElement? OnHitTest(Point point)

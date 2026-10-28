@@ -41,7 +41,7 @@ internal sealed class FlexTabSetView : Control, IVisualTreeHost, INodeView, IPan
         tabSet.View = this;
 
         // The overflow dropdown: shown only when the tabs do not all fit; clicking it pops a menu of the hidden
-        // tabs. Created once and kept; hidden via the render/hit-test overrides (not IsVisible, which thrashes layout).
+        // tabs. Created once and kept; hidden by arranging it to an empty rect (not IsVisible, which thrashes layout).
         _overflowButton = new Button
         {
             Content = new GlyphElement { Kind = GlyphKind.ChevronDown },
@@ -421,6 +421,7 @@ internal sealed class FlexTabSetView : Control, IVisualTreeHost, INodeView, IPan
         InvalidateArrange(); // the active tab is always kept visible, which can change the overflow set
     }
 
+    // Drawing order: caption, tab buttons, then the right-aligned controls over the strip.
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
     {
         if (_toolCaption is not null && !visitor(_toolCaption))
@@ -555,7 +556,7 @@ internal sealed class FlexTabSetView : Control, IVisualTreeHost, INodeView, IPan
     }
 
     // Computes which tabs fit in availableForTabs; the leading run is shown and the active tab is always kept
-    // visible. Populates _hiddenTabs / _overflowActive for the render + hit-test overrides (port of golden-layout).
+    // visible. Populates _hiddenTabs / _overflowActive for the arrange and hit-test code (port of golden-layout).
     private List<FlexTabButton> ResolveVisibleTabs(double availableForTabs)
     {
         _hiddenTabs.Clear();
@@ -780,27 +781,5 @@ internal sealed class FlexTabSetView : Control, IVisualTreeHost, INodeView, IPan
         double edge = HeaderAtBottom ? body.Bottom : body.Y;
         var seam = new Rect(gapLeft, edge - thickness, gapRight - gapLeft, thickness * 2);
         context.FillRectangle(seam, background);
-    }
-
-    protected override void RenderSubtree(IGraphicsContext context)
-    {
-        _toolCaption?.Render(context);
-
-        if (ShowTabStrip)
-        {
-            foreach (var tab in _tabs)
-            {
-                if (!_hiddenTabs.Contains(tab))
-                {
-                    tab.Render(context);
-                }
-            }
-
-            _maximizeButton?.Render(context);
-            if (_overflowActive)
-            {
-                _overflowButton.Render(context);
-            }
-        }
     }
 }

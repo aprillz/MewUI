@@ -1,5 +1,4 @@
 using Aprillz.MewUI.Controls;
-using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Markdown;
 
@@ -457,14 +456,6 @@ internal sealed class MarkdownBlockHost : Control, IVisualTreeHost, ILogicalTree
             }
         }
         return low;
-    }
-
-    protected override void RenderSubtree(IGraphicsContext context)
-    {
-        foreach (int index in _realizedIndices)
-        {
-            _realized[index]!.Render(context);
-        }
     }
 
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
