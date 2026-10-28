@@ -1,0 +1,22 @@
+<Project>
+
+  <!--
+    Carried by Aprillz.MewUI.Backend.MewVG.Browser. The backend calls GL entry points the runtime
+    does not export on its own, so a browser app compiles the shim into its native runtime, and
+    draws with WebGL 2 with entry points resolved by name.
+  -->
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'browser-wasm'">
+    <NativeFileReference Include="$(MSBuildThisFileDirectory)native/mewui_webgl_shim.c" />
+  </ItemGroup>
+
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'browser-wasm'">
+    <EmccExtraLDFlags>$(EmccExtraLDFlags) -sMIN_WEBGL_VERSION=2 -sMAX_WEBGL_VERSION=2 -sGL_ENABLE_GET_PROC_ADDRESS=1</EmccExtraLDFlags>
+  </PropertyGroup>
+
+  <!-- Without the workload the SDK only warns and skips the native build, and the app fails at startup without the shim. -->
+  <Target Name="_MewUIRequireWasmTools" BeforeTargets="Build"
+          Condition="'$(RuntimeIdentifier)' == 'browser-wasm' and '$(WasmNativeWorkloadAvailable)' != 'true'">
+    <Error Text="Aprillz.MewUI.Backend.MewVG.Browser compiles a native WebGL shim into the app, which needs the wasm-tools workload. Install it with: dotnet workload install wasm-tools" />
+  </Target>
+
+</Project>

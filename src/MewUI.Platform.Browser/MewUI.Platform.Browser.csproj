@@ -14,8 +14,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- The page-side half of the platform: a host copies these next to its own loader. -->
-    <None Include="wwwroot/**" Pack="true" PackagePath="staticwebassets/" />
+    <!-- The page-side half of the platform; the package targets serve it from a browser app's wwwroot. -->
+    <None Include="wwwroot/**" Pack="true" PackagePath="buildTransitive/wwwroot/" />
+    <None Include="..\..\build\$(MewUITitle).Platform.Browser.targets" Link="buildTransitive\$(MewUITitle).Platform.Browser.targets"
+          Pack="true" PackagePath="buildTransitive\" Visible="false" />
   </ItemGroup>
 
 </Project>

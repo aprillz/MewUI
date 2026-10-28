@@ -1,0 +1,49 @@
+<Project>
+
+  <!--
+    Carried by Aprillz.MewUI.Platform.Browser. The page side of text input ships with the platform,
+    and a browser app serves it next to its own page, where the page imports ./mewui-text-input.js.
+    It is defined as a static web asset in the app's build: the dev server behind dotnet run answers
+    a Content item linked into wwwroot with an empty body, while publish copies it correctly.
+  -->
+  <PropertyGroup>
+    <_MewUIBrowserJsDir>$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)wwwroot'))</_MewUIBrowserJsDir>
+  </PropertyGroup>
+
+  <Target Name="_MewUIBrowserDefineStaticWebAssets"
+          Condition="'$(UsingMicrosoftNETSdkStaticWebAssets)' == 'true' and '$(RuntimeIdentifier)' == 'browser-wasm'"
+          AfterTargets="ResolveProjectStaticWebAssets"
+          DependsOnTargets="ResolveStaticWebAssetsConfiguration">
+
+    <ItemGroup>
+      <_MewUIBrowserJs Include="$(_MewUIBrowserJsDir)mewui-text-input.js" RelativePath="mewui-text-input.js" />
+    </ItemGroup>
+
+    <DefineStaticWebAssets
+      CandidateAssets="@(_MewUIBrowserJs)"
+      FingerprintCandidates="false"
+      SourceId="$(PackageId)"
+      SourceType="Computed"
+      AssetKind="All"
+      AssetRole="Primary"
+      CopyToOutputDirectory="PreserveNewest"
+      CopyToPublishDirectory="PreserveNewest"
+      ContentRoot="$(_MewUIBrowserJsDir)"
+      BasePath="$(StaticWebAssetBasePath)">
+      <Output TaskParameter="Assets" ItemName="_MewUIBrowserStaticWebAsset" />
+    </DefineStaticWebAssets>
+
+    <DefineStaticWebAssetEndpoints
+      CandidateAssets="@(_MewUIBrowserStaticWebAsset)"
+      ExistingEndpoints="@(StaticWebAssetEndpoint)"
+      ContentTypeMappings="@(StaticWebAssetContentTypeMapping)">
+      <Output TaskParameter="Endpoints" ItemName="_MewUIBrowserStaticWebAssetEndpoint" />
+    </DefineStaticWebAssetEndpoints>
+
+    <ItemGroup>
+      <StaticWebAsset Include="@(_MewUIBrowserStaticWebAsset)" />
+      <StaticWebAssetEndpoint Include="@(_MewUIBrowserStaticWebAssetEndpoint)" />
+    </ItemGroup>
+  </Target>
+
+</Project>

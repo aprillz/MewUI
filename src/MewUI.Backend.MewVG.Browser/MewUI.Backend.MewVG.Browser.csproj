@@ -51,4 +51,11 @@
     <NativeFileReference Include="mewui_webgl_shim.c" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- A browser app compiles the shim itself; the package targets add it and the WebGL 2 link flags. -->
+    <None Include="mewui_webgl_shim.c" Pack="true" PackagePath="buildTransitive/native/" Visible="false" />
+    <None Include="..\..\build\$(MewUITitle).Backend.MewVG.Browser.targets" Link="buildTransitive\$(MewUITitle).Backend.MewVG.Browser.targets"
+          Pack="true" PackagePath="buildTransitive\" Visible="false" />
+  </ItemGroup>
+
 </Project>
