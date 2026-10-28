@@ -263,7 +263,7 @@ public sealed partial class TerminalView : ContentControl, ITextInputClient, ITe
     public void PasteText(string text)
     {
         // Line breaks are sent as the Enter key sends them; bracketed paste lets the application tell paste from typing.
-        string normalized = text.Replace("\r\n", "\r").Replace('\n', '\r');
+        string normalized = FilterPaste(text);
         bool bracketed;
         using (_terminal.LockForWriting())
         {
@@ -273,6 +273,32 @@ public sealed partial class TerminalView : ContentControl, ITextInputClient, ITe
 
         SendInput(bracketed ? "\u001b[200~" + normalized + "\u001b[201~" : normalized);
         QueueUpdate();
+    }
+
+    /// <summary>
+    /// Pasted text as Windows Terminal sends it: line breaks as carriage returns, and the C0 and C1 control characters
+    /// other than tab dropped, so a paste cannot end its own bracket or act as keys.
+    /// </summary>
+    private static string FilterPaste(string text)
+    {
+        var filtered = new StringBuilder(text.Length);
+        for (int index = 0; index < text.Length; index++)
+        {
+            char current = text[index];
+            if (current == '\n')
+            {
+                if (index == 0 || text[index - 1] != '\r')
+                {
+                    filtered.Append('\r');
+                }
+            }
+            else if (current is '\t' or '\r' || (current >= ' ' && current < '\u007f') || current > '\u009f')
+            {
+                filtered.Append(current);
+            }
+        }
+
+        return filtered.ToString();
     }
 
     /// <summary>Selects all the output.</summary>
