@@ -1249,7 +1249,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     /// Moves the window so its top-left corner is at the given screen position, in device pixels (origin top-left, Y down).
     /// No-op before the window is shown or where the platform cannot move windows.
     /// </summary>
-    internal void MoveToPx(int leftPx, int topPx)
+    public void MoveToScreenPixels(int leftPx, int topPx)
     {
         if (_backend == null || Handle == 0)
         {

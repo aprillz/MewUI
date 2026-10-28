@@ -466,7 +466,7 @@ internal static class WindowDragDropRouter
     {
         // Top-left = cursor - hotspot. screenPositionPx is top-left Y-down px (matches MoveTo).
         double scale = previewWindow.ScreenUnitsPerDip;
-        previewWindow.MoveToPx(
+        previewWindow.MoveToScreenPixels(
             (int)Math.Round(screenPositionPx.X - session.PreviewHotspot.X * scale),
             (int)Math.Round(screenPositionPx.Y - session.PreviewHotspot.Y * scale));
     }
