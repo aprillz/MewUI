@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en" translate="no">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>MewUIBrowserApp</title>
+  <style>
+    html, body, canvas { width: 100%; height: 100%; margin: 0; overflow: hidden; display: block; }
+    html, body { overscroll-behavior: none; }
+    /* The app owns every gesture inside the canvas. Without this the browser claims a touch drag for
+       panning and ends it with pointercancel partway through. */
+    canvas { touch-action: none; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+    /* Only visible until the first frame; matching the scheme avoids a flash on the other one. */
+    body { background: #ffffff; }
+    @media (prefers-color-scheme: dark) { body { background: #202124; } }
+    /* Drawn by the page itself, so it shows before the runtime has downloaded. */
+    #loader { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+      padding: 16px; background: inherit; color: #6b6b76; font: 16px system-ui, sans-serif; text-align: center;
+      white-space: pre-wrap; }
+    #loader[hidden] { display: none; }
+    #loader.failed { color: #c0475e; }
+    /* Kept on screen at one transparent pixel row: a field the browser treats as hidden is not a live
+       IME target, and main.js moves it onto the caret so the IME draws its candidates there. */
+    #textinput { position: fixed; top: 0; left: 0; width: 200px; height: 1px; opacity: 0;
+      pointer-events: none; border: 0; padding: 0; outline: none; background: transparent; color: transparent; }
+  </style>
+</head>
+<body class="notranslate">
+  <canvas id="canvas"></canvas>
+  <input id="textinput" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+  <div id="loader">Loading...</div>
+  <script type="module" src="./main.js"></script>
+</body>
+</html>

@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "Aprillz",
+  "classifications": [ "MewUI", "Web", "WebAssembly" ],
+  "identity": "Aprillz.MewUI.Templates.Browser",
+  "name": "MewUI Browser App",
+  "description": "A MewUI app that runs in the browser on WebAssembly and draws with WebGL 2.",
+  "shortName": "mewui-browser",
+  "defaultName": "MewUIBrowserApp",
+  "sourceName": "MewUIBrowserApp",
+  "preferNameDirectory": true,
+  "tags": {
+    "language": "C#",
+    "type": "project"
+  },
+  "symbols": {
+    "HttpPort": {
+      "type": "generated",
+      "generator": "port",
+      "parameters": {
+        "low": 5000,
+        "high": 5300
+      },
+      "replaces": "5240"
+    }
+  },
+  "primaryOutputs": [
+    { "path": "MewUIBrowserApp.csproj" }
+  ]
+}

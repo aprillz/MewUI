@@ -1,0 +1,63 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="../../build/MewUI.Common.props" />
+
+  <PropertyGroup>
+    <TargetFrameworks>netstandard2.0</TargetFrameworks>
+    <PackageId>$(MewUITitle).Templates</PackageId>
+    <PackageType>Template</PackageType>
+    <Description>dotnet new templates for $(MewUITitle) desktop and browser apps</Description>
+    <PackageTags>mewui;dotnet-new;templates</PackageTags>
+
+    <!-- A template package carries only its content folders. -->
+    <EnableDefaultItems>false</EnableDefaultItems>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <IncludeSymbols>false</IncludeSymbols>
+    <IncludeSource>false</IncludeSource>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <IsAotCompatible>false</IsAotCompatible>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
+    <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);_MewUIStampTemplates</TargetsForTfmSpecificContentInPackage>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <_MewUITemplateSource Include="content/**/*" Exclude="content/**/bin/**;content/**/obj/**" />
+  </ItemGroup>
+
+  <UsingTask TaskName="_MewUIReplaceInFiles" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <Files ParameterType="Microsoft.Build.Framework.ITaskItem[]" Required="true" />
+      <Token ParameterType="System.String" Required="true" />
+      <Value ParameterType="System.String" Required="true" />
+    </ParameterGroup>
+    <Task>
+      <Code Type="Fragment" Language="cs"><![CDATA[
+foreach (var file in Files)
+{
+    var target = file.GetMetadata("StampedPath");
+    Directory.CreateDirectory(Path.GetDirectoryName(target));
+    File.WriteAllText(target, File.ReadAllText(file.ItemSpec).Replace(Token, Value));
+}
+]]></Code>
+    </Task>
+  </UsingTask>
+
+  <!-- The templated projects reference MEWUI_VERSION, which becomes the version this package is packed with,
+       so a template always creates an app on the packages released beside it. -->
+  <Target Name="_MewUIStampTemplates">
+    <PropertyGroup>
+      <_MewUIStampRoot>$(IntermediateOutputPath)templates\</_MewUIStampRoot>
+    </PropertyGroup>
+    <ItemGroup>
+      <_MewUITemplateStamped Include="@(_MewUITemplateSource)"
+                             StampedPath="$(_MewUIStampRoot)%(RecursiveDir)%(Filename)%(Extension)"
+                             PackageDir="content\%(RecursiveDir)" />
+    </ItemGroup>
+    <_MewUIReplaceInFiles Files="@(_MewUITemplateStamped)" Token="MEWUI_VERSION" Value="$(PackageVersion)" />
+    <ItemGroup>
+      <TfmSpecificPackageFile Include="%(_MewUITemplateStamped.StampedPath)" PackagePath="%(_MewUITemplateStamped.PackageDir)" />
+    </ItemGroup>
+  </Target>
+
+</Project>

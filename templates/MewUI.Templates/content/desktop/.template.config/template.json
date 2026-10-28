@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "Aprillz",
+  "classifications": [ "MewUI", "Desktop" ],
+  "identity": "Aprillz.MewUI.Templates.App",
+  "name": "MewUI App",
+  "description": "A MewUI desktop app for Windows, Linux and macOS.",
+  "shortName": "mewui",
+  "defaultName": "MewUIApp",
+  "sourceName": "MewUIApp",
+  "preferNameDirectory": true,
+  "tags": {
+    "language": "C#",
+    "type": "project"
+  },
+  "symbols": {
+    "Framework": {
+      "type": "parameter",
+      "description": "The target framework for the project.",
+      "datatype": "choice",
+      "choices": [
+        { "choice": "net10.0", "description": "Target net10.0" },
+        { "choice": "net8.0", "description": "Target net8.0" }
+      ],
+      "defaultValue": "net10.0",
+      "replaces": "net10.0"
+    }
+  },
+  "primaryOutputs": [
+    { "path": "MewUIApp.csproj" }
+  ]
+}
