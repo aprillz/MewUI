@@ -16,8 +16,11 @@ internal sealed unsafe class DirectWriteFontFactory : IDisposable
     private nint _factory;
     private bool _disposed;
 
-    // Cache: family name to a DirectWrite custom font collection built from a registered file.
-    private readonly Dictionary<string, nint> _privateFontCollections = new(StringComparer.OrdinalIgnoreCase);
+    // Cache: registered family name, or font file path, to a DirectWrite custom font collection built from its files.
+    private readonly Dictionary<string, PrivateCollection> _privateFontCollections = new(StringComparer.OrdinalIgnoreCase);
+
+    // Collections replaced after a family gained or lost a file; fonts made earlier still draw with them.
+    private readonly List<nint> _retiredFontCollections = [];
 
     /// <summary>The shared <c>IDWriteFactory</c>, created on first access. Never 0 once returned.</summary>
     internal nint Factory
@@ -102,10 +105,13 @@ internal sealed unsafe class DirectWriteFontFactory : IDisposable
             // only sees files that were registered with GDI.
             if (OperatingSystem.IsWindows())
             {
-                Win32Fonts.EnsurePrivateFontFamily(resolved.Value.FilePath);
+                foreach (var filePath in resolved.Value.FilePaths)
+                {
+                    Win32Fonts.EnsurePrivateFontFamily(filePath);
+                }
             }
 
-            var fontCollection = GetOrCreatePrivateCollection(resolved.Value.FamilyName, resolved.Value.FilePath);
+            var fontCollection = GetOrCreatePrivateCollection(resolved.Value);
             return (resolved.Value.FamilyName, fontCollection);
         }
 
@@ -116,7 +122,7 @@ internal sealed unsafe class DirectWriteFontFactory : IDisposable
             var family = FontResources.TryGetParsedFamilyName(path, out var parsed) && !string.IsNullOrWhiteSpace(parsed)
                 ? parsed
                 : Path.GetFileNameWithoutExtension(path);
-            var fontCollection = GetOrCreatePrivateCollection(family, path);
+            var fontCollection = GetOrCreatePrivateCollection(path, [new FontRegistry.RegisteredFace(path, (int)FontWeight.Normal, false)]);
             return (family, fontCollection);
         }
 
@@ -140,17 +146,26 @@ internal sealed unsafe class DirectWriteFontFactory : IDisposable
         }
     }
 
-    private nint GetOrCreatePrivateCollection(string familyName, string filePath)
+    private nint GetOrCreatePrivateCollection(FontRegistry.ResolvedFont resolved)
+        => GetOrCreatePrivateCollection(resolved.FamilyName, resolved.Faces);
+
+    private nint GetOrCreatePrivateCollection(string cacheKey, FontRegistry.RegisteredFace[] faces)
     {
-        if (_privateFontCollections.TryGetValue(familyName, out var cached))
+        if (_privateFontCollections.TryGetValue(cacheKey, out var cached))
         {
-            return cached;
+            if (ReferenceEquals(cached.Faces, faces) || cached.Faces.SequenceEqual(faces))
+            {
+                return cached.Handle;
+            }
+
+            _privateFontCollections.Remove(cacheKey);
+            _retiredFontCollections.Add(cached.Handle);
         }
 
-        var collection = DWritePrivateFontCollection.CreateCollection((IDWriteFactory*)Factory, [filePath]);
+        var collection = DWritePrivateFontCollection.CreateCollection((IDWriteFactory*)Factory, [.. faces.Select(face => face.FilePath)]);
         if (collection != 0)
         {
-            _privateFontCollections[familyName] = collection;
+            _privateFontCollections[cacheKey] = new PrivateCollection(faces, collection);
         }
 
         return collection;
@@ -166,11 +181,19 @@ internal sealed unsafe class DirectWriteFontFactory : IDisposable
         _disposed = true;
         foreach (var collection in _privateFontCollections.Values)
         {
-            ComHelpers.Release(collection);
+            ComHelpers.Release(collection.Handle);
         }
         _privateFontCollections.Clear();
+
+        foreach (var collection in _retiredFontCollections)
+        {
+            ComHelpers.Release(collection);
+        }
+        _retiredFontCollections.Clear();
 
         ComHelpers.Release(_factory);
         _factory = 0;
     }
+
+    private readonly record struct PrivateCollection(FontRegistry.RegisteredFace[] Faces, nint Handle);
 }

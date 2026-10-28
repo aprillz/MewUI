@@ -1,5 +1,6 @@
 using Aprillz.MewUI.Native.Com;
 using Aprillz.MewUI.Native.DirectWrite;
+using Aprillz.MewUI.Resources;
 
 namespace Aprillz.MewUI.Rendering.DirectWrite;
 
@@ -14,7 +15,7 @@ internal static unsafe class DWriteFontFallbackHelper
 
     // Keyed by the listed families; the empty key is the chain alone.
     private static readonly Dictionary<string, nint> _cached = new(StringComparer.Ordinal);
-    private static int _cachedVersion = -1;
+    private static long _cachedVersion = -1;
 
     // Common Unicode ranges for the fallback chain.
     // Each entry in the user chain is mapped to a broad range (BMP + supplementary).
@@ -45,7 +46,8 @@ internal static unsafe class DWriteFontFallbackHelper
         string key = font?.ListedFallbackKey ?? string.Empty;
         lock (_gate)
         {
-            int version = FontFallback.Version;
+            // A registered family's collection changes when it gains a file.
+            long version = ((long)FontFallback.Version << 32) | (uint)FontRegistry.Version;
             if (_cachedVersion != version)
             {
                 ReleaseCachedNoLock();

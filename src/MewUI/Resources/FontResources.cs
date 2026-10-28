@@ -33,7 +33,7 @@ public static class FontResources
         var cached = CacheToLocalFile(fontStream, extensionHint, nameHint);
         var entry = EnsureEntry(cached.HashHex, cached.Path, addRef: true);
 
-        // Register in global registry: family name → file path
+        // Register in global registry: family name → the family's files
         var familyForControls = !string.IsNullOrWhiteSpace(entry.ParsedFamilyName)
             ? entry.ParsedFamilyName
             : nameHint ?? entry.FontFamilyForControls;
@@ -100,6 +100,7 @@ public static class FontResources
 
         // Remove first so re-entrancy doesn't keep a stale entry alive.
         FontEntries.TryRemove(key, out _);
+        FontRegistry.Unregister(entry.Path);
 
         // Best-effort cleanup for cache files we own.
         try

@@ -181,7 +181,7 @@ internal sealed partial class ManagedTextEngine
 
         if (cellCount == 0 || cells[cellCount - 1].Kind == ManagedTextRunKind.NewLine)
         {
-            var font = GetFont(snapshot.DefaultStyle, snapshot.Dpi);
+            var font = GetFont(snapshot.DefaultStyle, snapshot);
             double fontHeight = GetFontLineHeight(context, font);
             double offset = snapshot.DefaultStyle.BaselineOffset;
             double ascent = Math.Max(0, context.GetRasterBaseline(font) + offset);
@@ -224,7 +224,7 @@ internal sealed partial class ManagedTextEngine
             return;
         }
 
-        double ellipsisWidth = context.Measure(ELLIPSIS, GetFont(snapshot.DefaultStyle, snapshot.Dpi)).Width;
+        double ellipsisWidth = context.Measure(ELLIPSIS, GetFont(snapshot.DefaultStyle, snapshot)).Width;
         if (paragraph.Wrapping == TextWrapping.NoWrap)
         {
             foreach (var line in lines)
@@ -421,7 +421,7 @@ internal sealed partial class ManagedTextEngine
         int newLineLength,
         int fallbackStart)
     {
-        var defaultFont = GetFont(snapshot.DefaultStyle, snapshot.Dpi);
+        var defaultFont = GetFont(snapshot.DefaultStyle, snapshot);
         double width = 0;
         double measuredHeight = 0;
         double contentAscent = 0;

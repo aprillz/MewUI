@@ -161,7 +161,7 @@ internal sealed unsafe partial class CoreTextFont : FontBase, IGlyphOutlineFont
         return (installed[0], installed[1..]);
     }
 
-    /// <summary>The family CoreText knows <paramref name="family"/> by, registering its file first when it was registered with MewUI.</summary>
+    /// <summary>The family CoreText knows <paramref name="family"/> by, registering its files first when it was registered with MewUI.</summary>
     private static string ResolveRegisteredFamily(string family)
     {
         var resolved = FontRegistry.Resolve(family);
@@ -170,7 +170,11 @@ internal sealed unsafe partial class CoreTextFont : FontBase, IGlyphOutlineFont
             return family;
         }
 
-        EnsureRegisteredWithCoreText(resolved.Value.FilePath);
+        foreach (var filePath in resolved.Value.FilePaths)
+        {
+            EnsureRegisteredWithCoreText(filePath);
+        }
+
         return resolved.Value.FamilyName;
     }
 
