@@ -274,6 +274,12 @@ public abstract class FrameworkElement : UIElement, IDisposable
         set => SetValue(HeightProperty, value);
     }
 
+    /// <summary>Width that measure and arrange honor; NaN sizes to content.</summary>
+    internal virtual double LayoutWidth => Width;
+
+    /// <summary>Height that measure and arrange honor; NaN sizes to content.</summary>
+    internal virtual double LayoutHeight => Height;
+
     /// <summary>
     /// Gets or sets the minimum width in DIPs.
     /// </summary>
@@ -621,20 +627,23 @@ public abstract class FrameworkElement : UIElement, IDisposable
         double availableWidth = Math.Max(0, innerSlot.Width);
         double availableHeight = Math.Max(0, innerSlot.Height);
 
+        double layoutWidth = limits.Width;
+        double layoutHeight = limits.Height;
+
         // If we have explicit size, use it; otherwise use desired (excluding margin)
-        double arrangeWidth = !double.IsNaN(limits.Width) ? limits.Width : DesiredSize.Width - limits.Margin.HorizontalThickness;
-        double arrangeHeight = !double.IsNaN(limits.Height) ? limits.Height : DesiredSize.Height - limits.Margin.VerticalThickness;
+        double arrangeWidth = !double.IsNaN(layoutWidth) ? layoutWidth : DesiredSize.Width - limits.Margin.HorizontalThickness;
+        double arrangeHeight = !double.IsNaN(layoutHeight) ? layoutHeight : DesiredSize.Height - limits.Margin.VerticalThickness;
 
         arrangeWidth = Math.Clamp(arrangeWidth, limits.MinWidth, limits.MaxWidth);
         arrangeHeight = Math.Clamp(arrangeHeight, limits.MinHeight, limits.MaxHeight);
 
         // Auto-sized elements stretch to fill the slot. Otherwise preserve the explicit or
         // desired size after min/max constraints, even when it exceeds the available slot.
-        double width = (HorizontalAlignment == HorizontalAlignment.Stretch && double.IsNaN(limits.Width))
+        double width = (HorizontalAlignment == HorizontalAlignment.Stretch && double.IsNaN(layoutWidth))
             ? availableWidth
             : arrangeWidth;
 
-        double height = (VerticalAlignment == VerticalAlignment.Stretch && double.IsNaN(limits.Height))
+        double height = (VerticalAlignment == VerticalAlignment.Stretch && double.IsNaN(layoutHeight))
             ? availableHeight
             : arrangeHeight;
 
@@ -669,16 +678,19 @@ public abstract class FrameworkElement : UIElement, IDisposable
         var availableWidth = Math.Max(0, availableSize.Width - limits.Margin.HorizontalThickness);
         var availableHeight = Math.Max(0, availableSize.Height - limits.Margin.VerticalThickness);
 
+        double layoutWidth = limits.Width;
+        double layoutHeight = limits.Height;
+
         // Measure content with explicit Width/Height when set; otherwise use the available
         // content size. Clamp both cases to [Min, Max] so wrapped content respects MaxWidth.
-        var constrainedWidth = Math.Clamp(double.IsNaN(limits.Width) ? availableWidth : limits.Width, limits.MinWidth, limits.MaxWidth);
-        var constrainedHeight = Math.Clamp(double.IsNaN(limits.Height) ? availableHeight : limits.Height, limits.MinHeight, limits.MaxHeight);
+        var constrainedWidth = Math.Clamp(double.IsNaN(layoutWidth) ? availableWidth : layoutWidth, limits.MinWidth, limits.MaxWidth);
+        var constrainedHeight = Math.Clamp(double.IsNaN(layoutHeight) ? availableHeight : layoutHeight, limits.MinHeight, limits.MaxHeight);
 
         var measured = MeasureContent(new Size(limits.Round(constrainedWidth), limits.Round(constrainedHeight)));
 
         // Desired size honors explicit Width/Height when set (else the measured size), clamped, plus margin.
-        var finalWidth = Math.Clamp(double.IsNaN(limits.Width) ? measured.Width : limits.Width, limits.MinWidth, limits.MaxWidth);
-        var finalHeight = Math.Clamp(double.IsNaN(limits.Height) ? measured.Height : limits.Height, limits.MinHeight, limits.MaxHeight);
+        var finalWidth = Math.Clamp(double.IsNaN(layoutWidth) ? measured.Width : layoutWidth, limits.MinWidth, limits.MaxWidth);
+        var finalHeight = Math.Clamp(double.IsNaN(layoutHeight) ? measured.Height : layoutHeight, limits.MinHeight, limits.MaxHeight);
 
         return new Size(
             limits.Round(finalWidth) + limits.Margin.HorizontalThickness,
@@ -700,7 +712,7 @@ public abstract class FrameworkElement : UIElement, IDisposable
                 LayoutRounding.RoundToPixel(margin.Bottom, scale));
         }
 
-        var limits = new LayoutLimits(scale, margin, Width, Height, MinWidth, MaxWidth, MinHeight, MaxHeight);
+        var limits = new LayoutLimits(scale, margin, LayoutWidth, LayoutHeight, MinWidth, MaxWidth, MinHeight, MaxHeight);
         return limits with
         {
             Width = limits.Round(limits.Width),
