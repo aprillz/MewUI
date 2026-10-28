@@ -22,19 +22,45 @@ public sealed partial class Slider : RangeBase
     public static readonly MewProperty<bool> ChangeOnWheelProperty =
         MewProperty<bool>.Register<Slider>(nameof(ChangeOnWheel), true, MewPropertyOptions.None);
 
+    public static readonly MewProperty<Orientation> OrientationProperty =
+        MewProperty<Orientation>.Register<Slider>(nameof(Orientation), Orientation.Horizontal,
+            MewPropertyOptions.AffectsLayout | MewPropertyOptions.AffectsRender);
+
+    // Extent across the track while the matching Width or Height is left unset.
+    private const double DEFAULT_THICKNESS = 24;
+
     private WheelNotchAccumulator _wheelAccumulator;
 
     static Slider()
     {
         MaximumProperty.OverrideDefaultValue<Slider>(100.0);
-        HeightProperty.OverrideDefaultValue<Slider>(24.0);
         SmallChangeProperty.OverrideDefaultValue<Slider>(1.0);
         LargeChangeProperty.OverrideDefaultValue<Slider>(10.0);
         FocusableProperty.OverrideDefaultValue<Slider>(true);
     }
 
     /// <summary>
-    /// Whether the mouse wheel changes the value by <see cref="RangeBase.SmallChange"/> per notch while the pointer is over the slider.
+    /// Gets or sets the direction of the track; a vertical slider has its minimum at the bottom.
+    /// </summary>
+    /// <remarks>
+    /// While the extent across the track is unset it defaults to 24 DIPs (Height when horizontal,
+    /// Width when vertical).
+    /// </remarks>
+    public Orientation Orientation
+    {
+        get => GetValue(OrientationProperty);
+        set => SetValue(OrientationProperty, value);
+    }
+
+    internal override double LayoutWidth
+        => Orientation == Orientation.Vertical && !PropertyStore.HasOwnValue(WidthProperty.Id) ? DEFAULT_THICKNESS : Width;
+
+    internal override double LayoutHeight
+        => Orientation == Orientation.Horizontal && !PropertyStore.HasOwnValue(HeightProperty.Id) ? DEFAULT_THICKNESS : Height;
+
+    /// <summary>
+    /// Gets or sets whether the mouse wheel changes the value by
+    /// <see cref="RangeBase.SmallChange"/> per notch while the pointer is over the slider.
     /// </summary>
     public bool ChangeOnWheel
     {
@@ -58,23 +84,62 @@ public sealed partial class Slider : RangeBase
 
     private double ThumbSize => 14;
 
-    protected override Size MeasureContent(Size availableSize) => new Size(ThumbSize * 3, ThumbSize);
+    protected override Size MeasureContent(Size availableSize)
+    {
+        if (Orientation == Orientation.Vertical)
+        {
+            return new Size(ThumbSize, ThumbSize * 3);
+        }
+        else
+        {
+            return new Size(ThumbSize * 3, ThumbSize);
+        }
+    }
 
     protected override void OnRender(IGraphicsContext context)
     {
         var bounds = Bounds;
         var contentBounds = bounds.Deflate(Padding);
         var state = CurrentVisualState;
+        double fraction = GetNormalizedValue();
 
-        // Track, inset half a thumb on both sides so the thumb at either extreme stays inside
+        // Track, inset half a thumb on both ends so the thumb at either extreme stays inside
         // the control bounds; ink past them is cut by any caching or clipping ancestor.
-        double trackHeight = 4;
-        double trackY = contentBounds.Y + (contentBounds.Height - trackHeight) / 2;
-        var trackRect = new Rect(
-            contentBounds.X + ThumbSize / 2,
-            trackY,
-            Math.Max(0, contentBounds.Width - ThumbSize),
-            trackHeight);
+        const double TRACK_THICKNESS = 4;
+        Rect trackRect;
+        Rect fillRect;
+        Rect thumbRect;
+        if (Orientation == Orientation.Vertical)
+        {
+            trackRect = new Rect(
+                contentBounds.X + (contentBounds.Width - TRACK_THICKNESS) / 2,
+                contentBounds.Y + ThumbSize / 2,
+                TRACK_THICKNESS,
+                Math.Max(0, contentBounds.Height - ThumbSize));
+
+            double fillHeight = trackRect.Height * fraction;
+            fillRect = new Rect(trackRect.X, trackRect.Bottom - fillHeight, trackRect.Width, fillHeight);
+
+            double thumbY = trackRect.Bottom - fillHeight - ThumbSize / 2;
+            thumbY = Math.Clamp(thumbY, contentBounds.Y, Math.Max(contentBounds.Y, contentBounds.Bottom - ThumbSize));
+            double thumbX = contentBounds.X + (contentBounds.Width - ThumbSize) / 2;
+            thumbRect = new Rect(thumbX, thumbY, ThumbSize, ThumbSize);
+        }
+        else
+        {
+            trackRect = new Rect(
+                contentBounds.X + ThumbSize / 2,
+                contentBounds.Y + (contentBounds.Height - TRACK_THICKNESS) / 2,
+                Math.Max(0, contentBounds.Width - ThumbSize),
+                TRACK_THICKNESS);
+
+            fillRect = new Rect(trackRect.X, trackRect.Y, trackRect.Width * fraction, trackRect.Height);
+
+            double thumbX = trackRect.X + trackRect.Width * fraction - ThumbSize / 2;
+            thumbX = Math.Clamp(thumbX, contentBounds.X, Math.Max(contentBounds.X, contentBounds.Right - ThumbSize));
+            double thumbY = contentBounds.Y + (contentBounds.Height - ThumbSize) / 2;
+            thumbRect = new Rect(thumbX, thumbY, ThumbSize, ThumbSize);
+        }
 
         var trackBg = Background;
 
@@ -86,21 +151,11 @@ public sealed partial class Slider : RangeBase
             context.DrawRoundedRectangle(trackRect, 2, 2, trackBorder, Theme.Metrics.ControlBorderThickness, strokeInset: true);
         }
 
-        // Filled track
-        double t = GetNormalizedValue();
-        var fillRect = new Rect(trackRect.X, trackRect.Y, trackRect.Width * t, trackRect.Height);
-        if (fillRect.Width > 0)
+        if (fillRect.Width > 0 && fillRect.Height > 0)
         {
             var fillColor = state.IsEnabled ? Theme.Palette.Accent : Theme.Palette.DisabledAccent;
             context.FillRoundedRectangle(fillRect, 2, 2, fillColor);
         }
-
-        // Thumb
-        double thumbX = trackRect.X + trackRect.Width * t - ThumbSize / 2;
-        thumbX = Math.Clamp(thumbX, contentBounds.X, Math.Max(contentBounds.X, contentBounds.Right - ThumbSize));
-
-        double thumbY = contentBounds.Y + (contentBounds.Height - ThumbSize) / 2;
-        var thumbRect = new Rect(thumbX, thumbY, ThumbSize, ThumbSize);
 
         var thumbFill = ThumbBrush;
 
@@ -123,7 +178,7 @@ public sealed partial class Slider : RangeBase
         }
 
         Focus();
-        SetValueFromPosition(e.Position.X);
+        SetValueFromPosition(TransformFromRoot(e.Position));
 
         var root = FindVisualRoot();
         if (root is Window window)
@@ -146,7 +201,7 @@ public sealed partial class Slider : RangeBase
             return;
         }
 
-        SetValueFromPosition(e.Position.X);
+        SetValueFromPosition(TransformFromRoot(e.Position));
         e.Handled = true;
     }
 
@@ -276,15 +331,26 @@ public sealed partial class Slider : RangeBase
         return smallStep * 10;
     }
 
-    private void SetValueFromPosition(double x)
+    private void SetValueFromPosition(Point position)
     {
         // Mirrors the render-side track inset so a click lands on the value under the pointer.
         var contentBounds = Bounds.Deflate(Padding);
-        double left = contentBounds.X + ThumbSize / 2;
-        double width = Math.Max(1e-6, contentBounds.Width - ThumbSize);
-        double t = Math.Clamp((x - left) / width, 0, 1);
+        double fraction;
+        if (Orientation == Orientation.Vertical)
+        {
+            double bottom = contentBounds.Bottom - ThumbSize / 2;
+            double height = Math.Max(1e-6, contentBounds.Height - ThumbSize);
+            fraction = Math.Clamp((bottom - position.Y) / height, 0, 1);
+        }
+        else
+        {
+            double left = contentBounds.X + ThumbSize / 2;
+            double width = Math.Max(1e-6, contentBounds.Width - ThumbSize);
+            fraction = Math.Clamp((position.X - left) / width, 0, 1);
+        }
+
         double range = Maximum - Minimum;
-        double value = range <= 0 ? Minimum : Minimum + t * range;
+        double value = range <= 0 ? Minimum : Minimum + fraction * range;
         SetValueInternal(value, true);
     }
 
