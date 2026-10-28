@@ -16,6 +16,19 @@ public enum Stretch
 }
 
 /// <summary>
+/// Specifies whether stretching may enlarge content, shrink it, or both.
+/// </summary>
+public enum StretchDirection
+{
+    /// <summary>Content is only enlarged; content larger than the destination keeps its size.</summary>
+    UpOnly,
+    /// <summary>Content is only shrunk; content smaller than the destination keeps its size.</summary>
+    DownOnly,
+    /// <summary>Content is enlarged or shrunk as the stretch mode requires.</summary>
+    Both,
+}
+
+/// <summary>
 /// Specifies how <see cref="Rect"/> values used as an image view box are interpreted.
 /// </summary>
 public enum ImageViewBoxUnits

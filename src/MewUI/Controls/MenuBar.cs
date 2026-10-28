@@ -227,7 +227,7 @@ public sealed partial class MenuBar : Control, IPopupOwner
             return;
         }
 
-        int index = HitTestItemIndex(e.Position);
+        int index = HitTestItemIndex(TransformFromRoot(e.Position));
         if (index != _hotIndex)
         {
             _hotIndex = index;
@@ -248,7 +248,7 @@ public sealed partial class MenuBar : Control, IPopupOwner
             return;
         }
 
-        int index = HitTestItemIndex(e.Position);
+        int index = HitTestItemIndex(TransformFromRoot(e.Position));
         if (index == -1)
         {
             return;
@@ -313,8 +313,8 @@ public sealed partial class MenuBar : Control, IPopupOwner
 
         popup.Placement = MenuPlacement.Below;
         popup.PlacementOffset = new Point(0, 1);
-        var b = _itemBounds.Count > index ? _itemBounds[index] : Rect.Empty;
-        popup.Show(this, b);
+        var anchorBounds = _itemBounds.Count > index ? TransformToRoot(_itemBounds[index]) : Rect.Empty;
+        popup.Show(this, anchorBounds);
     }
 
     private void CloseOpenMenu()

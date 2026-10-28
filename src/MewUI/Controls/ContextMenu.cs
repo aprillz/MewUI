@@ -479,7 +479,7 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
         }
         else
         {
-            ShowCore(placementTarget, placementTarget.Bounds, Placement);
+            ShowCore(placementTarget, placementTarget.GetBoundsInRoot(), Placement);
         }
     }
 
@@ -1123,7 +1123,7 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
             return;
         }
 
-        int index = HitTestEntryIndex(e.Position);
+        int index = HitTestEntryIndex(TransformFromRoot(e.Position));
         SetHotIndex(index);
 
         if (index >= 0 && index < Items.Count && Items[index] is MenuItem item && item.SubMenu != null && item.IsEffectivelyEnabled)
@@ -1155,7 +1155,7 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
             return;
         }
 
-        int index = HitTestEntryIndex(e.Position);
+        int index = HitTestEntryIndex(TransformFromRoot(e.Position));
         if (index < 0 || index >= Items.Count)
         {
             return;

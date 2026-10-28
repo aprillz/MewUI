@@ -119,19 +119,28 @@ public sealed class RotationDecorator : FrameworkElement, IVisualTreeHost
             return;
         }
 
+        builder.PushTransform(ChildRotation());
+        builder.Child(Child);
+        builder.Pop();
+    }
+
+    internal override bool TryGetChildTransform(out Matrix3x2 transform)
+    {
+        transform = ChildRotation();
+        return true;
+    }
+
+    private Matrix3x2 ChildRotation()
+    {
         double centerX = Bounds.X + Bounds.Width / 2;
         double centerY = Bounds.Y + Bounds.Height / 2;
 
         // Matches the Translate/Rotate/Translate sequence of the immediate path, where each call
         // pre-multiplies the current transform.
-        var rotation =
+        return
             Matrix3x2.CreateTranslation((float)-centerX, (float)-centerY) *
             Matrix3x2.CreateRotation((float)Angle) *
             Matrix3x2.CreateTranslation((float)centerX, (float)centerY);
-
-        builder.PushTransform(rotation);
-        builder.Child(Child);
-        builder.Pop();
     }
 
     protected override UIElement? OnHitTest(Point point)

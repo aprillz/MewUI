@@ -26,6 +26,9 @@ internal readonly struct CompositionEntry
     internal double RadiusY { get; init; }
     internal Matrix3x2 Matrix { get; init; }
 
+    // A transform scope under which glyphs would land between pixels turns text snapping off for what it encloses.
+    internal bool DisablesTextPixelSnap { get; init; }
+
     /// <summary>Number of entries this scope encloses; 0 for non-scope entries.</summary>
     internal int ScopeLength { get; init; }
 }
@@ -106,10 +109,11 @@ internal sealed class CompositionPlanBuilder
         RadiusY = radiusY,
     });
 
-    internal void PushTransform(Matrix3x2 matrix) => PushScope(new CompositionEntry
+    internal void PushTransform(Matrix3x2 matrix, bool disablesTextPixelSnap = false) => PushScope(new CompositionEntry
     {
         Kind = CompositionEntryKind.Transform,
         Matrix = matrix,
+        DisablesTextPixelSnap = disablesTextPixelSnap,
     });
 
     internal void Pop()
@@ -166,7 +170,8 @@ internal sealed class CompositionPlanBuilder
                 built.Rect != existing.Rect ||
                 built.RadiusX != existing.RadiusX ||
                 built.RadiusY != existing.RadiusY ||
-                built.Matrix != existing.Matrix)
+                built.Matrix != existing.Matrix ||
+                built.DisablesTextPixelSnap != existing.DisablesTextPixelSnap)
             {
                 return false;
             }

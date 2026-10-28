@@ -284,7 +284,7 @@ public partial class Expander : HeaderedContentControl, IVisualTreeHost
         headerH = Math.Max(headerH, GlyphAreaWidth);
         var headerRow = new Rect(inner.X, inner.Y, inner.Width, headerH);
 
-        if (headerRow.Contains(e.Position))
+        if (headerRow.Contains(TransformFromRoot(e.Position)))
         {
             CommitTargetValue(IsExpandedProperty, !IsExpanded);
             Focus();

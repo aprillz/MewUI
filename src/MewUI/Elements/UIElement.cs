@@ -799,11 +799,11 @@ public abstract partial class UIElement : Element
     /// <returns>The bounding box of the rectangle in screen coordinates in device pixels.</returns>
     /// <exception cref="InvalidOperationException">The element is not connected to a shown window.</exception>
     public Rect RectToScreen(Rect rect)
-    {
-        var tl = PointToScreen(rect.TopLeft);
-        var br = PointToScreen(rect.BottomRight);
-        return new Rect(tl.X, tl.Y, br.X - tl.X, br.Y - tl.Y);
-    }
+        => GeneralTransform.BoundingBox(
+            PointToScreen(rect.TopLeft),
+            PointToScreen(rect.TopRight),
+            PointToScreen(rect.BottomLeft),
+            PointToScreen(rect.BottomRight));
 
     /// <summary>
     /// Converts a rectangle from screen coordinates in device pixels to element coordinates in DIPs.
@@ -812,10 +812,62 @@ public abstract partial class UIElement : Element
     /// <returns>The bounding box of the rectangle in element coordinates.</returns>
     /// <exception cref="InvalidOperationException">The element is not connected to a shown window.</exception>
     public Rect RectFromScreen(Rect rect)
+        => GeneralTransform.BoundingBox(
+            PointFromScreen(rect.TopLeft),
+            PointFromScreen(rect.TopRight),
+            PointFromScreen(rect.BottomLeft),
+            PointFromScreen(rect.BottomRight));
+
+    /// <summary>
+    /// This element's layout box where it is drawn, in the same window coordinates as <see cref="Element.Bounds"/>:
+    /// the axis-aligned bounding box after every transform its ancestors apply, or <see cref="Element.Bounds"/> when none does.
+    /// </summary>
+    internal Rect GetBoundsInRoot() => TransformToRoot(Bounds);
+
+    /// <summary>
+    /// Carries <paramref name="windowRect"/>, given in the untransformed window coordinates this element is laid out in,
+    /// to where it is drawn: the axis-aligned bounding box after every transform the ancestors apply.
+    /// </summary>
+    internal Rect TransformToRoot(Rect windowRect)
     {
-        var tl = PointFromScreen(rect.TopLeft);
-        var br = PointFromScreen(rect.BottomRight);
-        return new Rect(tl.X, tl.Y, br.X - tl.X, br.Y - tl.Y);
+        var chain = ComposeAncestorTransforms();
+        if (chain == null)
+        {
+            return windowRect;
+        }
+        else
+        {
+            return chain.TransformBounds(windowRect);
+        }
+    }
+
+    /// <summary>
+    /// Carries a window point where it is drawn, such as <see cref="MouseEventArgs.Position"/>, back into the untransformed
+    /// window coordinates this element is laid out in (the space of <see cref="Element.Bounds"/>). The point is returned
+    /// unchanged when no ancestor transforms this element or the transform has no inverse.
+    /// </summary>
+    internal Point TransformFromRoot(Point windowPoint)
+    {
+        var chain = ComposeAncestorTransforms();
+        if (chain != null && chain.Invert().TryTransform(windowPoint, out var layoutPoint))
+        {
+            return layoutPoint;
+        }
+        else
+        {
+            return windowPoint;
+        }
+    }
+
+    private MatrixGeneralTransform? ComposeAncestorTransforms()
+    {
+        Element root = this;
+        while (root.Parent != null)
+        {
+            root = root.Parent;
+        }
+
+        return ComposeChildTransforms(this, root, includeCommon: true);
     }
 
     /// <summary>

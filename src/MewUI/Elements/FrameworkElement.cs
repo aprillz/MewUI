@@ -218,7 +218,8 @@ public abstract class FrameworkElement : UIElement, IDisposable
         }
         if (anchor.X == 0 && anchor.Y == 0 && Bounds.Width > 0 && Bounds.Height > 0)
         {
-            anchor = new Point(Bounds.X + Bounds.Width / 2, Bounds.Bottom);
+            var drawnBounds = GetBoundsInRoot();
+            anchor = new Point(drawnBounds.X + drawnBounds.Width / 2, drawnBounds.Bottom);
         }
 
         var region = window.GetPopupPlacementRegion(new Rect(anchor.X, anchor.Y, 0, 0));
