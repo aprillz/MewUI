@@ -27,7 +27,7 @@ internal sealed class HeadlessWindowBackend : IWindowBackend
         Handle = Interlocked.Increment(ref _nextHandle);
     }
 
-    public nint Handle { get; }
+    public nint Handle { get; private set; }
 
     public Window Window => _window;
 
@@ -67,8 +67,12 @@ internal sealed class HeadlessWindowBackend : IWindowBackend
         }
 
         _window.RaiseClosed();
+        _window.ClearMouseCaptureState();
         _window.ReleaseWindowGraphicsResources(Handle);
         Dispose();
+        _window.DisposeVisualTree();
+        // A closed window reports no handle, so update passes queued before the close skip it.
+        Handle = 0;
     }
 
     public void Invalidate(bool erase)
