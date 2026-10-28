@@ -1,3 +1,5 @@
+using System.Numerics;
+
 using Aprillz.MewUI.Controls;
 
 namespace Aprillz.MewUI.Gallery;
@@ -12,54 +14,180 @@ partial class GalleryView
             .StretchMode(Stretch.Uniform)
             .ImageScaleQuality(ImageScaleQuality.HighQuality);
 
+        static float Radians(double degrees) => (float)(degrees * Math.PI / 180.0);
+
         // --- Translate ---
-        var translateBox = new TransformBox().Center().Child(CatImage());
+        var translateBox = new TransformDecorator().Center().Child(CatImage());
         var sliderTX = new Slider().Range(-100, 100).Value(0).Width(150);
         var sliderTY = new Slider().Range(-100, 100).Value(0).Width(150);
-        translateBox.Bind(TransformBox.TranslateXProperty, sliderTX, RangeBase.ValueProperty);
-        translateBox.Bind(TransformBox.TranslateYProperty, sliderTY, RangeBase.ValueProperty);
+        void UpdateTranslate() => translateBox.Transform =
+            Matrix3x2.CreateTranslation((float)sliderTX.Value, (float)sliderTY.Value);
+        sliderTX.OnValueChanged(_ => UpdateTranslate());
+        sliderTY.OnValueChanged(_ => UpdateTranslate());
 
         // --- Rotate ---
-        var rotateBox = new TransformBox().Center().Child(CatImage());
+        var rotateBox = new TransformDecorator().Center().Child(CatImage());
         var sliderRotate = new Slider().Range(-180, 180).Value(0).Width(180);
-        rotateBox.Bind(TransformBox.RotationDegreesProperty, sliderRotate, RangeBase.ValueProperty);
+        sliderRotate.OnValueChanged(degrees => rotateBox.Transform = Matrix3x2.CreateRotation(Radians(degrees)));
 
         // --- Scale ---
-        var scaleBox = new TransformBox().Center().Child(CatImage());
+        var scaleBox = new TransformDecorator().Center().Child(CatImage());
         var sliderScale = new Slider().Range(10, 300).Value(100).Width(180);
-        scaleBox.Bind(TransformBox.ScaleXProperty, sliderScale, RangeBase.ValueProperty,
-            v => v / 100.0, v => v * 100.0);
-        scaleBox.Bind(TransformBox.ScaleYProperty, sliderScale, RangeBase.ValueProperty,
-            v => v / 100.0, v => v * 100.0);
+        sliderScale.OnValueChanged(percent => scaleBox.Transform = Matrix3x2.CreateScale((float)(percent / 100.0)));
 
         // --- Combined ---
-        var combinedBox = new TransformBox().Center().Child(
+        var combinedBox = new TransformDecorator().Center().Child(
             new Image().BindSource(Resources.Logo).Width(200).Height(80)
                 .StretchMode(Stretch.Uniform)
                 .ImageScaleQuality(ImageScaleQuality.HighQuality));
         var sliderCombRot = new Slider().Range(-180, 180).Value(0).Width(140);
         var sliderCombScale = new Slider().Range(10, 300).Value(100).Width(140);
-        combinedBox.Bind(TransformBox.RotationDegreesProperty, sliderCombRot, RangeBase.ValueProperty);
-        combinedBox.Bind(TransformBox.ScaleXProperty, sliderCombScale, RangeBase.ValueProperty,
-            v => v / 100.0, v => v * 100.0);
-        combinedBox.Bind(TransformBox.ScaleYProperty, sliderCombScale, RangeBase.ValueProperty,
-            v => v / 100.0, v => v * 100.0);
+        void UpdateCombined() => combinedBox.Transform =
+            Matrix3x2.CreateScale((float)(sliderCombScale.Value / 100.0)) *
+            Matrix3x2.CreateRotation(Radians(sliderCombRot.Value));
+        sliderCombRot.OnValueChanged(_ => UpdateCombined());
+        sliderCombScale.OnValueChanged(_ => UpdateCombined());
 
         // --- Transform Origin ---
-        var originBox = new TransformBox().Center().Child(CatImage());
+        var originBox = new TransformDecorator().Center().Child(CatImage());
         var sliderOX = new Slider().Range(0, 100).Value(50).Width(120);
         var sliderOY = new Slider().Range(0, 100).Value(50).Width(120);
         var sliderOAngle = new Slider().Range(-180, 180).Value(30).Width(120);
-        originBox.Bind(TransformBox.OriginXProperty, sliderOX, RangeBase.ValueProperty,
-            v => v / 100.0, v => v * 100.0);
-        originBox.Bind(TransformBox.OriginYProperty, sliderOY, RangeBase.ValueProperty,
-            v => v / 100.0, v => v * 100.0);
-        originBox.Bind(TransformBox.RotationDegreesProperty, sliderOAngle, RangeBase.ValueProperty);
+        void UpdateOrigin()
+        {
+            originBox.TransformOrigin = new Point(sliderOX.Value / 100.0, sliderOY.Value / 100.0);
+            originBox.Transform = Matrix3x2.CreateRotation(Radians(sliderOAngle.Value));
+        }
+        sliderOX.OnValueChanged(_ => UpdateOrigin());
+        sliderOY.OnValueChanged(_ => UpdateOrigin());
+        sliderOAngle.OnValueChanged(_ => UpdateOrigin());
+        UpdateOrigin();
 
-        // Label helper: bind TextBlock.Text to a double MewProperty with format
-        TextBlock Label(MewObject source, MewProperty<double> prop, string format, double width = 50) =>
+        // Render mode keeps the outlined layout box at 100 x 40 and draws over A and B;
+        // Layout mode grows the box to the rotated bounding box and pushes A and B apart.
+        TransformDecorator ModeSample(TransformMode mode) => new TransformDecorator()
+            .Mode(mode)
+            .Child(
+                new Border()
+                    .Width(100)
+                    .Height(40)
+                    .CornerRadius(4)
+                    .WithTheme((theme, border) => border.Background(theme.Palette.Accent.WithAlpha(64)))
+                    .Child(new TextBlock().Text($"{mode} mode").Center()));
+
+        FrameworkElement ModeRow(TransformDecorator decorator) => new Border()
+            .Height(120)
+            .Child(
+                new StackPanel()
+                    .Horizontal()
+                    .Spacing(4)
+                    .CenterVertical()
+                    .Children(
+                        new TextBlock().Text("A").CenterVertical(),
+                        new Border()
+                            .BorderThickness(1)
+                            .WithTheme((theme, border) => border.BorderBrush(theme.Palette.ControlBorder))
+                            .CenterVertical()
+                            .Child(decorator),
+                        new TextBlock().Text("B").CenterVertical()));
+
+        var renderModeBox = ModeSample(TransformMode.Render);
+        var layoutModeBox = ModeSample(TransformMode.Layout);
+        var sliderModeAngle = new Slider().Range(-180, 180).Value(30).Width(180);
+        void UpdateMode()
+        {
+            var rotation = Matrix3x2.CreateRotation(Radians(sliderModeAngle.Value));
+            renderModeBox.Transform = rotation;
+            layoutModeBox.Transform = rotation;
+        }
+        sliderModeAngle.OnValueChanged(_ => UpdateMode());
+        UpdateMode();
+
+        // Every input below lands where the control is drawn: clicks, slider drags, the drop-down and
+        // tool tip placement, and the pointer position reported in the panel's own coordinates.
+        var hitClicks = new ObservableValue<int>(0);
+        var hitPointer = new ObservableValue<string>("Pointer in panel: -");
+        var hitSlider = new Slider().Range(0, 100).Value(40).Width(140);
+        var hitPanel = new Border()
+            .Padding(8)
+            .CornerRadius(6)
+            .BorderThickness(1)
+            .WithTheme((theme, border) => border.Background(theme.Palette.ContainerBackground).BorderBrush(theme.Palette.ControlBorder))
+            .Child(
+                new StackPanel()
+                    .Vertical()
+                    .Spacing(6)
+                    .Children(
+                        new Button()
+                            .Content("Click me")
+                            .ToolTip("The tool tip opens at the drawn button")
+                            .OnClick(() => hitClicks.Value++),
+                        hitSlider,
+                        new ComboBox()
+                            .Width(140)
+                            .Items("Red", "Green", "Blue")
+                            .SelectedIndex(0)));
+        hitPanel.OnMouseMove(args =>
+        {
+            var position = args.GetPosition(hitPanel);
+            hitPointer.Value = $"Pointer in panel: {position.X:0}, {position.Y:0}";
+        });
+
+        var hitBox = new TransformDecorator().Center().Child(hitPanel);
+        var sliderHitAngle = new Slider().Range(-180, 180).Value(-20).Width(140);
+        var sliderHitScale = new Slider().Range(50, 160).Value(120).Width(140);
+        void UpdateHit() => hitBox.Transform =
+            Matrix3x2.CreateScale((float)(sliderHitScale.Value / 100.0)) *
+            Matrix3x2.CreateRotation(Radians(sliderHitAngle.Value));
+        sliderHitAngle.OnValueChanged(_ => UpdateHit());
+        sliderHitScale.OnValueChanged(_ => UpdateHit());
+        UpdateHit();
+
+        // The child keeps its natural size; Stretch picks the scale and StretchDirection limits it to growing or shrinking.
+        Stretch[] stretchOptions = [Stretch.None, Stretch.Fill, Stretch.Uniform, Stretch.UniformToFill];
+        StretchDirection[] directionOptions = [StretchDirection.UpOnly, StretchDirection.DownOnly, StretchDirection.Both];
+        var viewbox = new Viewbox().Child(
+            new Border()
+                .Padding(8)
+                .CornerRadius(6)
+                .WithTheme((theme, border) => border.Background(theme.Palette.Accent.WithAlpha(48)))
+                .Child(
+                    new StackPanel()
+                        .Vertical()
+                        .Spacing(4)
+                        .Children(
+                            new TextBlock().Text("Viewbox content").Bold(),
+                            new Button().Content("Button"))));
+        var viewboxHost = new Border()
+            .Width(200)
+            .Height(120)
+            .BorderThickness(1)
+            .ClipToBounds(true)
+            .WithTheme((theme, border) => border.BorderBrush(theme.Palette.ControlBorder))
+            .Center()
+            .Child(viewbox);
+
+        var stretchCombo = new ComboBox()
+            .Width(140)
+            .Items(stretchOptions, option => option.ToString())
+            .SelectedIndex(Array.IndexOf(stretchOptions, viewbox.Stretch));
+        stretchCombo.OnSelectionChanged(_ => viewbox.Stretch = stretchOptions[Math.Max(0, stretchCombo.SelectedIndex)]);
+
+        var directionCombo = new ComboBox()
+            .Width(140)
+            .Items(directionOptions, option => option.ToString())
+            .SelectedIndex(Array.IndexOf(directionOptions, viewbox.StretchDirection));
+        directionCombo.OnSelectionChanged(_ => viewbox.StretchDirection = directionOptions[Math.Max(0, directionCombo.SelectedIndex)]);
+
+        var sliderViewboxWidth = new Slider().Range(40, 280).Value(200).Width(140);
+        var sliderViewboxHeight = new Slider().Range(30, 160).Value(120).Width(140);
+        sliderViewboxWidth.OnValueChanged(width => viewboxHost.Width = width);
+        sliderViewboxHeight.OnValueChanged(height => viewboxHost.Height = height);
+
+        // Label helper: bind TextBlock.Text to a slider value with format
+        TextBlock Label(Slider source, Func<double, string> format, double width = 50) =>
             new TextBlock()
-                .Bind(TextBlock.TextProperty, source, prop, v => v.ToString(format))
+                .Bind(TextBlock.TextProperty, source, RangeBase.ValueProperty, format)
                 .Width(width)
                 .CenterVertical();
 
@@ -73,11 +201,11 @@ partial class GalleryView
                     new StackPanel().Horizontal().Spacing(8).Children(
                         new TextBlock().Text("X:").StretchHorizontal(),
                         sliderTX,
-                        Label(translateBox, TransformBox.TranslateXProperty, "F0", 40)),
+                        Label(sliderTX, value => value.ToString("F0"), 40)),
                     new StackPanel().Horizontal().Spacing(8).Children(
                         new TextBlock().Text("Y:").StretchHorizontal(),
                         sliderTY,
-                        Label(translateBox, TransformBox.TranslateYProperty, "F0", 40))
+                        Label(sliderTY, value => value.ToString("F0"), 40))
                 )
             ),
 
@@ -90,7 +218,7 @@ partial class GalleryView
                     new StackPanel().Horizontal().Spacing(8).Children(
                         new TextBlock().Text("Angle:").StretchHorizontal(),
                         sliderRotate,
-                        Label(rotateBox, TransformBox.RotationDegreesProperty, "0\u00b0"))
+                        Label(sliderRotate, value => value.ToString("0\u00b0")))
                 )
             ),
 
@@ -103,7 +231,7 @@ partial class GalleryView
                     new StackPanel().Horizontal().Spacing(8).Children(
                         new TextBlock().Text("Scale:").StretchHorizontal(),
                         sliderScale,
-                        Label(scaleBox, TransformBox.ScaleXProperty, "0.00\u0078"))
+                        Label(sliderScale, value => (value / 100.0).ToString("0.00\u0078")))
                 )
             ),
 
@@ -116,11 +244,11 @@ partial class GalleryView
                     new StackPanel().Horizontal().Spacing(8).Children(
                         new TextBlock().Text("Angle:").StretchHorizontal(),
                         sliderCombRot,
-                        Label(combinedBox, TransformBox.RotationDegreesProperty, "0\u00b0")),
+                        Label(sliderCombRot, value => value.ToString("0\u00b0"))),
                     new StackPanel().Horizontal().Spacing(8).Children(
                         new TextBlock().Text("Scale:").StretchHorizontal(),
                         sliderCombScale,
-                        Label(combinedBox, TransformBox.ScaleXProperty, "0.00\u0078"))
+                        Label(sliderCombScale, value => (value / 100.0).ToString("0.00\u0078")))
                 )
             ),
 
@@ -133,15 +261,76 @@ partial class GalleryView
                     new StackPanel().Horizontal().Spacing(8).Children(
                         new TextBlock().Text("Origin X:").StretchHorizontal(),
                         sliderOX,
-                        Label(originBox, TransformBox.OriginXProperty, "F2", 40)),
+                        Label(sliderOX, value => (value / 100.0).ToString("F2"), 40)),
                     new StackPanel().Horizontal().Spacing(8).Children(
                         new TextBlock().Text("Origin Y:").StretchHorizontal(),
                         sliderOY,
-                        Label(originBox, TransformBox.OriginYProperty, "F2", 40)),
+                        Label(sliderOY, value => (value / 100.0).ToString("F2"), 40)),
                     new StackPanel().Horizontal().Spacing(8).Children(
                         new TextBlock().Text("Angle:").StretchHorizontal(),
                         sliderOAngle,
-                        Label(originBox, TransformBox.RotationDegreesProperty, "0\u00b0"))
+                        Label(sliderOAngle, value => value.ToString("0\u00b0")))
+                )
+            ),
+
+            Card(
+                "Render vs Layout Mode",
+                new StackPanel().Vertical().Spacing(8).Children(
+                    ModeRow(renderModeBox),
+                    ModeRow(layoutModeBox),
+                    new StackPanel().Horizontal().Spacing(8).Children(
+                        new TextBlock().Text("Angle:").StretchHorizontal(),
+                        sliderModeAngle,
+                        Label(sliderModeAngle, value => value.ToString("0\u00b0")))
+                )
+            ),
+
+            Card(
+                "Hit Testing",
+                new StackPanel().Vertical().Spacing(8).Children(
+                    new Border().Height(240).ClipToBounds(true)
+                        .StretchHorizontal()
+                        .Child(hitBox),
+                    new StackPanel().Horizontal().Spacing(8).Children(
+                        new TextBlock().Text("Angle:").StretchHorizontal(),
+                        sliderHitAngle,
+                        Label(sliderHitAngle, value => value.ToString("0\u00b0"))),
+                    new StackPanel().Horizontal().Spacing(8).Children(
+                        new TextBlock().Text("Scale:").StretchHorizontal(),
+                        sliderHitScale,
+                        Label(sliderHitScale, value => (value / 100.0).ToString("0.00\u0078"))),
+                    new TextBlock()
+                        .BindText(hitClicks, count => $"Clicks: {count}")
+                        .FontSize(ThemeFontSize.Small),
+                    new TextBlock()
+                        .Bind(TextBlock.TextProperty, hitSlider, RangeBase.ValueProperty, (double value) => $"Slider value: {value:0}")
+                        .FontSize(ThemeFontSize.Small),
+                    new TextBlock()
+                        .BindText(hitPointer)
+                        .FontSize(ThemeFontSize.Small)
+                )
+            ),
+
+            Card(
+                "Viewbox",
+                new StackPanel().Vertical().Spacing(8).Children(
+                    new Border().Height(170)
+                        .StretchHorizontal()
+                        .Child(viewboxHost),
+                    new StackPanel().Horizontal().Spacing(8).Children(
+                        new TextBlock().Text("Stretch:").StretchHorizontal(),
+                        stretchCombo),
+                    new StackPanel().Horizontal().Spacing(8).Children(
+                        new TextBlock().Text("Direction:").StretchHorizontal(),
+                        directionCombo),
+                    new StackPanel().Horizontal().Spacing(8).Children(
+                        new TextBlock().Text("Width:").StretchHorizontal(),
+                        sliderViewboxWidth,
+                        Label(sliderViewboxWidth, value => value.ToString("F0"), 40)),
+                    new StackPanel().Horizontal().Spacing(8).Children(
+                        new TextBlock().Text("Height:").StretchHorizontal(),
+                        sliderViewboxHeight,
+                        Label(sliderViewboxHeight, value => value.ToString("F0"), 40))
                 )
             ),
 
