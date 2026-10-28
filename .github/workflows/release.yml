@@ -25,6 +25,10 @@ jobs:
             8.0.x
             10.0.x
 
+      # The template gate in pack_mewui.cmd builds a browser app, which compiles a native shim.
+      - name: Install wasm-tools workload
+        run: dotnet workload install wasm-tools
+
       - name: Compute version
         id: version
         shell: pwsh

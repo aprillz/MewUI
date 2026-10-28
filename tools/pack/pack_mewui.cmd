@@ -51,6 +51,11 @@ set PROJECTS=^
   src\MewUI.Backend.MewVG.X11\MewUI.Backend.MewVG.X11.csproj^
   src\MewUI.Backend.MewVG.MacOS\MewUI.Backend.MewVG.MacOS.csproj
 
+REM --- Browser pair (net10.0 only; no metapackage includes them) ---
+set PROJECTS=%PROJECTS%^
+  src\MewUI.Platform.Browser\MewUI.Platform.Browser.csproj^
+  src\MewUI.Backend.MewVG.Browser\MewUI.Backend.MewVG.Browser.csproj
+
 REM --- Metapackages (meta) ---
 set PROJECTS=%PROJECTS%^
   meta\MewUI.Windows\MewUI.Windows.csproj^
@@ -76,6 +81,10 @@ set PROJECTS=%PROJECTS%^
   extensions\MewUI.Skia.Interop.MewVG.Win32\MewUI.Skia.Interop.MewVG.Win32.csproj^
   extensions\MewUI.Skia.Interop.MewVG.X11\MewUI.Skia.Interop.MewVG.X11.csproj^
   extensions\MewUI.Skia.Interop.MewVG.MacOS\MewUI.Skia.Interop.MewVG.MacOS.csproj
+
+REM --- dotnet new templates; check_templates.cmd builds an app from each after packing ---
+set PROJECTS=%PROJECTS%^
+  templates\MewUI.Templates\MewUI.Templates.csproj
 
 for %%P in (%PROJECTS%) do (
   echo Packing %%P ...
@@ -135,6 +144,18 @@ dotnet "%AUDIT_DLL%" --fail-on-missing !GATE_DLLS! > "%AUDIT_REPORT%"
 if errorlevel 1 (
   echo.
   echo FAILED: fluent coverage gate. Packages under %OUT% must not be published; see %AUDIT_REPORT%
+  exit /b 1
+)
+
+REM --- Template gate: an app created from each template builds against the packages just packed ---
+set TEMPLATE_VERSION=%VERSION%
+if "%TEMPLATE_VERSION%"=="" (
+  for /f "usebackq delims=" %%V in (`dotnet msbuild "%ROOT%\templates\MewUI.Templates\MewUI.Templates.csproj" -getProperty:PackageVersion`) do set TEMPLATE_VERSION=%%V
+)
+call "%~dp0check_templates.cmd" "%OUT%" !TEMPLATE_VERSION!
+if errorlevel 1 (
+  echo.
+  echo FAILED: template gate. Packages under %OUT% must not be published.
   exit /b 1
 )
 
