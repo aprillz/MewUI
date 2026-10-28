@@ -176,17 +176,22 @@ public sealed class ZoomPanCanvas : FrameworkElement, IVisualTreeHost
         child.Arrange(new Rect(0, 0, natural.Width, natural.Height));
     }
 
-    protected override void RenderSubtree(IGraphicsContext context)
+    protected override void OnRender(IGraphicsContext context)
     {
+        base.OnRender(context);
         if (ShowCheckerboardBackground && Bounds.Width > 0 && Bounds.Height > 0)
         {
             AlphaCheckerboard.Fill(context, Bounds, Theme.IsDark);
         }
+    }
 
+    protected override bool TryGetChildTransform(out Matrix3x2 transform)
+    {
         var child = Child;
         if (child == null)
         {
-            return;
+            transform = Matrix3x2.Identity;
+            return false;
         }
 
         var bounds = Bounds;
@@ -197,22 +202,12 @@ public sealed class ZoomPanCanvas : FrameworkElement, IVisualTreeHost
                 scrollViewer.ViewportWidth > 0 ? scrollViewer.ViewportWidth : bounds.Width,
                 scrollViewer.ViewportHeight > 0 ? scrollViewer.ViewportHeight : bounds.Height);
         float zoom = (float)Zoom;
+        var centerOffset = GetCenterOffset(viewportSize, child.DesiredSize, Zoom);
 
-        context.Save();
-
-        var current = context.GetTransform();
-        var natural = child.DesiredSize;
-        var centerOffset = GetCenterOffset(viewportSize, natural, Zoom);
-        float cx = (float)centerOffset.X;
-        float cy = (float)centerOffset.Y;
-
-        var transform = Matrix3x2.CreateScale(zoom, zoom)
-            * Matrix3x2.CreateTranslation((float)bounds.X + cx, (float)bounds.Y + cy)
-            * current;
-
-        context.SetTransform(transform);
-        child.Render(context);
-        context.Restore();
+        // The child is arranged at the origin, so the scale lands it at the bounds plus the centering offset.
+        transform = Matrix3x2.CreateScale(zoom, zoom)
+            * Matrix3x2.CreateTranslation((float)(bounds.X + centerOffset.X), (float)(bounds.Y + centerOffset.Y));
+        return true;
     }
 
     protected override UIElement? OnHitTest(Point point)
@@ -222,7 +217,25 @@ public sealed class ZoomPanCanvas : FrameworkElement, IVisualTreeHost
             return null;
         }
 
-        return Bounds.Contains(point) ? this : null;
+        // The child is drawn under the zoom transform, so the point is mapped back into its own coordinates.
+        var child = Child;
+        if (child != null && TryGetChildTransform(out var transform) && Matrix3x2.Invert(transform, out var inverse))
+        {
+            var mapped = Vector2.Transform(new Vector2((float)point.X, (float)point.Y), inverse);
+            if (child.HitTest(new Point(mapped.X, mapped.Y)) is UIElement childHit)
+            {
+                return childHit;
+            }
+        }
+
+        if (Bounds.Contains(point))
+        {
+            return this;
+        }
+        else
+        {
+            return null;
+        }
     }
 
     protected override void OnMouseWheel(MouseWheelEventArgs e)

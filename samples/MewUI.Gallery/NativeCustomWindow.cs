@@ -305,17 +305,17 @@ public class NativeCustomWindow : Window
     /// </summary>
     internal sealed class AlphaTextPanel : ContentControl
     {
-        protected override void RenderSubtree(IGraphicsContext context)
+        protected override void OnRender(IGraphicsContext context)
         {
+            // The hint is plain context state that Save/Restore leaves alone, so it stays on for the
+            // content the framework draws after this; the overlay, drawn after the content, turns it off.
             context.EnableAlphaTextHint = true;
-            try
-            {
-                base.RenderSubtree(context);
-            }
-            finally
-            {
-                context.EnableAlphaTextHint = false;
-            }
+            base.OnRender(context);
+        }
+
+        protected override void OnRenderOverlay(IGraphicsContext context)
+        {
+            context.EnableAlphaTextHint = false;
         }
     }
 }
