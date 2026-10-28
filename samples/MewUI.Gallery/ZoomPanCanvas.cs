@@ -198,43 +198,49 @@ public class ZoomPanCanvas : FrameworkElement, IVisualTreeHost
         child.Arrange(new Rect(bounds.X, bounds.Y, natural.Width, natural.Height));
     }
 
-    protected override void RenderSubtree(IGraphicsContext context)
+    protected override bool TryGetChildTransform(out Matrix3x2 transform)
     {
         var child = Child;
         if (child == null)
         {
-            return;
+            transform = Matrix3x2.Identity;
+            return false;
         }
 
         var bounds = Bounds;
         var zoom = (float)Zoom;
-
-        context.Save();
-        context.SetClip(bounds);
-
-        var current = context.GetTransform();
         var natural = child.DesiredSize;
-        float cx = CenterContent ? (float)Math.Max(0, (bounds.Width - natural.Width * zoom) * 0.5) : 0f;
-        float cy = CenterContent ? (float)Math.Max(0, (bounds.Height - natural.Height * zoom) * 0.5) : 0f;
+        float centerX = CenterContent ? (float)Math.Max(0, (bounds.Width - natural.Width * zoom) * 0.5) : 0f;
+        float centerY = CenterContent ? (float)Math.Max(0, (bounds.Height - natural.Height * zoom) * 0.5) : 0f;
 
-        var transform = Matrix3x2.CreateTranslation(-(float)bounds.X, -(float)bounds.Y)
+        // Scale about the top-left corner of the bounds, then shift for centering.
+        transform = Matrix3x2.CreateTranslation(-(float)bounds.X, -(float)bounds.Y)
             * Matrix3x2.CreateScale(zoom, zoom)
-            * Matrix3x2.CreateTranslation((float)bounds.X + cx, (float)bounds.Y + cy)
-            * current;
-
-        context.SetTransform(transform);
-        child.Render(context);
-        context.Restore();
+            * Matrix3x2.CreateTranslation((float)bounds.X + centerX, (float)bounds.Y + centerY);
+        return true;
     }
+
+    protected override ChildClip? GetChildClip(UIElement child) => new ChildClip(Bounds);
 
     protected override UIElement? OnHitTest(Point point)
     {
-        if (!IsVisible || !IsHitTestVisible)
+        if (!IsVisible || !IsHitTestVisible || !Bounds.Contains(point))
         {
             return null;
         }
 
-        return Bounds.Contains(point) ? this : null;
+        // The child is drawn under the zoom transform, so the point is mapped back into its own coordinates.
+        var child = Child;
+        if (child != null && TryGetChildTransform(out var transform) && Matrix3x2.Invert(transform, out var inverse))
+        {
+            var mapped = Vector2.Transform(new Vector2((float)point.X, (float)point.Y), inverse);
+            if (child.HitTest(new Point(mapped.X, mapped.Y)) is UIElement childHit)
+            {
+                return childHit;
+            }
+        }
+
+        return this;
     }
 
     protected override void OnMouseWheel(MouseWheelEventArgs e)
