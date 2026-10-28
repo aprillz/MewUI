@@ -216,7 +216,7 @@ public sealed partial class DatePicker : DropDownBase
 
     protected override Rect CalculatePopupBounds(Window window, UIElement popup)
     {
-        var bounds = Bounds;
+        var bounds = GetBoundsInRoot();
         var region = window.GetPopupPlacementRegion(bounds);
 
         // Calendar measures itself - use its desired size
@@ -226,7 +226,7 @@ public sealed partial class DatePicker : DropDownBase
 
         double x = PopupPlacement.ClampHorizontal(bounds.X, popupW, region, floorToLeftEdge: false);
 
-        double belowY = bounds.Y + ResolveHeaderHeight();
+        double belowY = GetAnchorInRoot(ResolveHeaderHeight()).Bottom;
         var (y, height) = PopupPlacement.ResolveVerticalPreferBelowIfFits(bounds.Y, belowY, region, popupH);
 
         return new Rect(x, y, popupW, height);

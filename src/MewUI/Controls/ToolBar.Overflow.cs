@@ -78,7 +78,7 @@ public sealed partial class ToolBar
         {
             _anchor = anchor;
             anchor.IsOverflowOpen = true;
-            _popup.ShowAt(anchor, anchor.Bounds);
+            _popup.ShowAt(anchor, anchor.GetBoundsInRoot());
         }
 
         internal void Close() => _popup.Close();

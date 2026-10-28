@@ -73,7 +73,7 @@ public partial class ToggleButton : ToggleBase
         bool toggleAllowed = !e.Handled;
         bool wasPressed = _pressCapture.EndPress();
 
-        if (toggleAllowed && wasPressed && IsEffectivelyEnabled && Bounds.Contains(e.Position))
+        if (toggleAllowed && wasPressed && IsEffectivelyEnabled && Bounds.Contains(TransformFromRoot(e.Position)))
         {
             CommitIsCheckedFromUser(!IsChecked);
         }

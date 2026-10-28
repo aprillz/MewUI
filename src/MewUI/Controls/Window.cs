@@ -2478,7 +2478,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             // stays at (0,0,0,0). Use the client size rect when the adorned element is this window.
             var bounds = ReferenceEquals(adorned, this)
                 ? new Rect(0, 0, _clientSizeDip.Width, _clientSizeDip.Height)
-                : adorned.Bounds;
+                : adorned.GetBoundsInRoot();
             adorner.Measure(new Size(bounds.Width, bounds.Height));
             adorner.Arrange(bounds);
         }

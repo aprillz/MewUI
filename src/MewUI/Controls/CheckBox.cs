@@ -215,7 +215,7 @@ public partial class CheckBox : CommandSourceControl
 
         bool wasPressed = _pressCapture.EndPress();
 
-        if (wasPressed && IsEffectivelyEnabled && Bounds.Contains(e.Position))
+        if (wasPressed && IsEffectivelyEnabled && Bounds.Contains(TransformFromRoot(e.Position)))
         {
             Toggle();
         }

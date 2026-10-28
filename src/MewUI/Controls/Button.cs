@@ -257,7 +257,7 @@ public partial class Button : CommandSourceControl
             bool wasPressed = _pressCapture.EndPress();
 
             // Fire click only when the release lands on the still-pressed button
-            if (wasPressed && !SuppressClickOnMouseUp && IsEffectivelyEnabled && Bounds.Contains(e.Position))
+            if (wasPressed && !SuppressClickOnMouseUp && IsEffectivelyEnabled && Bounds.Contains(TransformFromRoot(e.Position)))
             {
                 OnClick();
             }

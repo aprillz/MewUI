@@ -266,7 +266,7 @@ public sealed partial class ScrollBar : RangeBase
                 return;
             }
 
-            PageToward(_trackPart.ValueFromPoint(e.Position));
+            PageToward(_trackPart.ValueFromPoint(TransformFromRoot(e.Position)));
             e.Handled = true;
             return;
         }
@@ -275,7 +275,7 @@ public sealed partial class ScrollBar : RangeBase
         var layout = ComputeLayout(track);
         var thumbHit = GetThumbHitRect(layout.ThumbRect, Bounds);
 
-        var position = e.Position;
+        var position = TransformFromRoot(e.Position);
         double pos = Orientation == Orientation.Vertical ? position.Y : position.X;
 
         if (thumbHit.Contains(position))
@@ -320,7 +320,7 @@ public sealed partial class ScrollBar : RangeBase
         }
 
         var layout = ComputeLayout(GetTrackRect(Bounds, Theme));
-        var position = e.Position;
+        var position = TransformFromRoot(e.Position);
         double pos = Orientation == Orientation.Vertical ? position.Y : position.X;
 
         CommitValue(_dragStartValue + layout.ValueFromDistance(pos - _dragStartPos));

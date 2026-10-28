@@ -1081,7 +1081,7 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
             return;
         }
         Focus();
-        SetCaretFromPoint(e.Position, e.ShiftKey);
+        SetCaretFromPoint(TransformFromRoot(e.Position), e.ShiftKey);
         _dragSelecting = true;
         if (FindVisualRoot() is Window window)
         {
@@ -1094,7 +1094,7 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
     {
         base.OnMouseDoubleClick(e);
         if (e.Handled || e.Button != MouseButton.Left || !IsEffectivelyEnabled) return;
-        SetCaretFromPoint(e.Position, false);
+        SetCaretFromPoint(TransformFromRoot(e.Position), false);
         _editor.SelectWordAt(_editor.CaretPosition);
         EnsureCaretVisible();
         e.Handled = true;
@@ -1107,8 +1107,8 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
         {
             return;
         }
-        AutoScroll(e.Position);
-        SetCaretFromPoint(e.Position, true);
+        AutoScroll(TransformFromRoot(e.Position));
+        SetCaretFromPoint(TransformFromRoot(e.Position), true);
         e.Handled = true;
     }
 

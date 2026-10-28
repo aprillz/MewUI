@@ -992,9 +992,7 @@ public abstract partial class Element : MewObject
             throw new InvalidOperationException("The specified element is not an ancestor of this element.");
         }
 
-        double dx = Bounds.X - ancestor.Bounds.X;
-        double dy = Bounds.Y - ancestor.Bounds.Y;
-        return new TranslateGeneralTransform(dx, dy);
+        return CreateTransform(this, ancestor, ancestor);
     }
 
     /// <summary>
@@ -1039,9 +1037,107 @@ public abstract partial class Element : MewObject
             throw new InvalidOperationException("The specified element is not in the same visual tree.");
         }
 
-        double dx = Bounds.X - visual.Bounds.X;
-        double dy = Bounds.Y - visual.Bounds.Y;
-        return new TranslateGeneralTransform(dx, dy);
+        return CreateTransform(this, visual, FindCommonAncestor(this, visual));
+    }
+
+    /// <summary>
+    /// Gets the transform this element applies to its children when drawing them, mapping window coordinates
+    /// before the transform to window coordinates after it; false when the children are drawn untransformed.
+    /// </summary>
+    internal virtual bool TryGetChildTransform(out System.Numerics.Matrix3x2 transform)
+    {
+        transform = System.Numerics.Matrix3x2.Identity;
+        return false;
+    }
+
+    private static GeneralTransform CreateTransform(Element source, Element target, Element common)
+    {
+        // Transforms above the common ancestor apply to both sides alike and cancel out.
+        var sourceChain = ComposeChildTransforms(source, common, includeCommon: ReferenceEquals(target, common));
+        var targetChain = ComposeChildTransforms(target, common, includeCommon: ReferenceEquals(source, common));
+        if (sourceChain == null && targetChain == null)
+        {
+            double dx = source.Bounds.X - target.Bounds.X;
+            double dy = source.Bounds.Y - target.Bounds.Y;
+            return new TranslateGeneralTransform(dx, dy);
+        }
+
+        var sourceToWindow = MatrixGeneralTransform.Translation(source.Bounds.X, source.Bounds.Y);
+        if (sourceChain != null)
+        {
+            sourceToWindow = sourceToWindow.Then(sourceChain);
+        }
+
+        var targetToWindow = MatrixGeneralTransform.Translation(target.Bounds.X, target.Bounds.Y);
+        if (targetChain != null)
+        {
+            targetToWindow = targetToWindow.Then(targetChain);
+        }
+
+        return sourceToWindow.Then(targetToWindow.Invert());
+    }
+
+    /// <summary>
+    /// The child transforms of the ancestors of <paramref name="element"/> up to <paramref name="common"/>, nearest
+    /// first, mapping window coordinates before them to window coordinates after them; null when none applies.
+    /// </summary>
+    internal static MatrixGeneralTransform? ComposeChildTransforms(Element element, Element common, bool includeCommon)
+    {
+        MatrixGeneralTransform? chain = null;
+        for (var current = element; !ReferenceEquals(current, common) && current.Parent != null; current = current.Parent)
+        {
+            var parent = current.Parent;
+            if ((includeCommon || !ReferenceEquals(parent, common)) && parent.TryGetChildTransform(out var matrix))
+            {
+                var step = MatrixGeneralTransform.FromMatrix(matrix);
+                if (chain == null)
+                {
+                    chain = step;
+                }
+                else
+                {
+                    chain = chain.Then(step);
+                }
+            }
+        }
+
+        return chain;
+    }
+
+    private static Element FindCommonAncestor(Element first, Element second)
+    {
+        int firstDepth = Depth(first);
+        int secondDepth = Depth(second);
+        var firstCursor = first;
+        var secondCursor = second;
+        for (; firstDepth > secondDepth; firstDepth--)
+        {
+            firstCursor = firstCursor.Parent!;
+        }
+
+        for (; secondDepth > firstDepth; secondDepth--)
+        {
+            secondCursor = secondCursor.Parent!;
+        }
+
+        while (!ReferenceEquals(firstCursor, secondCursor))
+        {
+            firstCursor = firstCursor.Parent!;
+            secondCursor = secondCursor.Parent!;
+        }
+
+        return firstCursor;
+    }
+
+    private static int Depth(Element element)
+    {
+        int depth = 0;
+        for (var current = element.Parent; current != null; current = current.Parent)
+        {
+            depth++;
+        }
+
+        return depth;
     }
 
     /// <summary>

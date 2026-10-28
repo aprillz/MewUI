@@ -34,7 +34,7 @@ internal abstract class PartAutomationPeer : AutomationPeer
     protected override bool HasKeyboardFocusCore() => false;
 
     protected override Rect GetBoundingRectangleCore()
-        => TryGetBoundsInHost(out var bounds) ? bounds : Rect.Empty;
+        => TryGetBoundsInHost(out var bounds) ? Host.TransformToRoot(bounds) : Rect.Empty;
 
     protected override Window? GetWindowCore() => HostPeer.GetWindow();
 

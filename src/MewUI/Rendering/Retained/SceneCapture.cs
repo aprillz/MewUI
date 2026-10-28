@@ -490,6 +490,11 @@ internal sealed class SceneCapture
                 break;
             case CompositionEntryKind.Transform:
                 context.SetTransform(entry.Matrix * context.GetTransform());
+                if (entry.DisablesTextPixelSnap)
+                {
+                    context.TextPixelSnap = false;
+                }
+
                 break;
             default:
                 throw new InvalidOperationException($"The composition entry {entry.Kind} is not a scope.");

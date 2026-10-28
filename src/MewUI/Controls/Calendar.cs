@@ -701,7 +701,7 @@ public sealed partial class Calendar : Control, IVisualTreeHost
     protected override void OnMouseMove(MouseEventArgs e)
     {
         base.OnMouseMove(e);
-        int newHot = HitTestCell(e.Position);
+        int newHot = HitTestCell(TransformFromRoot(e.Position));
         if (newHot != _hotCellIndex)
         {
             _hotCellIndex = newHot;
@@ -726,7 +726,7 @@ public sealed partial class Calendar : Control, IVisualTreeHost
 
         Focus();
 
-        int cellIndex = HitTestCell(e.Position);
+        int cellIndex = HitTestCell(TransformFromRoot(e.Position));
         if (cellIndex < 0) return;
 
         HandleCellActivated(cellIndex);

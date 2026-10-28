@@ -472,7 +472,7 @@ public sealed partial class ComboBox : DropDownBase, ISelector, IIndexedSelector
             return base.CalculatePopupBounds(window, popup);
         }
 
-        var bounds = Bounds;
+        var bounds = GetBoundsInRoot();
         double width = Math.Max(0, bounds.Width);
         if (width <= 0)
         {

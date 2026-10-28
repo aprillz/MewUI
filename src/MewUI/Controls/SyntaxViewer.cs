@@ -744,7 +744,7 @@ public sealed partial class SyntaxViewer : Control, IVisualTreeHost, ITextViewHo
             return;
         }
         if (e.Button != MouseButton.Left) return;
-        SetCaretFromPoint(e.Position, e.ShiftKey);
+        SetCaretFromPoint(TransformFromRoot(e.Position), e.ShiftKey);
         _dragSelecting = true;
         if (FindVisualRoot() is Window window) window.CaptureMouse(this);
         e.Handled = true;
@@ -754,7 +754,7 @@ public sealed partial class SyntaxViewer : Control, IVisualTreeHost, ITextViewHo
     {
         base.OnMouseMove(e);
         if (!_dragSelecting || !IsMouseCaptured || !e.LeftButton) return;
-        SetCaretFromPoint(e.Position, true);
+        SetCaretFromPoint(TransformFromRoot(e.Position), true);
         e.Handled = true;
     }
 
