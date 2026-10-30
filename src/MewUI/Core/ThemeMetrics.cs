@@ -71,7 +71,7 @@ public sealed record class ThemeMetrics
     public required Thickness ContainerPadding { get; init; }
 
     /// <summary>
-    /// Gets the default padding between the border of an item list control (menu, list, tree) and its items (in DIPs).
+    /// Gets the default padding between the border of an item list control (menu, list, tree, calendar) and its items (in DIPs).
     /// </summary>
     public Thickness ItemsContainerPadding { get; init; }
 

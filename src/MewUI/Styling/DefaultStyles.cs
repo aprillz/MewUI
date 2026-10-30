@@ -280,7 +280,8 @@ public static class DefaultStyles
     internal static Style CreateCalendarStyle()
         => CreateValidationControlBasedStyle(typeof(Calendar),
             Setter.Create(Control.CornerRadiusProperty, t => t.Metrics.ControlCornerRadius),
-            Setter.Create(Control.BorderThicknessProperty, t => t.Metrics.ControlBorderThickness));
+            Setter.Create(Control.BorderThicknessProperty, t => t.Metrics.ControlBorderThickness),
+            Setter.Create(Control.PaddingProperty, t => t.Metrics.ItemsContainerPadding));
 
     internal static Style CreateBorderStyle() =>
         new(typeof(Border))
