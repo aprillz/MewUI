@@ -670,7 +670,7 @@ public abstract partial class UIElement : Element
     /// </summary>
     /// <param name="point">The point in window coordinates, the space of <see cref="Element.Bounds"/>.</param>
     /// <returns>The element at the point, or null.</returns>
-    public UIElement? HitTest(Point point) => OnHitTest(point);
+    public UIElement? HitTest(Point point) => IsHeldOutOfView ? null : OnHitTest(point);
 
     protected virtual UIElement? OnHitTest(Point point)
     {

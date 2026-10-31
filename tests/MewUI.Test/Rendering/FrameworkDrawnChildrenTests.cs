@@ -11,8 +11,8 @@ namespace MewUI.Test.Rendering;
 
 /// <summary>
 /// The framework draws a host's children from the data the host exposes: VisitChildren order, GetChildClip,
-/// TryGetChildTransform, and the empty-bounds rule for children the host does not want drawn. The scene builds
-/// the same structure into its plan.
+/// TryGetChildTransform, the empty-bounds rule and the held-out-of-view flag for children the host does not
+/// want drawn. The scene builds the same structure into its plan.
 /// Not parallelizable: the retained tests swap the process-wide Application.DefaultGraphicsFactory.
 /// </summary>
 [TestClass]
@@ -72,6 +72,30 @@ public sealed class FrameworkDrawnChildrenTests
         Assert.AreEqual(_first, ReadPixel(pixels, 50, 50), "the hidden child left the first one showing");
         Assert.AreEqual(1, plan.Entries.Count(entry => entry.Kind == CompositionEntryKind.Child));
         Assert.IsNull(host.HitTest(new Point(70, 70)) as Tile, "a child without area is not hit");
+    }
+
+    [TestMethod]
+    public void AChildHeldOutOfView_KeepsItsBounds_ButIsNeitherDrawnNorPlannedNorHit()
+    {
+        if (!OperatingSystem.IsWindows()) { Assert.Inconclusive("GDI backend is Windows-only."); return; }
+
+        var host = new TwoChildHost();
+        Lay(host);
+        host.Second.IsHeldOutOfView = true;
+        using var factory = new GdiGraphicsFactory();
+
+        var pixels = RenderSurface(factory, host.Render);
+        var plan = Plan(host);
+
+        Assert.AreEqual(new Rect(40, 40, 60, 60), host.Second.Bounds, "holding a child out of view leaves its layout alone");
+        Assert.AreEqual(_first, ReadPixel(pixels, 50, 50), "the held child is not drawn");
+        Assert.AreEqual(1, plan.Entries.Count(entry => entry.Kind == CompositionEntryKind.Child));
+        Assert.IsNull(host.HitTest(new Point(70, 70)) as Tile, "the held child is not hit");
+
+        host.Second.IsHeldOutOfView = false;
+
+        Assert.AreSame(host.Second, host.HitTest(new Point(70, 70)), "released, the child is hit again without a new layout");
+        Assert.AreEqual(2, Plan(host).Entries.Count(entry => entry.Kind == CompositionEntryKind.Child));
     }
 
     [TestMethod]

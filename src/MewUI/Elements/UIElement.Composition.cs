@@ -172,13 +172,41 @@ public abstract partial class UIElement
         }
     }
 
+    private bool _isHeldOutOfView;
+
+    /// <summary>
+    /// Set by a host that keeps this element attached and laid out but off the screen, as a virtualizing
+    /// presenter keeps a focused container outside its viewport. The host neither draws nor hit tests it,
+    /// and a change of what it draws waits, as under a culled visual, until the host places it again.
+    /// </summary>
+    internal bool IsHeldOutOfView
+    {
+        get => _isHeldOutOfView;
+        set
+        {
+            if (_isHeldOutOfView == value)
+            {
+                return;
+            }
+
+            _isHeldOutOfView = value;
+            if (value)
+            {
+                MarkSubtreeCulled();
+            }
+
+            // The host's set of drawn children changed, which is a change of its composition.
+            (Parent as UIElement)?.RaiseRenderDirty(RenderDirtyKind.Composition);
+        }
+    }
+
     /// <summary>
     /// True when <paramref name="host"/> draws this visual as one of its children this frame: it is attached to
-    /// the host, visible, not fully transparent and laid out with an area.
+    /// the host, visible, not fully transparent, not held out of view and laid out with an area.
     /// </summary>
     internal bool IsDrawnBy(UIElement host)
     {
-        if (!ReferenceEquals(Parent, host) || !IsVisible || Opacity <= 0)
+        if (!ReferenceEquals(Parent, host) || !IsVisible || Opacity <= 0 || _isHeldOutOfView)
         {
             return false;
         }
