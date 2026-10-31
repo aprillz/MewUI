@@ -118,16 +118,6 @@ internal sealed class VirtualizedItemsPresenter
         }
     }
 
-    /// <summary>
-    /// Leaves a container attached but with no area, so the host neither draws nor hit tests it until
-    /// the next layout gives it a place again.
-    /// </summary>
-    private static void ArrangeOutOfView(FrameworkElement element)
-    {
-        var bounds = element.Bounds;
-        element.Arrange(new Rect(bounds.X, bounds.Y, 0, 0));
-    }
-
     public void Dispose()
     {
         RecycleAll();
@@ -250,7 +240,7 @@ internal sealed class VirtualizedItemsPresenter
                     // user-interaction state (e.g. ToggleSwitch.IsChecked).
                     // Defer rebind + style snap until the item re-enters the visible range.
                     (_pendingRebind ??= new()).Add(key);
-                    ArrangeOutOfView(_realized[key]);
+                    _realized[key].IsHeldOutOfView = true;
                 }
             }
         }
@@ -283,6 +273,8 @@ internal sealed class VirtualizedItemsPresenter
     {
         if (_realized.TryGetValue(index, out var existing))
         {
+            existing.IsHeldOutOfView = false;
+
             // Also rebind if the item was focus-pinned and missed a prior rebind pass.
             bool pending = _pendingRebind != null && _pendingRebind.Remove(index);
             bool generationMismatch = !_itemBindingGenerations.TryGetValue(existing, out var boundGeneration)
@@ -379,6 +371,7 @@ internal sealed class VirtualizedItemsPresenter
         _unbind?.Invoke(element);
         _itemBindingGenerations.Remove(element);
         _resetHeld.Forget(element);
+        element.IsHeldOutOfView = false;
         element.Parent = null;
         if (index is not int recycledIndex || !_recycledByIndex.TryAdd(recycledIndex, element))
         {
