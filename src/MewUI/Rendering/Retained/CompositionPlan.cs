@@ -11,6 +11,13 @@ internal enum CompositionEntryKind : byte
     ClipRoundedRect,
     Transform,
     Alpha,
+
+    /// <summary>
+    /// A scope around one child that roots a <see cref="SceneFrame"/>: the scene reads what lies under the
+    /// child shifted by how far the child has moved since each node was staged, so a whole-pixel move of the
+    /// subtree visits no node that stays out of view. Drawing applies nothing for it.
+    /// </summary>
+    Frame,
 }
 
 /// <summary>
@@ -101,6 +108,12 @@ internal sealed class CompositionPlanBuilder
     {
         Kind = CompositionEntryKind.Alpha,
         Alpha = alpha,
+    });
+
+    /// <summary>Opens a scope whose one child roots a frame; the next entry has to be that child.</summary>
+    internal void PushFrame() => PushScope(new CompositionEntry
+    {
+        Kind = CompositionEntryKind.Frame,
     });
 
     internal void Pop()

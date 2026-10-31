@@ -17,6 +17,9 @@ internal sealed class SceneUpdate
     private readonly Dictionary<UIElement, VisualNode> _createdNodes = new(ReferenceEqualityComparer.Instance);
     private readonly List<PendingVisit> _visits = [];
     private readonly List<PendingConsumption> _consumptions = [];
+    private readonly List<PendingFrame> _frames = [];
+    private readonly List<VisualNode> _hidden = [];
+    private readonly List<Rect> _dirty = [];
     private UIElement? _root;
     private UIElement[]? _layerRoots;
     private RenderScene _scene;
@@ -108,17 +111,59 @@ internal sealed class SceneUpdate
         _compositions.Add(new PendingComposition(node, plan, state, stateBakedIntoContent));
     }
 
+    /// <summary>
+    /// Stages where the visual stands, in the frame <paramref name="frame"/> as it stands in this pass. Every
+    /// surface-space value is as the pass measured it, so the node reads unshifted until the frame moves again.
+    /// <paramref name="planStaged"/> is false for a node the frame carried along, whose plan still stands
+    /// where it was built.
+    /// </summary>
     internal void StageBounds(
         VisualNode node,
         Rect surfaceBounds,
         Rect surfaceSubtreeBounds,
+        Rect surfaceSubtreeReach,
         Point placedOrigin,
-        bool clippedAway = false,
-        CaptureKey captured = default)
+        bool clippedAway,
+        CaptureKey captured,
+        SceneFrame frame,
+        bool planStaged = true)
     {
         ArgumentNullException.ThrowIfNull(node);
-        _bounds.Add(new PendingBounds(node, surfaceBounds, surfaceSubtreeBounds, placedOrigin, clippedAway, captured));
+        ArgumentNullException.ThrowIfNull(frame);
+        _bounds.Add(new PendingBounds(
+            node,
+            surfaceBounds,
+            surfaceSubtreeBounds,
+            surfaceSubtreeReach,
+            placedOrigin,
+            clippedAway,
+            captured,
+            frame,
+            frame.PendingLocalOrigin,
+            frame.PendingSurfaceOrigin,
+            planStaged));
     }
+
+    /// <summary>
+    /// Notes that a frame move took the visual out of view without the pass looking into it. It is marked
+    /// clipped away, as a visit would mark it, and everything it holds stays as it was.
+    /// </summary>
+    internal void StageHidden(VisualNode node)
+    {
+        ArgumentNullException.ThrowIfNull(node);
+        _hidden.Add(node);
+    }
+
+    /// <summary>Stages the frame <paramref name="root"/> roots; the node takes it and the frame lands where it was staged.</summary>
+    internal void StageFrame(VisualNode root, SceneFrame frame)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+        ArgumentNullException.ThrowIfNull(frame);
+        _frames.Add(new PendingFrame(root, frame));
+    }
+
+    /// <summary>Stages a surface area the pass found stale for a reason no single slot or node answers for, as a frame move is.</summary>
+    internal void StageDirty(Rect area) => _dirty.Add(area);
 
     /// <summary>
     /// Where a slot reaches the surface in this pass, whether it was recorded again or only stands in a
@@ -241,7 +286,7 @@ internal sealed class SceneUpdate
             if (visit.AttachmentChanged)
             {
                 // The recorded coordinates belong to the previous parent, so nothing of them survives.
-                _scene.AddDirtyRect(visit.Node.SurfaceSubtreeBounds);
+                _scene.AddDirtyRect(visit.Node.ShiftedSurfaceSubtreeBounds);
                 visit.Node.AttachmentGeneration++;
                 StructureChanged = true;
                 visit.Node.ClearSlots();
@@ -258,6 +303,8 @@ internal sealed class SceneUpdate
             }
         }
 
+        // Everything a node holds from before this pass stands on the surface shifted by how far its frame
+        // has moved since, which is what the node's shift says until the frame lands below.
         for (int compositionIndex = 0; compositionIndex < _compositions.Count; compositionIndex++)
         {
             var composition = _compositions[compositionIndex];
@@ -266,7 +313,7 @@ internal sealed class SceneUpdate
                 (planChanged && !PlanChange.TryFindRemoved(composition.Node.Plan, composition.Plan, _removedEntries)))
             {
                 // What the visual looked like still occupies the surface, so both extents are stale.
-                _scene.AddDirtyRect(composition.Node.SurfaceSubtreeBounds);
+                _scene.AddDirtyRect(composition.Node.ShiftedSurfaceSubtreeBounds);
             }
             else if (planChanged)
             {
@@ -278,12 +325,14 @@ internal sealed class SceneUpdate
                     if (removedEntry.Kind == CompositionEntryKind.Child)
                     {
                         var removedNode = _scene.FindNode(removedEntry.Child!);
-                        _scene.AddDirtyRect(removedNode?.SurfaceSubtreeBounds ?? composition.Node.SurfaceSubtreeBounds);
+                        _scene.AddDirtyRect(removedNode?.ShiftedSurfaceSubtreeBounds ?? composition.Node.ShiftedSurfaceSubtreeBounds);
                     }
                     else
                     {
                         var removedData = composition.Node.GetSlot(removedEntry.SlotIndex);
-                        _scene.AddDirtyRect(removedData?.SurfaceExtent ?? composition.Node.SurfaceBounds);
+                        _scene.AddDirtyRect(removedData == null
+                            ? composition.Node.ShiftedSurfaceBounds
+                            : VisualNode.Shifted(removedData.SurfaceExtent, composition.Node.SurfaceShift));
                     }
                 }
             }
@@ -318,25 +367,27 @@ internal sealed class SceneUpdate
                 _scene.DrawnLiveWhileChanging.Add(slot.Node);
             }
 
+            var slotShift = slot.Node.SurfaceShift;
+            var previousExtent = previous == null ? default : VisualNode.Shifted(previous.SurfaceExtent, slotShift);
             if (wasDrawnLive || isDrawnLive)
             {
                 // A slot without a recording is drawn live across the visual, before or after this pass.
-                _scene.AddDirtyRect(slot.Node.SurfaceBounds);
+                _scene.AddDirtyRect(slot.Node.ShiftedSurfaceBounds);
                 _scene.AddDirtyRect(slot.Extent);
-                _scene.AddDirtyRect(previous?.SurfaceExtent ?? default);
+                _scene.AddDirtyRect(previousExtent);
             }
             else if (previous != null && slot.Data != null && slot.Change is Rect change)
             {
                 // Only some of the drawing calls differ, and the rest already stands on the surface.
                 // The margin around them never reaches past what the two recordings answer for as a whole.
-                _scene.AddDirtyRect(change.Intersect(previous.SurfaceExtent.Union(slot.Extent)));
-                slot.Data.SurfaceExtent = previous.SurfaceExtent;
-                slot.Data.SurfaceReach = previous.SurfaceReach;
+                _scene.AddDirtyRect(change.Intersect(previousExtent.Union(slot.Extent)));
+                slot.Data.SurfaceExtent = previousExtent;
+                slot.Data.SurfaceReach = VisualNode.Shifted(previous.SurfaceReach, slotShift);
             }
             else
             {
                 // A slot the plan did not have before reached nowhere, which an empty extent says.
-                _scene.AddDirtyRect(previous?.SurfaceExtent ?? default);
+                _scene.AddDirtyRect(previousExtent);
                 _scene.AddDirtyRect(slot.Extent);
             }
 
@@ -346,24 +397,8 @@ internal sealed class SceneUpdate
             slot.Node.RecordedSubtreeVersion = slot.SubtreeVersion;
         }
 
-        for (int boundsIndex = 0; boundsIndex < _bounds.Count; boundsIndex++)
-        {
-            var bounds = _bounds[boundsIndex];
-            // Each recording answers for where it was and is (below). Only a visual drawn live has no
-            // recording to do that, so its box does.
-            if (bounds.Node.NonRecordableReason != null && bounds.Node.SurfaceBounds != bounds.SurfaceBounds)
-            {
-                _scene.AddDirtyRect(bounds.Node.SurfaceBounds);
-                _scene.AddDirtyRect(bounds.SurfaceBounds);
-            }
-
-            bounds.Node.SurfaceBounds = bounds.SurfaceBounds;
-            bounds.Node.SurfaceSubtreeBounds = bounds.SurfaceSubtreeBounds;
-            bounds.Node.PlacedOrigin = bounds.PlacedOrigin;
-            bounds.Node.Element.NoteReachesSurface(!bounds.ClippedAway);
-            bounds.Node.Captured = bounds.Captured;
-        }
-
+        // Extents are compared before the bounds land: the bounds carry each node's new frame origin, and the
+        // shift that places a previous extent reads the old one.
         for (int extentIndex = 0; extentIndex < _extents.Count; extentIndex++)
         {
             var extent = _extents[extentIndex];
@@ -373,15 +408,69 @@ internal sealed class SceneUpdate
                 // A recording that stands somewhere else now, recorded again or not, leaves where it was
                 // and covers where it is. One that overhangs its clip on both sides shows the same extent
                 // after a move, so where it stood unclipped is compared as well.
-                if (data.SurfaceExtent != extent.Extent || data.SurfaceReach != extent.Reach)
+                var extentShift = extent.Node.SurfaceShift;
+                var previousExtent = VisualNode.Shifted(data.SurfaceExtent, extentShift);
+                if (previousExtent != extent.Extent || VisualNode.Shifted(data.SurfaceReach, extentShift) != extent.Reach)
                 {
-                    _scene.AddDirtyRect(data.SurfaceExtent);
+                    _scene.AddDirtyRect(previousExtent);
                     _scene.AddDirtyRect(extent.Extent);
                 }
 
                 data.SurfaceExtent = extent.Extent;
                 data.SurfaceReach = extent.Reach;
             }
+        }
+
+        for (int boundsIndex = 0; boundsIndex < _bounds.Count; boundsIndex++)
+        {
+            var bounds = _bounds[boundsIndex];
+            // Each recording answers for where it was and is (above). Only a visual drawn live has no
+            // recording to do that, so its box does.
+            if (bounds.Node.NonRecordableReason != null && bounds.Node.ShiftedSurfaceBounds != bounds.SurfaceBounds)
+            {
+                _scene.AddDirtyRect(bounds.Node.ShiftedSurfaceBounds);
+                _scene.AddDirtyRect(bounds.SurfaceBounds);
+            }
+
+            bounds.Node.SurfaceBounds = bounds.SurfaceBounds;
+            bounds.Node.SurfaceSubtreeBounds = bounds.SurfaceSubtreeBounds;
+            bounds.Node.SurfaceSubtreeReach = bounds.SurfaceSubtreeReach;
+            bounds.Node.PlacedOrigin = bounds.PlacedOrigin;
+            bounds.Node.ClippedAwayAtVisit = bounds.ClippedAway;
+            bounds.Node.Frame = bounds.Frame;
+            bounds.Node.CapturedFrameLocalOrigin = bounds.FrameLocalOrigin;
+            bounds.Node.CapturedFrameSurfaceOrigin = bounds.FrameSurfaceOrigin;
+            if (bounds.PlanStaged)
+            {
+                bounds.Node.PlanFrameLocalOrigin = bounds.FrameLocalOrigin;
+            }
+
+            bounds.Node.Element.NoteReachesSurface(!bounds.ClippedAway);
+            bounds.Node.Captured = bounds.Captured;
+        }
+
+        for (int hiddenIndex = 0; hiddenIndex < _hidden.Count; hiddenIndex++)
+        {
+            // Nothing of it shows any more, so it holds no extent; a replay then leaves it out as it leaves
+            // out what a visit found clipped away, instead of replaying it under the clip for nothing.
+            var hidden = _hidden[hiddenIndex];
+            hidden.ClearSurfaceExtents();
+            hidden.ClippedAwayAtVisit = true;
+            hidden.Element.NoteReachesSurface(false);
+        }
+
+        // Frames land last, so everything above read the shift of the scene the surface still shows.
+        for (int frameIndex = 0; frameIndex < _frames.Count; frameIndex++)
+        {
+            var frame = _frames[frameIndex];
+            StructureChanged |= !ReferenceEquals(frame.Root.RootedFrame, frame.Frame);
+            frame.Root.RootedFrame = frame.Frame;
+            frame.Frame.Commit();
+        }
+
+        for (int dirtyIndex = 0; dirtyIndex < _dirty.Count; dirtyIndex++)
+        {
+            _scene.AddDirtyRect(_dirty[dirtyIndex]);
         }
 
         MarkLayersDirtyFrom(firstReorderedLayer);
@@ -393,6 +482,9 @@ internal sealed class SceneUpdate
         _createdNodes.Clear();
         _visits.Clear();
         _consumptions.Clear();
+        _frames.Clear();
+        _hidden.Clear();
+        _dirty.Clear();
         _root = null;
         _layerRoots = null;
     }
@@ -427,7 +519,7 @@ internal sealed class SceneUpdate
             var node = _scene.FindNode(previous[index]);
             if (node != null)
             {
-                _scene.AddDirtyRect(node.SurfaceSubtreeBounds);
+                _scene.AddDirtyRect(node.ShiftedSurfaceSubtreeBounds);
             }
         }
 
@@ -448,7 +540,7 @@ internal sealed class SceneUpdate
             var node = _scene.FindNode(roots[index]);
             if (node != null)
             {
-                _scene.AddDirtyRect(node.SurfaceSubtreeBounds);
+                _scene.AddDirtyRect(node.ShiftedSurfaceSubtreeBounds);
             }
         }
     }
@@ -470,9 +562,17 @@ internal sealed class SceneUpdate
             created.Dispose();
         }
 
+        for (int frameIndex = 0; frameIndex < _frames.Count; frameIndex++)
+        {
+            _frames[frameIndex].Frame.Discard();
+        }
+
         _createdNodes.Clear();
         _visits.Clear();
         _consumptions.Clear();
+        _frames.Clear();
+        _hidden.Clear();
+        _dirty.Clear();
         _root = null;
         _layerRoots = null;
     }
@@ -481,13 +581,20 @@ internal sealed class SceneUpdate
 
     private readonly record struct PendingConsumption(UIElement Element, RenderDirtyKind Kind);
 
+    private readonly record struct PendingFrame(VisualNode Root, SceneFrame Frame);
+
     private readonly record struct PendingBounds(
         VisualNode Node,
         Rect SurfaceBounds,
         Rect SurfaceSubtreeBounds,
+        Rect SurfaceSubtreeReach,
         Point PlacedOrigin,
         bool ClippedAway,
-        CaptureKey Captured);
+        CaptureKey Captured,
+        SceneFrame Frame,
+        Point FrameLocalOrigin,
+        Point FrameSurfaceOrigin,
+        bool PlanStaged);
 
     private readonly record struct PendingSlot(
         VisualNode Node,
