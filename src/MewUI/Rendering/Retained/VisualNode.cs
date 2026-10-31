@@ -59,6 +59,77 @@ internal sealed class VisualNode : IDisposable
     /// <summary>Where the visual stands in the committed scene; a slot is replayed moved from where it was recorded to here.</summary>
     internal Point PlacedOrigin { get; set; }
 
+    /// <summary>
+    /// Surface-space extent of the visual and everything under it before the clips opened outside its frame
+    /// cut it down. A frame move tests this, shifted, against the clip to tell what came into view.
+    /// </summary>
+    internal Rect SurfaceSubtreeReach { get; set; }
+
+    /// <summary>
+    /// True when the last visit found the clips around the visual hide all of it. It holds no place on the
+    /// surface then, and has to be visited again when a frame move brings it back.
+    /// </summary>
+    internal bool ClippedAwayAtVisit { get; set; }
+
+    /// <summary>The frame this node was staged in, or null before its first staging.</summary>
+    internal SceneFrame? Frame { get; set; }
+
+    /// <summary>The frame this node's visual roots, when the visual that composes it opened one for it.</summary>
+    internal SceneFrame? RootedFrame { get; set; }
+
+    /// <summary>Where <see cref="Frame"/> stood in window coordinates when this node was last staged.</summary>
+    internal Point CapturedFrameLocalOrigin { get; set; }
+
+    /// <summary>Where <see cref="Frame"/> stood in surface coordinates when this node was last staged.</summary>
+    internal Point CapturedFrameSurfaceOrigin { get; set; }
+
+    /// <summary>
+    /// Where <see cref="Frame"/> stood in window coordinates when <see cref="Plan"/> was built. A node the
+    /// frame carried along keeps its plan, whose clips and transforms stand where the visual stood then.
+    /// </summary>
+    internal Point PlanFrameLocalOrigin { get; set; }
+
+    /// <summary>How far the frame has moved since the plan was built, which offsets every clip and transform in it.</summary>
+    internal Vector PlanLocalShift => Frame == null ? default : Frame.LocalOrigin - PlanFrameLocalOrigin;
+
+    /// <summary>True when a slot's recording cannot be replayed moved, so a move of the visual records it again.</summary>
+    internal bool HasUnplaceableSlot
+    {
+        get
+        {
+            for (int slotIndex = 0; slotIndex < _slots.Length; slotIndex++)
+            {
+                if (_slots[slotIndex] is RenderData data && !data.CanBePlaced)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// How far the frame has moved in window coordinates since this node was staged. The node's own geometry
+    /// was not written again for the move, so every window-space value it holds is read offset by this.
+    /// </summary>
+    internal Vector LocalShift => Frame == null ? default : Frame.LocalOrigin - CapturedFrameLocalOrigin;
+
+    /// <summary>The same move in surface coordinates, which offsets every surface-space value the node holds.</summary>
+    internal Vector SurfaceShift => Frame == null ? default : Frame.SurfaceOrigin - CapturedFrameSurfaceOrigin;
+
+    /// <summary>Where the visual and everything under it stand on the surface now, the frame move included.</summary>
+    internal Rect ShiftedSurfaceSubtreeBounds => Shifted(SurfaceSubtreeBounds, SurfaceShift);
+
+    /// <summary>Where the visual's own content stands on the surface now, the frame move included.</summary>
+    internal Rect ShiftedSurfaceBounds => Shifted(SurfaceBounds, SurfaceShift);
+
+    /// <summary>Where a slot's recording stands now, for a replay that moves it from where it was recorded.</summary>
+    internal Point ShiftedPlacedOrigin => PlacedOrigin + LocalShift;
+
+    internal static Rect Shifted(Rect rect, Vector shift)
+        => shift.X == 0 && shift.Y == 0 ? rect : rect.Offset(shift);
+
     internal CompositionState State { get; set; } = new(true, 1, false);
 
     internal CompositionPlan Plan { get; set; } = CompositionPlan.Empty;
@@ -167,6 +238,23 @@ internal sealed class VisualNode : IDisposable
         if (!ReferenceEquals(previous, data))
         {
             previous?.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Forgets where the visual and its slots reached the surface, as a visit that found them clipped away
+    /// would: a node without an extent is left out of every replay.
+    /// </summary>
+    internal void ClearSurfaceExtents()
+    {
+        SurfaceBounds = default;
+        SurfaceSubtreeBounds = default;
+        for (int slotIndex = 0; slotIndex < _slots.Length; slotIndex++)
+        {
+            if (_slots[slotIndex] is RenderData data)
+            {
+                data.SurfaceExtent = default;
+            }
         }
     }
 

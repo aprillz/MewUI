@@ -470,6 +470,13 @@ public sealed class ScrollViewer : ContentControl
         }
     }
 
+    /// <summary>
+    /// Content that is not scroll-driven is moved as a whole by the arrange, so the scene frames it. A
+    /// scroll-driven content stays where the viewport is and places its items itself.
+    /// </summary>
+    internal override bool IsChildFrame(UIElement child)
+        => ReferenceEquals(child, Content) && child is not IScrollContent;
+
     /// <summary>The content is clipped to the viewport; the bars draw over it unclipped.</summary>
     protected override ChildClip? GetChildClip(UIElement child)
     {

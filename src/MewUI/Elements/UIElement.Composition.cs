@@ -141,6 +141,13 @@ public abstract partial class UIElement
     protected virtual ChildClip? GetChildClip(UIElement child) => null;
 
     /// <summary>
+    /// True when <paramref name="child"/> and everything under it move as one whenever this element moves the
+    /// child, as a scroll viewer moves its content: the scene then shifts that subtree on a whole-pixel move
+    /// instead of visiting each node in it. Drawing is unaffected.
+    /// </summary>
+    internal virtual bool IsChildFrame(UIElement child) => false;
+
+    /// <summary>
     /// Whether glyphs drawn under this element's child transform still land on whole pixels; false turns
     /// text pixel snapping off under the transform.
     /// </summary>
@@ -494,7 +501,17 @@ public abstract partial class UIElement
                 }
             }
 
-            _builder!.Child(visual);
+            if (_host.IsChildFrame(visual))
+            {
+                _builder!.PushFrame();
+                _builder.Child(visual);
+                _builder.Pop();
+            }
+            else
+            {
+                _builder!.Child(visual);
+            }
+
             return true;
         }
 

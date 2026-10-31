@@ -22,6 +22,12 @@ internal sealed class RenderSceneStatistics
     /// <summary>Surfaces a replay made to blend a faded group as a whole.</summary>
     internal int GroupSurfaceCount { get; set; }
 
+    /// <summary>Frames an update found moved by whole pixels, so their subtrees were shifted instead of visited.</summary>
+    internal int FrameMoveCount { get; set; }
+
+    /// <summary>Visuals in view under a moved frame that an update carried along, staging their place without looking into them.</summary>
+    internal int CarriedNodeCount { get; set; }
+
     internal void Reset()
     {
         ContentRecordCount = 0;
@@ -30,6 +36,8 @@ internal sealed class RenderSceneStatistics
         LiveFallbackCount = 0;
         CapturedNodeCount = 0;
         GroupSurfaceCount = 0;
+        FrameMoveCount = 0;
+        CarriedNodeCount = 0;
     }
 }
 
@@ -53,6 +61,9 @@ internal sealed class RenderScene : IDisposable
     internal IReadOnlyList<UIElement> LayerRoots { get; set; } = [];
 
     internal RenderSceneStatistics Statistics { get; } = new();
+
+    /// <summary>The frame every node stands in that no scroll content frames; its origin is zero and never moves.</summary>
+    internal SceneFrame RootFrame { get; } = new(null);
 
     /// <summary>Makes the surfaces that faded groups are drawn into. Without one a group is faded call by call.</summary>
     internal IGraphicsFactory? GroupFactory { get; set; }
@@ -192,7 +203,7 @@ internal sealed class RenderScene : IDisposable
             var node = FindNode(removed[index]);
             if (node != null)
             {
-                AddDirtyRect(node.SurfaceSubtreeBounds);
+                AddDirtyRect(node.ShiftedSurfaceSubtreeBounds);
             }
 
             RemoveNode(removed[index]);
