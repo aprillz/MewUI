@@ -283,34 +283,37 @@ internal sealed class Win32WindowBackend : IWindowBackend
     {
         if (Handle == 0) return;
 
-        const int GWL_STYLE = -16;
-        const uint WS_MINIMIZEBOX = 0x00020000;
-        const uint SWP_NOSIZE = 0x0001;
-        const uint SWP_NOMOVE = 0x0002;
-        const uint SWP_NOZORDER = 0x0004;
-        const uint SWP_FRAMECHANGED = 0x0020;
-
-        uint style = (uint)User32.GetWindowLongPtr(Handle, GWL_STYLE).ToInt64();
-        style = value ? (style | WS_MINIMIZEBOX) : (style & ~WS_MINIMIZEBOX);
-        User32.SetWindowLongPtr(Handle, GWL_STYLE, (nint)style);
-        User32.SetWindowPos(Handle, 0, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOACTIVATE_ON_REFRESH);
+        // GetWindowStyle reads Window.CanMinimize, so every later restyle keeps the button state too.
+        ReapplyOwnedStyle();
     }
 
     public void SetCanMaximize(bool value)
     {
         if (Handle == 0) return;
 
-        const int GWL_STYLE = -16;
-        const uint WS_MAXIMIZEBOX = 0x00010000;
-        const uint SWP_NOSIZE = 0x0001;
-        const uint SWP_NOMOVE = 0x0002;
-        const uint SWP_NOZORDER = 0x0004;
-        const uint SWP_FRAMECHANGED = 0x0020;
+        ReapplyOwnedStyle();
+    }
 
-        uint style = (uint)User32.GetWindowLongPtr(Handle, GWL_STYLE).ToInt64();
-        style = value ? (style | WS_MAXIMIZEBOX) : (style & ~WS_MAXIMIZEBOX);
-        User32.SetWindowLongPtr(Handle, GWL_STYLE, (nint)style);
-        User32.SetWindowPos(Handle, 0, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOACTIVATE_ON_REFRESH);
+    public void SetCanClose(bool value)
+    {
+        if (Handle == 0) return;
+
+        ApplyCloseCommand();
+    }
+
+    private void ApplyCloseCommand()
+    {
+        const uint SC_CLOSE = 0xF060;
+        const uint MF_BYCOMMAND = 0x0000;
+        const uint MF_ENABLED = 0x0000;
+        const uint MF_GRAYED = 0x0001;
+
+        // The caption close button follows the system menu's Close item; Alt+F4 still closes, as in WPF and Avalonia.
+        nint systemMenu = User32.GetSystemMenu(Handle, false);
+        if (systemMenu != 0)
+        {
+            User32.EnableMenuItem(systemMenu, SC_CLOSE, MF_BYCOMMAND | (Window.CanClose ? MF_ENABLED : MF_GRAYED));
+        }
     }
 
     public void SetTopmost(bool value)
@@ -1548,6 +1551,14 @@ internal sealed class Win32WindowBackend : IWindowBackend
             if (!Window.WindowSize.IsResizable)
             {
                 style &= ~(WindowStyles.WS_THICKFRAME | WindowStyles.WS_MAXIMIZEBOX);
+            }
+            if (!Window.CanMinimize)
+            {
+                style &= ~WindowStyles.WS_MINIMIZEBOX;
+            }
+            if (!Window.CanMaximize)
+            {
+                style &= ~WindowStyles.WS_MAXIMIZEBOX;
             }
 
             return style;

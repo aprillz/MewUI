@@ -1074,8 +1074,8 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     }
 
     /// <summary>
-    /// Gets or sets whether the window can be closed, disabling the native close button when false;
-    /// the default is true.
+    /// Gets or sets whether the native close button is enabled; the default is true. Keyboard shortcuts and
+    /// <see cref="Close"/> still close the window; cancel <see cref="Closing"/> to keep it open.
     /// </summary>
     public bool CanClose
     {
