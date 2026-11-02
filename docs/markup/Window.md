@@ -12,7 +12,7 @@ Receiver: `Window` and derived types (`where T : Window`).
 | `AllowsTransparency(bool value = true)` | `AllowsTransparency` | Sets whether the window supports per-pixel transparency (platform dependent). |
 | `Borderless(bool value = true)` | `Borderless` | Sets whether the entire native non-client area (title bar and border) is removed. |
 | `Build(Action<TWindow> build)` |  | Defines and immediately runs the window's build at the composition site. The callback becomes the build owner (a virtual OnBuild override is then not invoked) and is re-run by Hot Reload when edited. |
-| `CanClose(bool value = true)` | `CanClose` | Sets whether the window can be closed, disabling the native close button when false; the default is true. |
+| `CanClose(bool value = true)` | `CanClose` | Sets whether the native close button is enabled; the default is true. Keyboard shortcuts and Close still close the window; cancel Closing to keep it open. |
 | `CanMaximize(bool value = true)` | `CanMaximize` | Sets whether the maximize button is enabled; the default is true. |
 | `CanMinimize(bool value = true)` | `CanMinimize` | Sets whether the minimize button is enabled; the default is true. |
 | `CreateBusyIndicator(string message = null, bool cancellable = false)` |  | Creates and shows a busy indicator overlay. Dispose the returned IBusyIndicator to dismiss. While active, window content is disabled and closing is prevented. |

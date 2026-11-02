@@ -96,6 +96,12 @@ internal static partial class User32
     public static nint SetWindowLongPtr(nint hWnd, int nIndex, nint dwNewLong)
         => nint.Size == 8 ? SetWindowLongPtrW(hWnd, nIndex, dwNewLong) : (nint)SetWindowLongW(hWnd, nIndex, (int)dwNewLong);
 
+    [LibraryImport(LibraryName)]
+    public static partial nint GetSystemMenu(nint hWnd, [MarshalAs(UnmanagedType.Bool)] bool bRevert);
+
+    [LibraryImport(LibraryName)]
+    public static partial int EnableMenuItem(nint hMenu, uint uIDEnableItem, uint uEnable);
+
     #endregion
 
     #region Layered Windows
