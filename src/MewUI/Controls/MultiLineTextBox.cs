@@ -1015,6 +1015,8 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
         {
             return;
         }
+        double startVertical = _verticalOffset;
+        double startHorizontal = _horizontalOffset;
         var caret = _view.GetCaretBounds(_editor.CaretPosition);
         if (double.IsNaN(_preferredCaretX))
         {
@@ -1048,6 +1050,7 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
         }
         UpdateViewport();
         _preferredCaretX = preferredCaretX;
+        RequestArrangeIfScrolled(startVertical, startHorizontal);
     }
 
     protected override void OnMouseDown(MouseEventArgs e)
@@ -1196,9 +1199,18 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
         }
 
         // A caret already in view scrolls nothing; the caret move itself repaints through the selection.
+        RequestArrangeIfScrolled(startVertical, startHorizontal);
+    }
+
+    /// <summary>
+    /// Asks for the arrange a scroll made outside the arrange pass needs: arranging is where the layers learn the new
+    /// offset and record again.
+    /// </summary>
+    private void RequestArrangeIfScrolled(double startVertical, double startHorizontal)
+    {
         if (_verticalOffset != startVertical || _horizontalOffset != startHorizontal)
         {
-            InvalidateVisual();
+            InvalidateArrange();
         }
     }
 
@@ -1281,6 +1293,10 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
         InvalidateVisual();
     }
 
+    /// <summary>
+    /// Scrolls to <paramref name="value"/>; <paramref name="invalidate"/> false is for the arrange pass itself, and a
+    /// caller outside it requests the arrange that tells the layers.
+    /// </summary>
     private void SetVerticalOffset(double value, bool invalidate = true)
     {
         // Against the extent the last layout measured. Arrange clamps again once the lines for the

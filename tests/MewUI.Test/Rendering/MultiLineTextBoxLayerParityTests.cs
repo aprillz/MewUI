@@ -26,6 +26,7 @@ public sealed class MultiLineTextBoxLayerParityTests
         DragSelectionRecolored,
         Composition,
         WheelScroll,
+        PageUpAfterWheelScroll,
         PlaceholderFocus,
         ForegroundChange,
         LayerInsertedAfterRender,
@@ -120,6 +121,13 @@ public sealed class MultiLineTextBoxLayerParityTests
                 break;
             case Edit.WheelScroll:
                 window.SendMouseWheel(new Point(viewport.X + 40, viewport.Y + 40), -3);
+                break;
+            case Edit.PageUpAfterWheelScroll:
+                // The wheel leaves the caret above the view, so the page scrolls from the key handler, outside an arrange.
+                window.SendMouseWheel(new Point(viewport.X + 40, viewport.Y + 40), -30);
+                Frame(window, surface);
+                AssertEqualsReference(session, window, surface, pixelWidth, scale, "after the wheel scroll");
+                window.SendKeyPress(Key.PageUp);
                 break;
             case Edit.PlaceholderFocus:
                 window.FocusManager.SetFocus(box!);
