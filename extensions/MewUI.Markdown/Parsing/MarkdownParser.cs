@@ -282,7 +282,7 @@ internal static class MarkdownParser
         switch (block)
         {
             case HeadingBlock heading:
-                IReadOnlyList<MarkdownSpan> headingSpans = Flatten(heading.Inline, options, mappingProfile);
+                IReadOnlyList<MarkdownSpan> headingSpans = Flatten(heading.Inline, source, options, mappingProfile);
                 return new MarkdownBlock
                 {
                     Kind = MarkdownBlockKind.Heading,
@@ -291,7 +291,7 @@ internal static class MarkdownParser
                     Alignment = alignment,
                     Spans = headingSpans,
                     Aliases = GetInlineAnchors(headingSpans),
-                    Anchor = GetAnchor(heading, options, mappingProfile, anchors)
+                    Anchor = GetAnchor(heading, source, options, mappingProfile, anchors)
                 };
             case QuoteBlock quote:
                 return new MarkdownBlock
@@ -379,7 +379,7 @@ internal static class MarkdownParser
                     Children = MapChildren(definitionItem, source, options, mappingProfile, anchors)
                 };
             case DefinitionTerm definitionTerm:
-                IReadOnlyList<MarkdownSpan> termSpans = Flatten(definitionTerm.Inline, options, mappingProfile);
+                IReadOnlyList<MarkdownSpan> termSpans = Flatten(definitionTerm.Inline, source, options, mappingProfile);
                 return new MarkdownBlock
                 {
                     Kind = MarkdownBlockKind.DefinitionTerm,
@@ -431,7 +431,7 @@ internal static class MarkdownParser
                     Spans = [RawSpan(html, source)]
                 };
             case LeafBlock leaf when leaf.Inline is not null:
-                IReadOnlyList<MarkdownSpan> leafSpans = Flatten(leaf.Inline, options, mappingProfile);
+                IReadOnlyList<MarkdownSpan> leafSpans = Flatten(leaf.Inline, source, options, mappingProfile);
                 return new MarkdownBlock
                 {
                     Kind = MarkdownBlockKind.Paragraph,
@@ -543,6 +543,7 @@ internal static class MarkdownParser
 
     internal static IReadOnlyList<MarkdownSpan> Flatten(
         ContainerInline? inline,
+        string source,
         MarkdownOptions options,
         MarkdownMappingProfile mappingProfile = default)
     {
@@ -551,7 +552,7 @@ internal static class MarkdownParser
             return [];
         }
 
-        return new MarkdownInlineBuilder(options, mappingProfile).Build(inline);
+        return new MarkdownInlineBuilder(source, options, mappingProfile).Build(inline);
     }
 
     private static MarkdownSpan RawSpan(MarkdownObject block, string source)
@@ -582,10 +583,10 @@ internal static class MarkdownParser
         return block.Lines.ToString();
     }
 
-    private static string? GetAnchor(HeadingBlock heading, MarkdownOptions options,
+    private static string? GetAnchor(HeadingBlock heading, string source, MarkdownOptions options,
         MarkdownMappingProfile mappingProfile, HashSet<string> anchors)
     {
-        IReadOnlyList<MarkdownSpan> spans = Flatten(heading.Inline, options, mappingProfile);
+        IReadOnlyList<MarkdownSpan> spans = Flatten(heading.Inline, source, options, mappingProfile);
         string text = string.Concat(spans.Select(static span => span.Text));
         StringBuilder slugBuilder = new();
         bool pendingSeparator = false;

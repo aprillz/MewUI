@@ -40,6 +40,6 @@ public sealed class MarkdownRenderContext
     public FrameworkElement RenderInlines(ContainerInline? inlines)
     {
         return Presenter.CreateParagraph(MarkdownParser.Flatten(
-            inlines, _document.Options, _document.MappingProfile));
+            inlines, _document.Source, _document.Options, _document.MappingProfile));
     }
 }
