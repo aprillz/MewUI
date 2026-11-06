@@ -50,6 +50,9 @@ public sealed partial class SplitPanel : Panel
     private double _dragStartFirst;
     private double _dragStartSecond;
 
+    // Set by the last measure: the main axis had no bound, so arrange must not shrink a star pane below its content.
+    private bool _measuredUnconstrained;
+
     /// <summary>
     /// Initializes a split panel with no panes.
     /// </summary>
@@ -253,12 +256,37 @@ public sealed partial class SplitPanel : Panel
         double availableCross = isHorizontal ? paddedSize.Height : paddedSize.Width;
         double panesMain = double.IsPositiveInfinity(availableMain) ? double.PositiveInfinity : Math.Max(0, availableMain - thickness);
 
-        if (!double.IsPositiveInfinity(panesMain))
+        _measuredUnconstrained = double.IsPositiveInfinity(panesMain);
+        double main;
+
+        if (_measuredUnconstrained)
+        {
+            // Without a main-axis bound a star pane sizes to its content, as a Grid star column does.
+            double firstLimit = FirstLength.IsAbsolute ? Math.Max(0, FirstLength.Value) : double.PositiveInfinity;
+            double secondLimit = SecondLength.IsAbsolute ? Math.Max(0, SecondLength.Value) : double.PositiveInfinity;
+
+            if (isHorizontal)
+            {
+                first.Measure(new Size(firstLimit, availableCross));
+                second.Measure(new Size(secondLimit, availableCross));
+            }
+            else
+            {
+                first.Measure(new Size(availableCross, firstLimit));
+                second.Measure(new Size(availableCross, secondLimit));
+            }
+
+            double firstMain = UnconstrainedPaneMain(FirstLength, isHorizontal ? first.DesiredSize.Width : first.DesiredSize.Height, MinFirst, MaxFirst);
+            double secondMain = UnconstrainedPaneMain(SecondLength, isHorizontal ? second.DesiredSize.Width : second.DesiredSize.Height, MinSecond, MaxSecond);
+            main = firstMain + thickness + secondMain;
+        }
+        else
         {
             ResolvePaneSizes(
                 panesMain,
                 isHorizontal ? first.DesiredSize.Width : first.DesiredSize.Height,
                 isHorizontal ? second.DesiredSize.Width : second.DesiredSize.Height,
+                keepStarDesired: false,
                 out double firstMain,
                 out double secondMain);
 
@@ -272,11 +300,11 @@ public sealed partial class SplitPanel : Panel
                 first.Measure(new Size(availableCross, firstMain));
                 second.Measure(new Size(availableCross, secondMain));
             }
-        }
 
-        double firstMainDesired = isHorizontal ? first.DesiredSize.Width : first.DesiredSize.Height;
-        double secondMainDesired = isHorizontal ? second.DesiredSize.Width : second.DesiredSize.Height;
-        double main = firstMainDesired + thickness + secondMainDesired;
+            double firstMainDesired = isHorizontal ? first.DesiredSize.Width : first.DesiredSize.Height;
+            double secondMainDesired = isHorizontal ? second.DesiredSize.Width : second.DesiredSize.Height;
+            main = firstMainDesired + thickness + secondMainDesired;
+        }
 
         double firstCrossDesired = isHorizontal ? first.DesiredSize.Height : first.DesiredSize.Width;
         double secondCrossDesired = isHorizontal ? second.DesiredSize.Height : second.DesiredSize.Width;
@@ -347,6 +375,7 @@ public sealed partial class SplitPanel : Panel
             panesMain,
             isHorizontal ? first!.DesiredSize.Width : first!.DesiredSize.Height,
             isHorizontal ? second!.DesiredSize.Width : second!.DesiredSize.Height,
+            _measuredUnconstrained,
             out double firstMain,
             out double secondMain);
 
@@ -364,7 +393,7 @@ public sealed partial class SplitPanel : Panel
         }
     }
 
-    private void ResolvePaneSizes(double panesMain, double firstDesiredMain, double secondDesiredMain, out double firstMain, out double secondMain)
+    private void ResolvePaneSizes(double panesMain, double firstDesiredMain, double secondDesiredMain, bool keepStarDesired, out double firstMain, out double secondMain)
     {
         panesMain = Math.Max(0, panesMain);
 
@@ -398,6 +427,21 @@ public sealed partial class SplitPanel : Panel
             {
                 firstMain = panesMain * (a / denom);
                 secondMain = panesMain - firstMain;
+            }
+
+            // After an unbounded measure each pane keeps its content length; only the surplus follows the weights.
+            if (keepStarDesired && firstDesiredMain + secondDesiredMain <= panesMain)
+            {
+                if (firstMain < firstDesiredMain)
+                {
+                    firstMain = firstDesiredMain;
+                    secondMain = panesMain - firstMain;
+                }
+                else if (secondMain < secondDesiredMain)
+                {
+                    secondMain = secondDesiredMain;
+                    firstMain = panesMain - secondMain;
+                }
             }
         }
         else if (firstStar && !secondStar)
@@ -441,6 +485,12 @@ public sealed partial class SplitPanel : Panel
 
         firstMain = Math.Max(0, firstMain);
         secondMain = Math.Max(0, secondMain);
+    }
+
+    private static double UnconstrainedPaneMain(GridLength length, double desired, double min, double max)
+    {
+        double main = length.IsAbsolute ? length.Value : desired;
+        return Math.Max(Math.Max(0, min), Math.Min(max, main));
     }
 
     private static double LengthToMain(GridLength length, double desired)
