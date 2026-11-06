@@ -8,13 +8,15 @@ namespace Aprillz.MewUI.Markdown;
 
 internal sealed class MarkdownInlineBuilder
 {
+    private readonly string _source;
     private readonly MarkdownOptions _options;
     private readonly MarkdownMappingProfile _mappingProfile;
     private readonly MarkdownHtmlParser _html = new();
     private readonly List<MarkdownSpan> _spans = [];
 
-    public MarkdownInlineBuilder(MarkdownOptions options, MarkdownMappingProfile mappingProfile)
+    public MarkdownInlineBuilder(string source, MarkdownOptions options, MarkdownMappingProfile mappingProfile)
     {
+        _source = source;
         _options = options;
         _mappingProfile = mappingProfile;
     }
@@ -76,7 +78,9 @@ internal sealed class MarkdownInlineBuilder
                 VisitSiblingChain(container.FirstChild, state);
                 break;
             default:
-                Append(inline.ToString() ?? string.Empty, state, inline);
+                // An inline from an extension this builder has no case for (math, say) shows its source text;
+                // most such nodes do not override ToString and would show their type name instead.
+                Append(MarkdownParser.GetSourceText(inline, _source), state, inline);
                 break;
         }
     }

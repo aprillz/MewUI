@@ -26,6 +26,15 @@ public sealed class MarkdownExtensibilityTests
     }
 
     [TestMethod]
+    public void UnregisteredExtensionInlineDisplaysSourceText()
+    {
+        ParsedMarkdown document = MarkdownParser.ParseDocument("left $x^2$ right", _mathOptions);
+
+        // MathInline does not override ToString, which would show its type name in place of the formula.
+        Assert.AreEqual("left $x^2$ right", string.Concat(document.Blocks.Single().Spans.Select(static span => span.Text)));
+    }
+
+    [TestMethod]
     public void BlockRendererReplacesExtensionNode()
     {
         EnsureGdi();
