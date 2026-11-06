@@ -6,7 +6,6 @@ internal sealed class LinuxClipboardService : IClipboardService
 {
     private static readonly object _lock = new();
     private static ClipboardBackend? _backend;
-    private static Process? _ownerProcess;
     private static string _localText = string.Empty;
 
     public bool TrySetText(string text)
@@ -22,7 +21,8 @@ internal sealed class LinuxClipboardService : IClipboardService
             _localText = text;
         }
 
-        return ok || text.Length > 0;
+        // The in-process copy never leaves this process, so it does not count as a clipboard write.
+        return ok;
     }
 
     /// <inheritdoc/>
@@ -182,78 +182,7 @@ internal sealed class LinuxClipboardService : IClipboardService
 
         public bool TrySetText(string text)
         {
-            // NOTE:
-            // On X11 the clipboard is selection-based; if the "owner" exits immediately,
-            // clipboard content often disappears unless a clipboard manager is running.
-            // Similarly, wl-copy stays alive until a paste happens.
-            // To make copy/paste reliable in minimal environments, we keep the owner process alive.
-            // We replace the previous owner on every Set.
-            if (Kind is ClipboardBackendKind.X11Xclip or ClipboardBackendKind.WaylandWlClipboard)
-            {
-                return TrySetTextWithOwnerProcess(text);
-            }
-
-            // For other helpers, do a best-effort synchronous write.
-            return TrySetTextOneShot(text);
-        }
-
-        private bool TrySetTextWithOwnerProcess(string text)
-        {
-            try
-            {
-                lock (_lock)
-                {
-                    if (_ownerProcess is { HasExited: false })
-                    {
-                        TryKill(_ownerProcess);
-                        _ownerProcess.Dispose();
-                    }
-
-                    var process = new Process
-                    {
-                        StartInfo = new ProcessStartInfo
-                        {
-                            FileName = _setCommand,
-                            Arguments = _setArguments,
-                            RedirectStandardInput = true,
-                            RedirectStandardOutput = false,
-                            RedirectStandardError = false,
-                            UseShellExecute = false,
-                            CreateNoWindow = true,
-                        },
-                        EnableRaisingEvents = true,
-                    };
-
-                    if (!process.Start())
-                    {
-                        process.Dispose();
-                        return false;
-                    }
-
-                    // Write the content and close stdin. The process keeps owning the clipboard.
-                    process.StandardInput.Write(text);
-                    process.StandardInput.Close();
-
-                    // If it exits immediately, treat it as failure (no owner kept alive).
-                    if (process.WaitForExit(50))
-                    {
-                        bool ok = process.ExitCode == 0;
-                        process.Dispose();
-                        return ok;
-                    }
-
-                    _ownerProcess = process;
-                    return true;
-                }
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        private bool TrySetTextOneShot(string text)
-        {
+            // Each helper forks a background owner and exits once it holds the selection, so that exit is the result.
             try
             {
                 using var process = new Process
