@@ -185,3 +185,33 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 https://github.com/Kryptos-FR/MarkView.Avalonia
 
 Copyright (c) Nicolas Musset. Licensed under the MIT License (full text identical to the FlexLayout MIT License above).
+
+## CSharpMath
+
+`Aprillz.MewUI.Markdown.Math` compiles the CSharpMath sources (the parser, the typesetter and the painter front end of CSharpMath.Rendering) to typeset LaTeX, and embeds CSharpMath's reference fonts (Latin Modern Math and others, under the GUST Font License and the SIL Open Font License).
+https://github.com/verybadcat/CSharpMath
+
+Copyright (c) 2017 William Jockusch, Hadrian Tang. Licensed under the MIT License (full text identical to the FlexLayout MIT License above).
+
+## Typography
+
+`Aprillz.MewUI.Markdown.Math` compiles the Typography font reader and glyph layout sources that CSharpMath.Rendering builds in.
+https://github.com/LayoutFarm/Typography
+
+The project is licensed under the MIT License as a whole (full text identical to the FlexLayout MIT License above), and each source file states its own license. The compiled files are under:
+
+- the MIT License: WinterDev (2015-present), Michael Popoloski (SharpFont, 2015).
+- the Apache License, Version 2.0: WinterDev (2016-present), Muhammad Tayyab Akram (SheenBidi, 2014), Samuel Carlsson (NRasterizer, 2014-2016), Sam Hocevar (2016-present), Villu Ruusmann and the Apache PDFBox authors (2018). You may obtain a copy of the License at https://www.apache.org/licenses/LICENSE-2.0. Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- the BSD 3-Clause License: the Adobe Glyph List, as follows.
+
+Copyright 2002, 2010, 2015 Adobe Systems Incorporated. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+
+Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+
+Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+
+Neither the name of Adobe Systems Incorporated nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
