@@ -8,3 +8,7 @@
 [submodule "extensions/MewUI.Svg/ThirdParty/SvgNet"]
 	path = extensions/MewUI.Svg/ThirdParty/SvgNet
 	url = https://github.com/svg-net/SVG
+[submodule "extensions/MewUI.Markdown.Math/ThirdParty/CSharpMath"]
+	path = extensions/MewUI.Markdown.Math/ThirdParty/CSharpMath
+	url = https://github.com/verybadcat/CSharpMath
+	shallow = true

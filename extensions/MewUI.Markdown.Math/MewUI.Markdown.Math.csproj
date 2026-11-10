@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="..\..\build\MewUI.Common.props" />
+  <PropertyGroup>
+    <RootNamespace>Aprillz.MewUI.Markdown</RootNamespace>
+    <AssemblyName>$(MewUITitle).Markdown.Math</AssemblyName>
+    <PackageId>$(MewUITitle).Markdown.Math</PackageId>
+    <Description>LaTeX math for the MewUI Markdown controls: formulas typeset by CSharpMath and drawn as vector paths on every backend.</Description>
+    <!-- CSharpMath and Typography compile from the submodule unchanged, and its root .editorconfig keeps out a path-scoped one:
+         the nullability and XML doc warnings their netstandard2.0 projects never raise are silenced project-wide. -->
+    <NoWarn>$(NoWarn);CS8618;CS8603;CS8625;CS8600;CS8601;CS8602;CS8604;CS0162;CS0168;CS0219;CS0649;CS0414;CS8765;CS8769;CS1572;CS1573;CS1574;CS1587</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\MewUI\MewUI.csproj" />
+    <ProjectReference Include="..\MewUI.Markdown\MewUI.Markdown.csproj" />
+    <InternalsVisibleTo Include="Aprillz.MewUI.Markdown.Math.Test" />
+    <!-- CSharpMath targets netstandard2.0, where System has no Range; the alias wins over the implicit using of System. -->
+    <Using Include="CSharpMath.Atom.Range" Alias="Range" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="ThirdParty\**" />
+    <EmbeddedResource Remove="ThirdParty\**" />
+    <None Remove="ThirdParty\**" />
+  </ItemGroup>
+
+  <!-- CSharpMath typesetting: the parser, atoms and displays, and the painter front end; the editor, the keyboard and the text painter are left out. -->
+  <ItemGroup Label="CSharpMath">
+    <Compile Include="ThirdParty\CSharpMath\CSharpMath\**\*.cs" Exclude="ThirdParty\CSharpMath\CSharpMath\Editor\**;ThirdParty\CSharpMath\CSharpMath\obj\**;ThirdParty\CSharpMath\CSharpMath\bin\**" Link="ThirdParty\CSharpMath\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="ThirdParty\CSharpMath\CSharpMath.Rendering\BackEnd\*.cs" Link="ThirdParty\CSharpMath.Rendering\BackEnd\%(Filename)%(Extension)" />
+    <Compile Include="ThirdParty\CSharpMath\CSharpMath.Rendering\FrontEnd\*.cs" Exclude="ThirdParty\CSharpMath\CSharpMath.Rendering\FrontEnd\MathKeyboard.cs;ThirdParty\CSharpMath\CSharpMath.Rendering\FrontEnd\TextPainter.cs" Link="ThirdParty\CSharpMath.Rendering\FrontEnd\%(Filename)%(Extension)" />
+    <EmbeddedResource Include="ThirdParty\CSharpMath\CSharpMath.Rendering\Reference Fonts\*.otf" LogicalName="CSharpMath.Rendering.Reference_Fonts.%(Filename)%(Extension)" Link="ThirdParty\CSharpMath.Rendering\Reference Fonts\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <!-- Typography, the font reader CSharpMath.Rendering compiles in, with the same file set as its project. -->
+  <ItemGroup Label="Typography">
+    <Compile Include="ThirdParty\CSharpMath\Typography\Typography.OpenFont\**\*.cs" Exclude="ThirdParty\CSharpMath\Typography\Typography.OpenFont\**\AssemblyInfo.cs" Link="ThirdParty\Typography\OpenFont\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="ThirdParty\CSharpMath\Typography\Typography.GlyphLayout\**\*.cs" Exclude="ThirdParty\CSharpMath\Typography\Typography.GlyphLayout\**\AssemblyInfo.cs" Link="ThirdParty\Typography\TextLayout\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="ThirdParty\CSharpMath\Typography\Typography.TextBreak\Typography.TextBreak\**\*.cs" Exclude="ThirdParty\CSharpMath\Typography\Typography.TextBreak\Typography.TextBreak\**\AssemblyInfo.cs" Link="ThirdParty\Typography\TextBreak\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="ThirdParty\CSharpMath\Typography\PixelFarm.Typography\3_Typography_Contours\GlyphOutlineBuilderBase.cs" Link="ThirdParty\Typography\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <Target Name="CheckCSharpMathSubmodule" BeforeTargets="BeforeBuild">
+    <Error Condition="!Exists('ThirdParty\CSharpMath\Typography\Typography.OpenFont')" Text="The CSharpMath submodule is not initialized: run 'git submodule update --init --recursive'." />
+  </Target>
+</Project>
