@@ -339,10 +339,11 @@ internal sealed partial class ManagedTextEngine : ITextEngine, IDisposable
     /// <summary>
     /// Splits the room a line box has beyond the text's own ascent and descent evenly above and below it,
     /// the way a CSS line box does. Given to the descent side alone, a font with line gap - or a line
-    /// height the paragraph set - holds its text against the top of the box.
+    /// height the paragraph set - holds its text against the top of the box. A line box shorter than its
+    /// text takes the same split of the shortfall, so the text overhangs it equally above and below.
     /// </summary>
     private static double ApplyHalfLeading(double baseline, double lineHeight, double textHeight)
-        => baseline + (Math.Max(0, lineHeight - textHeight) / 2);
+        => baseline + ((lineHeight - textHeight) / 2);
 
     private double ResolveLineCapHeight(
         ManagedTextLine line,

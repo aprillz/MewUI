@@ -53,6 +53,32 @@ public sealed class HalfLeadingTests
     }
 
     [TestMethod]
+    public void ALineShorterThanItsTextLetsItOverhangEquallyAboveAndBelow()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("GDI is Windows-only.");
+            return;
+        }
+
+        using var factory = new GdiGraphicsFactory();
+
+        var natural = Layout(factory, 0).Lines[0];
+        var squeezed = Layout(factory, natural.Bounds.Height - 8).Lines[0];
+
+        Assert.AreEqual(
+            natural.Baseline - 4,
+            squeezed.Baseline,
+            0.51,
+            "the text stayed against the top of a line box shorter than it");
+
+        double above = natural.Baseline - squeezed.Baseline;
+        double below = (natural.Bounds.Height - natural.Baseline)
+            - (squeezed.Bounds.Height - squeezed.Baseline);
+        Assert.AreEqual(above, below, 0.51, "the two overhangs are not the same size");
+    }
+
+    [TestMethod]
     public void ALineNoTallerThanItsTextKeepsTheFontsBaseline()
     {
         if (!OperatingSystem.IsWindows())
