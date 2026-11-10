@@ -14,8 +14,15 @@ internal static class NvgStrokeHelper
 {
     private const int GRADIENT_LUT_SIZE = 512;
     private const int MAX_GRADIENT_LUT_ENTRIES = 128;
+    private const int MAX_RETAINED_DASH_SEGMENTS = 4096;
 
     private static readonly ConditionalWeakTable<MewVGContext, GradientLutCache> GradientLutCaches = new();
+
+    // Scratch a dashed stroke flattens and builds into, per thread because strokes are drawn from more than one.
+    [ThreadStatic]
+    private static List<DashSegment>? _dashSegments;
+    [ThreadStatic]
+    private static PathGeometry? _dashPath;
 
     public static void ApplyPenStyle(MewVGContext vg, Pen pen)
     {
@@ -146,7 +153,8 @@ internal static class NvgStrokeHelper
         if (style.DashArray is not { Count: > 0 } dashes)
             return;
 
-        var segments = FlattenPath(path);
+        var segments = RentDashSegments();
+        FlattenPath(path, segments);
         if (segments.Count == 0) return;
 
         float thickness = (float)pen.Thickness;
@@ -292,7 +300,7 @@ internal static class NvgStrokeHelper
     /// </summary>
     public static void DrawDashedLine(MewVGContext vg, float x0, float y0, float x1, float y1, Pen pen, Rect strokeBounds)
     {
-        var path = new PathGeometry();
+        var path = RentDashPath();
         path.MoveTo(x0, y0);
         path.LineTo(x1, y1);
         DrawDashedStroke(vg, path, pen, strokeBounds);
@@ -303,7 +311,7 @@ internal static class NvgStrokeHelper
     /// </summary>
     public static void DrawDashedRect(MewVGContext vg, float x, float y, float w, float h, Pen pen, Rect strokeBounds)
     {
-        var path = new PathGeometry();
+        var path = RentDashPath();
         path.MoveTo(x, y);
         path.LineTo(x + w, y);
         path.LineTo(x + w, y + h);
@@ -317,7 +325,28 @@ internal static class NvgStrokeHelper
     /// </summary>
     public static void DrawDashedRoundedRect(MewVGContext vg, float x, float y, float w, float h, float r, Pen pen, Rect strokeBounds)
     {
-        var path = PathGeometry.FromRoundedRect(new Rect(x, y, w, h), r);
+        // The outline PathGeometry.FromRoundedRect builds, written into the scratch path instead of a new one.
+        const double CORNER_KAPPA = 0.5522847498;
+        double left = x;
+        double top = y;
+        double right = left + w;
+        double bottom = top + h;
+        double radiusX = Math.Min(r, (double)w / 2);
+        double radiusY = Math.Min(r, (double)h / 2);
+        double controlX = radiusX * CORNER_KAPPA;
+        double controlY = radiusY * CORNER_KAPPA;
+
+        var path = RentDashPath();
+        path.MoveTo(left + radiusX, top);
+        path.LineTo(right - radiusX, top);
+        path.BezierTo(right - radiusX + controlX, top, right, top + controlY, right, top + radiusY);
+        path.LineTo(right, bottom - radiusY);
+        path.BezierTo(right, bottom - radiusY + controlY, right - radiusX + controlX, bottom, right - radiusX, bottom);
+        path.LineTo(left + radiusX, bottom);
+        path.BezierTo(left + radiusX - controlX, bottom, left, bottom - radiusY + controlY, left, bottom - radiusY);
+        path.LineTo(left, top + radiusY);
+        path.BezierTo(left, top + radiusY - controlY, left + radiusX - controlX, top, left + radiusX, top);
+        path.Close();
         DrawDashedStroke(vg, path, pen, strokeBounds);
     }
 
@@ -326,7 +355,7 @@ internal static class NvgStrokeHelper
     /// </summary>
     public static void DrawDashedEllipse(MewVGContext vg, float cx, float cy, float rx, float ry, Pen pen, Rect strokeBounds)
     {
-        var path = new PathGeometry();
+        var path = RentDashPath();
         // Approximate ellipse with 4 bezier curves (standard approach)
         const float kappa = 0.5522847498f;
         float ox = rx * kappa, oy = ry * kappa;
@@ -339,13 +368,33 @@ internal static class NvgStrokeHelper
         DrawDashedStroke(vg, path, pen, strokeBounds);
     }
 
+    private static List<DashSegment> RentDashSegments()
+    {
+        var segments = _dashSegments;
+        if (segments == null || segments.Capacity > MAX_RETAINED_DASH_SEGMENTS)
+        {
+            // One long path must not keep its buffer for the life of the thread.
+            segments = new List<DashSegment>();
+            _dashSegments = segments;
+        }
+
+        segments.Clear();
+        return segments;
+    }
+
+    private static PathGeometry RentDashPath()
+    {
+        var path = _dashPath ??= new PathGeometry();
+        path.Clear();
+        return path;
+    }
+
     /// <summary>
-    /// Flattens a PathGeometry into line segments for dash computation.
+    /// Flattens a PathGeometry into line segments for dash computation, appending them to <paramref name="result"/>.
     /// Bezier curves are subdivided into line approximations.
     /// </summary>
-    private static List<DashSegment> FlattenPath(PathGeometry path)
+    private static void FlattenPath(PathGeometry path, List<DashSegment> result)
     {
-        var result = new List<DashSegment>();
         float curX = 0, curY = 0;
         float moveX = 0, moveY = 0;
 
@@ -386,8 +435,6 @@ internal static class NvgStrokeHelper
                     break;
             }
         }
-
-        return result;
     }
 
     private static void FlattenBezier(List<DashSegment> result,
@@ -465,8 +512,15 @@ internal static class NvgStrokeHelper
     private static int GetOrCreateGradientLut(MewVGContext vg, IReadOnlyList<GradientStop> stops)
     {
         var cache = GradientLutCaches.GetOrCreateValue(vg);
+
+        // A brush never changes its stops, so the list it drew with before finds its LUT without building a key.
+        if (cache.TryGetByStops(stops, out int knownImage))
+        {
+            return knownImage;
+        }
+
         var key = new GradientLutKey(stops);
-        if (cache.TryGet(key, out int existingImage))
+        if (cache.TryGet(key, stops, out int existingImage))
         {
             return existingImage;
         }
@@ -475,7 +529,7 @@ internal static class NvgStrokeHelper
         int imageId = vg.CreateOwnedImageRGBA(GRADIENT_LUT_SIZE, 1, MewVGImageFlags.Premultiplied, pixels);
         if (imageId != 0)
         {
-            cache.Add(key, imageId);
+            cache.Add(key, stops, imageId);
         }
 
         return imageId;
@@ -565,11 +619,15 @@ internal static class NvgStrokeHelper
         private readonly LinkedList<Entry> _lru = new();
         private readonly Queue<int> _pendingDeletes = new();
 
-        public bool TryGet(GradientLutKey key, out int imageId)
+        // The entry each stop list last resolved to. An evicted node is in no list, which makes a stale entry a miss.
+        private readonly ConditionalWeakTable<IReadOnlyList<GradientStop>, LinkedListNode<Entry>> _byStops = new();
+
+        /// <summary>Finds the LUT of a stop list this cache has resolved before, by reference.</summary>
+        public bool TryGetByStops(IReadOnlyList<GradientStop> stops, out int imageId)
         {
             lock (_syncRoot)
             {
-                if (_map.TryGetValue(key, out var node))
+                if (_byStops.TryGetValue(stops, out var node) && ReferenceEquals(node.List, _lru))
                 {
                     _lru.Remove(node);
                     _lru.AddFirst(node);
@@ -582,13 +640,32 @@ internal static class NvgStrokeHelper
             }
         }
 
-        public void Add(GradientLutKey key, int imageId)
+        public bool TryGet(GradientLutKey key, IReadOnlyList<GradientStop> stops, out int imageId)
+        {
+            lock (_syncRoot)
+            {
+                if (_map.TryGetValue(key, out var node))
+                {
+                    _lru.Remove(node);
+                    _lru.AddFirst(node);
+                    _byStops.AddOrUpdate(stops, node);
+                    imageId = node.Value.ImageId;
+                    return true;
+                }
+
+                imageId = 0;
+                return false;
+            }
+        }
+
+        public void Add(GradientLutKey key, IReadOnlyList<GradientStop> stops, int imageId)
         {
             lock (_syncRoot)
             {
                 var node = new LinkedListNode<Entry>(new Entry(key, imageId));
                 _lru.AddFirst(node);
                 _map[key] = node;
+                _byStops.AddOrUpdate(stops, node);
 
                 // Evicted textures are NOT deleted here: the frame's buffered draw calls may
                 // still reference them until the owning NanoVG flushes. They queue up and are
