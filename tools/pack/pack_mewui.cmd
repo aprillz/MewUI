@@ -80,6 +80,7 @@ set PROJECTS=%PROJECTS%^
   extensions\MewUI.Svg\MewUI.Svg.csproj^
   extensions\MewUI.MewCharts\MewUI.MewCharts.csproj^
   extensions\MewUI.Markdown\MewUI.Markdown.csproj^
+  extensions\MewUI.Markdown.Math\MewUI.Markdown.Math.csproj^
   extensions\MewUI.Terminal\MewUI.Terminal.csproj^
   extensions\MewUI.MewvalonEdit\MewUI.MewvalonEdit.csproj^
   extensions\MewUI.WebView2.Win32\MewUI.WebView2.Win32.csproj^
