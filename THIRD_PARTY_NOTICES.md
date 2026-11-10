@@ -178,3 +178,10 @@ LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR P
 INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR
 TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+## MarkView.Avalonia
+
+`Aprillz.MewUI.Markdown` contains a C# port of the LaTeX bracket delimiter parsing of MarkView.Avalonia.Math, and `Aprillz.MewUI.Markdown.Math` follows its formula renderers.
+https://github.com/Kryptos-FR/MarkView.Avalonia
+
+Copyright (c) Nicolas Musset. Licensed under the MIT License (full text identical to the FlexLayout MIT License above).
