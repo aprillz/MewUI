@@ -113,7 +113,7 @@ Tab과 Shift+Tab으로 링크 사이를 이동합니다. 블록을 넘나들고,
 
 ## 문법과 표현 확장
 
-`MarkdownOptions.ConfigurePipeline`은 Markdig 파이프라인 빌더를 받습니다. `UseMathematics()` 같은 Markdig 확장을 켤 수 있습니다. 렌더러가 없는 노드는 원본 텍스트로 표시됩니다.
+`MarkdownOptions.ConfigurePipeline`은 Markdig 파이프라인 빌더를 받습니다. `UseMathematics()` 같은 Markdig 확장을 켤 수 있습니다. 렌더러가 없는 노드는 원본 텍스트로 표시됩니다. `UseMathBracketDelimiters()`는 LaTeX 괄호 구분자 `\(...\)`와 `\[...\]`를 인식하며, `$...$`와 `$$...$$`와 같은 `MathInline`·`MathBlock` 노드를 만들며, 줄을 혼자 차지하는 `$$...$$`나 `\[...\]` 수식은 `MathBlock`으로 바꿉니다. `$$`가 수식과 같은 줄에 있어도 마찬가지입니다. 별도 패키지 `Aprillz.MewUI.Markdown.Math`가 이 노드를 조판된 수식으로 그립니다.
 
 `MarkdownRenderers`는 Markdig 노드 타입을 사용자 정의 표현에 연결합니다. `RegisterBlock<TBlock>`은 미부착 `FrameworkElement`를 반환하거나 기본 표현으로 넘기려면 `null`을 반환합니다. `RegisterInline<TInline>`은 노드의 텍스트 칸을 차지하는 `IInlineTextObject`를 반환합니다. 렌더러가 받는 `MarkdownRenderContext`는 프레젠터, 테마, 노드의 원본 텍스트, 그리고 자식 내용을 기본 파이프라인에 위임하는 `RenderBlocks`/`RenderInlines`를 제공합니다.
 

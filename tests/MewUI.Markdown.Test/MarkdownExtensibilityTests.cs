@@ -13,6 +13,7 @@ namespace Aprillz.MewUI.Markdown.Test;
 public sealed class MarkdownExtensibilityTests
 {
     private static readonly MarkdownOptions _mathOptions = new() { ConfigurePipeline = static builder => builder.UseMathematics() };
+    private static readonly MarkdownOptions _bracketMathOptions = new() { ConfigurePipeline = static builder => builder.UseMathematics().UseMathBracketDelimiters() };
 
     [TestMethod]
     public void UnregisteredExtensionNodeDisplaysSourceText()
@@ -32,6 +33,96 @@ public sealed class MarkdownExtensibilityTests
 
         // MathInline does not override ToString, which would show its type name in place of the formula.
         Assert.AreEqual("left $x^2$ right", string.Concat(document.Blocks.Single().Spans.Select(static span => span.Text)));
+    }
+
+    [TestMethod]
+    [DataRow("left \\(x^2\\) right", "left \\(x^2\\) right")]
+    [DataRow("left \\[x^2\\] right", "left \\[x^2\\] right")]
+    [DataRow("arr\\[i\\]", "arr[i]")]
+    [DataRow("left \\(x^2 right", "left (x^2 right")]
+    [DataRow("empty \\( \\)", "empty ( )")]
+    [DataRow("\\(a\nb\\)", "(a\nb)")]
+    public void BracketDelimitersParseFormulasInsideALine(string markdown, string expected)
+    {
+        ParsedMarkdown document = MarkdownParser.ParseDocument(markdown, _bracketMathOptions with { SoftBreakAsNewLine = true });
+
+        // An escaped parenthesis or bracket loses its backslash, a formula shows its source with the delimiters.
+        Assert.AreEqual(expected, string.Concat(document.Blocks.Single().Spans.Select(static span => span.Text)));
+    }
+
+    [TestMethod]
+    public void BracketFormulaShowsItsSourceWithoutFootnotes()
+    {
+        // Footnotes are what turn on precise source locations, which the source text of an inline depends on.
+        ParsedMarkdown document = MarkdownParser.ParseDocument("**a**\nleft \\(x^2\\) right", _bracketMathOptions with { UseFootnotes = false });
+
+        Assert.AreEqual("a left \\(x^2\\) right", string.Concat(document.Blocks.Single().Spans.Select(static span => span.Text)));
+    }
+
+    [TestMethod]
+    public void BracketDisplayFormulaOnItsOwnLinesSplitsTheParagraph()
+    {
+        ParsedMarkdown document = MarkdownParser.ParseDocument("above\n\\[\na^2 +\nb^2\n\\]\nbelow", _bracketMathOptions);
+
+        Assert.HasCount(3, document.Blocks);
+        Assert.AreEqual("above", string.Concat(document.Blocks[0].Spans.Select(static span => span.Text)));
+        Assert.AreEqual(MarkdownBlockKind.Code, document.Blocks[1].Kind);
+        Assert.IsInstanceOfType<MathBlock>(document.Blocks[1].Node);
+        Assert.AreEqual("a^2 +\nb^2", document.Blocks[1].Spans.Single().Text);
+        Assert.AreEqual("below", string.Concat(document.Blocks[2].Spans.Select(static span => span.Text)));
+    }
+
+    [TestMethod]
+    public void DollarDisplayFormulaOnItsOwnLineBecomesABlock()
+    {
+        ParsedMarkdown document = MarkdownParser.ParseDocument("above\n$$a^2 + b^2$$\nbelow $$c$$", _bracketMathOptions);
+
+        // A "$$" formula sharing its line with text stays inline, as Markdig parses it.
+        Assert.HasCount(3, document.Blocks);
+        Assert.AreEqual(MarkdownBlockKind.Code, document.Blocks[1].Kind);
+        Assert.IsInstanceOfType<MathBlock>(document.Blocks[1].Node);
+        Assert.AreEqual("a^2 + b^2", document.Blocks[1].Spans.Single().Text);
+        Assert.AreEqual("below $$c$$", string.Concat(document.Blocks[2].Spans.Select(static span => span.Text)));
+    }
+
+    [TestMethod]
+    public void DollarDisplayFormulaClosedOnALaterLineBecomesABlock()
+    {
+        // The dollars share their lines with the formula, which Markdig's block parser does not take.
+        ParsedMarkdown document = MarkdownParser.ParseDocument("above\n$$\\begin{vmatrix}\na & b\\\\\nc & d\n\\end{vmatrix}\n=ad-bc$$\nbelow", _bracketMathOptions);
+
+        Assert.HasCount(3, document.Blocks);
+        Assert.IsInstanceOfType<MathBlock>(document.Blocks[1].Node);
+        Assert.AreEqual("\\begin{vmatrix}\na & b\\\\\nc & d\n\\end{vmatrix}\n=ad-bc", document.Blocks[1].Spans.Single().Text);
+        Assert.AreEqual("below", string.Concat(document.Blocks[2].Spans.Select(static span => span.Text)));
+    }
+
+    [TestMethod]
+    public void DollarDisplayFormulaClosingTheParagraphBecomesABlock()
+    {
+        ParsedMarkdown document = MarkdownParser.ParseDocument("$$a$$\n$$\\begin{cases}\n1 & x>0\n\\end{cases}$$", _bracketMathOptions);
+
+        Assert.HasCount(2, document.Blocks);
+        Assert.AreEqual("a", document.Blocks[0].Spans.Single().Text);
+        Assert.AreEqual("\\begin{cases}\n1 & x>0\n\\end{cases}", document.Blocks[1].Spans.Single().Text);
+    }
+
+    [TestMethod]
+    public void BracketDisplayFormulaReachesTheMathBlockRenderer()
+    {
+        EnsureGdi();
+        string? source = null;
+        var renderers = new MarkdownRenderers().RegisterBlock<MathBlock>((block, context) =>
+        {
+            source = context.GetSource(block);
+            return new Border { Tag = "math" };
+        });
+        using var presenter = new MarkdownPresenter { Markdown = "before\n\\[x^2\\]\nafter", Options = _bracketMathOptions, Renderers = renderers };
+        presenter.Measure(new Size(240, 100));
+
+        Assert.IsTrue(Descendants(presenter.DocumentRoot!).OfType<Border>().Any(border => Equals(border.Tag, "math")));
+        Assert.AreEqual("\\[x^2\\]", source);
+        Assert.AreEqual(2, Descendants(presenter.DocumentRoot!).OfType<MarkdownParagraph>().Count());
     }
 
     [TestMethod]

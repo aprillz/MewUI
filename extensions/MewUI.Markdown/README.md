@@ -113,7 +113,7 @@ Blocks that have not been reached use an estimated height, the average of measur
 
 ## Extending the syntax and the presentation
 
-`MarkdownOptions.ConfigurePipeline` receives the Markdig pipeline builder, so Markdig extensions such as `UseMathematics()` can be enabled. Nodes without a renderer are shown as source text.
+`MarkdownOptions.ConfigurePipeline` receives the Markdig pipeline builder, so Markdig extensions such as `UseMathematics()` can be enabled. Nodes without a renderer are shown as source text. `UseMathBracketDelimiters()` adds the LaTeX bracket delimiters `\(...\)` and `\[...\]`, which produce the same `MathInline` and `MathBlock` nodes as `$...$` and `$$...$$`, and turns a `$$...$$` or `\[...\]` formula on lines of its own into a `MathBlock`, including a `$$...$$` whose dollars share their lines with the formula. The separate `Aprillz.MewUI.Markdown.Math` package draws these nodes as typeset formulas.
 
 `MarkdownRenderers` maps Markdig node types to custom presentation. `RegisterBlock<TBlock>` returns an unattached `FrameworkElement` (or `null` to fall back), and `RegisterInline<TInline>` returns an `IInlineTextObject` that occupies the node's text columns. The `MarkdownRenderContext` handed to a renderer exposes the presenter, the theme, the node's source text and `RenderBlocks`/`RenderInlines` for delegating child content to the default pipeline.
 
