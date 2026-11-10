@@ -44,11 +44,37 @@ internal sealed class SceneUpdate
     /// <summary>The layer roots the scene takes, in drawing order, when this update lands.</summary>
     internal void StageLayerRoots(IReadOnlyList<UIElement> layerRoots)
     {
-        _layerRoots = new UIElement[layerRoots.Count];
-        for (int index = 0; index < layerRoots.Count; index++)
+        if (_scene.LayerRoots is UIElement[] current && HasSameRoots(current, layerRoots))
         {
-            _layerRoots[index] = layerRoots[index];
+            // The layers rarely change, and staging the scene's own array commits as no change without a copy per pass.
+            _layerRoots = current;
         }
+        else
+        {
+            _layerRoots = new UIElement[layerRoots.Count];
+            for (int index = 0; index < layerRoots.Count; index++)
+            {
+                _layerRoots[index] = layerRoots[index];
+            }
+        }
+    }
+
+    private static bool HasSameRoots(UIElement[] current, IReadOnlyList<UIElement> staged)
+    {
+        if (current.Length != staged.Count)
+        {
+            return false;
+        }
+
+        for (int index = 0; index < current.Length; index++)
+        {
+            if (!ReferenceEquals(current[index], staged[index]))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>

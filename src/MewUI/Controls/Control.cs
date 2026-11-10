@@ -368,6 +368,16 @@ public abstract partial class Control : TextElement
 
         // Wire presenters after the root is attached so projected content lands under a
         // rooted presenter and picks up the correct inherited state.
+        WirePresenters(root, instance);
+
+        OnTemplateInstanceAttached();
+        OnApplyTemplate();
+        return true;
+    }
+
+    private void WirePresenters(Element root, ControlTemplateInstance instance)
+    {
+        // Kept out of ApplyTemplate: a capturing lambda there allocates its closure on every call, built or not.
         VisualTree.Visit(root, element =>
         {
             if (element is ContentPresenter presenter && presenter.TemplatedParent == null)
@@ -376,10 +386,6 @@ public abstract partial class Control : TextElement
                 presenter.AttachToTemplatedParent(this);
             }
         });
-
-        OnTemplateInstanceAttached();
-        OnApplyTemplate();
-        return true;
     }
 
     /// <summary>

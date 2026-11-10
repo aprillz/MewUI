@@ -10,6 +10,8 @@ public partial class Window
     private RenderScene? _renderScene;
     private SceneCapture? _sceneCapture;
     private RenderDirtyRegistry? _renderDirty;
+    // The scene pass's recorder, kept while the pass is given the context it wraps.
+    private RenderDataRecorder? _sceneRecorder;
     private bool _retainedSceneReady;
     // Target whose BeginFrame was asked to keep the previous frame; only then may this one repaint part of it.
     private object? _preservingTarget;
@@ -346,7 +348,12 @@ public partial class Window
         // The dirty region of the frame being drawn now, not of every frame since the scene was built.
         _renderScene.ResetDirtyRegion();
 
-        var recorder = new RenderDataRecorder(context) { SuppressDrawing = true };
+        var recorder = _sceneRecorder;
+        if (recorder == null || !ReferenceEquals(recorder.Inner, context))
+        {
+            recorder = new RenderDataRecorder(context) { SuppressDrawing = true };
+            _sceneRecorder = recorder;
+        }
 
         try
         {
@@ -935,6 +942,7 @@ public partial class Window
         _presentSurfaceContext?.Dispose();
         _presentSurfaceContext = null;
         _presentSurface = null;
+        _sceneRecorder = null;
     }
 
     private void ReleaseRetainedFrameSurface()
@@ -942,6 +950,7 @@ public partial class Window
         // The context draws into the surface, so it goes first.
         _retainedFrameContext?.Dispose();
         _retainedFrameContext = null;
+        _sceneRecorder = null;
         _retainedFrameSurface?.Dispose();
         _retainedFrameSurface = null;
         _preservingTarget = null;
