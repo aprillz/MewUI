@@ -91,8 +91,10 @@ public class DemoWindow : Window
             .OnLinkRequested(link => status.Text = $"Link: {link.Url} | Resolved: {link.ResolvedUri} | Source: {link.SourceStart}+{link.SourceLength}");
         var gfm = new Button().Content(new TextBlock().Text("GFM: on"));
         var html = new Button().Content(new TextBlock().Text("HTML: off"));
+        var math = new Button().Content(new TextBlock().Text("Math: off"));
         bool gfmEnabled = true;
         bool htmlEnabled = false;
+        bool mathEnabled = false;
 
         void ApplyOptions() => viewer.Options(new MarkdownOptions
         {
@@ -102,8 +104,9 @@ public class DemoWindow : Window
             UseStrikethrough = gfmEnabled,
             UseInserted = gfmEnabled,
             UseMarked = gfmEnabled,
-            UseHtmlFormatting = htmlEnabled
-        });
+            UseHtmlFormatting = htmlEnabled,
+            ConfigurePipeline = mathEnabled ? static builder => builder.UseMath() : null
+        }).Renderers(mathEnabled ? new MarkdownRenderers().UseMath() : null);
 
         void SelectCase(ReviewCase entry)
         {
@@ -139,11 +142,17 @@ public class DemoWindow : Window
             ApplyOptions();
             ((TextBlock)html.Content!).Text(htmlEnabled ? "HTML: on" : "HTML: off");
         });
+        math.OnClick(() =>
+        {
+            mathEnabled = !mathEnabled;
+            ApplyOptions();
+            ((TextBlock)math.Content!).Text(mathEnabled ? "Math: on" : "Math: off");
+        });
         new StackPanel()
             .Ref(out var toolbar)
             .Orientation(Orientation.Horizontal)
             .Spacing(8)
-            .Children(apply, gfm, html);
+            .Children(apply, gfm, html, math);
         new StackPanel()
             .Ref(out var header)
             .Spacing(6)
