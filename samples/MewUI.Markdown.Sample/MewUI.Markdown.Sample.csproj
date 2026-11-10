@@ -30,6 +30,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\MewUI\MewUI.csproj" />
     <ProjectReference Include="..\..\extensions\MewUI.Markdown\MewUI.Markdown.csproj" />
+    <ProjectReference Include="..\..\extensions\MewUI.Markdown.Math\MewUI.Markdown.Math.csproj" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(RuntimeIdentifier)' == ''">
