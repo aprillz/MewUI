@@ -114,10 +114,11 @@ internal sealed partial class GdiFont : FontBase, IGlyphOutlineFont, IWin32TextF
     private Dictionary<char, GlyphInk>? _glyphInk;
 
     /// <summary>
-    /// Ink of a single-line run that falls outside its advance box and the font's ascent/descent band,
-    /// in device-independent units. Zero for code units the outline query cannot answer.
+    /// Ink of a single-line run drawn with <paramref name="letterSpacing"/> that falls outside its
+    /// advance box and the font's ascent/descent band, in device-independent units. Zero for code
+    /// units the outline query cannot answer.
     /// </summary>
-    public TextInkOverhang GetRunInkOverhang(ReadOnlySpan<char> text)
+    public TextInkOverhang GetRunInkOverhang(ReadOnlySpan<char> text, double letterSpacing = 0)
     {
         if (text.IsEmpty || Handle == 0)
         {
@@ -132,7 +133,9 @@ internal sealed partial class GdiFont : FontBase, IGlyphOutlineFont, IWin32TextF
 
         // The right overhang is the furthest any glyph's ink reaches past the run's end, so a wide
         // italic followed by a narrow glyph still counts; the left one only comes from the first glyph.
-        int advanceAfter = 0;
+        // The spacing after a character belongs to the run box, the last one's included.
+        int characterExtraPx = GdiTextAdvances.ToCharacterExtraPx(letterSpacing, Dpi / 96.0);
+        int advanceAfter = characterExtraPx;
         int left = 0;
         int right = 0;
         int above = 0;
@@ -143,7 +146,7 @@ internal sealed partial class GdiFont : FontBase, IGlyphOutlineFont, IWin32TextF
             right = Math.Max(right, ink.Right - advanceAfter);
             above = Math.Max(above, ink.Above);
             below = Math.Max(below, ink.Below);
-            advanceAfter += ink.Advance;
+            advanceAfter += ink.Advance + characterExtraPx;
             if (index == 0)
             {
                 left = ink.Left;
@@ -161,7 +164,7 @@ internal sealed partial class GdiFont : FontBase, IGlyphOutlineFont, IWin32TextF
         return false;
     }
 
-    public bool TryGetPrefixAdvances(ReadOnlySpan<char> text, double dpiScale, Span<double> destination)
+    public bool TryGetPrefixAdvances(ReadOnlySpan<char> text, double dpiScale, double letterSpacing, Span<double> destination)
     {
         if (destination.Length < text.Length)
         {
@@ -182,7 +185,7 @@ internal sealed partial class GdiFont : FontBase, IGlyphOutlineFont, IWin32TextF
             return false;
         }
 
-        GdiTextAdvances.GetUtf16PrefixAdvances(_outlineDc, this, text, dpiScale, destination);
+        GdiTextAdvances.GetUtf16PrefixAdvances(_outlineDc, this, text, dpiScale, letterSpacing, destination);
         return true;
     }
 

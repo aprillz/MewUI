@@ -28,12 +28,12 @@ internal abstract class MeasureGraphicsContextBase : ITextBackendMeasurementCont
     double ITextBackendMeasurementContext.GetRasterBaseline(IFont font)
         => GetRasterBaseline(font);
 
-    double[]? ITextBackendMeasurementContext.GetUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font)
-        => this is ITextAdvanceSource source ? source.GetUtf16PrefixAdvances(text, font) : null;
+    double[]? ITextBackendMeasurementContext.GetUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font, double letterSpacing)
+        => this is ITextAdvanceSource source ? source.GetUtf16PrefixAdvances(text, font, letterSpacing) : null;
 
     bool ITextBackendMeasurementContext.TryGetUtf16PrefixAdvances(
-        ReadOnlySpan<char> text, IFont font, Span<double> destination)
-        => this is ITextAdvanceSource source && source.TryGetUtf16PrefixAdvances(text, font, destination);
+        ReadOnlySpan<char> text, IFont font, double letterSpacing, Span<double> destination)
+        => this is ITextAdvanceSource source && source.TryGetUtf16PrefixAdvances(text, font, letterSpacing, destination);
 
     public virtual void Dispose()
     {

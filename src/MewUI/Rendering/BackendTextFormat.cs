@@ -18,4 +18,11 @@ internal sealed class BackendTextFormat
     public required TextWrapping Wrapping { get; init; }
 
     public required TextTrimming Trimming { get; init; }
+
+    /// <summary>
+    /// Space added between the clusters the backend shapes the text into, in DIPs; negative tightens.
+    /// Where a backend puts it around a cluster is its own choice, and so is whether the last cluster
+    /// gets any: its measurement context reports the advances it draws with for the same value.
+    /// </summary>
+    public double LetterSpacing { get; init; }
 }

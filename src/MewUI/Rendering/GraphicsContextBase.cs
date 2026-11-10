@@ -478,7 +478,8 @@ internal abstract class GraphicsContextBase : IGraphicsContext, ITextBackendRend
         ReadOnlySpan<char> text,
         IFont font,
         double width,
-        double height)
+        double height,
+        double letterSpacing)
     {
         var format = new BackendTextFormat
         {
@@ -486,7 +487,8 @@ internal abstract class GraphicsContextBase : IGraphicsContext, ITextBackendRend
             HorizontalAlignment = TextAlignment.Left,
             VerticalAlignment = TextAlignment.Top,
             Wrapping = TextWrapping.NoWrap,
-            Trimming = TextTrimming.None
+            Trimming = TextTrimming.None,
+            LetterSpacing = letterSpacing
         };
         var constraints = new BackendTextLayoutConstraints(
             new Rect(0, 0, Math.Max(1, width), Math.Max(1, height)));
@@ -496,7 +498,7 @@ internal abstract class GraphicsContextBase : IGraphicsContext, ITextBackendRend
             return null;
         }
 
-        layout.InkOverhang = MeasureRunInkOverhang(text, font, layout);
+        layout.InkOverhang = MeasureRunInkOverhang(text, format, layout);
         return new GraphicsBackendTextRun(text.ToString(), format, layout, width, height);
     }
 
@@ -505,7 +507,7 @@ internal abstract class GraphicsContextBase : IGraphicsContext, ITextBackendRend
     /// that cannot measure glyph extents draws the box as before; one that can overrides this and
     /// draws that ink instead of clipping it.
     /// </summary>
-    protected virtual TextInkOverhang MeasureRunInkOverhang(ReadOnlySpan<char> text, IFont font, BackendTextLayout layout)
+    protected virtual TextInkOverhang MeasureRunInkOverhang(ReadOnlySpan<char> text, BackendTextFormat format, BackendTextLayout layout)
         => TextInkOverhang.None;
 
     void ITextBackendRenderContext.DrawRun(ITextBackendRun run, Point origin, Color color, object? owner)

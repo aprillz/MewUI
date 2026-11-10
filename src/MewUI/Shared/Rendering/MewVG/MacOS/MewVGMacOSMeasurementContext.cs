@@ -19,10 +19,10 @@ internal sealed class MewVGMetalMeasurementContext : MeasureGraphicsContextBase,
             ? CoreTextText.GetRasterBaseline(coreTextFont, _dpi)
             : base.GetRasterBaseline(font);
 
-    bool ITextAdvanceSource.TryGetUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font, Span<double> destination)
+    bool ITextAdvanceSource.TryGetUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font, double letterSpacing, Span<double> destination)
     {
         if (text.IsEmpty || font is not CoreTextFont ct || destination.Length < text.Length ||
-            !CoreTextText.TryGetUtf16PrefixAdvancesPx(ct, text, _dpi, destination))
+            !CoreTextText.TryGetUtf16PrefixAdvancesPx(ct, text, _dpi, destination, letterSpacing * DpiScale))
         {
             return false;
         }
@@ -35,10 +35,10 @@ internal sealed class MewVGMetalMeasurementContext : MeasureGraphicsContextBase,
         return true;
     }
 
-    double[] ITextAdvanceSource.GetUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font)
+    double[] ITextAdvanceSource.GetUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font, double letterSpacing)
     {
         if (!text.IsEmpty && font is CoreTextFont ct &&
-            CoreTextText.GetUtf16PrefixAdvancesPx(ct, text, _dpi) is double[] advances)
+            CoreTextText.GetUtf16PrefixAdvancesPx(ct, text, _dpi, letterSpacing * DpiScale) is double[] advances)
         {
             double scale = DpiScale;
             for (int index = 0; index < advances.Length; index++)

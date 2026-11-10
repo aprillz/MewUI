@@ -59,7 +59,8 @@ internal static unsafe class FreeTypeText
         TextWrapping wrapping,
         TextTrimming trimming = TextTrimming.None,
         int insetLeftPx = 0,
-        int insetTopPx = 0)
+        int insetTopPx = 0,
+        int letterSpacingPx = 0)
     {
         if (text.IsEmpty)
         {
@@ -79,7 +80,7 @@ internal static unsafe class FreeTypeText
         var lines = new List<LineSegment>();
         int maxLineWidth = 0;
         int effectiveWrapWidth = wrapping == TextWrapping.Wrap ? widthPx : 0;
-        TextLayoutUtils.EnumerateLines(text, effectiveWrapWidth, wrapping, span => MeasureRunWidthPx(span, face, font), line =>
+        TextLayoutUtils.EnumerateLines(text, effectiveWrapWidth, wrapping, span => MeasureRunWidthPx(span, face, font, letterSpacingPx), line =>
         {
             int width = (int)Math.Ceiling(line.Width);
             if (width > maxLineWidth)
@@ -101,7 +102,7 @@ internal static unsafe class FreeTypeText
                     if (line.Width > widthPx && line.Length > 0)
                     {
                         var lineText = text.Slice(line.Start, line.Length);
-                        var trimmed = TextLayoutUtils.TrimLineWithEllipsis(lineText, line.Start, widthPx, span => MeasureRunWidthPx(span, face, font));
+                        var trimmed = TextLayoutUtils.TrimLineWithEllipsis(lineText, line.Start, widthPx, span => MeasureRunWidthPx(span, face, font, letterSpacingPx));
                         lines[i] = new LineSegment(trimmed.Start, trimmed.Length, trimmed.Width);
                         trimmedFlags.Add(true);
                     }
@@ -124,32 +125,32 @@ internal static unsafe class FreeTypeText
                     if (lastLine.Length > 0)
                     {
                         var lineText = text.Slice(lastLine.Start, lastLine.Length);
-                        int ellipsisW = MeasureRunWidthPx("...", face, font);
+                        int ellipsisW = MeasureRunWidthPx("...", face, font, letterSpacingPx);
                         int maxTextW = Math.Max(0, widthPx - ellipsisW);
 
                         // Don't use TrimLineWithEllipsis here - its fast path skips the
                         // ellipsis when text fits, but wrap overflow always needs "...".
                         int trimLen = lastLine.Length;
-                        int textW = MeasureRunWidthPx(lineText, face, font);
+                        int textW = MeasureRunWidthPx(lineText, face, font, letterSpacingPx);
                         if (textW > maxTextW)
                         {
                             double avgChar = (double)textW / trimLen;
                             trimLen = Math.Clamp((int)(maxTextW / avgChar), 0, lastLine.Length);
-                            textW = trimLen > 0 ? MeasureRunWidthPx(lineText.Slice(0, trimLen), face, font) : 0;
+                            textW = trimLen > 0 ? MeasureRunWidthPx(lineText.Slice(0, trimLen), face, font, letterSpacingPx) : 0;
 
                             if (textW > maxTextW)
                             {
                                 while (trimLen > 0 && textW > maxTextW)
                                 {
                                     trimLen--;
-                                    textW = trimLen > 0 ? MeasureRunWidthPx(lineText.Slice(0, trimLen), face, font) : 0;
+                                    textW = trimLen > 0 ? MeasureRunWidthPx(lineText.Slice(0, trimLen), face, font, letterSpacingPx) : 0;
                                 }
                             }
                             else
                             {
                                 while (trimLen < lastLine.Length)
                                 {
-                                    int next = MeasureRunWidthPx(lineText.Slice(0, trimLen + 1), face, font);
+                                    int next = MeasureRunWidthPx(lineText.Slice(0, trimLen + 1), face, font, letterSpacingPx);
                                     if (next > maxTextW) break;
                                     trimLen++;
                                     textW = next;
@@ -238,42 +239,127 @@ internal static unsafe class FreeTypeText
                 var shaped = HarfBuzzShaper.Shape(shapeInput, face);
                 if (shaped != null)
                 {
-                    RenderShapedGlyphs(shaped, face, font, penX, penY, buffer, widthPx, heightPx, color, shapeInput);
+                    // Shaped right to left, the glyphs come in visual order with their clusters falling.
+                    bool rightToLeft = shaped.Length > 1 && shaped[0].Cluster > shaped[^1].Cluster;
+                    var shapedSpacing = LetterSpacingOffsets.Create(shapeInput, letterSpacingPx, rightToLeft);
+                    RenderShapedGlyphs(shaped, face, font, penX, penY, buffer, widthPx, heightPx, color, shapeInput, in shapedSpacing);
                     continue;
                 }
             }
 
             // Fallback: character-by-character rendering.
-            RenderLineFallback(text, line, face, font, penX, penY, buffer, widthPx, heightPx, color);
+            var spacing = LetterSpacingOffsets.Create(lineText, letterSpacingPx);
+            RenderLineFallback(text, line, face, font, penX, penY, buffer, widthPx, heightPx, color, in spacing);
 
             if (trimmed)
             {
                 // Advance penX to end of line for ellipsis placement.
-                int lineEndX = penX + MeasureRunWidthPxFallback(lineText, face, font);
-                RenderEllipsisFallback(face, font, lineEndX, penY, buffer, widthPx, heightPx, color);
+                int lineEndX = penX + MeasureRunWidthPxFallback(lineText, face, font) + spacing.TotalPx;
+                var ellipsisSpacing = LetterSpacingOffsets.Create("...", letterSpacingPx);
+                RenderEllipsisFallback(face, font, lineEndX, penY, buffer, widthPx, heightPx, color, in ellipsisSpacing);
             }
         }
 
         return new TextBitmap(widthPx, heightPx, buffer);
     }
 
-    private static int MeasureRunWidthPx(ReadOnlySpan<char> text, FreeTypeFaceCache.FaceEntry face, FreeTypeFont font)
+    private static int MeasureRunWidthPx(ReadOnlySpan<char> text, FreeTypeFaceCache.FaceEntry face, FreeTypeFont font,
+        int letterSpacingPx = 0)
     {
         if (text.IsEmpty)
         {
             return 0;
         }
 
+        int spacingPx = letterSpacingPx == 0 ? 0 : CountTextElements(text) * letterSpacingPx;
         if (HarfBuzzAvailability.IsAvailable)
         {
             var shaped = HarfBuzzShaper.Shape(text, face);
             if (shaped != null)
             {
-                return MeasureShapedWidth(shaped, text, face, font);
+                return MeasureShapedWidth(shaped, text, face, font) + spacingPx;
             }
         }
 
-        return MeasureRunWidthPxFallback(text, face, font);
+        return MeasureRunWidthPxFallback(text, face, font) + spacingPx;
+    }
+
+    /// <summary>
+    /// Letter spacing as the whole pixels this rasterizer puts after every text element. Whole, as
+    /// every advance here is, and the same value in measurement and in drawing.
+    /// </summary>
+    public static int ToLetterSpacingPx(double letterSpacing, double dpiScale)
+        => (int)Math.Round(letterSpacing * (dpiScale > 0 ? dpiScale : 1), MidpointRounding.AwayFromZero);
+
+    private static int CountTextElements(ReadOnlySpan<char> text)
+    {
+        int count = 0;
+        for (int position = 0; position < text.Length; position += ElementLength(text, position))
+        {
+            count++;
+        }
+
+        return count;
+    }
+
+    /// <summary>
+    /// Where letter spacing moves the glyphs of one line: every text element sits one spacing further
+    /// along than the element before it. The spacing does not depend on how the line was shaped, so a
+    /// ligature or a fallback run measures and draws at the same place.
+    /// </summary>
+    private readonly struct LetterSpacingOffsets
+    {
+        private readonly int[]? _elementOfUnit;
+        private readonly int _elementCount;
+        private readonly int _spacingPx;
+        private readonly bool _rightToLeft;
+
+        private LetterSpacingOffsets(int[] elementOfUnit, int elementCount, int spacingPx, bool rightToLeft)
+        {
+            _elementOfUnit = elementOfUnit;
+            _elementCount = elementCount;
+            _spacingPx = spacingPx;
+            _rightToLeft = rightToLeft;
+        }
+
+        /// <summary>The spacing of the whole line, the one after its last element included.</summary>
+        public int TotalPx => _elementCount * _spacingPx;
+
+        public static LetterSpacingOffsets Create(ReadOnlySpan<char> text, int spacingPx, bool rightToLeft = false)
+        {
+            if (spacingPx == 0 || text.IsEmpty)
+            {
+                return default;
+            }
+
+            var elementOfUnit = new int[text.Length];
+            int element = 0;
+            for (int position = 0; position < text.Length; element++)
+            {
+                int length = Math.Min(ElementLength(text, position), text.Length - position);
+                elementOfUnit.AsSpan(position, length).Fill(element);
+                position += length;
+            }
+
+            return new LetterSpacingOffsets(elementOfUnit, element, spacingPx, rightToLeft);
+        }
+
+        /// <summary>How far past its natural place the cluster at <paramref name="unit"/> is drawn.</summary>
+        public int OffsetPx(int unit)
+        {
+            if (_elementOfUnit == null || (uint)unit >= (uint)_elementOfUnit.Length)
+            {
+                return 0;
+            }
+
+            // Drawn right to left, the first glyph is the last element, which nothing is ahead of.
+            int elementsAhead = _rightToLeft ? _elementCount - 1 - _elementOfUnit[unit] : _elementOfUnit[unit];
+            return elementsAhead * _spacingPx;
+        }
+
+        /// <summary>The spacing in the advance that ends the text element <paramref name="unit"/> belongs to.</summary>
+        public int AdvancePx(int unit)
+            => _elementOfUnit == null || (uint)unit >= (uint)_elementOfUnit.Length ? 0 : (_elementOfUnit[unit] + 1) * _spacingPx;
     }
 
     /// <summary>
@@ -490,23 +576,38 @@ internal static unsafe class FreeTypeText
 
     /// <summary>
     /// Computes cumulative prefix advances in pixels per UTF-16 code unit, using the same
-    /// metric path as measurement and rendering (shaped when HarfBuzz is available).
+    /// metric path as measurement and rendering (shaped when HarfBuzz is available), with
+    /// <paramref name="letterSpacingPx"/> after every text element.
     /// </summary>
-    public static double[] GetUtf16PrefixAdvancesPx(ReadOnlySpan<char> text, FreeTypeFont font)
+    public static double[] GetUtf16PrefixAdvancesPx(ReadOnlySpan<char> text, FreeTypeFont font, int letterSpacingPx = 0)
     {
         var prefix = new double[text.Length];
-        FillUtf16PrefixAdvancesPx(text, font, prefix);
+        FillUtf16PrefixAdvancesPx(text, font, prefix, letterSpacingPx);
         return prefix;
     }
 
     /// <summary>Writes the prefix advances into a caller-owned span of at least one entry per code unit.</summary>
-    public static void FillUtf16PrefixAdvancesPx(ReadOnlySpan<char> text, FreeTypeFont font, Span<double> prefix)
+    public static void FillUtf16PrefixAdvancesPx(ReadOnlySpan<char> text, FreeTypeFont font, Span<double> prefix,
+        int letterSpacingPx = 0)
     {
         if (text.IsEmpty)
         {
             return;
         }
 
+        FillNaturalPrefixAdvancesPx(text, font, prefix);
+        if (letterSpacingPx != 0)
+        {
+            var spacing = LetterSpacingOffsets.Create(text, letterSpacingPx);
+            for (int index = 0; index < text.Length; index++)
+            {
+                prefix[index] += spacing.AdvancePx(index);
+            }
+        }
+    }
+
+    private static void FillNaturalPrefixAdvancesPx(ReadOnlySpan<char> text, FreeTypeFont font, Span<double> prefix)
+    {
         var face = FreeTypeFaceCache.Instance.Get(font.FontPath, font.PixelHeight, font.Weight, font.IsItalic);
 
         if (HarfBuzzAvailability.IsAvailable)
@@ -641,8 +742,10 @@ internal static unsafe class FreeTypeText
         int widthPx,
         int heightPx,
         Color color,
-        ReadOnlySpan<char> sourceText = default)
+        ReadOnlySpan<char> sourceText = default,
+        in LetterSpacingOffsets spacing = default)
     {
+        // The pen keeps the natural advances; the spacing is added where each cluster is drawn.
         long penX26_6 = (long)startPenX << 6;
         int baseY = penY + GetBaselinePx(font);
 
@@ -671,7 +774,7 @@ internal static unsafe class FreeTypeText
                         {
                             penX26_6 += RenderShapedGlyphsDirect(
                                 run.Glyphs, run.Face, font, penX26_6, baseY,
-                                buffer, widthPx, heightPx, color);
+                                buffer, widthPx, heightPx, color, in spacing, run.TextStart);
                         }
                     }
 
@@ -691,7 +794,7 @@ internal static unsafe class FreeTypeText
                             uint fbGlyph = fb.GetGlyphIndex(codepoint);
                             if (fbGlyph != 0)
                             {
-                                int drawX = (int)(penX26_6 >> 6);
+                                int drawX = (int)(penX26_6 >> 6) + spacing.OffsetPx((int)gg.Cluster);
                                 RenderFallbackCodepoint(fb, codepoint, fbGlyph, drawX, baseY,
                                     buffer, widthPx, heightPx, color, out int advancePx);
                                 penX26_6 += (long)advancePx << 6;
@@ -708,7 +811,7 @@ internal static unsafe class FreeTypeText
             // keeps its colours when it is the font asked for.
             penX26_6 += RenderShapedGlyphsDirect(
                 glyphs.AsSpan(i, 1), face, font, penX26_6, baseY,
-                buffer, widthPx, heightPx, color);
+                buffer, widthPx, heightPx, color, in spacing);
         }
     }
 
@@ -716,6 +819,9 @@ internal static unsafe class FreeTypeText
     /// Renders shaped glyphs from a specific face (typically a fallback emoji font).
     /// Handles color emoji (BGRA) and BitmapScale. Does NOT attempt further fallback for .notdef.
     /// Returns total advance in 26.6 fixed-point, each glyph snapped to a whole pixel as measurement snaps it.
+    /// The advance leaves the letter spacing out: <paramref name="spacing"/> only moves where each cluster is
+    /// drawn, by the place its text has in the line, <paramref name="clusterBase"/> being where the glyphs'
+    /// clusters count from.
     /// </summary>
     private static long RenderShapedGlyphsDirect(
         ReadOnlySpan<ShapedGlyph> glyphs,
@@ -726,7 +832,9 @@ internal static unsafe class FreeTypeText
         byte[] buffer,
         int widthPx,
         int heightPx,
-        Color color)
+        Color color,
+        in LetterSpacingOffsets spacing = default,
+        int clusterBase = 0)
     {
         long penX26_6 = startPenX26_6;
         bool isColorFont = FT.FT_HAS_COLOR(face.Face);
@@ -738,7 +846,8 @@ internal static unsafe class FreeTypeText
             long scaledAdvance = SnapAdvanceToPixels((long)Math.Round(g.XAdvance26_6 * scale));
             if (g.GlyphId == 0) { penX26_6 += scaledAdvance; continue; }
 
-            int glyphDrawX = (int)((penX26_6 + (long)Math.Round(g.XOffset26_6 * scale)) >> 6);
+            int glyphDrawX = (int)((penX26_6 + (long)Math.Round(g.XOffset26_6 * scale)) >> 6)
+                + spacing.OffsetPx(clusterBase + (int)g.Cluster);
             int drawYOffset = (int)((long)Math.Round(g.YOffset26_6 * scale) >> 6);
 
             if (isColorFont)
@@ -868,7 +977,8 @@ internal static unsafe class FreeTypeText
         byte[] buffer,
         int widthPx,
         int heightPx,
-        Color color)
+        Color color,
+        in LetterSpacingOffsets spacing = default)
     {
         uint prevGlyph = 0;
         FreeTypeFaceCache.FaceEntry prevFace = face;
@@ -883,6 +993,8 @@ internal static unsafe class FreeTypeText
                 continue;
             }
 
+            // The pen keeps the natural advances; the spacing only moves where this code point is drawn.
+            int spacingOffsetPx = spacing.OffsetPx(i);
             uint code;
             if (char.IsHighSurrogate(ch) && i + 1 < line.Length && char.IsLowSurrogate(text[line.Start + i + 1]))
             {
@@ -922,7 +1034,7 @@ internal static unsafe class FreeTypeText
             {
                 // Cached path: area-average downscale once, blit from cache thereafter.
                 BlitCachedColorGlyph(activeFace, glyph,
-                    penX, baseY, buffer, widthPx, heightPx);
+                    penX + spacingOffsetPx, baseY, buffer, widthPx, heightPx);
             }
             else
             {
@@ -945,7 +1057,7 @@ internal static unsafe class FreeTypeText
                                 var bmpGlyph = Marshal.PtrToStructure<FT_BitmapGlyphRec>(bmpGlyphPtr);
                                 double scale = activeFace.BitmapScale;
                                 BlitGlyph(bmpGlyph.bitmap, (int)bmpGlyph.bitmap.width, (int)bmpGlyph.bitmap.rows,
-                                    penX + (int)(bmpGlyph.left * scale), baseY - (int)(bmpGlyph.top * scale), buffer, widthPx, heightPx, color, scale);
+                                    penX + spacingOffsetPx + (int)(bmpGlyph.left * scale), baseY - (int)(bmpGlyph.top * scale), buffer, widthPx, heightPx, color, scale);
                             }
                         }
                         finally
@@ -974,12 +1086,13 @@ internal static unsafe class FreeTypeText
         byte[] buffer,
         int widthPx,
         int heightPx,
-        Color color)
+        Color color,
+        in LetterSpacingOffsets spacing = default)
     {
         // Render "..." as three period glyphs.
         const string dots = "...";
         var seg = new LineSegment(0, dots.Length, 0);
-        RenderLineFallback(dots, seg, face, font, penX, penY, buffer, widthPx, heightPx, color);
+        RenderLineFallback(dots, seg, face, font, penX, penY, buffer, widthPx, heightPx, color, in spacing);
     }
 
     /// <summary>

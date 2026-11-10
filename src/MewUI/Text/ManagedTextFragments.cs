@@ -329,7 +329,7 @@ internal sealed partial class ManagedTextEngine
         if (context.SupportsUtf16PrefixAdvances)
         {
             rented = ArrayPool<double>.Shared.Rent(length);
-            if (context.TryGetUtf16PrefixAdvances(span, font, rented.AsSpan(0, length)))
+            if (context.TryGetUtf16PrefixAdvances(span, font, letterSpacing, rented.AsSpan(0, length)))
             {
                 cumulative = rented.AsSpan(0, length);
             }
@@ -337,7 +337,7 @@ internal sealed partial class ManagedTextEngine
             {
                 ArrayPool<double>.Shared.Return(rented);
                 rented = null;
-                cumulativeArray = context.GetUtf16PrefixAdvances(span, font);
+                cumulativeArray = context.GetUtf16PrefixAdvances(span, font, letterSpacing);
                 cumulative = cumulativeArray;
             }
 
@@ -361,14 +361,15 @@ internal sealed partial class ManagedTextEngine
             double width;
             if (!cumulative.IsEmpty)
             {
+                // The backend's advances already carry the letter spacing it draws the run with.
                 double current = cumulative[graphemeEnd - start - 1];
-                width = Math.Max(0, current - previous + letterSpacing);
+                width = Math.Max(0, current - previous);
                 previous = current;
             }
             else
             {
                 // No advance source: the backend can only measure text it is given, so each grapheme
-                // is measured on its own, exactly as the cluster path did.
+                // is measured on its own, exactly as the cluster path did, and the spacing is added here.
                 var graphemeSize = context.Measure(
                     snapshot.Text.AsSpan(graphemeStart, graphemeEnd - graphemeStart), font);
                 width = Math.Max(0, graphemeSize.Width + letterSpacing);

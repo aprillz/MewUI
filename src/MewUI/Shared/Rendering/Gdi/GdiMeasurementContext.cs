@@ -16,7 +16,7 @@ internal sealed class GdiMeasurementContext : MeasureGraphicsContextBase, ITextA
 
     public override double DpiScale { get; }
 
-    double[] ITextAdvanceSource.GetUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font)
+    double[] ITextAdvanceSource.GetUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font, double letterSpacing)
     {
         if (font is not IWin32TextFace face)
         {
@@ -29,7 +29,7 @@ internal sealed class GdiMeasurementContext : MeasureGraphicsContextBase, ITextA
         }
 
         var advances = GC.AllocateUninitializedArray<double>(text.Length);
-        if (!face.TryGetPrefixAdvances(text, DpiScale, advances))
+        if (!face.TryGetPrefixAdvances(text, DpiScale, letterSpacing, advances))
         {
             throw new InvalidOperationException("The font could not report prefix advances.");
         }
@@ -37,8 +37,8 @@ internal sealed class GdiMeasurementContext : MeasureGraphicsContextBase, ITextA
         return advances;
     }
 
-    bool ITextAdvanceSource.TryGetUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font, Span<double> destination)
-        => font is IWin32TextFace face && face.TryGetPrefixAdvances(text, DpiScale, destination);
+    bool ITextAdvanceSource.TryGetUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font, double letterSpacing, Span<double> destination)
+        => font is IWin32TextFace face && face.TryGetPrefixAdvances(text, DpiScale, letterSpacing, destination);
 
     public GdiMeasurementContext(nint hdc, uint dpi)
     {

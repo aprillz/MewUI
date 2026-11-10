@@ -320,8 +320,8 @@ internal sealed unsafe partial class DirectWriteFont : FontBase, IGlyphOutlineFo
         return lineHeight > 0 && baseline > 0;
     }
 
-    public TextInkOverhang GetRunInkOverhang(ReadOnlySpan<char> text)
-        => DirectWriteTextMeasure.GetRunInkOverhang(_dwriteFactoryHandle, this, null, text, PixelsPerDip);
+    public TextInkOverhang GetRunInkOverhang(ReadOnlySpan<char> text, double letterSpacing = 0)
+        => DirectWriteTextMeasure.GetRunInkOverhang(_dwriteFactoryHandle, this, null, text, PixelsPerDip, letterSpacing);
 
     public bool TryGetRunBaseline(ReadOnlySpan<char> text, double dpiScale, out double baseline)
     {
@@ -335,7 +335,7 @@ internal sealed unsafe partial class DirectWriteFont : FontBase, IGlyphOutlineFo
             _dwriteFactoryHandle, this, null, text, dpiScale > 0 ? (float)dpiScale : 1f, out baseline);
     }
 
-    public bool TryGetPrefixAdvances(ReadOnlySpan<char> text, double dpiScale, Span<double> destination)
+    public bool TryGetPrefixAdvances(ReadOnlySpan<char> text, double dpiScale, double letterSpacing, Span<double> destination)
     {
         if (destination.Length < text.Length)
         {
@@ -353,7 +353,7 @@ internal sealed unsafe partial class DirectWriteFont : FontBase, IGlyphOutlineFo
         }
 
         DirectWriteTextMeasure.FillPrefixAdvances(
-            _dwriteFactoryHandle, this, null, text, dpiScale > 0 ? (float)dpiScale : 1f, destination);
+            _dwriteFactoryHandle, this, null, text, dpiScale > 0 ? (float)dpiScale : 1f, letterSpacing, destination);
         return true;
     }
 
@@ -380,7 +380,8 @@ internal sealed unsafe partial class DirectWriteFont : FontBase, IGlyphOutlineFo
         bitmap = DirectWriteTextRasterizer.Rasterize(
             _dwriteFactoryHandle, this, text, request.WidthPx, request.HeightPx, request.Color,
             request.HorizontalAlignment, request.VerticalAlignment, request.Wrapping, request.Trimming,
-            request.DpiScale > 0 ? (float)request.DpiScale : 1f, request.Buffer, request.InkInset);
+            request.DpiScale > 0 ? (float)request.DpiScale : 1f, request.Buffer, request.InkInset,
+            request.LetterSpacing);
         return true;
     }
 
@@ -396,7 +397,8 @@ internal sealed unsafe partial class DirectWriteFont : FontBase, IGlyphOutlineFo
         return DirectWriteTextRasterizer.TryRasterizeSubpixel(
             _dwriteFactoryHandle, this, text, request.WidthPx, request.HeightPx,
             request.HorizontalAlignment, request.VerticalAlignment, request.Wrapping, request.Trimming,
-            request.DpiScale > 0 ? (float)request.DpiScale : 1f, request.InkInset, request.Buffer, out coverage);
+            request.DpiScale > 0 ? (float)request.DpiScale : 1f, request.InkInset, request.Buffer,
+            request.LetterSpacing, out coverage);
     }
 
     public unsafe bool TryAppendGlyphOutline(PathGeometry path, char ch, Point baselineOrigin, out double advance)

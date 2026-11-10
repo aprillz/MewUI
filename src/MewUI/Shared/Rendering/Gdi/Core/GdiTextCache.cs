@@ -52,7 +52,8 @@ internal sealed class GdiTextCache : IDisposable
         TextTrimming trimming,
         TextAlignment hAlign,
         TextAlignment vAlign,
-        TextInkInsetPx inkInset = default)
+        TextInkInsetPx inkInset = default,
+        int characterExtraPx = 0)
     {
         int width = targetRect.Width;
         int height = targetRect.Height;
@@ -65,7 +66,7 @@ internal sealed class GdiTextCache : IDisposable
         {
             // Oversized bounds: fall back to the uncached renderer rather than growing the cache unbounded.
             PerPixelAlphaTextRenderer.DrawText(hdc, null, _surfacePool, text, targetRect, font, color, format,
-                yOffsetPx, textHeightPx, wrapping, trimming, hAlign, vAlign, inkInset);
+                yOffsetPx, textHeightPx, wrapping, trimming, hAlign, vAlign, inkInset, characterExtraPx);
             return;
         }
 
@@ -73,7 +74,7 @@ internal sealed class GdiTextCache : IDisposable
         var key = new TextCacheKey(
             string.GetHashCode(text), fontHandle, string.Empty, 0, color.ToArgb(),
             width, height, (int)hAlign, (int)vAlign, (int)wrapping, (int)trimming,
-            inkInset.Left, inkInset.Top);
+            inkInset.Left, inkInset.Top, characterExtraPx);
 
         if (TryGet(key, text, out var cached))
         {
@@ -117,7 +118,7 @@ internal sealed class GdiTextCache : IDisposable
             {
                 fixed (char* pText = text)
                 {
-                    Gdi32.DrawText(surface.MemDc, pText, text.Length, ref localRect, format);
+                    GdiTextAdvances.DrawText(surface.MemDc, pText, text.Length, ref localRect, format, characterExtraPx);
                 }
             }
         }

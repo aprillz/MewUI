@@ -96,7 +96,7 @@ public sealed partial class MewVGWin32GraphicsFactory : IPersistentFrameGraphics
         private static Size Measure(ReadOnlySpan<char> text, IFont font, double maxWidth)
             => BrowserTextMeasure.Measure(text, font, maxWidth);
 
-        double[] ITextAdvanceSource.GetUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font)
+        double[] ITextAdvanceSource.GetUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font, double letterSpacing)
         {
             if (text.IsEmpty)
             {
@@ -104,18 +104,18 @@ public sealed partial class MewVGWin32GraphicsFactory : IPersistentFrameGraphics
             }
 
             var advances = new double[text.Length];
-            BrowserTextMeasure.FillPrefixAdvances(text, font, advances);
+            BrowserTextMeasure.FillPrefixAdvances(text, font, advances, letterSpacing);
             return advances;
         }
 
-        bool ITextAdvanceSource.TryGetUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font, Span<double> destination)
+        bool ITextAdvanceSource.TryGetUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font, double letterSpacing, Span<double> destination)
         {
             if (text.IsEmpty || destination.Length < text.Length)
             {
                 return text.IsEmpty;
             }
 
-            BrowserTextMeasure.FillPrefixAdvances(text, font, destination);
+            BrowserTextMeasure.FillPrefixAdvances(text, font, destination, letterSpacing);
             return true;
         }
     }

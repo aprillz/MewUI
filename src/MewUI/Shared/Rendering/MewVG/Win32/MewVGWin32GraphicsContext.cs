@@ -169,9 +169,9 @@ internal sealed partial class MewVGWin32GraphicsContext
     private Size MeasureTextCore(ReadOnlySpan<char> text, IFont font, double maxWidth)
         => EnsureMeasureContext().MeasureText(text, font, maxWidth);
 
-    protected override TextInkOverhang MeasureRunInkOverhang(ReadOnlySpan<char> text, IFont font, BackendTextLayout layout)
-        => font is IWin32TextFace face
-            ? Win32TextFaceRuns.ShiftInkOverhang(face.GetRunInkOverhang(text), layout.RasterOriginOffsetY)
+    protected override TextInkOverhang MeasureRunInkOverhang(ReadOnlySpan<char> text, BackendTextFormat format, BackendTextLayout layout)
+        => format.Font is IWin32TextFace face
+            ? Win32TextFaceRuns.ShiftInkOverhang(face.GetRunInkOverhang(text, format.LetterSpacing), layout.RasterOriginOffsetY)
             : TextInkOverhang.None;
 
     public override Size MeasureText(ReadOnlySpan<char> text, IFont font)
@@ -357,12 +357,14 @@ internal sealed partial class MewVGWin32GraphicsContext
             (int)format.Wrapping,
             (int)format.Trimming,
             inkInset.Left,
-            inkInset.Top), needsLinear);
+            inkInset.Top,
+            (float)format.LetterSpacing), needsLinear);
 
         var rasterRequest = new Win32TextRasterizeRequest(
             widthPx, heightPx, color,
             format.HorizontalAlignment, format.VerticalAlignment,
-            format.Wrapping, format.Trimming, DpiScale, inkInset);
+            format.Wrapping, format.Trimming, DpiScale, inkInset, LetterSpacing: format.LetterSpacing);
+        int characterExtraPx = GdiTextAdvances.ToCharacterExtraPx(format.LetterSpacing, DpiScale);
 
         MewVGTextEntry entry;
         if (_transientText)
@@ -373,7 +375,7 @@ internal sealed partial class MewVGWin32GraphicsContext
                 bmp = OpenGLTextRasterizer.Rasterize(
                     _frameSession.Hdc, gdiFont!, text, widthPx, heightPx, color,
                     format.HorizontalAlignment, format.VerticalAlignment,
-                    format.Wrapping, format.Trimming, transientBuffer, inkInset);
+                    format.Wrapping, format.Trimming, transientBuffer, inkInset, characterExtraPx);
             }
             entry = _textCache.UseTransient(bmp.Data.AsSpan(0, bmp.WidthPx * bmp.HeightPx * 4), bmp.WidthPx, bmp.HeightPx, needsLinear);
         }
@@ -384,7 +386,7 @@ internal sealed partial class MewVGWin32GraphicsContext
                 bmp = OpenGLTextRasterizer.Rasterize(
                     _frameSession.Hdc, gdiFont!, text, widthPx, heightPx, color,
                     format.HorizontalAlignment, format.VerticalAlignment,
-                    format.Wrapping, format.Trimming, inkInset: inkInset);
+                    format.Wrapping, format.Trimming, inkInset: inkInset, characterExtraPx: characterExtraPx);
             }
             entry = _textCache.CreateImage(key, text, ref bmp);
         }

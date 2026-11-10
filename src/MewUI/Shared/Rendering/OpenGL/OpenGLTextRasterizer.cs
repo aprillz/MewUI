@@ -23,7 +23,8 @@ internal static class OpenGLTextRasterizer
         TextWrapping wrapping,
         TextTrimming trimming = TextTrimming.None,
         byte[]? buffer = null,
-        TextInkInsetPx inkInset = default)
+        TextInkInsetPx inkInset = default,
+        int characterExtraPx = 0)
     {
         widthPx = Math.Max(1, widthPx);
         heightPx = Math.Max(1, heightPx);
@@ -117,7 +118,7 @@ internal static class OpenGLTextRasterizer
 
                     fixed (char* pText = text)
                     {
-                        Gdi32.DrawText(memDc, pText, text.Length, ref rect, format);
+                        GdiTextAdvances.DrawText(memDc, pText, text.Length, ref rect, format, characterExtraPx);
                     }
                 }
 

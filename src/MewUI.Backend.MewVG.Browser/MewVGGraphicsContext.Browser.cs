@@ -172,8 +172,8 @@ internal sealed partial class MewVGWin32GraphicsContext
     private static Size MeasureTextCore(ReadOnlySpan<char> text, IFont font, double maxWidth)
         => BrowserTextMeasure.Measure(text, font, maxWidth);
 
-    protected override TextInkOverhang MeasureRunInkOverhang(ReadOnlySpan<char> text, IFont font, BackendTextLayout layout)
-        => BrowserTextMeasure.MeasureInk(text, font);
+    protected override TextInkOverhang MeasureRunInkOverhang(ReadOnlySpan<char> text, BackendTextFormat format, BackendTextLayout layout)
+        => BrowserTextMeasure.MeasureInk(text, format.Font, format.LetterSpacing);
 
     public override BackendTextLayout CreateBackendTextLayout(
         ReadOnlySpan<char> text,
@@ -182,8 +182,9 @@ internal sealed partial class MewVGWin32GraphicsContext
     {
         var bounds = constraints.Bounds;
         double maxWidth = double.IsPositiveInfinity(bounds.Width) ? 0 : bounds.Width;
+        // The texture a run is drawn into is as wide as this, so the spacing has to be in it.
         var measured = format.Wrapping == TextWrapping.NoWrap
-            ? MeasureText(text, format.Font)
+            ? BrowserTextMeasure.Measure(text, format.Font, double.PositiveInfinity, format.LetterSpacing)
             : MeasureText(text, format.Font, maxWidth);
         double width = maxWidth > 0 ? maxWidth : measured.Width;
         double height = double.IsPositiveInfinity(bounds.Height) || bounds.Height <= 0
@@ -240,7 +241,8 @@ internal sealed partial class MewVGWin32GraphicsContext
         var cache = _resources?.TextCache
             ?? _offscreenTextCaches.GetValue(_offscreen!, surface => new BrowserTextCache(surface.Vg));
         int imageId = cache.GetOrCreateImage(
-            text, layout, BrowserFont.CssFontFor(format.Font), rasterWidthPx, rasterHeightPx, DpiScale, color, inkInset);
+            text, layout, BrowserFont.CssFontFor(format.Font), rasterWidthPx, rasterHeightPx, DpiScale, color, inkInset,
+            format.LetterSpacing);
         if (imageId == 0)
         {
             return;

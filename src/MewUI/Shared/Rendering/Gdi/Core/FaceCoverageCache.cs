@@ -141,7 +141,8 @@ internal static class FaceCoverageCache
             (int)request.Trimming,
             (int)Math.Round(request.DpiScale * 1000),
             request.InkInset.Left,
-            request.InkInset.Top);
+            request.InkInset.Top,
+            (float)request.LetterSpacing);
 
     private readonly record struct Key(
         int TextHash,
@@ -154,7 +155,8 @@ internal static class FaceCoverageCache
         int Trimming,
         int ScaleThousandths,
         int InsetLeftPx,
-        int InsetTopPx);
+        int InsetTopPx,
+        float LetterSpacing);
 
     private sealed record Entry(Key Key, string Text, Win32TextCoverage Coverage, bool HasSubpixelForm, int Bytes);
 }

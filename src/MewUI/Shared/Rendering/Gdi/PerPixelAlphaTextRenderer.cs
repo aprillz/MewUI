@@ -22,7 +22,8 @@ internal static class PerPixelAlphaTextRenderer
         TextTrimming trimming = TextTrimming.None,
         TextAlignment hAlign = TextAlignment.Left,
         TextAlignment vAlign = TextAlignment.Top,
-        TextInkInsetPx inkInset = default)
+        TextInkInsetPx inkInset = default,
+        int characterExtraPx = 0)
     {
         var surfaceRect = targetRect;
         if (pixelSurface != null)
@@ -59,7 +60,7 @@ internal static class PerPixelAlphaTextRenderer
 
         if (width > GdiRenderingConstants.MaxAaSurfaceSize || height > GdiRenderingConstants.MaxAaSurfaceSize)
         {
-            DrawTextDirect(hdc, text, drawRect, font.GetHandle(GdiFontRenderMode.Coverage), color, format, wrapping, trimming, hAlign, vAlign);
+            DrawTextDirect(hdc, text, drawRect, font.GetHandle(GdiFontRenderMode.Coverage), color, format, wrapping, trimming, hAlign, vAlign, characterExtraPx);
             return;
         }
 
@@ -117,7 +118,7 @@ internal static class PerPixelAlphaTextRenderer
                 {
                     fixed (char* pText = text)
                     {
-                        Gdi32.DrawText(surface.MemDc, pText, text.Length, ref localRect, format);
+                        GdiTextAdvances.DrawText(surface.MemDc, pText, text.Length, ref localRect, format, characterExtraPx);
                     }
                 }
             }
@@ -210,7 +211,8 @@ internal static class PerPixelAlphaTextRenderer
         TextWrapping wrapping,
         TextTrimming trimming,
         TextAlignment hAlign,
-        TextAlignment vAlign)
+        TextAlignment vAlign,
+        int characterExtraPx = 0)
     {
         int width = bboxDeviceRect.Width;
         int height = bboxDeviceRect.Height;
@@ -272,7 +274,7 @@ internal static class PerPixelAlphaTextRenderer
             {
                 fixed (char* pText = text)
                 {
-                    Gdi32.DrawText(surface.MemDc, pText, text.Length, ref r, format);
+                    GdiTextAdvances.DrawText(surface.MemDc, pText, text.Length, ref r, format, characterExtraPx);
                 }
             }
 
@@ -385,7 +387,8 @@ internal static class PerPixelAlphaTextRenderer
     private static unsafe void DrawTextDirect(
         nint hdc, ReadOnlySpan<char> text, RECT rect, nint fontHandle, Color color, uint format,
         TextWrapping wrapping = TextWrapping.NoWrap, TextTrimming trimming = TextTrimming.None,
-        TextAlignment hAlign = TextAlignment.Left, TextAlignment vAlign = TextAlignment.Top)
+        TextAlignment hAlign = TextAlignment.Left, TextAlignment vAlign = TextAlignment.Top,
+        int characterExtraPx = 0)
     {
         var oldFont = Gdi32.SelectObject(hdc, fontHandle);
         var oldColor = Gdi32.SetTextColor(hdc, color.ToCOLORREF());
@@ -403,7 +406,7 @@ internal static class PerPixelAlphaTextRenderer
                 fixed (char* pText = text)
                 {
                     var r = rect;
-                    Gdi32.DrawText(hdc, pText, text.Length, ref r, format);
+                    GdiTextAdvances.DrawText(hdc, pText, text.Length, ref r, format, characterExtraPx);
                 }
             }
         }

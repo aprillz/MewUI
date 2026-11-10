@@ -74,8 +74,8 @@ internal sealed class CountingGraphicsFactory(IGraphicsFactory inner) : IGraphic
 
         public double GetRasterBaseline(IFont font) => inner.GetRasterBaseline(font);
 
-        public double[]? GetUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font)
-            => inner.GetUtf16PrefixAdvances(text, font);
+        public double[]? GetUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font, double letterSpacing = 0)
+            => inner.GetUtf16PrefixAdvances(text, font, letterSpacing);
 
         public void Dispose() => inner.Dispose();
     }

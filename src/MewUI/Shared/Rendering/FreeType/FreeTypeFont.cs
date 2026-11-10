@@ -62,9 +62,10 @@ internal sealed class FreeTypeFont : FontBase, IGlyphOutlineFont
     /// <summary>
     /// Ink of a single-line run that falls outside its advance box and the font's ascent/descent band,
     /// in device-independent units, from the hinted glyph metrics the rasterizer draws with. Zero for
-    /// code points this face has no glyph for.
+    /// code points this face has no glyph for. <paramref name="letterSpacingPx"/> is the spacing the
+    /// run is drawn with, which widens the box past every glyph.
     /// </summary>
-    internal unsafe TextInkOverhang GetRunInkOverhang(ReadOnlySpan<char> text)
+    internal unsafe TextInkOverhang GetRunInkOverhang(ReadOnlySpan<char> text, int letterSpacingPx = 0)
     {
         if (text.IsEmpty || string.IsNullOrWhiteSpace(FontPath) || PixelHeight <= 0 || Size <= 0)
         {
@@ -89,7 +90,10 @@ internal sealed class FreeTypeFont : FontBase, IGlyphOutlineFont
         double right = 0;
         double above = 0;
         double below = 0;
-        double advanceAfter = 0;
+        // The run box ends one spacing after the last glyph. Between glyphs only tightening is counted, once
+        // per code point: the rasterizer spaces per text element, and too much overhang merely grows the raster.
+        double advanceAfter = letterSpacingPx;
+        int tighteningPx = Math.Min(0, letterSpacingPx);
         // The right overhang is the furthest any glyph's ink reaches past the run's end, so a wide
         // italic followed by a narrow glyph still counts; the left one only comes from the first glyph.
         for (int index = text.Length - 1; index >= 0; index--)
@@ -105,7 +109,7 @@ internal sealed class FreeTypeFont : FontBase, IGlyphOutlineFont
             right = Math.Max(right, ink.Right - advanceAfter);
             above = Math.Max(above, ink.Top - baselinePx);
             below = Math.Max(below, ink.Bottom - descentPx);
-            advanceAfter += ink.Advance;
+            advanceAfter += ink.Advance + tighteningPx;
             if (index == 0)
             {
                 left = ink.Left;

@@ -13,7 +13,8 @@ internal static class GdiTextAdvances
         nint hdc,
         GdiFont font,
         ReadOnlySpan<char> text,
-        double dpiScale)
+        double dpiScale,
+        double letterSpacing = 0)
     {
         if (text.IsEmpty)
         {
@@ -21,7 +22,7 @@ internal static class GdiTextAdvances
         }
 
         var advances = GC.AllocateUninitializedArray<double>(text.Length);
-        Fill(hdc, font, text, dpiScale, advances);
+        Fill(hdc, font, text, dpiScale, letterSpacing, advances);
         return advances;
     }
 
@@ -31,11 +32,38 @@ internal static class GdiTextAdvances
         GdiFont font,
         ReadOnlySpan<char> text,
         double dpiScale,
+        double letterSpacing,
         Span<double> destination)
     {
         if (!text.IsEmpty)
         {
-            Fill(hdc, font, text, dpiScale, destination);
+            Fill(hdc, font, text, dpiScale, letterSpacing, destination);
+        }
+    }
+
+    /// <summary>
+    /// Letter spacing as the whole device pixels GDI adds after every character; measuring and drawing
+    /// both take this value, so they stay in step.
+    /// </summary>
+    public static int ToCharacterExtraPx(double letterSpacing, double dpiScale)
+        => (int)Math.Round(letterSpacing * (dpiScale > 0 ? dpiScale : 1), MidpointRounding.AwayFromZero);
+
+    /// <summary>Draws text with <paramref name="characterExtraPx"/> pixels after every character.</summary>
+    public static unsafe int DrawText(nint hdc, char* text, int length, ref RECT rect, uint format, int characterExtraPx)
+    {
+        if (characterExtraPx == 0)
+        {
+            return Gdi32.DrawText(hdc, text, length, ref rect, format);
+        }
+
+        int previousExtra = Gdi32.SetTextCharacterExtra(hdc, characterExtraPx);
+        try
+        {
+            return Gdi32.DrawText(hdc, text, length, ref rect, format);
+        }
+        finally
+        {
+            Gdi32.SetTextCharacterExtra(hdc, previousExtra);
         }
     }
 
@@ -44,13 +72,16 @@ internal static class GdiTextAdvances
         GdiFont font,
         ReadOnlySpan<char> text,
         double dpiScale,
+        double letterSpacing,
         Span<double> advances)
     {
+        int characterExtraPx = ToCharacterExtraPx(letterSpacing, dpiScale);
         fixed (char* textPointer = text)
         fixed (double* advancesPointer = advances)
         {
             int* cumulativePixels = (int*)advancesPointer;
             var oldFont = Gdi32.SelectObject(hdc, font.Handle);
+            int previousExtra = characterExtraPx != 0 ? Gdi32.SetTextCharacterExtra(hdc, characterExtraPx) : 0;
             try
             {
                 SIZE size;
@@ -68,6 +99,11 @@ internal static class GdiTextAdvances
             }
             finally
             {
+                if (characterExtraPx != 0)
+                {
+                    Gdi32.SetTextCharacterExtra(hdc, previousExtra);
+                }
+
                 Gdi32.SelectObject(hdc, oldFont);
             }
 
