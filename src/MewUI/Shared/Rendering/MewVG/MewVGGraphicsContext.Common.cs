@@ -586,31 +586,45 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
     {
         if (strokeInset)
             rect = rect.Deflate(new Thickness(QuantizeHalfStroke(thickness, DpiScale)));
-        _vg.ShapeAntiAlias(false);
+        bool crisp = BeginCrispRectangle();
         _vg.BeginPath();
         _vg.Rect((float)rect.X, (float)rect.Y, (float)rect.Width, (float)rect.Height);
         _vg.StrokeColor(ToNvgColor(color));
         NvgStrokeWidth((float)thickness);
         _vg.Stroke();
-        _vg.ShapeAntiAlias(true);
+        EndCrispRectangle(crisp);
     }
 
     protected override void FillRectangleCore(Rect rect, Color color)
     {
-        // Edges on the pixel grid fill crisply without antialiasing; a turned rectangle's edges are
-        // slanted and would come out jagged.
-        var xform = _vg.GetTransformMatrix();
-        bool gridAligned = (xform.M12 == 0 && xform.M21 == 0) || (xform.M11 == 0 && xform.M22 == 0);
+        bool crisp = BeginCrispRectangle();
+        _vg.BeginPath();
+        _vg.Rect((float)rect.X, (float)rect.Y, (float)rect.Width, (float)rect.Height);
+        _vg.FillColor(ToNvgColor(color));
+        _vg.Fill();
+        EndCrispRectangle(crisp);
+    }
+
+    /// <summary>
+    /// Turns shape antialiasing off when the transform keeps a rectangle's edges along the pixel grid, and
+    /// returns whether it did; <see cref="EndCrispRectangle"/> takes that value once the rectangle is drawn.
+    /// </summary>
+    private bool BeginCrispRectangle()
+    {
+        // Edges along the grid draw crisply without antialiasing; a turned rectangle's are slanted and would come out jagged.
+        var transform = _vg.GetTransformMatrix();
+        bool gridAligned = (transform.M12 == 0 && transform.M21 == 0) || (transform.M11 == 0 && transform.M22 == 0);
         if (gridAligned)
         {
             _vg.ShapeAntiAlias(false);
         }
 
-        _vg.BeginPath();
-        _vg.Rect((float)rect.X, (float)rect.Y, (float)rect.Width, (float)rect.Height);
-        _vg.FillColor(ToNvgColor(color));
-        _vg.Fill();
-        if (gridAligned)
+        return gridAligned;
+    }
+
+    private void EndCrispRectangle(bool crisp)
+    {
+        if (crisp)
         {
             _vg.ShapeAntiAlias(true);
         }
@@ -783,14 +797,14 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
             return;
         }
 
-        _vg.ShapeAntiAlias(false);
+        bool crisp = BeginCrispRectangle();
         _vg.BeginPath();
         _vg.Rect((float)rect.X, (float)rect.Y, (float)rect.Width, (float)rect.Height);
         NvgStrokeHelper.ApplyPenStyle(_vg, pen);
         NvgStrokeWidth((float)pen.Thickness);
         NvgStrokeHelper.ApplyStrokeBrush(_vg, pen, rect);
         _vg.Stroke();
-        _vg.ShapeAntiAlias(true);
+        EndCrispRectangle(crisp);
     }
 
     public override void DrawRoundedRectangle(Rect rect, double radiusX, double radiusY, Pen pen)
@@ -857,21 +871,21 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
         if (brush is SolidColorBrush solid) { FillRectangle(rect, solid.Color); return; }
         if (brush is ImageBrush imageBrush)
         {
-            _vg.ShapeAntiAlias(false);
+            bool crispImage = BeginCrispRectangle();
             _vg.BeginPath();
             _vg.Rect((float)rect.X, (float)rect.Y, (float)rect.Width, (float)rect.Height);
             if (ApplyImageBrushPaint(imageBrush)) _vg.Fill();
-            _vg.ShapeAntiAlias(true);
+            EndCrispRectangle(crispImage);
             return;
         }
         if (brush is not GradientBrush gradient) return;
 
-        _vg.ShapeAntiAlias(false);
+        bool crisp = BeginCrispRectangle();
         _vg.BeginPath();
         _vg.Rect((float)rect.X, (float)rect.Y, (float)rect.Width, (float)rect.Height);
         NvgStrokeHelper.ApplyGradientPaint(_vg, gradient, rect);
         _vg.Fill();
-        _vg.ShapeAntiAlias(true);
+        EndCrispRectangle(crisp);
     }
 
     public override void FillRoundedRectangle(Rect rect, double radiusX, double radiusY, Brush brush)
