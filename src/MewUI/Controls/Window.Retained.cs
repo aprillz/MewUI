@@ -409,7 +409,8 @@ public partial class Window
 
         // Past this share of the surface a frame that repaints areas costs as much as one that repaints
         // everything, which has no erasing and no clipping to do (agent/retained-redesign/dirty-region-cost.md).
-        double surfaceArea = (target.PixelWidth / Math.Max(1.0, target.DpiScale)) * (target.PixelHeight / Math.Max(1.0, target.DpiScale));
+        double targetScale = TargetScale(target);
+        double surfaceArea = (target.PixelWidth / targetScale) * (target.PixelHeight / targetScale);
         if (_renderScene.DirtyRegion.TotalArea >= surfaceArea * WHOLE_FRAME_DIRTY_RATIO)
         {
             LastWholeFrameReason = $"the dirty region {_renderScene.DirtyBounds} covers most of the surface";
