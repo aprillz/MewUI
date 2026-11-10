@@ -3065,15 +3065,17 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             throw new ArgumentNullException(nameof(surface));
         }
 
-        var clientSizeDip = new Size(
-            surface.PixelWidth / Math.Max(1.0, surface.DpiScale),
-            surface.PixelHeight / Math.Max(1.0, surface.DpiScale));
+        double scale = TargetScale(surface);
+        var clientSizeDip = new Size(surface.PixelWidth / scale, surface.PixelHeight / scale);
 
         if (!TryRenderFrameWithOverlay(surface, clientSizeDip))
         {
             RenderFrameCore(surface, clientSizeDip);
         }
     }
+
+    /// <summary>The scale a target draws at, which may be below 1; a target that reports none draws at 1.</summary>
+    private static double TargetScale(IRenderTarget target) => target.DpiScale > 0 ? target.DpiScale : 1.0;
 
     /// <summary>Ends the frame and releases a context made for this frame alone, even when ending it throws.</summary>
     private static void EndFrameAndRelease(IGraphicsContext context, bool oneShot, bool profiling)
