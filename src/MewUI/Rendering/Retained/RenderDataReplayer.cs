@@ -186,18 +186,42 @@ internal static class RenderDataReplayer
 
     private static void ReplayAnyText(IGraphicsContext context, in RenderCommand command, double[] values, object?[] resources, double placedOffsetX, double placedOffsetY)
     {
-        var text = context.Text;
-        if (command.Kind == RenderCommandKind.DrawTextBackground)
+        var layout = Require<ITextLayout>(in command, resources);
+        var options = (TextDrawOptions)resources[command.PaintIndex]!;
+        if (placedOffsetX == 0 && placedOffsetY == 0)
         {
-            ReplayText(context, text.DrawBackground, in command, resources, placedOffsetX, placedOffsetY);
-        }
-        else if (command.Kind == RenderCommandKind.DrawTextForeground)
-        {
-            ReplayText(context, text.DrawForeground, in command, resources, placedOffsetX, placedOffsetY);
+            DrawText(context.Text, command.Kind, layout, new Point(command.Bounds.X, command.Bounds.Y), in options);
         }
         else
         {
-            ReplayText(context, text.Draw, in command, resources, placedOffsetX, placedOffsetY);
+            context.Save();
+            try
+            {
+                // Negating the same float the caller translated by cancels it exactly.
+                context.Translate(-placedOffsetX, -placedOffsetY);
+                DrawText(context.Text, command.Kind, layout, new Point(command.Bounds.X + placedOffsetX, command.Bounds.Y + placedOffsetY), in options);
+            }
+            finally
+            {
+                context.Restore();
+            }
+        }
+    }
+
+    private static void DrawText(ITextRenderContext text, RenderCommandKind kind, ITextLayout layout, Point origin, in TextDrawOptions options)
+    {
+        // Called directly: passing these as a method group would allocate a delegate per replayed command.
+        if (kind == RenderCommandKind.DrawTextBackground)
+        {
+            text.DrawBackground(layout, origin, in options);
+        }
+        else if (kind == RenderCommandKind.DrawTextForeground)
+        {
+            text.DrawForeground(layout, origin, in options);
+        }
+        else
+        {
+            text.Draw(layout, origin, in options);
         }
     }
 
@@ -375,35 +399,6 @@ internal static class RenderDataReplayer
         }
     }
 
-    private static void ReplayText(
-        IGraphicsContext context,
-        TextReplay replay,
-        in RenderCommand command,
-        object?[] resources,
-        double placedOffsetX,
-        double placedOffsetY)
-    {
-        var layout = Require<ITextLayout>(in command, resources);
-        var options = (TextDrawOptions)resources[command.PaintIndex]!;
-        if (placedOffsetX == 0 && placedOffsetY == 0)
-        {
-            replay(layout, new Point(command.Bounds.X, command.Bounds.Y), in options);
-            return;
-        }
-
-        context.Save();
-        try
-        {
-            // Negating the same float the caller translated by cancels it exactly.
-            context.Translate(-placedOffsetX, -placedOffsetY);
-            replay(layout, new Point(command.Bounds.X + placedOffsetX, command.Bounds.Y + placedOffsetY), in options);
-        }
-        finally
-        {
-            context.Restore();
-        }
-    }
-
     [ThreadStatic]
     private static int _replayPass;
 
@@ -426,6 +421,4 @@ internal static class RenderDataReplayer
         => (command.ResourceIndex >= 0 ? resources[command.ResourceIndex] : null) as T
             ?? throw new InvalidOperationException(
                 $"The recorded command {command.Kind} has no {typeof(T).Name} resource.");
-
-    private delegate void TextReplay(ITextLayout layout, Point origin, in TextDrawOptions options);
 }

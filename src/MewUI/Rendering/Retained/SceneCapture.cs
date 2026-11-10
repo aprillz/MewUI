@@ -188,7 +188,7 @@ internal sealed class SceneCapture
             scene.PruneUnreachable();
         }
 
-        dirty.Registry?.RemoveWhere(element => scene.FindNode(element) == null);
+        dirty.Registry?.RemoveVisualsNotIn(scene);
     }
 
     /// <summary>Records or replays one visual and returns its surface-space subtree extent.</summary>

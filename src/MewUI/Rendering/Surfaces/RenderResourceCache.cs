@@ -852,12 +852,12 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
         return evicted;
     }
 
-    private CachedRenderResource? FindOldestReusablePersistentNoLock()
+    private CachedRenderResource? FindOldestReusablePersistentNoLock(CachedRenderResource? excluded = null)
     {
         CachedRenderResource? victim = null;
         foreach (var candidate in _entries.Values)
         {
-            if (candidate.LeaseCount != 0)
+            if (candidate.LeaseCount != 0 || ReferenceEquals(candidate, excluded))
             {
                 continue;
             }
@@ -881,13 +881,7 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
             && (_persistentBytes + _scratchBytes + _atlasActiveBytes > _persistentLowWatermarkBytes
                 || _entries.Count > _persistentMaxCount))
         {
-            var victim = FindOldestReusablePersistentNoLock();
-            if (ReferenceEquals(victim, protectedEntry))
-            {
-                victim = _entries.Values
-                    .Where(candidate => !ReferenceEquals(candidate, protectedEntry) && candidate.LeaseCount == 0)
-                    .MinBy(static candidate => candidate.LastUseSequence);
-            }
+            var victim = FindOldestReusablePersistentNoLock(protectedEntry);
             if (victim == null)
             {
                 break;

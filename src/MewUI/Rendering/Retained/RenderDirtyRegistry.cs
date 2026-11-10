@@ -66,19 +66,22 @@ internal sealed class RenderDirtyRegistry
         }
     }
 
-    /// <summary>What is queued for the pass that reads next, for diagnostics and tests.</summary>
-    internal IReadOnlyDictionary<UIElement, RenderDirtyKind> Queued => _current;
+    /// <summary>
+    /// What is queued for the pass that reads next. Callers only read it; the type is the dictionary
+    /// itself so that enumerating it every pass allocates nothing.
+    /// </summary>
+    internal Dictionary<UIElement, RenderDirtyKind> Queued => _current;
 
     /// <summary>
-    /// Drops what is queued for visuals the surface no longer draws. Their change needs no pass, and a
-    /// queue that kept them would keep the visuals themselves alive.
+    /// Drops what is queued for visuals <paramref name="scene"/> no longer draws. Their change needs no
+    /// pass, and a queue that kept them would keep the visuals themselves alive.
     /// </summary>
-    internal void RemoveWhere(Func<UIElement, bool> isGone)
+    internal void RemoveVisualsNotIn(RenderScene scene)
     {
         List<UIElement>? gone = null;
         foreach (var element in _current.Keys)
         {
-            if (isGone(element))
+            if (scene.FindNode(element) == null)
             {
                 gone ??= [];
                 gone.Add(element);
