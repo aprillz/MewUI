@@ -171,9 +171,12 @@ internal static unsafe class DirectWriteTextMeasure
         }
     }
 
-    /// <summary>Ink of a single-line run that falls outside its layout box, in device-independent units.</summary>
+    /// <summary>
+    /// Ink of a single-line run drawn with <paramref name="letterSpacing"/> that falls outside its layout
+    /// box, in device-independent units.
+    /// </summary>
     internal static TextInkOverhang GetRunInkOverhang(nint factory, DirectWriteFont font,
-        DWriteTextFormatCache? formatCache, ReadOnlySpan<char> text, float pixelsPerDip)
+        DWriteTextFormatCache? formatCache, ReadOnlySpan<char> text, float pixelsPerDip, double letterSpacing)
     {
         if (text.IsEmpty || factory == 0)
         {
@@ -198,6 +201,7 @@ internal static unsafe class DirectWriteTextMeasure
             }
 
             ApplyCustomFontFallback(factory, textLayout, font);
+            ApplyLetterSpacing(textLayout, text.Length, letterSpacing);
 
             // DirectWrite reports overhangs against the layout's max width and height, not the text, so
             // the run is laid out again in a box of exactly its own size, the one the caller reserves.
@@ -217,6 +221,7 @@ internal static unsafe class DirectWriteTextMeasure
             }
 
             ApplyCustomFontFallback(factory, textLayout, font);
+            ApplyLetterSpacing(textLayout, text.Length, letterSpacing);
             if (DWriteVTable.GetOverhangMetrics(textLayout, out var overhangs) < 0)
             {
                 return TextInkOverhang.None;
@@ -235,10 +240,12 @@ internal static unsafe class DirectWriteTextMeasure
     }
 
     /// <summary>
-    /// Writes the cumulative advance after each UTF-16 code unit, in device-independent units.
+    /// Writes the cumulative advance after each UTF-16 code unit of a run laid out with
+    /// <paramref name="letterSpacing"/>, in device-independent units.
     /// </summary>
     internal static void FillPrefixAdvances(nint factory, DirectWriteFont font,
-        DWriteTextFormatCache? formatCache, ReadOnlySpan<char> text, float pixelsPerDip, Span<double> result)
+        DWriteTextFormatCache? formatCache, ReadOnlySpan<char> text, float pixelsPerDip, double letterSpacing,
+        Span<double> result)
     {
         nint textFormat = AcquireTextFormat(factory, font, formatCache, TextWrapping.NoWrap, out bool ownFormat);
         if (textFormat == 0)
@@ -258,6 +265,7 @@ internal static unsafe class DirectWriteTextMeasure
             }
 
             ApplyCustomFontFallback(factory, textLayout, font);
+            ApplyLetterSpacing(textLayout, text.Length, letterSpacing);
 
             foreach (var run in DWriteGlyphRunExtractor.Capture(textLayout, pixelsPerDip))
             {
@@ -332,6 +340,19 @@ internal static unsafe class DirectWriteTextMeasure
         }
 
         _ = DWriteTextLayout2VTable.SetFontFallback(textLayout, fallback);
+    }
+
+    /// <summary>
+    /// Gives every cluster of the layout <paramref name="letterSpacing"/> DIPs of trailing space. Every
+    /// layout of one run takes the same value, so measuring and drawing agree; a system without the
+    /// interface leaves them all at their natural advances.
+    /// </summary>
+    internal static void ApplyLetterSpacing(nint textLayout, int textLength, double letterSpacing)
+    {
+        if (textLayout != 0 && letterSpacing != 0)
+        {
+            _ = DWriteTextLayout1VTable.SetTrailingCharacterSpacing(textLayout, (float)letterSpacing, (uint)textLength);
+        }
     }
 
     /// <summary>

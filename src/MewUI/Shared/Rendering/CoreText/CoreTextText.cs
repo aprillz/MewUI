@@ -32,7 +32,8 @@ internal static unsafe partial class CoreTextText
         TextWrapping wrapping,
         int wrapWidthPx = 0,
         TextTrimming trimming = TextTrimming.None,
-        TextInkInsetPx inset = default)
+        TextInkInsetPx inset = default,
+        double letterSpacingPx = 0)
     {
         widthPx = Math.Max(1, widthPx);
         heightPx = Math.Max(1, heightPx);
@@ -50,11 +51,20 @@ internal static unsafe partial class CoreTextText
         int stride = checked(widthPx * 4);
         var data = new byte[checked(stride * heightPx)];
 
-        if (!RasterizeCore(ctFont, text, widthPx, heightPx, alignWidthPx,
-                          color, horizontalAlignment, verticalAlignment,
-                          wrapping, wrapWidthPx, trimming, inset, data))
+        double outerSpacingPx = _letterSpacingPx;
+        _letterSpacingPx = letterSpacingPx;
+        try
         {
-            return new TextBitmap(1, 1, new byte[4]);
+            if (!RasterizeCore(ctFont, text, widthPx, heightPx, alignWidthPx,
+                              color, horizontalAlignment, verticalAlignment,
+                              wrapping, wrapWidthPx, trimming, inset, data))
+            {
+                return new TextBitmap(1, 1, new byte[4]);
+            }
+        }
+        finally
+        {
+            _letterSpacingPx = outerSpacingPx;
         }
 
         return new TextBitmap(widthPx, heightPx, data);
@@ -86,6 +96,7 @@ internal static unsafe partial class CoreTextText
         int wrapWidthPx,
         TextTrimming trimming,
         TextInkInsetPx inset,
+        double letterSpacingPx,
         byte[] destBuffer,
         out int actualWidthPx,
         out int actualHeightPx)
@@ -113,11 +124,20 @@ internal static unsafe partial class CoreTextText
             return false;
         }
 
-        if (!RasterizeCore(ctFont, text, widthPx, heightPx, alignWidthPx,
-                          color, horizontalAlignment, verticalAlignment,
-                          wrapping, wrapWidthPx, trimming, inset, destBuffer))
+        double outerSpacingPx = _letterSpacingPx;
+        _letterSpacingPx = letterSpacingPx;
+        try
         {
-            return false;
+            if (!RasterizeCore(ctFont, text, widthPx, heightPx, alignWidthPx,
+                              color, horizontalAlignment, verticalAlignment,
+                              wrapping, wrapWidthPx, trimming, inset, destBuffer))
+            {
+                return false;
+            }
+        }
+        finally
+        {
+            _letterSpacingPx = outerSpacingPx;
         }
 
         actualWidthPx = widthPx;
@@ -138,10 +158,11 @@ internal static unsafe partial class CoreTextText
     /// <summary>
     /// Ink of a single-line run that falls outside its run box, in device-independent units: past the
     /// pen origin on the left, past <paramref name="boxWidth"/> on the right, and past the font's
-    /// ascent/descent band. Glyphs sit at their advance positions in the font the run is drawn with;
-    /// code units that font has no glyph for contribute nothing.
+    /// ascent/descent band. Glyphs sit at their advance positions in the font the run is drawn with,
+    /// <paramref name="letterSpacingPx"/> after each; code units that font has no glyph for contribute nothing.
     /// </summary>
-    public static TextInkOverhang MeasureRunInk(CoreTextFont font, ReadOnlySpan<char> text, uint dpi, double boxWidth)
+    public static TextInkOverhang MeasureRunInk(CoreTextFont font, ReadOnlySpan<char> text, uint dpi, double boxWidth,
+        double letterSpacingPx = 0)
     {
         const int STACK_LIMIT = 128;
         var ctFont = font.GetFontRef(dpi);
@@ -187,7 +208,7 @@ internal static unsafe partial class CoreTextText
                 above = Math.Max(above, rect.origin.y + rect.size.height - ascent);
                 below = Math.Max(below, -rect.origin.y - descent);
             }
-            pen += advances[index].width;
+            pen += advances[index].width + letterSpacingPx;
         }
 
         double scale = dpi / 96.0;
@@ -394,7 +415,8 @@ internal static unsafe partial class CoreTextText
         return Measure(font, text, maxWidthPx, wrapping, dpi);
     }
 
-    public static Size Measure(CoreTextFont font, ReadOnlySpan<char> text, int maxWidthPx, TextWrapping wrapping, uint dpi)
+    public static Size Measure(CoreTextFont font, ReadOnlySpan<char> text, int maxWidthPx, TextWrapping wrapping, uint dpi,
+        double letterSpacingPx = 0)
     {
         var ctFont = font.GetFontRef(dpi);
         if (text.IsEmpty || ctFont == 0)
@@ -409,19 +431,28 @@ internal static unsafe partial class CoreTextText
         double maxLineWidth = 0;
         int totalLines = 0;
 
-        // Split by explicit newlines first.
-        int start = 0;
-        for (int i = 0; i <= text.Length; i++)
+        double outerSpacingPx = _letterSpacingPx;
+        _letterSpacingPx = letterSpacingPx;
+        try
         {
-            bool isBreak = i == text.Length || text[i] == '\n';
-            if (!isBreak)
+            // Split by explicit newlines first.
+            int start = 0;
+            for (int i = 0; i <= text.Length; i++)
             {
-                continue;
-            }
+                bool isBreak = i == text.Length || text[i] == '\n';
+                if (!isBreak)
+                {
+                    continue;
+                }
 
-            var segment = text.Slice(start, i - start).TrimEnd('\r');
-            MeasureWrappedSegment(ctFont, segment, maxWidthPx, wrapping, ref maxLineWidth, ref totalLines);
-            start = i + 1;
+                var segment = text.Slice(start, i - start).TrimEnd('\r');
+                MeasureWrappedSegment(ctFont, segment, maxWidthPx, wrapping, ref maxLineWidth, ref totalLines);
+                start = i + 1;
+            }
+        }
+        finally
+        {
+            _letterSpacingPx = outerSpacingPx;
         }
 
         if (totalLines <= 0)
@@ -655,12 +686,14 @@ internal static unsafe partial class CoreTextText
 
     /// <summary>
     /// Returns cumulative prefix advances in pixels for each UTF-16 index of the shaped line.
-    /// Uses the same CTLine path as drawing so engine cluster positions match rendered glyphs.
+    /// Uses the same CTLine path as drawing so engine cluster positions match rendered glyphs,
+    /// <paramref name="letterSpacingPx"/> included.
     /// </summary>
-    public static double[]? GetUtf16PrefixAdvancesPx(CoreTextFont font, ReadOnlySpan<char> text, uint dpi)
+    public static double[]? GetUtf16PrefixAdvancesPx(CoreTextFont font, ReadOnlySpan<char> text, uint dpi,
+        double letterSpacingPx = 0)
     {
         var advances = new double[text.Length];
-        return TryGetUtf16PrefixAdvancesPx(font, text, dpi, advances) ? advances : null;
+        return TryGetUtf16PrefixAdvancesPx(font, text, dpi, advances, letterSpacingPx) ? advances : null;
     }
 
     /// <summary>Writes the prefix advances into a caller-owned span of at least one entry per code unit.</summary>
@@ -668,7 +701,8 @@ internal static unsafe partial class CoreTextText
         CoreTextFont font,
         ReadOnlySpan<char> text,
         uint dpi,
-        Span<double> destination)
+        Span<double> destination,
+        double letterSpacingPx = 0)
     {
         var ctFont = font.GetFontRef(dpi);
         if (text.IsEmpty || ctFont == 0 || destination.Length < text.Length)
@@ -679,7 +713,18 @@ internal static unsafe partial class CoreTextText
         nint cfString = CreateCFString(text);
         if (cfString == 0) return false;
 
-        nint attrStr = CreateFontAttrString(cfString, ctFont);
+        double outerSpacingPx = _letterSpacingPx;
+        _letterSpacingPx = letterSpacingPx;
+        nint attrStr;
+        try
+        {
+            attrStr = CreateFontAttrString(cfString, ctFont);
+        }
+        finally
+        {
+            _letterSpacingPx = outerSpacingPx;
+        }
+
         CFRelease(cfString);
         if (attrStr == 0) return false;
 
@@ -715,7 +760,15 @@ internal static unsafe partial class CoreTextText
 
     #region CTLine helpers for complex grapheme clusters
 
+    private const nint CF_NUMBER_FLOAT64_TYPE = 6;
+
+    // Kern, in pixels, of the text the calling entry point measures or draws. It is set for the length of that
+    // call, so every line built inside it carries the same spacing whichever helper builds the line.
+    [ThreadStatic]
+    private static double _letterSpacingPx;
+
     private static nint _kCTFontAttributeName;
+    private static nint _kCTKernAttributeName;
     private static nint _kCTForegroundColorFromContextAttributeName;
     private static nint _kCFBooleanTrue;
     private static nint _kCFTypeDictKeyCallBacks;
@@ -733,6 +786,8 @@ internal static unsafe partial class CoreTextText
 
             if (NativeLibrary.TryGetExport(ct, "kCTFontAttributeName", out var p) && p != 0)
                 _kCTFontAttributeName = Marshal.ReadIntPtr(p);
+            if (NativeLibrary.TryGetExport(ct, "kCTKernAttributeName", out var kern) && kern != 0)
+                _kCTKernAttributeName = Marshal.ReadIntPtr(kern);
             if (NativeLibrary.TryGetExport(ct, "kCTForegroundColorFromContextAttributeName", out var p2) && p2 != 0)
                 _kCTForegroundColorFromContextAttributeName = Marshal.ReadIntPtr(p2);
             if (NativeLibrary.TryGetExport(cf, "kCFBooleanTrue", out var p3) && p3 != 0)
@@ -750,12 +805,41 @@ internal static unsafe partial class CoreTextText
     private static nint CreateFontAttrString(nint cfStr, nint font)
     {
         if (!EnsureCTLineConstants()) return 0;
-        nint key = _kCTFontAttributeName;
-        nint dict = CFDictionaryCreate(0, &key, &font, 1, _kCFTypeDictKeyCallBacks, _kCFTypeDictValueCallBacks);
+        nint* keys = stackalloc nint[2];
+        nint* vals = stackalloc nint[2];
+        keys[0] = _kCTFontAttributeName;
+        vals[0] = font;
+        int count = 1;
+        nint kern = AddKern(keys, vals, ref count);
+        nint dict = CFDictionaryCreate(0, keys, vals, count, _kCFTypeDictKeyCallBacks, _kCFTypeDictValueCallBacks);
+        if (kern != 0) CFRelease(kern);
         if (dict == 0) return 0;
         nint result = CFAttributedStringCreate(0, cfStr, dict);
         CFRelease(dict);
         return result;
+    }
+
+    /// <summary>
+    /// Adds the letter spacing of the current call as a kern attribute, so a line that is measured and one
+    /// that is drawn space their glyphs alike. Returns the number to release once the dictionary holds it, or zero.
+    /// </summary>
+    private static nint AddKern(nint* keys, nint* vals, ref int count)
+    {
+        double spacingPx = _letterSpacingPx;
+        if (spacingPx == 0 || _kCTKernAttributeName == 0)
+        {
+            return 0;
+        }
+
+        nint number = CFNumberCreate(0, CF_NUMBER_FLOAT64_TYPE, &spacingPx);
+        if (number != 0)
+        {
+            keys[count] = _kCTKernAttributeName;
+            vals[count] = number;
+            count++;
+        }
+
+        return number;
     }
 
     /// <summary>
@@ -765,8 +849,8 @@ internal static unsafe partial class CoreTextText
     private static nint CreateFontAttrStringWithContextColor(nint cfStr, nint font)
     {
         if (!EnsureCTLineConstants()) return 0;
-        nint* keys = stackalloc nint[2];
-        nint* vals = stackalloc nint[2];
+        nint* keys = stackalloc nint[3];
+        nint* vals = stackalloc nint[3];
         keys[0] = _kCTFontAttributeName;
         vals[0] = font;
         int count = 1;
@@ -776,7 +860,9 @@ internal static unsafe partial class CoreTextText
             vals[count] = _kCFBooleanTrue;
             count++;
         }
+        nint kern = AddKern(keys, vals, ref count);
         nint dict = CFDictionaryCreate(0, keys, vals, count, _kCFTypeDictKeyCallBacks, _kCFTypeDictValueCallBacks);
+        if (kern != 0) CFRelease(kern);
         if (dict == 0) return 0;
         nint result = CFAttributedStringCreate(0, cfStr, dict);
         CFRelease(dict);
@@ -894,6 +980,9 @@ internal static unsafe partial class CoreTextText
 
     [LibraryImport("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")]
     private static partial nint CFAttributedStringCreate(nint allocator, nint str, nint attributes);
+
+    [LibraryImport("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")]
+    private static partial nint CFNumberCreate(nint allocator, nint theType, double* valuePtr);
 
     [LibraryImport("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")]
     private static partial nint CFDictionaryCreate(nint allocator, nint* keys, nint* values, nint numValues, nint keyCallBacks, nint valueCallBacks);

@@ -20,14 +20,18 @@ internal interface ITextBackendMeasurementContext : IDisposable
     /// </summary>
     double GetRasterBaseline(IFont font);
 
-    double[]? GetUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font);
+    /// <summary>
+    /// Returns the advance of every UTF-16 prefix of the text as a run created with
+    /// <paramref name="letterSpacing"/> draws it: the spacing is already in the advances.
+    /// </summary>
+    double[]? GetUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font, double letterSpacing = 0);
 
     /// <summary>
-    /// Writes the advance of every UTF-16 prefix of the text into <paramref name="destination"/>,
-    /// which has to hold one entry per code unit. False when this context measures no advances, or
-    /// when it can only answer by allocating, in which case the caller falls back to the array form.
+    /// Writes the same advances into <paramref name="destination"/>, which has to hold one entry per
+    /// code unit. False when this context measures no advances, or when it can only answer by
+    /// allocating, in which case the caller falls back to the array form.
     /// </summary>
-    bool TryGetUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font, Span<double> destination)
+    bool TryGetUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font, double letterSpacing, Span<double> destination)
         => false;
 }
 
@@ -63,7 +67,11 @@ internal static class TransientText
 /// <summary>Backend-private run realization and drawing surface.</summary>
 internal interface ITextBackendRenderContext
 {
-    ITextBackendRun? CreateRun(ReadOnlySpan<char> text, IFont font, double width, double height);
+    /// <summary>
+    /// Realizes a run that draws with <paramref name="letterSpacing"/> DIPs between its clusters, at the
+    /// advances the measurement context reports for the same value.
+    /// </summary>
+    ITextBackendRun? CreateRun(ReadOnlySpan<char> text, IFont font, double width, double height, double letterSpacing = 0);
 
     void DrawRun(ITextBackendRun run, Point origin, Color color, object? owner);
 }

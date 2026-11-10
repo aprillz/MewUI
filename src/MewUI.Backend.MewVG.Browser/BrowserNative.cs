@@ -17,6 +17,10 @@ internal static partial class BrowserNative
     [LibraryImport(LibraryName, EntryPoint = "mewui_webgl_make_current")]
     internal static partial void MakeContextCurrent();
 
+    // Same shape as mewui_sig_vif; the first argument carries nothing.
+    [LibraryImport(LibraryName, EntryPoint = "mewui_text_set_letter_spacing")]
+    internal static partial void SetTextLetterSpacing(int reserved, float spacingPx);
+
     [LibraryImport(LibraryName, EntryPoint = "mewui_text_measure", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial double MeasureText(string text, string cssFont, out double ascent, out double descent);
 

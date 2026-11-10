@@ -499,7 +499,8 @@ internal sealed class ManagedTextRenderContext : ITextRenderContext, IDisposable
             layout.Snapshot.Text.AsSpan(textStart, textLength),
             font,
             Math.Max(1, width),
-            Math.Max(1, height));
+            Math.Max(1, height),
+            layout.Snapshot.Paragraph.LetterSpacing);
         if (backendRun is null)
         {
             return null;

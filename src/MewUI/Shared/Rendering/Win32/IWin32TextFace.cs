@@ -10,17 +10,19 @@ namespace Aprillz.MewUI.Rendering.Win32;
 internal interface IWin32TextFace
 {
     /// <summary>
-    /// Ink of a single-line run that falls outside its advance box and the font's ascent/descent
-    /// band, in device-independent units. <see cref="TextInkOverhang.None"/> when unavailable.
+    /// Ink of a single-line run drawn with <paramref name="letterSpacing"/> that falls outside its
+    /// advance box and the font's ascent/descent band, in device-independent units.
+    /// <see cref="TextInkOverhang.None"/> when unavailable.
     /// </summary>
-    TextInkOverhang GetRunInkOverhang(ReadOnlySpan<char> text);
+    TextInkOverhang GetRunInkOverhang(ReadOnlySpan<char> text, double letterSpacing = 0);
 
     /// <summary>
-    /// Writes the cumulative advance after each UTF-16 code unit, in device-independent units.
-    /// Returns false when <paramref name="destination"/> is shorter than the text or the face
-    /// cannot answer, leaving it untouched.
+    /// Writes the cumulative advance after each UTF-16 code unit of a run drawn with
+    /// <paramref name="letterSpacing"/>, in device-independent units. Returns false when
+    /// <paramref name="destination"/> is shorter than the text or the face cannot answer, leaving it
+    /// untouched.
     /// </summary>
-    bool TryGetPrefixAdvances(ReadOnlySpan<char> text, double dpiScale, Span<double> destination);
+    bool TryGetPrefixAdvances(ReadOnlySpan<char> text, double dpiScale, double letterSpacing, Span<double> destination);
 
     /// <summary>
     /// Size of <paramref name="text"/> in device-independent units. An infinite
@@ -86,6 +88,7 @@ internal readonly record struct Win32TextCoverage(int WidthPx, int HeightPx, byt
 /// glyph ink that overhangs it is kept; the run box then sits inset inside the raster. A
 /// <see cref="Buffer"/> large enough for the result is filled in place and aliased by it, so the
 /// caller has to be done with the previous result before it rasterizes again.
+/// <see cref="LetterSpacing"/> is the extra advance after every cluster, in device-independent units.
 /// </summary>
 internal readonly record struct Win32TextRasterizeRequest(
     int WidthPx,
@@ -97,4 +100,5 @@ internal readonly record struct Win32TextRasterizeRequest(
     TextTrimming Trimming,
     double DpiScale,
     TextInkInsetPx InkInset = default,
-    byte[]? Buffer = null);
+    byte[]? Buffer = null,
+    double LetterSpacing = 0);

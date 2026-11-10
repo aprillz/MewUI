@@ -1034,6 +1034,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITra
         }
 
         ApplyCustomFontFallback(nativeLayout, dwFont);
+        DirectWriteTextMeasure.ApplyLetterSpacing(nativeLayout, text.Length, format.LetterSpacing);
 
         // Apply trimming if requested.
         if (format.Trimming == TextTrimming.CharacterEllipsis)
@@ -1184,7 +1185,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITra
         }
     }
 
-    protected override TextInkOverhang MeasureRunInkOverhang(ReadOnlySpan<char> text, IFont font, BackendTextLayout layout)
+    protected override TextInkOverhang MeasureRunInkOverhang(ReadOnlySpan<char> text, BackendTextFormat format, BackendTextLayout layout)
     {
         // The run layout's box is its max width and height, so the overhangs are relative to the run box.
         if (layout.BackendHandle == 0 ||

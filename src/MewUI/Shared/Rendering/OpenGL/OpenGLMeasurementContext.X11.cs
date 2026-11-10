@@ -10,14 +10,15 @@ internal sealed partial class OpenGLMeasurementContext : ITextAdvanceSource
             ? FreeTypeText.GetRasterBaseline(ftFont)
             : base.GetRasterBaseline(font);
 
-    bool ITextAdvanceSource.TryGetUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font, Span<double> destination)
+    bool ITextAdvanceSource.TryGetUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font, double letterSpacing, Span<double> destination)
     {
         if (text.IsEmpty || font is not FreeTypeFont ftFont || destination.Length < text.Length)
         {
             return false;
         }
 
-        FreeTypeText.FillUtf16PrefixAdvancesPx(text, ftFont, destination);
+        FreeTypeText.FillUtf16PrefixAdvancesPx(
+            text, ftFont, destination, FreeTypeText.ToLetterSpacingPx(letterSpacing, DpiScale));
         double scale = DpiScale;
         for (int index = 0; index < text.Length; index++)
         {
@@ -26,11 +27,12 @@ internal sealed partial class OpenGLMeasurementContext : ITextAdvanceSource
         return true;
     }
 
-    double[] ITextAdvanceSource.GetUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font)
+    double[] ITextAdvanceSource.GetUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font, double letterSpacing)
     {
         if (!text.IsEmpty && font is FreeTypeFont ftFont)
         {
-            var advances = FreeTypeText.GetUtf16PrefixAdvancesPx(text, ftFont);
+            var advances = FreeTypeText.GetUtf16PrefixAdvancesPx(
+                text, ftFont, FreeTypeText.ToLetterSpacingPx(letterSpacing, DpiScale));
             double scale = DpiScale;
             for (int index = 0; index < advances.Length; index++)
             {

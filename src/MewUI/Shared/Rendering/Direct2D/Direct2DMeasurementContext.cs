@@ -130,7 +130,7 @@ internal sealed unsafe class Direct2DMeasurementContext : MeasureGraphicsContext
         return layout?.MeasuredSize ?? Size.Empty;
     }
 
-    double[] ITextAdvanceSource.GetUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font)
+    double[] ITextAdvanceSource.GetUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font, double letterSpacing)
     {
         if (text.IsEmpty)
         {
@@ -138,28 +138,29 @@ internal sealed unsafe class Direct2DMeasurementContext : MeasureGraphicsContext
         }
 
         var advances = new double[text.Length];
-        FillUtf16PrefixAdvances(text, font, advances);
+        FillUtf16PrefixAdvances(text, font, letterSpacing, advances);
         return advances;
     }
 
-    bool ITextAdvanceSource.TryGetUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font, Span<double> destination)
+    bool ITextAdvanceSource.TryGetUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font, double letterSpacing, Span<double> destination)
     {
         if (text.IsEmpty || destination.Length < text.Length)
         {
             return text.IsEmpty;
         }
 
-        FillUtf16PrefixAdvances(text, font, destination);
+        FillUtf16PrefixAdvances(text, font, letterSpacing, destination);
         return true;
     }
 
-    private void FillUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font, Span<double> result)
+    private void FillUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font, double letterSpacing, Span<double> result)
     {
         if (font is not DirectWriteFont dwFont)
         {
             throw new ArgumentException("Font must be a DirectWriteFont.", nameof(font));
         }
 
-        DirectWriteTextMeasure.FillPrefixAdvances(_dwriteFactory, dwFont, _textFormatCache, text, _pixelsPerDip, result);
+        DirectWriteTextMeasure.FillPrefixAdvances(
+            _dwriteFactory, dwFont, _textFormatCache, text, _pixelsPerDip, letterSpacing, result);
     }
 }

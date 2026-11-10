@@ -63,7 +63,8 @@ internal static unsafe class DirectWriteTextRasterizer
         TextTrimming trimming,
         float pixelsPerDip,
         byte[]? buffer = null,
-        TextInkInsetPx inkInset = default)
+        TextInkInsetPx inkInset = default,
+        double letterSpacing = 0)
     {
         widthPx = Math.Max(1, widthPx);
         heightPx = Math.Max(1, heightPx);
@@ -94,6 +95,7 @@ internal static unsafe class DirectWriteTextRasterizer
             }
 
             DirectWriteTextMeasure.ApplyCustomFontFallback(factory, textLayout, font);
+            DirectWriteTextMeasure.ApplyLetterSpacing(textLayout, text.Length, letterSpacing);
 
             if (trimming == TextTrimming.CharacterEllipsis)
             {
@@ -145,7 +147,7 @@ internal static unsafe class DirectWriteTextRasterizer
         int widthPx, int heightPx,
         TextAlignment horizontalAlignment, TextAlignment verticalAlignment,
         TextWrapping wrapping, TextTrimming trimming, float pixelsPerDip,
-        TextInkInsetPx inkInset, byte[]? buffer, out Win32TextCoverage coverage)
+        TextInkInsetPx inkInset, byte[]? buffer, double letterSpacing, out Win32TextCoverage coverage)
     {
         coverage = default;
         widthPx = Math.Max(1, widthPx);
@@ -177,6 +179,7 @@ internal static unsafe class DirectWriteTextRasterizer
 
             ApplyTrimming(factory, textFormat, textLayout, trimming);
             DirectWriteTextMeasure.ApplyCustomFontFallback(factory, textLayout, font);
+            DirectWriteTextMeasure.ApplyLetterSpacing(textLayout, text.Length, letterSpacing);
 
             int channelBytes = widthPx * heightPx * 3;
             byte[] channels;

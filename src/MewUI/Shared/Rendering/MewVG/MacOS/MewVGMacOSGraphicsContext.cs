@@ -444,11 +444,15 @@ internal sealed partial class MewVGMacOSGraphicsContext
     #region Text Rendering
 
     private Size MeasureTextCore(ReadOnlySpan<char> text, IFont font)
+        => MeasureSingleLine(text, font, letterSpacing: 0);
+
+    private Size MeasureSingleLine(ReadOnlySpan<char> text, IFont font, double letterSpacing)
     {
         if (text.IsEmpty) return Size.Empty;
         if (font is not CoreTextFont ct) return new Size(text.Length * 8, 16);
         int maxWidthPx = 0;
-        var sizePx = CoreTextText.Measure(ct, text, maxWidthPx, TextWrapping.NoWrap, (uint)Math.Round(DpiScale * 96.0));
+        var sizePx = CoreTextText.Measure(
+            ct, text, maxWidthPx, TextWrapping.NoWrap, (uint)Math.Round(DpiScale * 96.0), letterSpacing * DpiScale);
         return new Size(sizePx.Width / DpiScale, sizePx.Height / DpiScale);
     }
 
@@ -478,7 +482,8 @@ internal sealed partial class MewVGMacOSGraphicsContext
         Size measured;
         if (format.Wrapping == TextWrapping.NoWrap)
         {
-            measured = MeasureTextCore(text, format.Font);
+            // The bitmap a run is drawn into is as wide as this, so the spacing has to be in it.
+            measured = MeasureSingleLine(text, format.Font, format.LetterSpacing);
         }
         else
         {
@@ -497,9 +502,10 @@ internal sealed partial class MewVGMacOSGraphicsContext
         };
     }
 
-    protected override TextInkOverhang MeasureRunInkOverhang(ReadOnlySpan<char> text, IFont font, BackendTextLayout layout)
-        => font is CoreTextFont coreTextFont
-            ? CoreTextText.MeasureRunInk(coreTextFont, text, (uint)Math.Round(DpiScale * 96.0), layout.EffectiveBounds.Width)
+    protected override TextInkOverhang MeasureRunInkOverhang(ReadOnlySpan<char> text, BackendTextFormat format, BackendTextLayout layout)
+        => format.Font is CoreTextFont coreTextFont
+            ? CoreTextText.MeasureRunInk(
+                coreTextFont, text, (uint)Math.Round(DpiScale * 96.0), layout.EffectiveBounds.Width, format.LetterSpacing * DpiScale)
             : TextInkOverhang.None;
 
     public override void DrawBackendTextLayout(ReadOnlySpan<char> text,
@@ -600,6 +606,7 @@ internal sealed partial class MewVGMacOSGraphicsContext
                 format.Wrapping,
                 format.Trimming,
                 inkInset,
+                format.LetterSpacing * DpiScale,
                 out imageId,
                 out bitmapWidthPx,
                 out bitmapHeightPx)
@@ -617,6 +624,7 @@ internal sealed partial class MewVGMacOSGraphicsContext
                 format.Wrapping,
                 format.Trimming,
                 inkInset,
+                format.LetterSpacing * DpiScale,
                 out imageId,
                 out bitmapWidthPx,
                 out bitmapHeightPx)
@@ -632,6 +640,7 @@ internal sealed partial class MewVGMacOSGraphicsContext
                 format.Wrapping,
                 format.Trimming,
                 inkInset,
+                format.LetterSpacing * DpiScale,
                 out imageId,
                 out bitmapWidthPx,
                 out bitmapHeightPx);

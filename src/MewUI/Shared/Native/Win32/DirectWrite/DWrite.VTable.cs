@@ -611,6 +611,37 @@ internal static unsafe class DWriteFontFallbackBuilderVTable
     }
 }
 
+/// <summary>IDWriteTextLayout1 vtable helper for per-cluster character spacing.</summary>
+internal static unsafe class DWriteTextLayout1VTable
+{
+    private static readonly Guid IID_IDWriteTextLayout1 = new("9064D822-80A7-465C-A986-DF65F78B8FEB");
+
+    /// <summary>
+    /// IDWriteTextLayout1::SetCharacterSpacing (vtable index 69) over the first
+    /// <paramref name="textLength"/> code units: <paramref name="trailingSpacing"/> DIPs after every
+    /// cluster, no advance pushed below zero. QIs for IDWriteTextLayout1 first; returns E_NOINTERFACE
+    /// where the system has none, and the layout then keeps its natural advances.
+    /// </summary>
+    public static int SetTrailingCharacterSpacing(nint textLayout, float trailingSpacing, uint textLength)
+    {
+        int hr = ComHelpers.QueryInterface(textLayout, in IID_IDWriteTextLayout1, out nint layout1);
+        if (hr < 0 || layout1 == 0) return hr;
+
+        var vtbl = *(nint**)layout1;
+        var fn = (delegate* unmanaged[Stdcall]<nint, float, float, float, DWRITE_TEXT_RANGE, int>)vtbl[69];
+        hr = fn(layout1, 0f, trailingSpacing, 0f, new DWRITE_TEXT_RANGE { startPosition = 0, length = textLength });
+        ComHelpers.Release(layout1);
+        return hr;
+    }
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct DWRITE_TEXT_RANGE
+{
+    public uint startPosition;
+    public uint length;
+}
+
 /// <summary>
 /// IDWriteTextLayout vtable helper for setting custom font fallback.
 /// IDWriteTextLayout2 extends IDWriteTextLayout1 extends IDWriteTextLayout extends IDWriteTextFormat.

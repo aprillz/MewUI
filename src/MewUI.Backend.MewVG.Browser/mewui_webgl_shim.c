@@ -54,12 +54,22 @@ EM_JS(void, mewui_text_ensure_context, (), {
     }
 });
 
+// Letter spacing, in CSS pixels, of every run measured or drawn from here on, until it is set again. It is
+// applied where the font is, so clearing the cached font makes the next call state both; a canvas resize
+// resets both the same way. The parameter list is mewui_sig_vif's, a shape the runtime already has a
+// trampoline for, and reserved carries nothing. A browser without CanvasRenderingContext2D.letterSpacing
+// ignores the assignment in measuring and drawing alike, so the two still agree.
+EM_JS(void, mewui_text_set_letter_spacing, (int reserved, float spacing_px), {
+    Module.mewuiTextSpacing = spacing_px;
+    Module.mewuiTextFont = null;
+});
+
 // Measures one line in CSS pixels. Ascent and descent are written through the out pointers.
 EM_JS(double, mewui_text_measure, (const char* utf8_text, const char* utf8_font, double* out_ascent, double* out_descent), {
     mewui_text_ensure_context();
     var ctx = Module.mewuiTextCtx;
     var f = UTF8ToString(utf8_font);
-    if (Module.mewuiTextFont !== f) { ctx.font = f; ctx.textBaseline = "alphabetic"; Module.mewuiTextFont = f; }
+    if (Module.mewuiTextFont !== f) { ctx.font = f; ctx.textBaseline = "alphabetic"; ctx.letterSpacing = (Module.mewuiTextSpacing || 0) + "px"; Module.mewuiTextFont = f; }
     var metrics = ctx.measureText(UTF8ToString(utf8_text));
     if (out_ascent) HEAPF64[out_ascent >> 3] = metrics.fontBoundingBoxAscent || 0;
     if (out_descent) HEAPF64[out_descent >> 3] = metrics.fontBoundingBoxDescent || 0;
@@ -73,7 +83,7 @@ EM_JS(double, mewui_text_ink_box, (const char* utf8_text, const char* utf8_font,
     mewui_text_ensure_context();
     var ctx = Module.mewuiTextCtx;
     var f = UTF8ToString(utf8_font);
-    if (Module.mewuiTextFont !== f) { ctx.font = f; ctx.textBaseline = "alphabetic"; Module.mewuiTextFont = f; }
+    if (Module.mewuiTextFont !== f) { ctx.font = f; ctx.textBaseline = "alphabetic"; ctx.letterSpacing = (Module.mewuiTextSpacing || 0) + "px"; Module.mewuiTextFont = f; }
     var metrics = ctx.measureText(UTF8ToString(utf8_text));
     if (out_ascent) HEAPF64[out_ascent >> 3] = metrics.actualBoundingBoxAscent || 0;
     if (out_descent) HEAPF64[out_descent >> 3] = metrics.actualBoundingBoxDescent || 0;
@@ -87,7 +97,7 @@ EM_JS(double, mewui_text_ink_extent, (const char* utf8_text, const char* utf8_fo
     mewui_text_ensure_context();
     var ctx = Module.mewuiTextCtx;
     var f = UTF8ToString(utf8_font);
-    if (Module.mewuiTextFont !== f) { ctx.font = f; ctx.textBaseline = "alphabetic"; Module.mewuiTextFont = f; }
+    if (Module.mewuiTextFont !== f) { ctx.font = f; ctx.textBaseline = "alphabetic"; ctx.letterSpacing = (Module.mewuiTextSpacing || 0) + "px"; Module.mewuiTextFont = f; }
     var metrics = ctx.measureText(UTF8ToString(utf8_text));
     var band = ctx.measureText("Mg");
     HEAPF64[out_horizontal >> 3] = metrics.actualBoundingBoxLeft || 0;
@@ -107,7 +117,7 @@ EM_JS(double, mewui_text_prefix_advances, (const char* utf8_text, const char* ut
     mewui_text_ensure_context();
     var ctx = Module.mewuiTextCtx;
     var f = UTF8ToString(utf8_font);
-    if (Module.mewuiTextFont !== f) { ctx.font = f; ctx.textBaseline = "alphabetic"; Module.mewuiTextFont = f; }
+    if (Module.mewuiTextFont !== f) { ctx.font = f; ctx.textBaseline = "alphabetic"; ctx.letterSpacing = (Module.mewuiTextSpacing || 0) + "px"; Module.mewuiTextFont = f; }
     var text = UTF8ToString(utf8_text);
     var capacity = HEAPF64[out_capacity >> 3] | 0;
     var count = Math.min(text.length, capacity);
@@ -162,7 +172,7 @@ EM_JS(int, mewui_text_rasterize, (const char* utf8_text, const char* utf8_font, 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, width_px, height_px);
     var f = UTF8ToString(utf8_font);
-    if (Module.mewuiTextFont !== f) { ctx.font = f; ctx.textBaseline = "alphabetic"; Module.mewuiTextFont = f; }
+    if (Module.mewuiTextFont !== f) { ctx.font = f; ctx.textBaseline = "alphabetic"; ctx.letterSpacing = (Module.mewuiTextSpacing || 0) + "px"; Module.mewuiTextFont = f; }
     ctx.fillStyle = "rgba(" + red + "," + green + "," + blue + "," + (alpha / 255) + ")";
 
     // The managed text engine breaks lines and positions every run, so one call draws one run at the
@@ -208,7 +218,7 @@ EM_JS(int, mewui_text_draw_to_texture, (const char* utf8_text, const char* utf8_
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, width_px, height_px);
     var f = UTF8ToString(utf8_font);
-    if (Module.mewuiTextFont !== f) { ctx.font = f; ctx.textBaseline = "alphabetic"; Module.mewuiTextFont = f; }
+    if (Module.mewuiTextFont !== f) { ctx.font = f; ctx.textBaseline = "alphabetic"; ctx.letterSpacing = (Module.mewuiTextSpacing || 0) + "px"; Module.mewuiTextFont = f; }
     ctx.fillStyle = "rgba(" + red + "," + green + "," + blue + "," + (alpha / 255) + ")";
     var ascent = ctx.measureText("Mg").fontBoundingBoxAscent || 0;
     if (!(ascent > 0))

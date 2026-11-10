@@ -24,9 +24,32 @@ internal static class BrowserTextMeasure
     private const int MAX_CACHED_PREFIX_LENGTH = 1024;
     private const int MAX_CACHED_PREFIX_SETS = 2048;
 
+    // The spacing the canvas was last told to use. It keeps it for whatever is measured or drawn next,
+    // so every call that reaches the canvas states its own first.
+    private static double _canvasLetterSpacing;
+
+    /// <summary>
+    /// Makes the canvas measure and draw the runs that follow with <paramref name="letterSpacing"/>
+    /// device-independent units after every character.
+    /// </summary>
+    internal static void UseLetterSpacing(double letterSpacing)
+    {
+        if (letterSpacing != _canvasLetterSpacing)
+        {
+            BrowserNative.SetTextLetterSpacing(0, (float)letterSpacing);
+            _canvasLetterSpacing = letterSpacing;
+        }
+    }
+
+    /// <summary>The key the measurement caches file a font under: spaced runs measure differently.</summary>
+    private static string CacheKeyFor(string cssFont, double letterSpacing)
+        => letterSpacing == 0
+            ? cssFont
+            : string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{cssFont}|{letterSpacing:R}");
+
     // The managed text engine owns line breaking and hands this backend one run at a time, so the
     // width limit never has to be honoured here.
-    internal static Size Measure(ReadOnlySpan<char> text, IFont font, double maxWidth)
+    internal static Size Measure(ReadOnlySpan<char> text, IFont font, double maxWidth, double letterSpacing = 0)
     {
         double lineHeight = Math.Max(1, font.Ascent + font.Descent);
         if (text.IsEmpty)
@@ -46,7 +69,7 @@ internal static class BrowserTextMeasure
             }
 
             int end = index > start && text[index - 1] == '\r' ? index - 1 : index;
-            widest = Math.Max(widest, MeasureLine(text[start..end], cssFont));
+            widest = Math.Max(widest, MeasureLine(text[start..end], cssFont, letterSpacing));
             lines++;
             start = index + 1;
         }
@@ -55,7 +78,7 @@ internal static class BrowserTextMeasure
     }
 
     /// <summary>Ink of one run past its advance box and the font's ascent/descent band, in device-independent units.</summary>
-    internal static unsafe TextInkOverhang MeasureInk(ReadOnlySpan<char> text, IFont font)
+    internal static unsafe TextInkOverhang MeasureInk(ReadOnlySpan<char> text, IFont font, double letterSpacing = 0)
     {
         if (text.IsEmpty)
         {
@@ -64,21 +87,23 @@ internal static class BrowserTextMeasure
 
         double* horizontal = stackalloc double[2];
         double* vertical = stackalloc double[2];
+        UseLetterSpacing(letterSpacing);
         BrowserNative.MeasureInkExtent(text.ToString(), BrowserFont.CssFontFor(font), horizontal, vertical);
         return TextInkOverhang.FromEdges(horizontal[0], vertical[0], horizontal[1], vertical[1]);
     }
 
-    internal static double MeasureLine(ReadOnlySpan<char> line, string cssFont)
+    internal static double MeasureLine(ReadOnlySpan<char> line, string cssFont, double letterSpacing = 0)
     {
         if (line.IsEmpty)
         {
             return 0;
         }
 
-        if (!_widths.TryGetValue(cssFont, out var forFont))
+        string cacheKey = CacheKeyFor(cssFont, letterSpacing);
+        if (!_widths.TryGetValue(cacheKey, out var forFont))
         {
             forFont = new Dictionary<string, double>(StringComparer.Ordinal);
-            _widths[cssFont] = forFont;
+            _widths[cacheKey] = forFont;
         }
 
         var lookup = forFont.GetAlternateLookup<ReadOnlySpan<char>>();
@@ -88,13 +113,14 @@ internal static class BrowserTextMeasure
         }
 
         var content = line.ToString();
+        UseLetterSpacing(letterSpacing);
         var width = BrowserNative.MeasureText(content, cssFont, out _, out _);
         if (_widthCount > 4096)
         {
             _widths.Clear();
             _widthCount = 0;
             forFont = new Dictionary<string, double>(StringComparer.Ordinal);
-            _widths[cssFont] = forFont;
+            _widths[cacheKey] = forFont;
         }
 
         forFont[content] = width;
@@ -103,7 +129,7 @@ internal static class BrowserTextMeasure
     }
 
     /// <summary>Writes the advance after every UTF-16 code unit of the run, laid out as the rasterizer draws it.</summary>
-    internal static void FillPrefixAdvances(ReadOnlySpan<char> text, IFont font, Span<double> destination)
+    internal static void FillPrefixAdvances(ReadOnlySpan<char> text, IFont font, Span<double> destination, double letterSpacing = 0)
     {
         if (text.IsEmpty)
         {
@@ -111,10 +137,11 @@ internal static class BrowserTextMeasure
         }
 
         var cssFont = BrowserFont.CssFontFor(font);
-        if (!_prefixAdvances.TryGetValue(cssFont, out var forFont))
+        string cacheKey = CacheKeyFor(cssFont, letterSpacing);
+        if (!_prefixAdvances.TryGetValue(cacheKey, out var forFont))
         {
             forFont = new Dictionary<string, double[]>(StringComparer.Ordinal);
-            _prefixAdvances[cssFont] = forFont;
+            _prefixAdvances[cacheKey] = forFont;
         }
 
         var lookup = forFont.GetAlternateLookup<ReadOnlySpan<char>>();
@@ -126,6 +153,7 @@ internal static class BrowserTextMeasure
 
         var content = text.ToString();
         var advances = new double[content.Length];
+        UseLetterSpacing(letterSpacing);
         MeasurePrefixAdvances(content, cssFont, advances);
         advances.AsSpan().CopyTo(destination);
 
@@ -139,7 +167,7 @@ internal static class BrowserTextMeasure
             _prefixAdvances.Clear();
             _prefixAdvanceCount = 0;
             forFont = new Dictionary<string, double[]>(StringComparer.Ordinal);
-            _prefixAdvances[cssFont] = forFont;
+            _prefixAdvances[cacheKey] = forFont;
         }
 
         forFont[content] = advances;

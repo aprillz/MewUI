@@ -13,5 +13,6 @@ internal readonly record struct TextCacheKey(
     int Wrapping,
     int Trimming = 0,
     int InsetLeftPx = 0,
-    int InsetTopPx = 0
+    int InsetTopPx = 0,
+    float LetterSpacing = 0
 );

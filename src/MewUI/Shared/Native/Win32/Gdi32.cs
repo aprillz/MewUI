@@ -272,6 +272,9 @@ internal static partial class Gdi32
     public static unsafe partial int DrawText(nint hdc, char* lpchText, int cchText, ref RECT lprc, uint format);
 
     [LibraryImport(LibraryName)]
+    public static partial int SetTextCharacterExtra(nint hdc, int extra);
+
+    [LibraryImport(LibraryName)]
     public static partial uint SetTextColor(nint hdc, uint color);
 
     [LibraryImport(LibraryName)]

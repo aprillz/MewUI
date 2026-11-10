@@ -134,8 +134,10 @@ internal sealed partial class MewVGX11GraphicsContext
         return fallback.MeasureText(text, font, maxWidth);
     }
 
-    protected override TextInkOverhang MeasureRunInkOverhang(ReadOnlySpan<char> text, IFont font, BackendTextLayout layout)
-        => font is FreeTypeFont ftFont ? ftFont.GetRunInkOverhang(text) : TextInkOverhang.None;
+    protected override TextInkOverhang MeasureRunInkOverhang(ReadOnlySpan<char> text, BackendTextFormat format, BackendTextLayout layout)
+        => format.Font is FreeTypeFont ftFont
+            ? ftFont.GetRunInkOverhang(text, FreeTypeText.ToLetterSpacingPx(format.LetterSpacing, DpiScale))
+            : TextInkOverhang.None;
 
     public override Size MeasureText(ReadOnlySpan<char> text, IFont font)
         => MeasureTextCore(text, font);
@@ -252,6 +254,7 @@ internal sealed partial class MewVGX11GraphicsContext
         }
         double widthDip = widthPx / DpiScale;
         double heightDip = heightPx / DpiScale;
+        int letterSpacingPx = FreeTypeText.ToLetterSpacingPx(format.LetterSpacing, DpiScale);
 
         var key = new MewVGTextCacheKey(new TextCacheKey(
             string.GetHashCode(text),
@@ -266,7 +269,8 @@ internal sealed partial class MewVGX11GraphicsContext
             (int)format.Wrapping,
             (int)format.Trimming,
             inkInset.Left,
-            inkInset.Top));
+            inkInset.Top,
+            letterSpacingPx));
 
         MewVGTextEntry entry;
         if (_transientText)
@@ -282,7 +286,8 @@ internal sealed partial class MewVGX11GraphicsContext
                 format.Wrapping,
                 format.Trimming,
                 inkInset.Left,
-                inkInset.Top);
+                inkInset.Top,
+                letterSpacingPx);
             entry = _textCache.UseTransient(bmp.Data.AsSpan(0, bmp.WidthPx * bmp.HeightPx * 4), bmp.WidthPx, bmp.HeightPx, linear: false);
         }
         else if (!_textCache.TryGet(key, text, out entry))
@@ -298,7 +303,8 @@ internal sealed partial class MewVGX11GraphicsContext
                 format.Wrapping,
                 format.Trimming,
                 inkInset.Left,
-                inkInset.Top);
+                inkInset.Top,
+                letterSpacingPx);
             entry = _textCache.CreateImage(key, text, ref bmp);
         }
 

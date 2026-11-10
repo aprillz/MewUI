@@ -527,7 +527,7 @@ public sealed class TextBaselineOffsetTests
         public List<DrawCall> Draws { get; } = [];
         public List<Rect> Fills { get; } = [];
 
-        public ITextBackendRun CreateRun(ReadOnlySpan<char> text, IFont font, double width, double height)
+        public ITextBackendRun CreateRun(ReadOnlySpan<char> text, IFont font, double width, double height, double letterSpacing = 0)
             => new RecordingRun(text.ToString(), width, height);
 
         public void DrawRun(ITextBackendRun run, Point origin, Color color, object? owner)

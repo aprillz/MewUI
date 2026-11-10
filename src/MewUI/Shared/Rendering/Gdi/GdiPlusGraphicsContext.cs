@@ -1372,6 +1372,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
         var verticalAlignment = format.VerticalAlignment;
         var wrapping = format.Wrapping;
         var trimming = format.Trimming;
+        int characterExtraPx = GdiTextAdvances.ToCharacterExtraPx(format.LetterSpacing, _dpiScale);
 
         // GDI text bypasses GDI+ WorldTransform - apply transform manually.
         // A text-engine run rasterizes into a surface grown by its ink overhang and draws unclipped
@@ -1426,7 +1427,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
             {
                 _textCache.DrawCached(
                     Hdc, text, r, gdiFont, color, gdiFormat, yOffsetPx, textHeightPx,
-                    wrapping, trimming, horizontalAlignment, verticalAlignment, inkInset);
+                    wrapping, trimming, horizontalAlignment, verticalAlignment, inkInset, characterExtraPx);
             }
             else
             {
@@ -1445,7 +1446,8 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
                     trimming,
                     horizontalAlignment,
                     verticalAlignment,
-                    inkInset);
+                    inkInset,
+                    characterExtraPx);
             }
             return;
         }
@@ -1473,7 +1475,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
 
             if (PerPixelAlphaTextRenderer.DrawTextTransformed(
                     Hdc, alphaSurface, _surfacePool, text, rt, cullR, textTransform, gdiFont, color, fmt,
-                    yOff, txtH, wrapping, trimming, horizontalAlignment, verticalAlignment))
+                    yOff, txtH, wrapping, trimming, horizontalAlignment, verticalAlignment, characterExtraPx))
             {
                 return;
             }
@@ -1531,7 +1533,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
                 fixed (char* pText = text)
                 {
                     ApplyVerticalOffset(ref r, yOffsetPx, textHeightPx);
-                    Gdi32.DrawText(Hdc, pText, text.Length, ref r, gdiFormat);
+                    GdiTextAdvances.DrawText(Hdc, pText, text.Length, ref r, gdiFormat, characterExtraPx);
                 }
             }
 
@@ -1630,14 +1632,15 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
         System.Buffers.ArrayPool<byte>.Shared.Return(kept);
     }
 
-    protected override TextInkOverhang MeasureRunInkOverhang(ReadOnlySpan<char> text, IFont font, BackendTextLayout layout)
+    protected override TextInkOverhang MeasureRunInkOverhang(ReadOnlySpan<char> text, BackendTextFormat format, BackendTextLayout layout)
     {
-        if (font is not IWin32TextFace face)
+        if (format.Font is not IWin32TextFace face)
         {
             return TextInkOverhang.None;
         }
 
-        return Win32TextFaceRuns.ShiftInkOverhang(face.GetRunInkOverhang(text), layout.RasterOriginOffsetY);
+        return Win32TextFaceRuns.ShiftInkOverhang(
+            face.GetRunInkOverhang(text, format.LetterSpacing), layout.RasterOriginOffsetY);
     }
 
     // What a face rasterizes into, grown as needed and reused for every run.
@@ -1687,7 +1690,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
         var request = new Win32TextRasterizeRequest(
             widthPx, heightPx, color,
             format.HorizontalAlignment, format.VerticalAlignment,
-            format.Wrapping, format.Trimming, _dpiScale, inkInset, _faceRasterBuffer);
+            format.Wrapping, format.Trimming, _dpiScale, inkInset, _faceRasterBuffer, format.LetterSpacing);
 
         // Subpixel antialiasing needs a coverage value per channel, which one alpha per pixel cannot
         // carry. Blending it takes reading the pixels under the run, so it is only available where
@@ -1781,7 +1784,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
         var request = new Win32TextRasterizeRequest(
             sourceWidth, sourceHeight, color,
             format.HorizontalAlignment, format.VerticalAlignment,
-            format.Wrapping, format.Trimming, _dpiScale, inkInset);
+            format.Wrapping, format.Trimming, _dpiScale, inkInset, LetterSpacing: format.LetterSpacing);
         if (!face.TryRasterize(text, request, out var bitmap) || bitmap.Data.Length == 0)
         {
             return;

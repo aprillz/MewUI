@@ -68,6 +68,7 @@ internal sealed class MewVGMetalTextCache : IDisposable
         public TextWrapping LastWrapping;
         public TextTrimming LastTrimming;
         public TextInkInsetPx LastInset;
+        public double LastLetterSpacingPx;
         public long LastUse;
     }
 
@@ -91,7 +92,8 @@ internal sealed class MewVGMetalTextCache : IDisposable
         TextWrapping Wrapping,
         TextTrimming Trimming = TextTrimming.None,
         int InsetLeftPx = 0,
-        int InsetTopPx = 0)
+        int InsetTopPx = 0,
+        double LetterSpacingPx = 0)
     {
         public override int GetHashCode()
         {
@@ -108,6 +110,7 @@ internal sealed class MewVGMetalTextCache : IDisposable
                 hash = (hash * 397) ^ TextHash;
                 hash = (hash * 397) ^ InsetLeftPx;
                 hash = (hash * 397) ^ InsetTopPx;
+                hash = (hash * 397) ^ LetterSpacingPx.GetHashCode();
                 return hash;
             }
         }
@@ -130,6 +133,7 @@ internal sealed class MewVGMetalTextCache : IDisposable
         TextWrapping wrapping,
         TextTrimming trimming,
         TextInkInsetPx inset,
+        double letterSpacingPx,
         out int imageId,
         out int bitmapWidthPx,
         out int bitmapHeightPx)
@@ -160,7 +164,8 @@ internal sealed class MewVGMetalTextCache : IDisposable
             wrapping,
             trimming,
             inset.Left,
-            inset.Top);
+            inset.Top,
+            letterSpacingPx);
 
         if (_cache.TryGetValue(key, out var entry))
         {
@@ -177,7 +182,7 @@ internal sealed class MewVGMetalTextCache : IDisposable
             Remove(key);
         }
 
-        var bmp = CoreTextText.Rasterize(font, text, widthPx, heightPx, dpi, color, horizontalAlignment, verticalAlignment, wrapping, widthPx, trimming, inset);
+        var bmp = CoreTextText.Rasterize(font, text, widthPx, heightPx, dpi, color, horizontalAlignment, verticalAlignment, wrapping, widthPx, trimming, inset, letterSpacingPx);
         if (bmp.WidthPx <= 0 || bmp.HeightPx <= 0 || bmp.Data.Length == 0)
         {
             return false;
@@ -329,6 +334,7 @@ internal sealed class MewVGMetalTextCache : IDisposable
         TextWrapping wrapping,
         TextTrimming trimming,
         TextInkInsetPx inset,
+        double letterSpacingPx,
         out int imageId,
         out int bitmapWidthPx,
         out int bitmapHeightPx)
@@ -367,6 +373,7 @@ internal sealed class MewVGMetalTextCache : IDisposable
             entry.LastWrapping == wrapping &&
             entry.LastTrimming == trimming &&
             entry.LastInset == inset &&
+            entry.LastLetterSpacingPx == letterSpacingPx &&
             text.SequenceEqual(lastText);
 
         if (sameInputs)
@@ -388,18 +395,19 @@ internal sealed class MewVGMetalTextCache : IDisposable
             // would repaint every quad already queued this frame, so use the keyed cache.
             return TryGetOrCreate(
                 font, text, widthPx, heightPx, dpi, color,
-                horizontalAlignment, verticalAlignment, wrapping, trimming, inset,
+                horizontalAlignment, verticalAlignment, wrapping, trimming, inset, letterSpacingPx,
                 out imageId, out bitmapWidthPx, out bitmapHeightPx);
         }
 
         if (!RasterizeIntoEntry(entry, font, text, widthPx, heightPx, dpi, color,
-                horizontalAlignment, verticalAlignment, wrapping, trimming, inset,
+                horizontalAlignment, verticalAlignment, wrapping, trimming, inset, letterSpacingPx,
                 out int actualW, out int actualH))
         {
             return false;
         }
 
         entry.LastFrame = _frameGeneration;
+        entry.LastLetterSpacingPx = letterSpacingPx;
         entry.LastFontRef = fontRef;
         entry.LastArgb = ownedArgb;
         entry.LastWidthPx = widthPx;
@@ -437,6 +445,7 @@ internal sealed class MewVGMetalTextCache : IDisposable
         TextWrapping wrapping,
         TextTrimming trimming,
         TextInkInsetPx inset,
+        double letterSpacingPx,
         out int imageId,
         out int bitmapWidthPx,
         out int bitmapHeightPx)
@@ -457,7 +466,7 @@ internal sealed class MewVGMetalTextCache : IDisposable
 
         var entry = _transientSlots[_transientIndex++];
         if (!RasterizeIntoEntry(entry, font, text, Math.Max(1, widthPx), Math.Max(1, heightPx), dpi, color,
-                horizontalAlignment, verticalAlignment, wrapping, trimming, inset,
+                horizontalAlignment, verticalAlignment, wrapping, trimming, inset, letterSpacingPx,
                 out int actualW, out int actualH))
         {
             return false;
@@ -484,6 +493,7 @@ internal sealed class MewVGMetalTextCache : IDisposable
         TextWrapping wrapping,
         TextTrimming trimming,
         TextInkInsetPx inset,
+        double letterSpacingPx,
         out int actualW,
         out int actualH)
     {
@@ -502,7 +512,7 @@ internal sealed class MewVGMetalTextCache : IDisposable
         if (!CoreTextText.RasterizeInto(
                 font, text, widthPx, heightPx, dpi, color,
                 horizontalAlignment, verticalAlignment,
-                wrapping, widthPx, trimming, inset,
+                wrapping, widthPx, trimming, inset, letterSpacingPx,
                 entry.Buffer,
                 out actualW, out actualH))
         {

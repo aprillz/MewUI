@@ -325,7 +325,7 @@ public sealed class TextBaselinePlacementTests
     {
         public List<DrawCall> Draws { get; } = [];
 
-        public ITextBackendRun CreateRun(ReadOnlySpan<char> text, IFont font, double width, double height)
+        public ITextBackendRun CreateRun(ReadOnlySpan<char> text, IFont font, double width, double height, double letterSpacing = 0)
             => new RecordingRun(text.ToString(), font.Ascent);
 
         public void DrawRun(ITextBackendRun run, Point origin, Color color, object? owner)
