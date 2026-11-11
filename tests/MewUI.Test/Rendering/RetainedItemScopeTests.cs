@@ -31,7 +31,7 @@ public sealed class RetainedItemScopeTests
         }
 
         using var factory = new GdiGraphicsFactory();
-        Application.DefaultGraphicsFactory = factory;
+        using var factoryScope = new DefaultGraphicsFactoryScope(factory);
 
         var containers = BuildItems();
         var window = BuildWindow(containers);
@@ -69,7 +69,7 @@ public sealed class RetainedItemScopeTests
         }
 
         using var factory = new GdiGraphicsFactory();
-        Application.DefaultGraphicsFactory = factory;
+        using var factoryScope = new DefaultGraphicsFactoryScope(factory);
 
         var containers = BuildItems();
         var window = BuildWindow(containers);
