@@ -21,6 +21,10 @@ public static class LiveChartsMewUI
     private static bool _initialized;
     private static readonly object _lock = new();
 
+    // Light-theme label colors of the LiveCharts default theme: dark text on the chart, light text on a filled shape.
+    private static readonly Color _darkText = new(45, 45, 45);
+    private static readonly Color _lightText = new(245, 245, 245);
+
     /// <summary>Applies <see cref="UseMewDefaults"/> to the global LiveCharts settings on the first call and returns them; later calls return the settings unchanged.</summary>
     public static LiveChartsSettings EnsureInitialized()
     {
@@ -57,7 +61,10 @@ public static class LiveChartsMewUI
 
                     // Tooltip/legend paints: without a background paint the tooltip's container box
                     // is invisible (only the floating text shows).
-                    theme.TooltipBackgroundPaint = new SolidColorPaint(new Color(250, 235, 235, 235));
+                    theme.TooltipBackgroundPaint = new SolidColorPaint(new Color(230, 235, 235, 235))
+                    {
+                        ImageFilter = new Painting.ImageFilters.DropShadow(2, 2, 6, 6, new Color(100, 0, 0, 0)),
+                    };
                     theme.TooltipTextPaint = new SolidColorPaint(new Color(30, 30, 30));
                     theme.LegendTextPaint = new SolidColorPaint(new Color(30, 30, 30));
                 })
@@ -66,6 +73,7 @@ public static class LiveChartsMewUI
                 .HasRuleForAnySeries(series =>
                 {
                     series.Name ??= LiveCharts.IgnoreSeriesName;
+                    if (series.ShowDataLabels) series.DataLabelsPaint = new SolidColorPaint(_darkText);
                     _ = series.HasState("Hover", [(nameof(DrawnGeometry.Opacity), 0.8f)]);
                 })
                 .HasRuleForAxes(axis =>
@@ -83,6 +91,11 @@ public static class LiveChartsMewUI
                             : new SolidColorPaint(lineColor);
                         cartesian.Padding = new Padding(12);
                     }
+                    else if (axis is IPolarAxis polar)
+                    {
+                        polar.LabelsBackground = new LvcColor(255, 255, 255);
+                        axis.SeparatorsPaint = new SolidColorPaint(lineColor);
+                    }
                     else
                     {
                         axis.SeparatorsPaint = new SolidColorPaint(lineColor);
@@ -97,6 +110,8 @@ public static class LiveChartsMewUI
                     lineSeries.GeometrySize = 12;
                     lineSeries.GeometryStroke = new SolidColorPaint(color, 4);
                     lineSeries.GeometryFill = new SolidColorPaint(new Color(250, 250, 250));
+                    if (lineSeries.ShowError) lineSeries.ErrorPaint = new SolidColorPaint(_darkText);
+                    _ = lineSeries.HasState("Hover", [(nameof(DrawnGeometry.ScaleTransform), new LvcPoint(1.35f, 1.35f))]);
                 })
                 .HasRuleForBarSeries(barSeries =>
                 {
@@ -105,18 +120,34 @@ public static class LiveChartsMewUI
                     barSeries.Fill = new SolidColorPaint(color);
                     barSeries.Rx = 3;
                     barSeries.Ry = 3;
+                    if (barSeries.ShowDataLabels)
+                    {
+                        barSeries.DataLabelsPaint = new SolidColorPaint(
+                            barSeries.DataLabelsPosition == DataLabelsPosition.Middle ? _lightText : _darkText);
+                    }
+                    if (barSeries.ShowError) barSeries.ErrorPaint = new SolidColorPaint(_darkText);
                 })
                 .HasRuleForScatterSeries(scatterSeries =>
                 {
                     var color = MewPaint.ToMewColor(theme.GetSeriesColor(scatterSeries));
-                    scatterSeries.Fill = new SolidColorPaint(color);
-                    scatterSeries.GeometrySize = 24;
+                    scatterSeries.Stroke = null;
+                    scatterSeries.Fill = new SolidColorPaint(new Color(200, color.R, color.G, color.B));
+                    if (scatterSeries.ShowError) scatterSeries.ErrorPaint = new SolidColorPaint(_darkText);
                 })
                 .HasRuleForPieSeries(pieSeries =>
                 {
                     var color = MewPaint.ToMewColor(theme.GetSeriesColor(pieSeries));
                     pieSeries.Stroke = null;
                     pieSeries.Fill = new SolidColorPaint(color);
+                    if (pieSeries.ShowDataLabels)
+                    {
+                        pieSeries.DataLabelsPaint = new SolidColorPaint(
+                            pieSeries.DataLabelsPosition == PolarLabelsPosition.Outer ? _darkText : _lightText);
+                    }
+                    _ = pieSeries.HasState("Hover", [
+                        (nameof(Drawing.Geometries.DoughnutGeometry.PushOut), (float)pieSeries.HoverPushout),
+                        (nameof(Drawing.Geometries.DoughnutGeometry.Opacity), 0.8f),
+                    ]);
                 })
                 .HasRuleForGaugeSeries(gaugeSeries =>
                 {
@@ -155,6 +186,7 @@ public static class LiveChartsMewUI
                     polarLine.GeometrySize = 12;
                     polarLine.GeometryStroke = new SolidColorPaint(color, 4);
                     polarLine.GeometryFill = new SolidColorPaint(new Color(250, 250, 250));
+                    _ = polarLine.HasState("Hover", [(nameof(DrawnGeometry.ScaleTransform), new LvcPoint(1.35f, 1.35f))]);
                 })
                 .HasRuleForStepLineSeries(stepLine =>
                 {
@@ -164,6 +196,7 @@ public static class LiveChartsMewUI
                     stepLine.GeometrySize = 12;
                     stepLine.GeometryStroke = new SolidColorPaint(color, 4);
                     stepLine.GeometryFill = new SolidColorPaint(new Color(250, 250, 250));
+                    _ = stepLine.HasState("Hover", [(nameof(DrawnGeometry.ScaleTransform), new LvcPoint(1.35f, 1.35f))]);
                 })
                 .HasRuleForStackedLineSeries(stackedArea =>
                 {
@@ -174,13 +207,24 @@ public static class LiveChartsMewUI
                     stackedArea.Stroke = null;
                     stackedArea.Fill = new SolidColorPaint(color);
                 })
-                .HasRuleForStackedColumnSeries(stackedColumn =>
+                .HasRuleForStackedBarSeries(stackedBar =>
                 {
-                    var color = MewPaint.ToMewColor(theme.GetSeriesColor(stackedColumn));
-                    stackedColumn.Stroke = null;
-                    stackedColumn.Fill = new SolidColorPaint(color);
-                    stackedColumn.Rx = 0;
-                    stackedColumn.Ry = 0;
+                    var color = MewPaint.ToMewColor(theme.GetSeriesColor(stackedBar));
+                    stackedBar.Stroke = null;
+                    stackedBar.Fill = new SolidColorPaint(color);
+                    stackedBar.Rx = 0;
+                    stackedBar.Ry = 0;
+                    stackedBar.DataLabelsPosition = DataLabelsPosition.Middle;
+                    if (stackedBar.ShowDataLabels) stackedBar.DataLabelsPaint = new SolidColorPaint(_lightText);
+                })
+                .HasRuleForStackedStepLineSeries(stackedStep =>
+                {
+                    var color = MewPaint.ToMewColor(theme.GetSeriesColor(stackedStep));
+                    stackedStep.GeometrySize = 0;
+                    stackedStep.GeometryStroke = null;
+                    stackedStep.GeometryFill = null;
+                    stackedStep.Stroke = null;
+                    stackedStep.Fill = new SolidColorPaint(color);
                 })
                 .HasRuleForBoxSeries(boxSeries =>
                 {

@@ -9,8 +9,11 @@ namespace Aprillz.MewUI.MewCharts.Painting;
 /// <summary>Paints geometries with a linear gradient whose start and end points are relative (0..1) to the current draw area.</summary>
 public class LinearGradientPaint : MewPaint
 {
-    private static readonly Point DefaultStart = new(0, 0);
-    private static readonly Point DefaultEnd = new(0, 1);
+    /// <summary>The default relative start point, the middle of the left edge.</summary>
+    public static readonly Point DefaultStartPoint = new(0, 0.5);
+
+    /// <summary>The default relative end point, the middle of the right edge.</summary>
+    public static readonly Point DefaultEndPoint = new(1, 0.5);
 
     private readonly GradientStop[] _stops;
     private readonly Point _start;
@@ -26,12 +29,19 @@ public class LinearGradientPaint : MewPaint
         _end = end;
     }
 
-    /// <summary>Initializes a top-to-bottom gradient with evenly spaced stops for the given colors.</summary>
-    public LinearGradientPaint(Color[] colors) : this(BuildStops(colors), DefaultStart, DefaultEnd) { }
+    /// <summary>Initializes a gradient with evenly spaced stops for the given colors between relative start and end points.</summary>
+    public LinearGradientPaint(Color[] colors, Point startPoint, Point endPoint) : this(BuildStops(colors), startPoint, endPoint) { }
 
-    /// <summary>Initializes a top-to-bottom gradient from <paramref name="start"/> to <paramref name="end"/>.</summary>
+    /// <summary>Initializes a left-to-right gradient with evenly spaced stops for the given colors.</summary>
+    public LinearGradientPaint(Color[] colors) : this(BuildStops(colors), DefaultStartPoint, DefaultEndPoint) { }
+
+    /// <summary>Initializes a gradient from <paramref name="startColor"/> to <paramref name="endColor"/> between relative start and end points.</summary>
+    public LinearGradientPaint(Color startColor, Color endColor, Point startPoint, Point endPoint)
+        : this([new GradientStop(0, startColor), new GradientStop(1, endColor)], startPoint, endPoint) { }
+
+    /// <summary>Initializes a left-to-right gradient from <paramref name="start"/> to <paramref name="end"/>.</summary>
     public LinearGradientPaint(Color start, Color end)
-        : this([new GradientStop(0, start), new GradientStop(1, end)], DefaultStart, DefaultEnd) { }
+        : this(start, end, DefaultStartPoint, DefaultEndPoint) { }
 
     private static GradientStop[] BuildStops(Color[] colors)
     {
@@ -45,15 +55,19 @@ public class LinearGradientPaint : MewPaint
     }
 
     /// <summary>Returns a new paint with the same gradient and paint settings.</summary>
-    public override Paint CloneTask() =>
-        new LinearGradientPaint(_stops, _start, _end)
+    public override Paint CloneTask()
+    {
+        var clone = new LinearGradientPaint(_stops, _start, _end)
         {
             PaintStyle = PaintStyle,
             IsAntialias = IsAntialias,
             StrokeThickness = StrokeThickness,
+            StrokeMiter = StrokeMiter,
             ZIndex = ZIndex,
-            PixelSnap = PixelSnap,
         };
+        CopyPaintSettingsTo(clone);
+        return clone;
+    }
 
     internal override void OnPaintStarted(DrawingContext drawingContext, IDrawnElement? drawnElement)
     {
@@ -74,12 +88,15 @@ public class LinearGradientPaint : MewPaint
         context.ActiveStyle = PaintStyle;
         context.ActiveStrokeThickness = thickness;
         context.ActivePixelSnap = PixelSnap;
+        ApplyFilterTo(context);
 
         if (PaintStyle.HasFlag(PaintStyle.Stroke))
         {
-            if (_pen is null || !ReferenceEquals(_pen.Brush, _brush) || _pen.Thickness != thickness)
+            var strokeStyle = GetStrokeStyle();
+            if (_pen is null || !ReferenceEquals(_pen.Brush, _brush) || _pen.Thickness != thickness ||
+                _pen.StrokeStyle != (strokeStyle ?? StrokeStyle.Default))
             {
-                _pen = new Pen(_brush, thickness);
+                _pen = new Pen(_brush, thickness, strokeStyle);
             }
             context.ActivePen = _pen;
             context.ActiveBrush = null;

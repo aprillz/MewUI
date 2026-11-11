@@ -1,8 +1,26 @@
 using Aprillz.MewUI.MewCharts.Drawing.Geometries;
 
 using LiveChartsCore;
+using LiveChartsCore.Drawing;
 
 namespace Aprillz.MewUI.MewCharts.Views;
+
+/// <summary>A step-line series with a custom point-marker geometry, rendered with the MewUI backend.</summary>
+/// <typeparam name="TModel">The model type of the plotted values.</typeparam>
+/// <typeparam name="TVisual">The point-marker geometry type.</typeparam>
+public class StepLineSeries<TModel, TVisual>
+    : CoreStepLineSeries<TModel, TVisual, LabelGeometry, StepLineAreaGeometry, LineGeometry>
+    where TVisual : BoundedDrawnGeometry, new()
+{
+    /// <summary>Initializes a series with no values.</summary>
+    public StepLineSeries() : base(null) { }
+
+    /// <summary>Initializes a series that plots the given collection; null plots nothing.</summary>
+    public StepLineSeries(IReadOnlyCollection<TModel>? values) : base(values) { }
+
+    /// <summary>Initializes a series that plots the given values.</summary>
+    public StepLineSeries(params TModel[] values) : base(values) { }
+}
 
 /// <summary>A step-line series rendered with the MewUI backend.</summary>
 /// <typeparam name="TModel">The model type of the plotted values.</typeparam>

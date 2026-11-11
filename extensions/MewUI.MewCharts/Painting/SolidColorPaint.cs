@@ -7,7 +7,7 @@ using LiveChartsCore.Painting;
 namespace Aprillz.MewUI.MewCharts.Painting;
 
 /// <summary>
-/// Paints geometries with a single solid <see cref="Color"/>, optionally with a dashed stroke.
+/// Paints geometries with a single solid <see cref="Color"/>, optionally with a dashed or styled stroke.
 /// </summary>
 public class SolidColorPaint : MewPaint
 {
@@ -44,8 +44,8 @@ public class SolidColorPaint : MewPaint
             ZIndex = ZIndex,
             DashArray = DashArray,
             DashOffset = DashOffset,
-            PixelSnap = PixelSnap,
         };
+        CopyPaintSettingsTo(clone);
         return clone;
     }
 
@@ -59,10 +59,10 @@ public class SolidColorPaint : MewPaint
         context.ActiveStrokeThickness = thickness;
         context.ActivePixelSnap = PixelSnap;
         context.ActiveBrush = null;
+        ApplyFilterTo(context);
 
-        if (DashArray is { Length: > 0 } && PaintStyle.HasFlag(PaintStyle.Stroke))
+        if (PaintStyle.HasFlag(PaintStyle.Stroke) && GetStrokeStyle(DashArray, DashOffset) is StrokeStyle strokeStyle)
         {
-            var strokeStyle = new StrokeStyle { DashArray = DashArray, DashOffset = DashOffset };
             // Descriptors are immutable, so reuse the pen across frames and rebuild only when inputs change.
             if (_pen is null || _pen.Thickness != thickness || _pen.StrokeStyle != strokeStyle ||
                 _pen.Brush is not SolidColorBrush solid || solid.Color != Color)

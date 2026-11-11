@@ -3,13 +3,13 @@ using Aprillz.MewUI.Text;
 
 namespace Aprillz.MewUI.MewCharts.Drawing.Geometries;
 
-/// <summary>A text label geometry (axis labels, data labels, titles), honoring <see cref="Padding"/>.</summary>
+/// <summary>A text label geometry (axis labels, data labels, titles), honoring <see cref="Padding"/> and wrapping at <see cref="BaseLabelGeometry.MaxWidth"/>.</summary>
 public class LabelGeometry : BaseLabelGeometry, IDrawnElement<MewDrawingContext>
 {
     /// <summary>Measures the text plus padding, rotated by the label rotation.</summary>
     public override LvcSize Measure()
     {
-        var text = MewChartsText.Measure(Text, TextSize);
+        var text = MewChartsText.Measure(Text, TextSize, Paint as Painting.MewPaint, MaxWidth);
         var width = (float)text.Width + Padding.Left + Padding.Right;
         var height = (float)text.Height + Padding.Top + Padding.Bottom;
         return new LvcSize(width, height).GetRotatedSize(RotateTransform);
@@ -20,7 +20,8 @@ public class LabelGeometry : BaseLabelGeometry, IDrawnElement<MewDrawingContext>
     {
         if (string.IsNullOrEmpty(Text)) return;
 
-        var layout = MewChartsText.GetLayout(Text, TextSize);
+        // Axis labels leave Paint unset and draw with the axis LabelsPaint task, which is the active paint.
+        var layout = MewChartsText.GetLayout(Text, TextSize, (Paint ?? context.ActiveLvcPaint) as Painting.MewPaint, MaxWidth);
         if (layout is null) return;
 
         var textSize = layout.MeasuredSize;
