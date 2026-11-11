@@ -69,7 +69,7 @@ The submodule (`ThirdParty/LiveCharts2`) is pinned to tag `2.0.5` and is kept pr
 
 ## Samples
 
-`samples/MewUI.MewCharts.Sample` is a gallery faithful to the official LiveCharts2 samples (~75 sections), rendered entirely through MewCharts. Run it with `--gdi` or `--vg` to switch backends.
+`samples/MewUI.MewCharts.Sample` is a gallery of the official LiveCharts2 samples (98 sections, in the order of the upstream sample index), rendered entirely through MewCharts. Run it with `--gdi` or `--vg` to switch backends.
 
 ## Known differences / limits
 
