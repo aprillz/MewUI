@@ -1,5 +1,7 @@
 using System.Numerics;
 
+using Aprillz.MewUI.MewCharts.Drawing.Geometries;
+using Aprillz.MewUI.MewCharts.Painting.ImageFilters;
 using Aprillz.MewUI.Rendering;
 
 using LiveChartsCore.Drawing;
@@ -35,15 +37,20 @@ public sealed class MewDrawingContext : DrawingContext
     public Color Background { get; }
 
     // Resolved paint state, set by the active MewPaint in OnPaintStarted and read by geometry Draw helpers.
-    internal Color ActiveColor { get; set; }
+    /// <summary>Gets the color of the active paint; gradient paints report their middle stop.</summary>
+    public Color ActiveColor { get; internal set; }
     internal PaintStyle ActiveStyle { get; set; }
-    internal float ActiveStrokeThickness { get; set; } = 1f;
+    /// <summary>Gets the stroke thickness of the active paint in DIPs.</summary>
+    public float ActiveStrokeThickness { get; internal set; } = 1f;
     internal bool ActivePixelSnap { get; set; }
 
     // Optional gradient/image fill brush and dashed/styled stroke pen; when set they take
     // precedence over ActiveColor. Set by gradient/dashed paints in OnPaintStarted.
     internal Brush? ActiveBrush { get; set; }
     internal Pen? ActivePen { get; set; }
+
+    // Drop shadow of the active paint's image filter, set by MewPaint in OnPaintStarted.
+    internal DropShadow? ActivePaintShadow { get; set; }
 
     /// <summary>
     /// Gets or sets the draw area, in local coordinates, that gradient paints map their relative (0..1)
@@ -124,13 +131,13 @@ public sealed class MewDrawingContext : DrawingContext
         {
             if (ActiveLvcPaint.PaintStyle.HasFlag(PaintStyle.Fill))
             {
-                if (element.Fill is null) element.Draw(this);
+                if (element.Fill is null) DrawElement(element);
                 else DrawByPaint(element.Fill, element);
             }
 
             if (ActiveLvcPaint.PaintStyle.HasFlag(PaintStyle.Stroke))
             {
-                if (element.Stroke is null) element.Draw(this);
+                if (element.Stroke is null) DrawElement(element);
                 else DrawByPaint(element.Stroke, element);
             }
         }
@@ -150,6 +157,7 @@ public sealed class MewDrawingContext : DrawingContext
         var savedPixelSnap = ActivePixelSnap;
         var savedBrush = ActiveBrush;
         var savedPen = ActivePen;
+        var savedShadow = ActivePaintShadow;
         var savedLvcPaint = ActiveLvcPaint;
 
         if (paint != MeasureTask.Instance)
@@ -158,7 +166,7 @@ public sealed class MewDrawingContext : DrawingContext
             paint.OnPaintStarted(this, element);
         }
 
-        element.Draw(this);
+        DrawElement(element);
         paint.OnPaintFinished(this, element);
 
         ActiveColor = savedColor;
@@ -167,7 +175,62 @@ public sealed class MewDrawingContext : DrawingContext
         ActivePixelSnap = savedPixelSnap;
         ActiveBrush = savedBrush;
         ActivePen = savedPen;
+        ActivePaintShadow = savedShadow;
         ActiveLvcPaint = savedLvcPaint;
+    }
+
+    private void DrawElement(IDrawnElement<MewDrawingContext> element)
+    {
+        // The geometry's own shadow (set by visual states such as Hover) replaces the paint's filter,
+        // and it is cast once, under the fill.
+        if (ActiveLvcPaint is not null && ActiveStyle.HasFlag(PaintStyle.Fill))
+        {
+            var shadow = element.DropShadow;
+            if (shadow is not null && shadow != LvcDropShadow.Empty)
+            {
+                DrawShadow(element, shadow.Dx, shadow.Dy, Math.Max(shadow.SigmaX, shadow.SigmaY),
+                    new Color(shadow.Color.A, shadow.Color.R, shadow.Color.G, shadow.Color.B));
+            }
+            else if (ActivePaintShadow is DropShadow paintShadow)
+            {
+                DrawShadow(element, paintShadow.Dx, paintShadow.Dy, Math.Max(paintShadow.SigmaX, paintShadow.SigmaY), paintShadow.Color);
+            }
+        }
+
+        element.Draw(this);
+    }
+
+    private void DrawShadow(IDrawnElement<MewDrawingContext> element, float dx, float dy, float sigma, Color color)
+    {
+        if (color.A == 0 || sigma <= 0) return;
+
+        Rect bounds;
+        double cornerRadius;
+        switch (element)
+        {
+            case PopUpGeometry popUp:
+                bounds = popUp.GetBodyBounds();
+                cornerRadius = popUp.BorderRadius / 2;
+                break;
+            case RoundedRectangleGeometry rounded:
+                bounds = new Rect(rounded.X, rounded.Y, rounded.Width, rounded.Height);
+                cornerRadius = Math.Max(rounded.BorderRadius.X, rounded.BorderRadius.Y);
+                break;
+            case BoundedDrawnGeometry bounded when element is CircleGeometry or OvalGeometry:
+                bounds = new Rect(bounded.X, bounded.Y, bounded.Width, bounded.Height);
+                cornerRadius = Math.Min(bounded.Width, bounded.Height) / 2;
+                break;
+            default:
+                var size = element.Measure();
+                bounds = new Rect(element.X, element.Y, size.Width, size.Height);
+                cornerRadius = 0;
+                break;
+        }
+
+        if (bounds.Width <= 0 || bounds.Height <= 0) return;
+
+        // A Gaussian edge fades over about four standard deviations, which is the feather width the context expects.
+        G.DrawBoxShadow(bounds, cornerRadius, sigma * 4, color, dx, dy);
     }
 
     // Opacity handling for the legend/tooltip path (DrawByPaint with a geometry opacity mask).

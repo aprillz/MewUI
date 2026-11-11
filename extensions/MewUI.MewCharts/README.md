@@ -74,7 +74,7 @@ The submodule (`ThirdParty/LiveCharts2`) is pinned to tag `2.0.5` and is kept pr
 ## Known differences / limits
 
 - GDI backend has lower curve/text anti-aliasing quality than Direct2D/MewVG.
-- Arbitrary-shape drop shadows are approximated (box-shadow is rectangle-oriented).
+- Drop shadows follow rectangles, rounded rectangles, ellipses and tooltip pop-ups; other shapes cast the shadow of their bounding rectangle.
 - Text metrics differ slightly from SkiaSharp, so some rotated/multi-line labels can shift a little.
 - GeoMap (maps) is not ported.
 

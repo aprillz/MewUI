@@ -34,10 +34,18 @@ public static class MewChartsText
     }
 
     /// <summary>Gets a cached layout of the text at the given size, or <see langword="null"/> before <see cref="EnsureInitialized"/> has run or when the text is empty.</summary>
-    public static ITextLayout? GetLayout(string text, float size)
+    public static ITextLayout? GetLayout(string text, float size) => GetLayout(text, size, null, float.MaxValue);
+
+    /// <summary>
+    /// Gets a cached layout of the text at the given size in the font of <paramref name="paint"/>, falling back to the
+    /// chart font for unset values, wrapped at word boundaries to <paramref name="maxWidth"/> DIPs when it is finite;
+    /// <see langword="null"/> before <see cref="EnsureInitialized"/> has run or when the text is empty.
+    /// </summary>
+    public static ITextLayout? GetLayout(string text, float size, Painting.MewPaint? paint, float maxWidth)
     {
         if (_factory is null || string.IsNullOrEmpty(text)) return null;
-        var family = string.IsNullOrEmpty(FontFamily) ? ThemeManager.DefaultMetrics.FontFamily : FontFamily;
+        var family = paint?.FontFamily;
+        if (string.IsNullOrEmpty(family)) family = string.IsNullOrEmpty(FontFamily) ? ThemeManager.DefaultMetrics.FontFamily : FontFamily;
         var scaled = (float)Math.Max(1, size * FontScale);
         lock (_lock)
         {
@@ -46,7 +54,10 @@ public static class MewChartsText
                 {
                     Text = text.AsMemory(),
                     Dpi = 96,
-                    DefaultStyle = new TextRunStyle(family, scaled)
+                    DefaultStyle = new TextRunStyle(family, scaled, paint?.FontWeight ?? FontWeight.Normal, paint?.Italic ?? false),
+                    Paragraph = maxWidth > 0 && maxWidth < float.MaxValue
+                        ? new TextParagraphStyle { MaxWidth = maxWidth, Wrapping = TextWrapping.Wrap }
+                        : new TextParagraphStyle(),
                 },
                 TextLayoutCachePolicy.Content);
         }
@@ -56,5 +67,11 @@ public static class MewChartsText
     public static Size Measure(string text, float size)
     {
         return GetLayout(text, size)?.MeasuredSize ?? Size.Empty;
+    }
+
+    /// <summary>Measures the text at the given size in the font of <paramref name="paint"/>, wrapped to <paramref name="maxWidth"/> DIPs when it is finite; returns <see cref="Size.Empty"/> before <see cref="EnsureInitialized"/> has run.</summary>
+    public static Size Measure(string text, float size, Painting.MewPaint? paint, float maxWidth)
+    {
+        return GetLayout(text, size, paint, maxWidth)?.MeasuredSize ?? Size.Empty;
     }
 }

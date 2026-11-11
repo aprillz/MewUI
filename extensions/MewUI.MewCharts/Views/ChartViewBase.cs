@@ -16,7 +16,7 @@ using LiveChartsCore.VisualElements;
 namespace Aprillz.MewUI.MewCharts.Views;
 
 /// <summary>Base chart control that hosts a LiveCharts <see cref="CoreMotionCanvas"/> and implements <see cref="IChartView"/>.</summary>
-public abstract class ChartViewBase : Control, IChartView
+public abstract partial class ChartViewBase : Control, IChartView
 {
     private ChartObserver? _observer;
     private bool _loaded;

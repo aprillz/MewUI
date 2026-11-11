@@ -42,15 +42,19 @@ public class RadialGradientPaint : MewPaint
     }
 
     /// <summary>Returns a new paint with the same gradient and paint settings.</summary>
-    public override Paint CloneTask() =>
-        new RadialGradientPaint(_stops, _center, _radius)
+    public override Paint CloneTask()
+    {
+        var clone = new RadialGradientPaint(_stops, _center, _radius)
         {
             PaintStyle = PaintStyle,
             IsAntialias = IsAntialias,
             StrokeThickness = StrokeThickness,
+            StrokeMiter = StrokeMiter,
             ZIndex = ZIndex,
-            PixelSnap = PixelSnap,
         };
+        CopyPaintSettingsTo(clone);
+        return clone;
+    }
 
     internal override void OnPaintStarted(DrawingContext drawingContext, IDrawnElement? drawnElement)
     {
@@ -71,12 +75,15 @@ public class RadialGradientPaint : MewPaint
         context.ActiveStyle = PaintStyle;
         context.ActiveStrokeThickness = thickness;
         context.ActivePixelSnap = PixelSnap;
+        ApplyFilterTo(context);
 
         if (PaintStyle.HasFlag(PaintStyle.Stroke))
         {
-            if (_pen is null || !ReferenceEquals(_pen.Brush, _brush) || _pen.Thickness != thickness)
+            var strokeStyle = GetStrokeStyle();
+            if (_pen is null || !ReferenceEquals(_pen.Brush, _brush) || _pen.Thickness != thickness ||
+                _pen.StrokeStyle != (strokeStyle ?? StrokeStyle.Default))
             {
-                _pen = new Pen(_brush, thickness);
+                _pen = new Pen(_brush, thickness, strokeStyle);
             }
             context.ActivePen = _pen;
             context.ActiveBrush = null;
