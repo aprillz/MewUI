@@ -113,7 +113,7 @@ Copyright (c) Simon Mourier. Licensed under the MIT License (full text identical
 ## LiveCharts2 (LiveChartsCore)
 
 `Aprillz.MewUI.MewCharts` compiles the LiveChartsCore charting engine into its assembly from a
-pinned source submodule (v2.0.4). The SkiaSharp drawing backend is not used or redistributed;
+pinned source submodule (v2.0.5). The SkiaSharp drawing backend is not used or redistributed;
 only the backend-agnostic `LiveChartsCore` engine is included.
 https://github.com/beto-rodriguez/LiveCharts2
 

@@ -30,6 +30,6 @@ var chart = new CartesianChart
 Series live in `Aprillz.MewUI.MewCharts.Views`; axes/paints come from LiveChartsCore, so the
 LiveCharts2 docs apply as-is. View properties are bindable `MewProperty` fields.
 
-Bundles LiveChartsCore (MIT, v2.0.4); see `THIRD_PARTY_NOTICES.md`. GeoMap is not ported.
+Bundles LiveChartsCore (MIT, v2.0.5); see `THIRD_PARTY_NOTICES.md`. GeoMap is not ported.
 
 Repo: https://github.com/aprillz/MewUI
