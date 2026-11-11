@@ -478,7 +478,7 @@ public sealed partial class ComboBox : DropDownBase, ISelector, IIndexedSelector
             width = 120;
         }
 
-        var region = window.GetPopupPlacementRegion(bounds);
+        var region = window.GetPopupPlacementRegion(bounds, this);
         double x = PopupPlacement.ClampHorizontal(bounds.X, width, region, floorToLeftEdge: true);
 
         // Do not measure the popup ListBox with infinite height; it can reset its scroll state.
