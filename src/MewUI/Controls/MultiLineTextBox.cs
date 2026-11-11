@@ -550,7 +550,7 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
                 line,
                 selection,
                 Theme.Palette.SelectionText,
-                Theme.Palette.SelectionBackground,
+                SelectionBackground,
                 out var selectionSpan))
         {
             return [];
