@@ -125,7 +125,6 @@ internal class FlexBorderButton : Button
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
         };
-        label.WithTheme((theme, l) => l.Foreground = theme.Palette.WindowText);
         return label;
     }
 

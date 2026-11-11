@@ -22,7 +22,6 @@ internal static class FlexDragChip
     internal static UIElement Build(string title)
     {
         var label = new TextBlock { Text = title, TextTrimming = TextTrimming.CharacterEllipsis };
-        label.WithTheme((theme, l) => l.Foreground = theme.Palette.WindowText);
 
         var chip = new Border
         {
@@ -35,6 +34,7 @@ internal static class FlexDragChip
         {
             border.Background = theme.Palette.WindowBackground;
             border.BorderBrush = theme.Palette.ControlBorder;
+            border.Foreground = theme.Palette.WindowText;
         });
         return chip;
     }
