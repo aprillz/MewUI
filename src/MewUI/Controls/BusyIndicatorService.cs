@@ -196,11 +196,7 @@ internal sealed class BusyIndicatorPresenter : Control, IVisualTreeHost
             Margin = new Thickness(0, 8, 0, 0),
             IsVisible = message != null,
         };
-        _messageLabel.WithTheme((t, c) =>
-        {
-            c.Foreground = t.Palette.WindowText;
-            c.Background = t.Palette.ControlBackground;
-        });
+        _messageLabel.WithTheme((t, c) => c.Background = t.Palette.ControlBackground);
 
         if (message != null)
         {
@@ -238,7 +234,6 @@ internal sealed class BusyIndicatorPresenter : Control, IVisualTreeHost
                 HorizontalAlignment = HorizontalAlignment.Center,
                 Text = MewUIStrings.BusyIndicatorAbortConfirmation.Value
             };
-            _confirmLabel.WithTheme((t, c) => c.Foreground = t.Palette.WindowText);
 
             _yesButton = new Button
             {
@@ -280,7 +275,6 @@ internal sealed class BusyIndicatorPresenter : Control, IVisualTreeHost
                 Text = MewUIStrings.BusyIndicatorAborting.Value,
                 IsVisible = false
             };
-            _abortingLabel.WithTheme((t, c) => c.Foreground = t.Palette.WindowText);
 
             // Border wraps abort message area
             _abortArea = new Border
@@ -321,6 +315,9 @@ internal sealed class BusyIndicatorPresenter : Control, IVisualTreeHost
         _child = grid;
         _child.Parent = this;
         IsHitTestVisible = true; // block input to controls behind the overlay
+
+        // The overlay paints its own background, so the text on it takes the matching theme color.
+        this.WithTheme((t, c) => c.Foreground = t.Palette.WindowText);
 
         // Nothing shows until the fade starts.
         Opacity = 0;

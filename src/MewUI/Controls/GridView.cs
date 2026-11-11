@@ -1617,7 +1617,7 @@ public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, 
                             context,
                             new Point(centerX, bounds.Y + bounds.Height / 2),
                             3,
-                            theme.Palette.WindowText,
+                            _owner.Foreground,
                             _owner._core.SortDirection == GridViewSortDirection.Ascending
                                 ? GlyphKind.ChevronUp
                                 : GlyphKind.ChevronDown,

@@ -416,7 +416,7 @@ internal sealed partial class ManagedFileDialogWindow : Window
                     var text = ctx.Get<TextBlock>("Text");
                     text.Text = item.Label;
                     text.FontWeight = item.IsHeader ? FontWeight.SemiBold : FontWeight.Normal;
-                    text.WithTheme((t, c) => c.Foreground = item.IsHeader ? t.Palette.DisabledText : t.Palette.WindowText);
+                    DefaultItemTemplates.SyncForeground(text, item.IsHeader ? Theme.Palette.DisabledText : null);
                 },
                 kind: p => p.IsHeader ? NavigationItemKind.Header : NavigationItemKind.Item);
 

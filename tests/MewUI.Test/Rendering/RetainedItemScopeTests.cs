@@ -8,7 +8,7 @@ namespace MewUI.Test.Rendering;
 
 /// <summary>
 /// Validates that an item's visual state reaches the surface through the container that owns it:
-/// changing one item's selection or hover must re-record that container alone, and must mark only
+/// changing one item's selection or hover must re-record that item alone, and must mark only
 /// the area that container covers. The state goes through the container's style, as it does in a
 /// list, so the containers stand in a window.
 /// Not parallelizable: assigns the process-wide Application.DefaultGraphicsFactory.
@@ -42,10 +42,11 @@ public sealed class RetainedItemScopeTests
         containers[2].SetIsSelected(true);
         Frames(window, surface, 1);
 
+        // The container and its label: the selection colors the text it hands down.
         Assert.AreEqual(
-            1,
+            2,
             window.RetainedStatistics.ContentRecordCount,
-            "a selection change re-recorded more than the container that owns it");
+            "a selection change re-recorded more than the item that owns it");
 
         Assert.IsTrue(window.LastRetainedDirtyRect is Rect, $"the selection change repainted the whole frame ({window.LastWholeFrameReason})");
         var dirtyRect = (Rect)window.LastRetainedDirtyRect!;

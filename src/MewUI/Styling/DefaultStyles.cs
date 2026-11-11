@@ -684,7 +684,6 @@ public static class DefaultStyles
                 // Matches the other button-like controls; the container shares the same face.
                 // Padding comes from SegmentedControl.ItemPadding; height follows the control.
                 Setter.Create(Control.BackgroundProperty, t => t.Palette.ButtonFace),
-                Setter.Create(TextElement.ForegroundProperty, t => t.Palette.WindowText),
                 Setter.Create(Control.CornerRadiusProperty, 0.0),
                 Setter.Create(Control.BorderThicknessProperty, 0.0),
             ],
@@ -713,7 +712,7 @@ public static class DefaultStyles
                     Setters = [Setter.Create(Control.BackgroundProperty, t => t.Palette.ButtonPressedBackground)],
                 },
                 // Selected: accent-tinted face, matching ToggleButton's Checked state
-                // (a segmented control is a mutually exclusive toggle group). Foreground stays WindowText.
+                // (a segmented control is a mutually exclusive toggle group). The foreground does not change.
                 new StateTrigger
                 {
                     Match = VisualStateFlags.Selected,

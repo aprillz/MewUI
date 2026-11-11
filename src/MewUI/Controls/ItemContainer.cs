@@ -47,6 +47,12 @@ public class ItemContainer : ContentControl, ICommandArgumentSource
                     Match = VisualStateFlags.Selected,
                     Setters = [Setter.Create(BackgroundProperty, theme => theme.Palette.SelectionBackground)],
                 },
+                // A disabled list keeps the disabled text it hands down, selected row included.
+                new StateTrigger
+                {
+                    Match = VisualStateFlags.Selected | VisualStateFlags.Enabled,
+                    Setters = [Setter.Create(ForegroundProperty, theme => theme.Palette.SelectionText)],
+                },
             ],
         };
 

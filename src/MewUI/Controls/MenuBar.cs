@@ -6,16 +6,17 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// A horizontal menu bar control for application menus.
 /// </summary>
-public sealed partial class MenuBar : Control, IPopupOwner
+public sealed partial class MenuBar : Control, IPopupOwner, IVisualTreeHost
 {
     private static readonly bool _defaultStyleRegistered =
         DefaultStyles.Register<MenuBar>(DefaultStyles.CreateMenuBarStyle);
 
-    private const double ItemHorizontalPadding = 10;
-    private const double ItemVerticalPadding = 4;
+    internal const double ITEM_HORIZONTAL_PADDING = 10;
+    private const double ITEM_VERTICAL_PADDING = 4;
 
     private readonly MenuBarItemCollection _items = new();
     private readonly List<Rect> _itemBounds = new();
+    private readonly List<MenuBarRow> _rows = new();
     private readonly MenuTextLayouts _textLayouts = new();
     private int _hotIndex = -1;
     private int _openIndex = -1;
@@ -29,6 +30,8 @@ public sealed partial class MenuBar : Control, IPopupOwner
     /// Gets the menu items collection.
     /// </summary>
     public IList<MenuItem> Items => _items;
+
+    internal MenuTextLayouts TextLayouts => _textLayouts;
 
     public static readonly MewProperty<double> SpacingProperty =
         MewProperty<double>.Register<MenuBar>(nameof(Spacing), 2.0, MewPropertyOptions.AffectsLayout);
@@ -74,6 +77,11 @@ public sealed partial class MenuBar : Control, IPopupOwner
             CloseOpenMenu();
         }
 
+        if ((change & MenuModelChange.Structure) != 0)
+        {
+            SyncRows();
+        }
+
         if ((change & (MenuModelChange.Structure | MenuModelChange.Text |
             MenuModelChange.Command)) != 0)
         {
@@ -87,7 +95,78 @@ public sealed partial class MenuBar : Control, IPopupOwner
 
         if ((change & MenuModelChange.All) != 0)
         {
-            InvalidateVisual();
+            foreach (var row in _rows)
+            {
+                row.OnItemChanged();
+            }
+        }
+    }
+
+    /// <summary>Gives every item a row, in item order.</summary>
+    private void SyncRows()
+    {
+        while (_rows.Count > _items.Count)
+        {
+            var last = _rows[^1];
+            _rows.RemoveAt(_rows.Count - 1);
+            last.Bind(null);
+            last.Parent = null;
+        }
+
+        for (int index = 0; index < _items.Count; index++)
+        {
+            if (index == _rows.Count)
+            {
+                var added = new MenuBarRow();
+                added.Parent = this;
+                _rows.Add(added);
+            }
+
+            var row = _rows[index];
+            row.Bind(_items[index]);
+            row.ItemRadius = ResolveItemRadius();
+            row.SetIsHot(index == _hotIndex);
+            row.SetIsOpen(index == _openIndex);
+        }
+    }
+
+    private double ResolveItemRadius() => Math.Max(0, CornerRadius - 1);
+
+    private void SetHotIndex(int index)
+    {
+        if (_hotIndex == index)
+        {
+            return;
+        }
+
+        if ((uint)_hotIndex < (uint)_rows.Count)
+        {
+            _rows[_hotIndex].SetIsHot(false);
+        }
+
+        _hotIndex = index;
+        if ((uint)index < (uint)_rows.Count)
+        {
+            _rows[index].SetIsHot(true);
+        }
+    }
+
+    private void SetOpenIndex(int index)
+    {
+        if (_openIndex == index)
+        {
+            return;
+        }
+
+        if ((uint)_openIndex < (uint)_rows.Count)
+        {
+            _rows[_openIndex].SetIsOpen(false);
+        }
+
+        _openIndex = index;
+        if ((uint)index < (uint)_rows.Count)
+        {
+            _rows[index].SetIsOpen(true);
         }
     }
 
@@ -160,8 +239,8 @@ public sealed partial class MenuBar : Control, IPopupOwner
             var item = _items[i];
             var text = GetDisplayText(item);
             var textSize = _textLayouts.Measure(factory, text, dpi, in style);
-            var itemW = textSize.Width + (ItemHorizontalPadding * 2);
-            var itemH = textSize.Height + (ItemVerticalPadding * 2);
+            var itemW = textSize.Width + (ITEM_HORIZONTAL_PADDING * 2);
+            var itemH = textSize.Height + (ITEM_VERTICAL_PADDING * 2);
 
             if (!first)
             {
@@ -194,8 +273,8 @@ public sealed partial class MenuBar : Control, IPopupOwner
             var item = _items[i];
             var text = GetDisplayText(item);
             var textSize = _textLayouts.Measure(factory, text, dpi, in style);
-            var itemW = textSize.Width + (ItemHorizontalPadding * 2);
-            var itemH = Math.Min(innerH, textSize.Height + (ItemVerticalPadding * 2));
+            var itemW = textSize.Width + (ITEM_HORIZONTAL_PADDING * 2);
+            var itemH = Math.Min(innerH, textSize.Height + (ITEM_VERTICAL_PADDING * 2));
 
             if (!first)
             {
@@ -203,7 +282,14 @@ public sealed partial class MenuBar : Control, IPopupOwner
             }
 
             var itemY = y + (innerH - itemH) / 2;
-            _itemBounds.Add(new Rect(x, itemY, itemW, itemH));
+            var itemRect = new Rect(x, itemY, itemW, itemH);
+            _itemBounds.Add(itemRect);
+            if (i < _rows.Count)
+            {
+                _rows[i].Measure(itemRect.Size);
+                _rows[i].Arrange(itemRect);
+            }
+
             x += itemW;
             first = false;
         }
@@ -212,11 +298,7 @@ public sealed partial class MenuBar : Control, IPopupOwner
     protected override void OnMouseLeave()
     {
         base.OnMouseLeave();
-        if (_hotIndex != -1)
-        {
-            _hotIndex = -1;
-            InvalidateVisual();
-        }
+        SetHotIndex(-1);
     }
 
     protected override void OnMouseMove(MouseEventArgs e)
@@ -228,11 +310,7 @@ public sealed partial class MenuBar : Control, IPopupOwner
         }
 
         int index = HitTestItemIndex(TransformFromRoot(e.Position));
-        if (index != _hotIndex)
-        {
-            _hotIndex = index;
-            InvalidateVisual();
-        }
+        SetHotIndex(index);
 
         if (_openIndex != -1 && index != -1 && index != _openIndex)
         {
@@ -300,8 +378,7 @@ public sealed partial class MenuBar : Control, IPopupOwner
         CloseOpenMenu();
         _preMenuTarget = target;
 
-        _openIndex = index;
-        InvalidateVisual();
+        SetOpenIndex(index);
 
         var popup = new ContextMenu(item.SubMenu);
         popup.FontFamily = FontFamily;
@@ -331,8 +408,7 @@ public sealed partial class MenuBar : Control, IPopupOwner
         }
 
         _openPopup = null;
-        _openIndex = -1;
-        InvalidateVisual();
+        SetOpenIndex(-1);
     }
 
     void IPopupOwner.OnPopupClosed(UIElement popup, PopupCloseKind kind)
@@ -340,9 +416,8 @@ public sealed partial class MenuBar : Control, IPopupOwner
         if (_openPopup != null && popup == _openPopup)
         {
             _openPopup = null;
-            _openIndex = -1;
+            SetOpenIndex(-1);
             _preMenuTarget = null;
-            InvalidateVisual();
         }
     }
 
@@ -366,50 +441,6 @@ public sealed partial class MenuBar : Control, IPopupOwner
         var bounds = GetSnappedBorderBounds(Bounds);
         context.FillRectangle(bounds, Background);
 
-        var factory = GetGraphicsFactory();
-        var style = GetTextRunStyle();
-        uint dpi = GetDpi();
-
-        for (int i = 0; i < _itemBounds.Count && i < _items.Count; i++)
-        {
-            var row = _itemBounds[i];
-            var item = _items[i];
-
-            var bg = Color.Transparent;
-            if (_openIndex == i)
-            {
-                bg = Theme.Palette.SelectionBackground;
-            }
-            else if (_hotIndex == i)
-            {
-                bg = Theme.Palette.SelectionBackground.WithAlpha((byte)(0.6 * 255));
-            }
-
-            if (bg.A > 0)
-            {
-                if (CornerRadius - 1 is double r && r > 0)
-                {
-                    context.FillRoundedRectangle(row, r, r, bg);
-                }
-                else
-                {
-                    context.FillRectangle(row, bg);
-                }
-            }
-
-            var fg = item.IsEffectivelyEnabled ? Foreground : Theme.Palette.DisabledText;
-            var textRect = row.Deflate(new Thickness(ItemHorizontalPadding, 0, ItemHorizontalPadding, 0));
-            var showAccessKeys = GetValue(Window.ShowAccessKeysProperty);
-            var parsed = item.GetParsedText();
-            var layout = _textLayouts.GetOrCreate(
-                factory, parsed.displayText, dpi, in style, textRect.Width, textRect.Height);
-            if (layout != null)
-            {
-                MenuTextLayouts.Draw(
-                    context, layout, textRect, fg, showAccessKeys, parsed.underlineIndex);
-            }
-        }
-
         if (DrawBottomSeparator)
         {
             // Simple bottom separator.
@@ -429,6 +460,13 @@ public sealed partial class MenuBar : Control, IPopupOwner
             property.Id == FontWeightProperty.Id)
         {
             _textLayouts.Invalidate();
+        }
+        else if (property.Id == CornerRadiusProperty.Id)
+        {
+            foreach (var row in _rows)
+            {
+                row.ItemRadius = ResolveItemRadius();
+            }
         }
 
         base.OnMewPropertyChanged(property);
@@ -450,6 +488,19 @@ public sealed partial class MenuBar : Control, IPopupOwner
     {
         base.OnThemeChanged(oldTheme, newTheme);
         _textLayouts.Invalidate();
+    }
+
+    bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
+    {
+        foreach (var row in _rows)
+        {
+            if (!visitor(row))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     protected override void OnDispose()

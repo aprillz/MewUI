@@ -10,6 +10,37 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 internal sealed class BreadcrumbDropDown : PopupOwnerBase
 {
+    // Removes beforefieldinit: nothing reads the field below, so trimming would otherwise drop its
+    // initializer and the registration with it.
+    static BreadcrumbDropDown() { }
+
+    // Hover and open feedback matching the adjacent flat crumb buttons, so the chevron reads as clickable.
+    private static readonly bool _defaultStyleRegistered =
+        DefaultStyles.Register<BreadcrumbDropDown>(static () => new Style(typeof(BreadcrumbDropDown))
+        {
+            Transitions = [Transition.Create(BackgroundProperty)],
+            Setters =
+            [
+                // The hover hue at zero alpha: Color.Transparent is white and would flash as the fill ramps in.
+                Setter.Create(BackgroundProperty, theme => theme.Palette.ButtonHoverBackground.WithAlpha(0)),
+                Setter.Create(BorderThicknessProperty, 0.0),
+                Setter.Create(CornerRadiusProperty, theme => theme.Metrics.ControlCornerRadius),
+            ],
+            Triggers =
+            [
+                new StateTrigger
+                {
+                    Match = VisualStateFlags.Hot,
+                    Setters = [Setter.Create(BackgroundProperty, theme => theme.Palette.ButtonHoverBackground.WithAlpha(128))],
+                },
+                new StateTrigger
+                {
+                    Match = VisualStateFlags.Active,
+                    Setters = [Setter.Create(BackgroundProperty, theme => theme.Palette.ButtonHoverBackground.WithAlpha(128))],
+                },
+            ],
+        });
+
     private const double GLYPH_SIZE = 4;
     private const double ANIM_MS = 140;
 
@@ -31,8 +62,6 @@ internal sealed class BreadcrumbDropDown : PopupOwnerBase
 
         // Bare glyph: no chrome and no tab stop. It remains focusable so clicking the owner while its
         // popup is open does not clear focus, close the popup, and then reopen it with the same press.
-        Background = Color.Transparent;
-        BorderThickness = 0;
         // Same padding as the crumb buttons so chevron and crumbs read as consistent clickable segments.
         Padding = new Thickness(4);
         Focusable = true;
@@ -97,13 +126,8 @@ internal sealed class BreadcrumbDropDown : PopupOwnerBase
 
     protected override void OnRender(IGraphicsContext context)
     {
-        // Hover/open feedback matching the adjacent flat crumb buttons, so the chevron reads as clickable.
-        var state = CurrentVisualState;
-        if ((state.Flags & VisualStateFlags.Hot) != 0 || IsDropDownOpen)
-        {
-            double radius = LayoutRounding.RoundToPixel(Theme.Metrics.ControlCornerRadius, GetDpi() / 96.0);
-            context.FillRoundedRectangle(Bounds, radius, radius, Theme.Palette.ButtonHoverBackground.WithAlpha(128));
-        }
+        // The popup owner base draws no chrome, so the styled fill is drawn here.
+        DrawBackgroundAndBorder(context, Bounds, Background, BorderBrush, BorderThickness, CornerRadius);
 
         var color = Theme.Palette.DisabledText;
         double angle = _progress * (Math.PI / 2);   // '>' rotates toward 'v' as the popup opens

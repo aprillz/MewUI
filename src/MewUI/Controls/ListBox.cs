@@ -823,13 +823,6 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
                 {
                     tb.IsEnabled = enabled;
                 }
-
-                var fg = ResolveItemForeground(IsSelected(index));
-
-                if (tb.Foreground != fg)
-                {
-                    tb.Foreground = fg;
-                }
             });
 
     private void OnItemsChanged(ItemsChange change)

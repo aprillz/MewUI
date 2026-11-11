@@ -213,8 +213,7 @@ public partial class Expander : HeaderedContentControl, IVisualTreeHost
             inner.X + GlyphAreaWidth / 2,
             inner.Y + headerH / 2);
 
-        var fg = IsEffectivelyEnabled ? Foreground : Theme.Palette.DisabledText;
-        Glyph.Draw(context, glyphCenter, GlyphSize, fg,
+        Glyph.Draw(context, glyphCenter, GlyphSize, Foreground,
             IsExpanded ? GlyphKind.ChevronDown : GlyphKind.ChevronRight);
     }
 
