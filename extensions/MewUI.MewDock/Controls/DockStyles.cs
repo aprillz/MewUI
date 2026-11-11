@@ -111,7 +111,6 @@ internal static class DockStyles
         [
             Setter.Create(Control.BackgroundProperty, (Theme t) => t.Palette.ButtonFace),
             Setter.Create(Control.BorderBrushProperty, (Theme t) => t.Palette.ControlBorder),
-            Setter.Create(Control.ForegroundProperty, (Theme t) => t.Palette.WindowText),
             Setter.Create(Control.PaddingProperty, new Thickness(8, 2, 8, 2)),
             Setter.Create(Control.CornerRadiusProperty, (Theme t) => t.Metrics.ControlCornerRadius),
             Setter.Create(Control.BorderThicknessProperty, (Theme t) => t.Metrics.ControlBorderThickness),

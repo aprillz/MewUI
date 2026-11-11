@@ -32,9 +32,7 @@ internal sealed class FlexTabButton : Button
         // A tab click selects the tab; the keyboard focus goes to the tab's content, not the tab.
         Focusable = false;
 
-        // Foreground is set explicitly (the label sits under the Panel-based header, which does not inherit it).
         _label = new TextBlock { Text = tab.Name ?? MewUIDockString.TitleUnnamedTab.Value };
-        _label.WithTheme((theme, label) => label.Foreground = theme.Palette.WindowText);
         // A host header is made once per tab and passes from button to button as the tab moves between groups.
         _hostHeader = context.HeaderFor(tab);
         if (_hostHeader is not null)

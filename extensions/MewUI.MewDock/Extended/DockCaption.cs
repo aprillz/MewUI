@@ -42,7 +42,6 @@ internal sealed class DockCaption : ContentControl, IToolHeader
         _buildMenu = buildMenu;
 
         _label = new TextBlock { VerticalAlignment = VerticalAlignment.Center };
-        _label.WithTheme((theme, label) => label.Foreground = theme.Palette.WindowText);
 
         _menuButton = GlyphButton(new GlyphElement { Kind = GlyphKind.ChevronDown });
         _menuButton.Click += ShowMenu;
