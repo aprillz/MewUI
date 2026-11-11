@@ -69,7 +69,7 @@ submodule(`ThirdParty/LiveCharts2`)은 태그 `2.0.5`에 고정되며 원본 그
 
 ## 샘플
 
-`samples/MewUI.MewCharts.Sample`은 공식 LiveCharts2 샘플(~75개 섹션)을 충실히 옮긴 갤러리로, 전부 MewCharts로 렌더링됩니다. `--gdi` 또는 `--vg` 인자로 백엔드를 전환할 수 있습니다.
+`samples/MewUI.MewCharts.Sample`은 공식 LiveCharts2 샘플 98개 섹션을 원본 샘플 목록 순서대로 옮긴 갤러리로, 전부 MewCharts로 렌더링됩니다. `--gdi` 또는 `--vg` 인자로 백엔드를 전환할 수 있습니다.
 
 ## 알려진 차이/제한
 

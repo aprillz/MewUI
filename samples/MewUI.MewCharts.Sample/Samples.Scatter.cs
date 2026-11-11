@@ -1,5 +1,3 @@
-using System.Collections.ObjectModel;
-
 using Aprillz.MewUI;
 using Aprillz.MewUI.Controls;
 using Aprillz.MewUI.MewCharts.Drawing.Geometries;
@@ -22,46 +20,56 @@ internal static partial class Samples
         ],
     };
 
-    // Scatter/Bubbles
+    // Scatter/Bubbles: StackGroup 1 makes the second and third series share one weight scale.
     internal static FrameworkElement ScatterBubbles() => new CartesianChart
     {
         Series =
         [
-            new ScatterSeries<WeightedPoint>(new WeightedPoint[]
-            {
-                new(2.2, 5.4, 5), new(3.6, 9.6, 9), new(9.9, 5.2, 3), new(8.1, 4.7, 8), new(5.3, 7.1, 6),
-            }) { MinGeometrySize = 10, GeometrySize = 50 },
+            new ScatterSeries<WeightedPoint>(FetchWeightedPoints(1)) { GeometrySize = 100, MinGeometrySize = 5 },
+            new ScatterSeries<WeightedPoint>(FetchWeightedPoints(10)) { GeometrySize = 100, MinGeometrySize = 5, StackGroup = 1 },
+            new ScatterSeries<WeightedPoint>(FetchWeightedPoints(10)) { GeometrySize = 100, MinGeometrySize = 5, StackGroup = 1 },
         ],
     };
 
-    // Scatter/AutoUpdate: a scatter whose points are added on a timer.
-    internal static FrameworkElement ScatterAutoUpdate()
+    // Scatter/AutoUpdate
+    internal static FrameworkElement ScatterAutoUpdate() =>
+        AutoUpdateChart("Juana", (name, values) => new ScatterSeries<ObservableValue>(values) { Name = name });
+
+    // Scatter/Custom
+    internal static FrameworkElement ScatterCustom() => new CartesianChart
     {
-        var values = new ObservableCollection<ObservablePoint>();
-        for (var i = 0; i < 6; i++) values.Add(new ObservablePoint(Random.Next(0, 20), Random.Next(0, 20)));
-        var chart = new CartesianChart { Series = [new ScatterSeries<ObservablePoint>(values)] };
-        var timer = new DispatcherTimer().IntervalMs(1500).OnTick(() =>
+        Series =
+        [
+            new ScatterSeries<ObservablePoint, HeartGeometry>(FetchScatterPoints()) { Stroke = null, GeometrySize = 40 },
+            new ScatterSeries<ObservablePoint, SvgGeometry>(FetchScatterPoints()) { GeometrySvg = SVGPoints.Pin, GeometrySize = 40 },
+            new ScatterSeries<ObservablePoint, ScatterMyGeometry>(FetchScatterPoints()) { GeometrySize = 40 },
+        ],
+    };
+
+    // Upstream Bubbles Fetch: 10 points at random integer coordinates with weight Next(0, 100) * scale.
+    private static WeightedPoint[] FetchWeightedPoints(int scale)
+    {
+        var values = new WeightedPoint[10];
+        for (var index = 0; index < values.Length; index++)
         {
-            values.Add(new ObservablePoint(Random.Next(0, 20), Random.Next(0, 20)));
-            if (values.Count > 12) values.RemoveAt(0);
-        });
-        timer.Start();
-        Timers.Add(timer);
-        return chart;
+            var pointX = Random.Next(0, 20);
+            var pointY = Random.Next(0, 20);
+            var weight = Random.Next(0, 100) * scale;
+            values[index] = new WeightedPoint(pointX, pointY, weight);
+        }
+        return values;
     }
 
-    // Scatter/Custom: scatter series using a circle marker and an SVG pin marker.
-    internal static FrameworkElement ScatterCustom()
+    // Upstream Scatter/Custom Fetch: 10 points at random integer coordinates.
+    private static ObservablePoint[] FetchScatterPoints()
     {
-        var r = new Random(7);
-        ObservablePoint[] Fetch() => Enumerable.Range(0, 10).Select(_ => new ObservablePoint(r.Next(0, 20), r.Next(0, 20))).ToArray();
-        return new CartesianChart
+        var values = new ObservablePoint[10];
+        for (var index = 0; index < values.Length; index++)
         {
-            Series =
-            [
-                new ScatterSeries<ObservablePoint>(Fetch()) { GeometrySize = 30 },
-                new ScatterSeries<ObservablePoint, SvgGeometry>(Fetch()) { GeometrySize = 40, GeometrySvg = SVGPoints.Pin },
-            ],
-        };
+            var pointX = Random.Next(0, 20);
+            var pointY = Random.Next(0, 20);
+            values[index] = new ObservablePoint(pointX, pointY);
+        }
+        return values;
     }
 }
