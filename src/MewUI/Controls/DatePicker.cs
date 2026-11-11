@@ -196,7 +196,7 @@ public sealed partial class DatePicker : DropDownBase
                 _cachedHeaderText = date.ToString(fmt);
             }
             text = _cachedHeaderText;
-            textColor = state.IsEnabled ? Foreground : Theme.Palette.DisabledText;
+            textColor = Foreground;
         }
         else if (!string.IsNullOrEmpty(Placeholder) && !state.IsFocused)
         {

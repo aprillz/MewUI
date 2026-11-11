@@ -380,14 +380,10 @@ public sealed partial class TreeView : Control, ISubtreeInvalidationHost, IFocus
 
         if (container is TreeRowContainer row)
         {
-            var theme = Theme;
             row.Indent = Indent;
             row.Depth = _itemsSource.GetDepth(index);
             row.HasChildren = _itemsSource.GetHasChildren(index);
             row.IsExpanded = _itemsSource.GetIsExpanded(index);
-            row.GlyphColor = !IsEffectivelyEnabled
-                ? theme.Palette.DisabledText
-                : IsSelected(index) ? theme.Palette.SelectionText : theme.Palette.WindowText;
         }
     }
 
@@ -419,7 +415,7 @@ public sealed partial class TreeView : Control, ISubtreeInvalidationHost, IFocus
             }
         });
 
-    /// <summary>Re-applies the palette and row state to every realized row container.</summary>
+    /// <summary>Re-applies the row state to every realized row container.</summary>
     private void RefreshRowContainerConfiguration()
         => _presenter.VisitRealized((index, element) =>
         {
@@ -955,15 +951,6 @@ public sealed partial class TreeView : Control, ISubtreeInvalidationHost, IFocus
                 if (tb.IsEnabled != enabled)
                 {
                     tb.IsEnabled = enabled;
-                }
-
-                bool selected = IsSelected(index);
-                var fg = !enabled
-                    ? Theme.Palette.DisabledText
-                    : selected ? Theme.Palette.SelectionText : Theme.Palette.WindowText;
-                if (tb.Foreground != fg)
-                {
-                    tb.Foreground = fg;
                 }
             });
 
@@ -1507,7 +1494,6 @@ internal sealed class TreeRowContainer : ItemContainer
     private int _depth;
     private bool _hasChildren;
     private bool _isExpanded;
-    private Color _glyphColor;
 
     internal double Indent
     {
@@ -1533,12 +1519,6 @@ internal sealed class TreeRowContainer : ItemContainer
         set => SetGlyphValue(ref _isExpanded, value);
     }
 
-    internal Color GlyphColor
-    {
-        get => _glyphColor;
-        set => SetGlyphValue(ref _glyphColor, value);
-    }
-
     protected override void OnRender(IGraphicsContext context)
     {
         base.OnRender(context);
@@ -1551,7 +1531,7 @@ internal sealed class TreeRowContainer : ItemContainer
         // The expander sits in the row, which starts before the padding this container is inset by.
         var row = Bounds.Inflate(RowPadding);
         var glyphRect = new Rect(row.X + _depth * _indent, row.Y, _indent, row.Height);
-        TreeView.DrawExpanderGlyph(context, glyphRect, _isExpanded, _glyphColor);
+        TreeView.DrawExpanderGlyph(context, glyphRect, _isExpanded, Foreground);
     }
 
     private void SetGlyphValue<T>(ref T field, T value)

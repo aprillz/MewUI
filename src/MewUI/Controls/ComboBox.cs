@@ -447,7 +447,7 @@ public sealed partial class ComboBox : DropDownBase, ISelector, IIndexedSelector
             .Deflate(Padding);
         string text = SelectedText ?? string.Empty;
         var state = CurrentVisualState;
-        var textColor = state.IsEnabled ? Foreground : Theme.Palette.DisabledText;
+        var textColor = Foreground;
         if (string.IsNullOrEmpty(text) && !string.IsNullOrEmpty(Placeholder) && !state.IsFocused)
         {
             text = Placeholder;

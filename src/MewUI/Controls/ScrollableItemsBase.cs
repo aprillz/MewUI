@@ -212,7 +212,7 @@ public abstract partial class ScrollableItemsBase : Control, ISubtreeInvalidatio
     protected Color ResolveItemForeground(bool selected)
         => !IsEffectivelyEnabled
             ? Theme.Palette.DisabledText
-            : selected ? Theme.Palette.SelectionText : Theme.Palette.WindowText;
+            : selected ? Theme.Palette.SelectionText : Foreground;
 
     /// <summary>
     /// Returns the current viewport height in DIPs, accounting for border insets and padding.

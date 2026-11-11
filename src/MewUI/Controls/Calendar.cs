@@ -26,8 +26,6 @@ public sealed partial class Calendar : Control, IVisualTreeHost
     private const double CellHeight = 24;
     private const double CellSpacing = 0;
     private const double NavButtonWidth = 32;
-    private const double CellCornerRadius = 4;
-    private const double TodayStrokeThickness = 1;
 
     // Navigation buttons (FlatButton style)
     private readonly Button _prevButton;
@@ -41,6 +39,7 @@ public sealed partial class Calendar : Control, IVisualTreeHost
     // Cached cell rects for hit testing
     private Rect[] _cellRects = Array.Empty<Rect>();
     private int _hotCellIndex = -1;
+    private readonly List<CalendarCell> _cells = new();
 
     // Culture-formatted digit strings for day-of-month cells (index 0 = day 1). Native digits
     // (e.g. Arabic-indic) depend on culture, so the table is rebuilt only when culture changes.
@@ -62,8 +61,8 @@ public sealed partial class Calendar : Control, IVisualTreeHost
     private CultureInfo? _cachedDecadeYearNumbersCulture;
 
     // Small font for cell text
-    private const double CellFontSize = 11;
-    private static readonly double DowFontSize = Math.Round(CellFontSize * 0.85);
+    internal const double CELL_FONT_SIZE = 11;
+    private static readonly double DowFontSize = Math.Round(CELL_FONT_SIZE * 0.85);
     public static readonly MewProperty<DateTime?> SelectedDateProperty =
         MewProperty<DateTime?>.Register<Calendar>(nameof(SelectedDate), null,
             MewPropertyOptions.AffectsRender,
@@ -72,7 +71,11 @@ public sealed partial class Calendar : Control, IVisualTreeHost
     public static readonly MewProperty<DateTime> DisplayDateProperty =
         MewProperty<DateTime>.Register<Calendar>(nameof(DisplayDate), DateTime.Today,
             MewPropertyOptions.AffectsRender,
-            static (self, _, _) => self.UpdateHeaderText());
+            static (self, _, _) =>
+            {
+                self.UpdateHeaderText();
+                self.InvalidateArrange();
+            });
 
     public static readonly MewProperty<CalendarMode> DisplayModeProperty =
         MewProperty<CalendarMode>.Register<Calendar>(nameof(DisplayMode), CalendarMode.Month,
@@ -81,11 +84,13 @@ public sealed partial class Calendar : Control, IVisualTreeHost
 
     public static readonly MewProperty<DayOfWeek> FirstDayOfWeekProperty =
         MewProperty<DayOfWeek>.Register<Calendar>(nameof(FirstDayOfWeek), DayOfWeek.Sunday,
-            MewPropertyOptions.AffectsRender);
+            MewPropertyOptions.AffectsRender,
+            static (self, _, _) => self.InvalidateArrange());
 
     public static readonly MewProperty<bool> IsTodayHighlightedProperty =
         MewProperty<bool>.Register<Calendar>(nameof(IsTodayHighlighted), true,
-            MewPropertyOptions.AffectsRender);
+            MewPropertyOptions.AffectsRender,
+            static (self, _, _) => self.InvalidateArrange());
 
     static Calendar()
     {
@@ -184,12 +189,14 @@ public sealed partial class Calendar : Control, IVisualTreeHost
             DisplayDate = newValue.Value;
         }
 
+        InvalidateArrange();
         SelectedDateChanged?.Invoke(newValue);
     }
 
     private void OnDisplayModeChanged(CalendarMode oldValue, CalendarMode newValue)
     {
         UpdateHeaderText();
+        InvalidateArrange();
         DisplayModeChanged?.Invoke(newValue);
     }
 
@@ -238,6 +245,131 @@ public sealed partial class Calendar : Control, IVisualTreeHost
 
         // Compute cell rects
         ComputeCellRects(inner);
+        UpdateCells();
+    }
+
+    /// <summary>Gives every cell of the current view its rect, label and state.</summary>
+    private void UpdateCells()
+    {
+        SyncCellCount(_cellRects.Length);
+
+        var culture = CultureInfo.CurrentCulture;
+        var display = DisplayDate;
+        var selected = SelectedDate;
+        var today = DateTime.Today;
+
+        switch (DisplayMode)
+        {
+            case CalendarMode.Month:
+            {
+                var dayNumbers = GetDayNumbers(culture);
+                var firstOfMonth = new DateTime(display.Year, display.Month, 1);
+                int startDow = ((int)firstOfMonth.DayOfWeek - (int)FirstDayOfWeek + DaysPerWeek) % DaysPerWeek;
+                var startDate = firstOfMonth.AddDays(-startDow);
+                bool highlightToday = IsTodayHighlighted;
+                for (int index = 0; index < _cells.Count; index++)
+                {
+                    var date = startDate.AddDays(index);
+                    _cells[index].Update(
+                        dayNumbers[date.Day - 1],
+                        culture,
+                        isSelected: selected.HasValue && date == selected.Value.Date,
+                        isMarked: highlightToday && date == today,
+                        isOutside: date.Month != display.Month || date.Year != display.Year,
+                        circleInset: 0,
+                        markInset: true);
+                }
+
+                break;
+            }
+            case CalendarMode.Year:
+            {
+                var monthNames = GetMonthNames(culture);
+                for (int index = 0; index < _cells.Count; index++)
+                {
+                    int month = index + 1;
+                    _cells[index].Update(
+                        monthNames[index],
+                        culture,
+                        isSelected: selected.HasValue && selected.Value.Year == display.Year && selected.Value.Month == month,
+                        isMarked: today.Year == display.Year && today.Month == month,
+                        isOutside: false,
+                        circleInset: 2,
+                        markInset: false);
+                }
+
+                break;
+            }
+            case CalendarMode.Decade:
+            {
+                int decadeStart = display.Year / 10 * 10;
+                var yearNumbers = GetDecadeYearNumbers(decadeStart, culture);
+                for (int index = 0; index < _cells.Count; index++)
+                {
+                    // The decade view runs from the year before the decade to the year after it.
+                    int year = decadeStart - 1 + index;
+                    _cells[index].Update(
+                        yearNumbers[index],
+                        culture,
+                        isSelected: selected.HasValue && selected.Value.Year == year,
+                        isMarked: today.Year == year,
+                        isOutside: year < decadeStart || year >= decadeStart + 10,
+                        circleInset: 2,
+                        markInset: false);
+                }
+
+                break;
+            }
+        }
+
+        for (int index = 0; index < _cells.Count; index++)
+        {
+            var cell = _cells[index];
+            var rect = _cellRects[index];
+            cell.SetIsHot(index == _hotCellIndex && IsHotEligible(index));
+            cell.Measure(rect.Size);
+            cell.Arrange(rect);
+        }
+    }
+
+    private void SyncCellCount(int count)
+    {
+        while (_cells.Count > count)
+        {
+            var last = _cells[^1];
+            _cells.RemoveAt(_cells.Count - 1);
+            last.Parent = null;
+        }
+
+        while (_cells.Count < count)
+        {
+            var cell = new CalendarCell();
+            cell.Parent = this;
+            _cells.Add(cell);
+        }
+    }
+
+    /// <summary>Whether a cell takes the hover: the years either side of a decade do not.</summary>
+    private bool IsHotEligible(int index)
+        => DisplayMode != CalendarMode.Decade || (index > 0 && index < YearDecadeCells - 1);
+
+    private void SetHotCell(int index)
+    {
+        if (index == _hotCellIndex)
+        {
+            return;
+        }
+
+        if ((uint)_hotCellIndex < (uint)_cells.Count)
+        {
+            _cells[_hotCellIndex].SetIsHot(false);
+        }
+
+        _hotCellIndex = index;
+        if ((uint)index < (uint)_cells.Count && IsHotEligible(index))
+        {
+            _cells[index].SetIsHot(true);
+        }
     }
 
     private void ComputeCellRects(Rect bounds)
@@ -274,28 +406,32 @@ public sealed partial class Calendar : Control, IVisualTreeHost
     protected override void OnRender(IGraphicsContext context)
     {
         DrawBackgroundAndBorder(context, Bounds, Background, BorderBrush, BorderThickness, Math.Max(0, CornerRadius));
-    }
 
-    protected override void OnRenderOverlay(IGraphicsContext context)
-    {
-        // The mode may change between arrange and render, and the cell rects follow the mode.
-        ComputeCellRects(GetInnerBounds());
-        RenderGrid(context);
-    }
-
-    private void RenderGrid(IGraphicsContext context)
-    {
-        switch (DisplayMode)
+        if (DisplayMode == CalendarMode.Month && _cellRects.Length == MonthCells)
         {
-            case CalendarMode.Month:
-                RenderMonthView(context);
-                break;
-            case CalendarMode.Year:
-                RenderYearView(context);
-                break;
-            case CalendarMode.Decade:
-                RenderDecadeView(context);
-                break;
+            RenderDayOfWeekHeaders(context);
+        }
+    }
+
+    private void RenderDayOfWeekHeaders(IGraphicsContext context)
+    {
+        var palette = Theme.Palette;
+        var inner = GetInnerBounds();
+        double headerY = inner.Y + HeaderHeight;
+        double cellW = _cellRects[0].Width;
+        var culture = CultureInfo.CurrentCulture;
+        var dayNames = GetDayNames(culture, FirstDayOfWeek);
+        var factory = GetGraphicsFactory();
+
+        for (int index = 0; index < DaysPerWeek; index++)
+        {
+            var rect = new Rect(
+                inner.X + CellSpacing + index * (cellW + CellSpacing),
+                headerY,
+                cellW,
+                DayOfWeekHeaderHeight);
+
+            DrawCalendarText(context, this, factory, dayNames[index], rect, DowFontSize, palette.PlaceholderText, culture);
         }
     }
 
@@ -386,185 +522,11 @@ public sealed partial class Calendar : Control, IVisualTreeHost
         return numbers;
     }
 
-    private void RenderMonthView(IGraphicsContext context)
-    {
-        var theme = Theme;
-        var palette = theme.Palette;
-        var today = DateTime.Today;
-        double dpiScale = GetDpi() / 96.0;
-        double snappedRadius = LayoutRounding.RoundToPixel(CellCornerRadius, dpiScale);
-        double snappedStroke = LayoutRounding.SnapThicknessToPixels(TodayStrokeThickness, dpiScale, 1);
-        var display = DisplayDate;
-        var selected = SelectedDate;
-
-        // Day of week headers
-        var inner = GetInnerBounds();
-        double headerY = inner.Y + HeaderHeight;
-        double cellW = _cellRects.Length > 0 ? _cellRects[0].Width : 0;
-        var fdow = FirstDayOfWeek;
-        var culture = CultureInfo.CurrentCulture;
-        var dayNames = GetDayNames(culture, fdow);
-        var dayNumbers = GetDayNumbers(culture);
-
-        for (int i = 0; i < DaysPerWeek; i++)
-        {
-            string dayName = dayNames[i];
-
-            var rect = new Rect(
-                inner.X + CellSpacing + i * (cellW + CellSpacing),
-                headerY,
-                cellW,
-                DayOfWeekHeaderHeight);
-
-            DrawCalendarText(context, dayName, rect, DowFontSize, palette.PlaceholderText, culture);
-        }
-
-        // Day cells
-        var firstOfMonth = new DateTime(display.Year, display.Month, 1);
-        int startDow = ((int)firstOfMonth.DayOfWeek - (int)fdow + DaysPerWeek) % DaysPerWeek;
-        var startDate = firstOfMonth.AddDays(-startDow);
-
-        for (int i = 0; i < MonthCells; i++)
-        {
-            var date = startDate.AddDays(i);
-            var cellRect = _cellRects[i];
-            bool isCurrentMonth = date.Month == display.Month && date.Year == display.Year;
-            bool isToday = IsTodayHighlighted && date == today;
-            bool isSelected = selected.HasValue && date == selected.Value.Date;
-            bool isHot = i == _hotCellIndex;
-
-            var unit = Math.Min(cellRect.Width, cellRect.Height);
-            var circleRect = new Rect(cellRect.X + (cellRect.Width - unit) / 2, cellRect.Y + (cellRect.Height - unit) / 2, unit, unit);
-            snappedRadius = unit / 2.0;
-
-            // Background
-            if (isSelected)
-            {
-                context.FillRoundedRectangle(circleRect, snappedRadius, snappedRadius, palette.Accent);
-            }
-            else if (isHot)
-            {
-                context.FillRoundedRectangle(circleRect, snappedRadius, snappedRadius, palette.AccentHoverOverlay);
-            }
-
-            // Today ring
-            if (isToday && !isSelected)
-            {
-                context.DrawRoundedRectangle(circleRect, snappedRadius, snappedRadius, palette.Accent, snappedStroke, true);
-            }
-
-            // Text
-            var textColor = isSelected
-                ? palette.AccentText
-                : isCurrentMonth
-                    ? palette.WindowText
-                    : palette.DisabledText;
-
-            DrawCalendarText(context, dayNumbers[date.Day - 1], cellRect, CellFontSize, textColor, culture);
-        }
-    }
-
-    private void RenderYearView(IGraphicsContext context)
-    {
-        var theme = Theme;
-        var palette = theme.Palette;
-        var display = DisplayDate;
-        var selected = SelectedDate;
-        double dpiScale = GetDpi() / 96.0;
-        double snappedRadius = LayoutRounding.RoundToPixel(CellCornerRadius, dpiScale);
-        double snappedStroke = LayoutRounding.SnapThicknessToPixels(TodayStrokeThickness, dpiScale, 1);
-        var culture = CultureInfo.CurrentCulture;
-        var monthNames = GetMonthNames(culture);
-
-        for (int i = 0; i < YearDecadeCells; i++)
-        {
-            var cellRect = _cellRects[i];
-
-            var unit = Math.Min(cellRect.Width, cellRect.Height) - 2;
-            var circleRect = new Rect(cellRect.X + (cellRect.Width - unit) / 2, cellRect.Y + (cellRect.Height - unit) / 2, unit, unit);
-            snappedRadius = unit / 2.0;
-
-            int month = i + 1;
-            bool isSelected = selected.HasValue &&
-                              selected.Value.Year == display.Year &&
-                              selected.Value.Month == month;
-            bool isHot = i == _hotCellIndex;
-            bool isCurrent = DateTime.Today.Year == display.Year && DateTime.Today.Month == month;
-
-            if (isSelected)
-            {
-                context.FillRoundedRectangle(circleRect, snappedRadius, snappedRadius, palette.Accent);
-            }
-            else if (isHot)
-            {
-                context.FillRoundedRectangle(circleRect, snappedRadius, snappedRadius, palette.AccentHoverOverlay);
-            }
-
-            if (isCurrent && !isSelected)
-            {
-                context.DrawRoundedRectangle(circleRect, snappedRadius, snappedRadius, palette.Accent, snappedStroke);
-            }
-
-            var textColor = isSelected ? palette.AccentText : palette.WindowText;
-            string label = monthNames[month - 1];
-
-            DrawCalendarText(context, label, cellRect, CellFontSize, textColor, culture);
-        }
-    }
-
-    private void RenderDecadeView(IGraphicsContext context)
-    {
-        var theme = Theme;
-        var palette = theme.Palette;
-        var display = DisplayDate;
-        var selected = SelectedDate;
-        int decadeStart = display.Year / 10 * 10;
-        double dpiScale = GetDpi() / 96.0;
-        double snappedRadius = LayoutRounding.RoundToPixel(CellCornerRadius, dpiScale);
-        double snappedStroke = LayoutRounding.SnapThicknessToPixels(TodayStrokeThickness, dpiScale, 1);
-        var culture = CultureInfo.CurrentCulture;
-        var yearNumbers = GetDecadeYearNumbers(decadeStart, culture);
-
-        for (int i = 0; i < YearDecadeCells; i++)
-        {
-            var cellRect = _cellRects[i];
-            int year = decadeStart - 1 + i; // decade: -1 to +10
-            bool isInDecade = year >= decadeStart && year < decadeStart + 10;
-            bool isSelected = selected.HasValue && selected.Value.Year == year;
-            bool isHot = i == _hotCellIndex;
-            bool isCurrent = DateTime.Today.Year == year;
-
-
-            var unit = Math.Min(cellRect.Width, cellRect.Height) - 2;
-            var circleRect = new Rect(cellRect.X + (cellRect.Width - unit) / 2, cellRect.Y + (cellRect.Height - unit) / 2, unit, unit);
-            snappedRadius = unit / 2.0;
-
-            if (isSelected)
-            {
-                context.FillRoundedRectangle(circleRect, snappedRadius, snappedRadius, palette.Accent);
-            }
-            else if (isHot && isInDecade)
-            {
-                context.FillRoundedRectangle(circleRect, snappedRadius, snappedRadius, palette.AccentHoverOverlay);
-            }
-
-            if (isCurrent && !isSelected)
-            {
-                context.DrawRoundedRectangle(circleRect, snappedRadius, snappedRadius, palette.Accent, snappedStroke);
-            }
-
-            var textColor = isSelected
-                ? palette.AccentText
-                : isInDecade
-                    ? palette.WindowText
-                    : palette.DisabledText;
-
-            DrawCalendarText(context, yearNumbers[i], cellRect, CellFontSize, textColor, culture);
-        }
-    }
-
-    private void DrawCalendarText(
+    /// <summary>Draws a centered, clipped calendar label in the owner's font.</summary>
+    internal static void DrawCalendarText(
         IGraphicsContext context,
+        Control owner,
+        IGraphicsFactory factory,
         string text,
         Rect bounds,
         double fontSize,
@@ -574,7 +536,7 @@ public sealed partial class Calendar : Control, IVisualTreeHost
         var request = new TextLayoutRequest
         {
             Text = text.AsMemory(),
-            Dpi = GetDpi(),
+            Dpi = owner.GetDpi(),
             Paragraph = new TextParagraphStyle
             {
                 MaxWidth = bounds.Width,
@@ -583,17 +545,17 @@ public sealed partial class Calendar : Control, IVisualTreeHost
                 Culture = culture
             },
             DefaultStyle = new TextRunStyle(
-                FontFamily,
+                owner.FontFamily,
                 fontSize,
-                FontWeight,
-                FontStyle == FontStyle.Italic,
+                owner.FontWeight,
+                owner.FontStyle == FontStyle.Italic,
                 Culture: culture)
         };
-        var layout = GetGraphicsFactory().TextEngine.GetOrCreateLayout(
+        var layout = factory.TextEngine.GetOrCreateLayout(
             request,
             TextLayoutCachePolicy.Content);
         var origin = new Point(bounds.X, bounds.Y + Math.Max(0, (bounds.Height - layout.MeasuredSize.Height) * 0.5));
-        var options = new TextDrawOptions(color, Owner: this);
+        var options = new TextDrawOptions(color, Owner: owner);
 
         context.Save();
         try
@@ -659,22 +621,13 @@ public sealed partial class Calendar : Control, IVisualTreeHost
     protected override void OnMouseMove(MouseEventArgs e)
     {
         base.OnMouseMove(e);
-        int newHot = HitTestCell(TransformFromRoot(e.Position));
-        if (newHot != _hotCellIndex)
-        {
-            _hotCellIndex = newHot;
-            InvalidateVisual();
-        }
+        SetHotCell(HitTestCell(TransformFromRoot(e.Position)));
     }
 
     protected override void OnMouseLeave()
     {
         base.OnMouseLeave();
-        if (_hotCellIndex >= 0)
-        {
-            _hotCellIndex = -1;
-            InvalidateVisual();
-        }
+        SetHotCell(-1);
     }
 
     protected override void OnMouseDown(MouseEventArgs e)
@@ -875,7 +828,22 @@ public sealed partial class Calendar : Control, IVisualTreeHost
     #endregion
 
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
-        => visitor(_prevButton) && visitor(_headerButton) && visitor(_nextButton);
+    {
+        if (!visitor(_prevButton) || !visitor(_headerButton) || !visitor(_nextButton))
+        {
+            return false;
+        }
+
+        foreach (var cell in _cells)
+        {
+            if (!visitor(cell))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
 }
 
 /// <summary>

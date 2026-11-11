@@ -39,4 +39,24 @@ internal static class DefaultItemTemplates
             label.FontWeight = owner.FontWeight;
         }
     }
+
+    /// <summary>
+    /// Gives a recycled item label a color of its own, or with <see langword="null"/> lets it inherit the
+    /// foreground of its container.
+    /// </summary>
+    public static void SyncForeground(TextBlock label, Color? color)
+    {
+        if (color.HasValue)
+        {
+            if (label.Foreground != color.Value)
+            {
+                label.Foreground = color.Value;
+            }
+        }
+        else if (label.PropertyStore.HasValue(TextElement.ForegroundProperty.Id, ValueSource.Local))
+        {
+            // Framework bookkeeping rather than a user clear, so nothing goes to the binding diagnostics.
+            label.RestoreLocalValue(TextElement.ForegroundProperty, hadLocal: false, value: null);
+        }
+    }
 }
