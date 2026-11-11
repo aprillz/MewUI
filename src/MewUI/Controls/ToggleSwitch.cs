@@ -103,6 +103,13 @@ public sealed partial class ToggleSwitch : ToggleBase
         displayed.Arrange(labelBounds);
     }
 
+    /// <inheritdoc/>
+    internal override bool FillsBoundsOpaquely
+    {
+        // The background fills the track alone; the label stands on whatever is behind the control.
+        get => false;
+    }
+
     protected override void OnRender(IGraphicsContext context)
     {
         // A template owns the control's entire visuals; the built-in track would double-render.

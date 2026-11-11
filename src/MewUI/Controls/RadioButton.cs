@@ -183,6 +183,13 @@ public partial class RadioButton : ToggleBase
         displayed.Arrange(textBounds);
     }
 
+    /// <inheritdoc/>
+    internal override bool FillsBoundsOpaquely
+    {
+        // The background fills the circle alone; the label stands on whatever is behind the control.
+        get => false;
+    }
+
     protected override void OnRender(IGraphicsContext context)
     {
         EnsureGroupRegistered();

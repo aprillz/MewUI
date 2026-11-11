@@ -595,7 +595,7 @@ public abstract partial class UIElement : Element
         // pixels the backend knows, which is what subpixel antialiasing needs on a surface that
         // carries per-pixel alpha (a popup). The scope has to start before OnRender: controls
         // such as ContextMenu and ListBox draw their own text there rather than in a child.
-        if (this is Control { Background.A: 255 })
+        if (this is Control control && control.FillsBoundsOpaquely)
         {
             OpaqueBackdropScope.Begin(context, Bounds);
             try

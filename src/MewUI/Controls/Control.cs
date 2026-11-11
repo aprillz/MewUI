@@ -108,6 +108,12 @@ public abstract partial class Control : TextElement
     }
 
     /// <summary>
+    /// Whether drawing this control starts by filling its bounds with an opaque color, which lets the text
+    /// drawn over it use subpixel antialiasing on a surface that carries per-pixel alpha.
+    /// </summary>
+    internal virtual bool FillsBoundsOpaquely => Background.A == 255;
+
+    /// <summary>
     /// Gets or sets the border color.
     /// </summary>
     public Color BorderBrush

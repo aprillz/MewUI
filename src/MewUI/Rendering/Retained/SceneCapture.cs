@@ -275,7 +275,7 @@ internal sealed class SceneCapture
 
         double opacity = element.Opacity;
         bool isVisible = element.IsVisible && opacity > 0;
-        var state = new CompositionState(isVisible, opacity, element is Control { Background.A: 255 });
+        var state = new CompositionState(isVisible, opacity, element is Control control && control.FillsBoundsOpaquely);
 
         if (!isVisible)
         {
@@ -700,7 +700,7 @@ internal sealed class SceneCapture
     {
         // The element's own render path applies its opacity and backdrop, so the data carries them.
         double opacity = element.Opacity;
-        var state = new CompositionState(true, opacity, element is Control { Background.A: 255 });
+        var state = new CompositionState(true, opacity, element is Control control && control.FillsBoundsOpaquely);
         update.StageComposition(node, CompositionPlan.Empty, state, stateBakedIntoContent: true);
 
         // One recording carries the whole subtree, so it answers for every kind of change in it.
