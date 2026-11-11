@@ -7,6 +7,8 @@ on:
 
 permissions:
   contents: write
+  # NuGet trusted publishing exchanges the workflow's OIDC token for a short-lived push key.
+  id-token: write
 
 jobs:
   publish:
@@ -41,6 +43,13 @@ jobs:
         shell: cmd
         run: tools\pack\pack_mewui.cmd ${{ steps.version.outputs.version }}
 
+      # The key lasts an hour, so it is requested after packing, right before the push.
+      - name: NuGet login (trusted publishing)
+        id: nuget-login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
       - name: Push to NuGet
         shell: pwsh
         run: |
@@ -51,7 +60,7 @@ jobs:
           foreach ($pkg in $packages) {
             Write-Host "  $($pkg.Name)"
             dotnet nuget push $pkg.FullName `
-              --api-key "${{ secrets.NUGET_API_KEY }}" `
+              --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}" `
               --source "https://api.nuget.org/v3/index.json" `
               --skip-duplicate
           }
