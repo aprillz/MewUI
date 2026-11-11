@@ -157,6 +157,13 @@ public sealed partial class GroupBox : HeaderedContentControl
         }
     }
 
+    /// <inheritdoc/>
+    internal override bool FillsBoundsOpaquely
+    {
+        // The background fills the box under the header; the header stands on whatever is behind the control.
+        get => false;
+    }
+
     protected override void OnRender(IGraphicsContext context)
     {
         if (HasTemplateInstance)

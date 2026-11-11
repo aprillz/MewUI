@@ -153,6 +153,13 @@ public partial class CheckBox : CommandSourceControl
         displayed.Arrange(textBounds);
     }
 
+    /// <inheritdoc/>
+    internal override bool FillsBoundsOpaquely
+    {
+        // The background fills the check box alone; the label stands on whatever is behind the control.
+        get => false;
+    }
+
     protected override void OnRender(IGraphicsContext context)
     {
         // A template owns the control's entire visuals; the built-in box would double-render.
