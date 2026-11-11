@@ -28,6 +28,12 @@ internal sealed class PopupEntry
 
     public bool StaysOpen { get; set; }
 
+    /// <summary>
+    /// The owner's client origin, in screen units, that this popup stays placed against while the owner
+    /// window moves; null to follow the owner window's current position.
+    /// </summary>
+    public Point? PinnedClientOrigin { get; set; }
+
     public PopupChrome? Chrome { get; set; }
 
     /// <summary>The OS surface hosting this popup when it is native-hosted; null for in-surface popups.</summary>

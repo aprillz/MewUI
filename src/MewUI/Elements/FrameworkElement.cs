@@ -222,7 +222,7 @@ public abstract class FrameworkElement : UIElement, IDisposable
             anchor = new Point(drawnBounds.X + drawnBounds.Width / 2, drawnBounds.Bottom);
         }
 
-        var region = window.GetPopupPlacementRegion(new Rect(anchor.X, anchor.Y, 0, 0));
+        var region = window.GetPopupPlacementRegion(new Rect(anchor.X, anchor.Y, 0, 0), this);
         var measureSize = new Size(Math.Max(0, region.Width), Math.Max(0, region.Height));
 
         window.ShowToolTip(this, content, measureSize, desired =>

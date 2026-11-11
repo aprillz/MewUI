@@ -26,6 +26,9 @@ internal sealed class PopupManager
 
     private bool _isClosingPopups;
 
+    // The popup whose placement callback is running, so placement regions use that popup's origin.
+    private PopupEntry? _placingEntry;
+
     public PopupManager(Window window)
     {
         _window = window;
@@ -75,6 +78,8 @@ internal sealed class PopupManager
 
     internal void NotifyDpiChanged(uint oldDpi, uint newDpi)
     {
+        // A pinned origin was taken at the old scale, so those popups would land off where they opened.
+        ClosePinnedPopups();
         _inSurfaceHost.NotifyDpiChanged(oldDpi, newDpi);
         _nativeHost.NotifyDpiChanged(oldDpi, newDpi);
     }
@@ -146,7 +151,11 @@ internal sealed class PopupManager
     /// first would size it from registered defaults, and nothing downstream corrects a rectangle already
     /// computed from those.
     /// </summary>
-    internal Rect ShowPopup(UIElement owner, UIElement popup, Func<Window, Rect> measureBounds, bool sizeToContent = false, bool staysOpen = false)
+    /// <remarks>
+    /// <paramref name="pinToScreen"/> keeps a natively hosted popup where it opened while the owner window
+    /// moves. A popup opened from inside a pinned popup stays with it whatever this flag says.
+    /// </remarks>
+    internal Rect ShowPopup(UIElement owner, UIElement popup, Func<Window, Rect> measureBounds, bool sizeToContent = false, bool staysOpen = false, bool pinToScreen = false)
     {
         ArgumentNullException.ThrowIfNull(owner);
         ArgumentNullException.ThrowIfNull(popup);
@@ -172,16 +181,25 @@ internal sealed class PopupManager
         {
             if (_popups[i].Element == popup)
             {
-                _popups[i].Owner = owner;
-                _popups[i].Host?.OnOwnerChanged(_popups[i]);
-                var updatedBounds = SnapPlacementToDevicePixels(measureBounds(_window));
+                var existing = _popups[i];
+                existing.Owner = owner;
+                existing.Host?.OnOwnerChanged(existing);
+                existing.PinnedClientOrigin = ResolvePinnedClientOrigin(owner, existing.Host, pinToScreen);
+                var updatedBounds = SnapPlacementToDevicePixels(MeasurePlacement(existing, measureBounds));
                 UpdatePopup(popup, updatedBounds);
                 return updatedBounds;
             }
         }
 
         var host = ResolveHost();
-        var entry = new PopupEntry { Owner = owner, Element = popup, StaysOpen = staysOpen, Host = host };
+        var entry = new PopupEntry
+        {
+            Owner = owner,
+            Element = popup,
+            StaysOpen = staysOpen,
+            Host = host,
+            PinnedClientOrigin = ResolvePinnedClientOrigin(owner, host, pinToScreen),
+        };
 
         // Root the popup before measuring it for placement: its named style (e.g. ComboBoxPopup) and
         // inherited properties (fonts) only resolve once its context chain reaches this window's
@@ -189,7 +207,7 @@ internal sealed class PopupManager
         // to) sized the popup from unstyled metrics - a zero border thickness that forced a spurious
         // scrollbar, or a fallback font that clipped content.
         PopupHostSupport.AttachChrome(_window, entry);
-        var measuredBounds = SnapPlacementToDevicePixels(measureBounds(_window));
+        var measuredBounds = SnapPlacementToDevicePixels(MeasurePlacement(entry, measureBounds));
         entry.PlacementBounds = measuredBounds;
         entry.Bounds = measuredBounds;
         // Register before showing the native surface: when a sibling popup (submenu) shows and takes
@@ -218,6 +236,79 @@ internal sealed class PopupManager
             _window.Invalidate();
             return;
         }
+    }
+
+    private Rect MeasurePlacement(PopupEntry entry, Func<Window, Rect> measureBounds)
+    {
+        var previous = _placingEntry;
+        _placingEntry = entry;
+        try
+        {
+            return measureBounds(_window);
+        }
+        finally
+        {
+            _placingEntry = previous;
+        }
+    }
+
+    /// <summary>
+    /// The owner client origin a new popup stays placed against: the current one when pinning, the
+    /// enclosing pinned popup's when opened from inside one, otherwise none.
+    /// </summary>
+    private Point? ResolvePinnedClientOrigin(UIElement owner, IPopupHost? host, bool pinToScreen)
+    {
+        // A popup drawn inside the owner surface moves with the owner whatever is remembered.
+        if (!ReferenceEquals(host, _nativeHost) || _window.Handle == 0)
+        {
+            return null;
+        }
+
+        if (pinToScreen)
+        {
+            return _window.ClientToScreen(Point.Zero);
+        }
+        else
+        {
+            return FindPinnedClientOrigin(owner);
+        }
+    }
+
+    /// <summary>
+    /// The origin placement math should convert with: the popup being placed when called from its
+    /// placement callback, else the pinned popup enclosing <paramref name="anchorElement"/>, else none.
+    /// </summary>
+    internal Point? ResolvePlacementClientOrigin(UIElement? anchorElement)
+    {
+        if (_placingEntry != null)
+        {
+            return _placingEntry.PinnedClientOrigin;
+        }
+
+        if (anchorElement != null)
+        {
+            return FindPinnedClientOrigin(anchorElement);
+        }
+        else
+        {
+            return null;
+        }
+    }
+
+    private Point? FindPinnedClientOrigin(UIElement element)
+    {
+        for (Element? current = element; current != null; current = current.Parent)
+        {
+            for (int index = 0; index < _popups.Count; index++)
+            {
+                if (ReferenceEquals(_popups[index].Element, current))
+                {
+                    return _popups[index].PinnedClientOrigin;
+                }
+            }
+        }
+
+        return null;
     }
 
     /// <summary>Snaps a popup's placement origin to the device-pixel grid; the size is left as measured.</summary>
@@ -385,6 +476,48 @@ internal sealed class PopupManager
             {
                 var entry = entries[i];
                 if (!ReferenceEquals(entry.Owner, owner))
+                {
+                    continue;
+                }
+
+                // Gone already when it closed along with a popup it was opened from.
+                int index = _popups.IndexOf(entry);
+                if (index < 0)
+                {
+                    continue;
+                }
+
+                CloseAndDetachEntry(index, PopupCloseKind.Lifecycle);
+                removedAny = true;
+            }
+
+            if (removedAny)
+            {
+                _window.Invalidate();
+            }
+        }
+        finally
+        {
+            _isClosingPopups = false;
+        }
+    }
+
+    private void ClosePinnedPopups()
+    {
+        if (_popups.Count == 0 || _isClosingPopups)
+        {
+            return;
+        }
+
+        _isClosingPopups = true;
+        try
+        {
+            bool removedAny = false;
+            var entries = _popups.ToArray();
+            for (int i = entries.Length - 1; i >= 0; i--)
+            {
+                var entry = entries[i];
+                if (!entry.PinnedClientOrigin.HasValue)
                 {
                     continue;
                 }

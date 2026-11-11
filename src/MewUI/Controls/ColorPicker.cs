@@ -154,7 +154,7 @@ public sealed class ColorPicker : DropDownBase
     protected override Rect CalculatePopupBounds(Window window, UIElement popup)
     {
         var bounds = GetBoundsInRoot();
-        var region = window.GetPopupPlacementRegion(bounds);
+        var region = window.GetPopupPlacementRegion(bounds, this);
 
         // Measure with unconstrained width so the popup reports its natural width
         // (otherwise inner panels with Stretch/Grid columns expand to the region width).

@@ -3763,8 +3763,8 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     /// window. Placement is always a callback: measuring a popup before it is rooted reads registered
     /// defaults rather than this window's styles, fonts, theme and DPI.
     /// </summary>
-    internal Rect ShowPopup(UIElement owner, UIElement popup, Func<Window, Rect> measureBounds, bool sizeToContent = false, bool staysOpen = false)
-        => _popupManager.ShowPopup(owner, popup, measureBounds, sizeToContent, staysOpen);
+    internal Rect ShowPopup(UIElement owner, UIElement popup, Func<Window, Rect> measureBounds, bool sizeToContent = false, bool staysOpen = false, bool pinToScreen = false)
+        => _popupManager.ShowPopup(owner, popup, measureBounds, sizeToContent, staysOpen, pinToScreen);
 
     /// <summary>
     /// Applies the close policy; true when the press itself closed a popup by landing on that popup's
@@ -3778,8 +3778,10 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     /// popups are confined to the client area; natively hosted popups may use the work area of the
     /// monitor containing <paramref name="anchorBounds"/>, so they can extend beyond this window.
     /// Falls back to the client area when the platform cannot report a work area.
+    /// An <paramref name="anchorElement"/> inside a popup that stays where it opened measures against
+    /// that popup's screen position instead of where this window has since moved.
     /// </summary>
-    internal Rect GetPopupPlacementRegion(Rect anchorBounds)
+    internal Rect GetPopupPlacementRegion(Rect anchorBounds, UIElement? anchorElement = null)
     {
         var clientRegion = new Rect(0, 0, ClientSize.Width, ClientSize.Height);
         if (!PopupManager.PreferNativePopups || _backend == null || Handle == 0 || !Application.IsRunning)
@@ -3787,22 +3789,59 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             return clientRegion;
         }
 
-        var anchorCenterPx = ClientToScreen(new Point(
+        var pinnedOrigin = _popupManager.ResolvePlacementClientOrigin(anchorElement);
+        var anchorCenterPx = PopupClientToScreen(new Point(
             anchorBounds.X + (anchorBounds.Width / 2),
-            anchorBounds.Y + (anchorBounds.Height / 2)));
+            anchorBounds.Y + (anchorBounds.Height / 2)), pinnedOrigin);
         var workAreaPx = Application.Current.PlatformHost.GetWorkAreaForPoint(anchorCenterPx);
         if (workAreaPx.Width <= 0 || workAreaPx.Height <= 0)
         {
             return clientRegion;
         }
 
-        var topLeft = ScreenToClient(new Point(workAreaPx.X, workAreaPx.Y));
-        var bottomRight = ScreenToClient(new Point(workAreaPx.Right, workAreaPx.Bottom));
+        var topLeft = PopupScreenToClient(new Point(workAreaPx.X, workAreaPx.Y), pinnedOrigin);
+        var bottomRight = PopupScreenToClient(new Point(workAreaPx.Right, workAreaPx.Bottom), pinnedOrigin);
         return new Rect(
             topLeft.X,
             topLeft.Y,
             Math.Max(0, bottomRight.X - topLeft.X),
             Math.Max(0, bottomRight.Y - topLeft.Y));
+    }
+
+    /// <summary>
+    /// <see cref="ClientToScreen"/> for a popup placed against <paramref name="pinnedClientOrigin"/>, as
+    /// if this window's client origin were still there; null converts against the current position.
+    /// </summary>
+    internal Point PopupClientToScreen(Point clientPointDip, Point? pinnedClientOrigin)
+    {
+        var screenPoint = ClientToScreen(clientPointDip);
+        if (pinnedClientOrigin.HasValue)
+        {
+            var currentOrigin = ClientToScreen(Point.Zero);
+            return new Point(
+                screenPoint.X - (currentOrigin.X - pinnedClientOrigin.Value.X),
+                screenPoint.Y - (currentOrigin.Y - pinnedClientOrigin.Value.Y));
+        }
+        else
+        {
+            return screenPoint;
+        }
+    }
+
+    /// <summary>The inverse of <see cref="PopupClientToScreen"/>.</summary>
+    internal Point PopupScreenToClient(Point screenPoint, Point? pinnedClientOrigin)
+    {
+        if (pinnedClientOrigin.HasValue)
+        {
+            var currentOrigin = ClientToScreen(Point.Zero);
+            return ScreenToClient(new Point(
+                screenPoint.X + (currentOrigin.X - pinnedClientOrigin.Value.X),
+                screenPoint.Y + (currentOrigin.Y - pinnedClientOrigin.Value.Y)));
+        }
+        else
+        {
+            return ScreenToClient(screenPoint);
+        }
     }
 
     internal void ShowToolTip(UIElement owner, Element content, Size availableSize, Func<Size, Rect> place)

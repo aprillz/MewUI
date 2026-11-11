@@ -131,7 +131,7 @@ public class Popup : FrameworkElement, IVisualTreeHost, ILogicalTreeHost
     /// </summary>
     private Rect Place(Window window, Rect anchorInWindow, PopupAnchorSide side)
     {
-        var region = window.GetPopupPlacementRegion(anchorInWindow);
+        var region = window.GetPopupPlacementRegion(anchorInWindow, this);
         Measure(new Size(Math.Max(0, region.Width), Math.Max(0, region.Height)));
         double width = Math.Max(0, DesiredSize.Width);
         double height = Math.Max(0, DesiredSize.Height);

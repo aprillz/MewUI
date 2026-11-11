@@ -123,7 +123,7 @@ public abstract class PopupOwnerBase : Control, IPopupOwner
             width = 120;
         }
 
-        var region = window.GetPopupPlacementRegion(bounds);
+        var region = window.GetPopupPlacementRegion(bounds, this);
         double x = PopupPlacement.ClampHorizontal(bounds.X, width, region, floorToLeftEdge: true);
 
         double maxHeight = Math.Max(0, MaxDropDownHeight);

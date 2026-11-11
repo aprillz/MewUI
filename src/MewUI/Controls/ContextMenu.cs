@@ -485,12 +485,12 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
 
     /// <summary>
     /// Opens the menu at an explicit window position (a caret, a stored press point), regardless of
-    /// <see cref="Placement"/>.
+    /// <see cref="Placement"/>. The menu and its submenus stay where they opened if the window moves.
     /// </summary>
     public void Show(UIElement placementTarget, Point positionInWindow)
     {
         ArgumentNullException.ThrowIfNull(placementTarget);
-        ShowCore(placementTarget, new Rect(positionInWindow.X, positionInWindow.Y, 0, 0), MenuPlacement.Pointer);
+        ShowCore(placementTarget, new Rect(positionInWindow.X, positionInWindow.Y, 0, 0), MenuPlacement.Pointer, pinToScreen: true);
     }
 
     /// <summary>
@@ -526,7 +526,7 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
         }
     }
 
-    private void ShowCore(UIElement placementTarget, Rect anchorInWindow, MenuPlacement placement)
+    private void ShowCore(UIElement placementTarget, Rect anchorInWindow, MenuPlacement placement, bool pinToScreen = false)
     {
         var root = placementTarget.FindVisualRoot();
         if (root is not Window window)
@@ -547,14 +547,15 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
         // Measuring here saw an unstyled zero border, so the width came out short by the border the
         // arrange pass then deflated - and the caption is the only elastic column, so the whole loss
         // landed on it and trimmed the last glyph.
-        window.ShowPopup(placementTarget, this, w => MeasurePlacement(w, anchorInWindow, placement));
+        // A menu at a point has nothing in the window to follow, so it stays where it opened.
+        window.ShowPopup(placementTarget, this, w => MeasurePlacement(w, anchorInWindow, placement), pinToScreen: pinToScreen);
         window.FocusManager.SetFocus(this);
     }
 
     private Rect MeasurePlacement(Window window, Rect anchor, MenuPlacement placement)
     {
         // Measure without passing infinity into backends that may convert widths to ints.
-        var region = window.GetPopupPlacementRegion(anchor);
+        var region = window.GetPopupPlacementRegion(anchor, this);
         Measure(new Size(Math.Max(0, region.Width), Math.Max(0, region.Height)));
         var desired = DesiredSize;
 
@@ -1327,7 +1328,7 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
 
     private Rect MeasureSubMenuPlacement(Window window, ContextMenu subMenuPopup, Rect ownerRowBounds)
     {
-        var region = window.GetPopupPlacementRegion(ownerRowBounds);
+        var region = window.GetPopupPlacementRegion(ownerRowBounds, this);
         subMenuPopup.Measure(new Size(Math.Max(0, region.Width), Math.Max(0, region.Height)));
         var desired = subMenuPopup.DesiredSize;
 

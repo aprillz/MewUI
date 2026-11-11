@@ -62,10 +62,10 @@ internal sealed class NativePopupHost : IPopupHost
                 _ownerWindow.RequestClosePopups(PopupCloseRequest.PointerDown(null));
         }
 
-        popupWindow.ShowSurface(_ownerWindow, ResolveScreenPosition(initialOrigin));
+        popupWindow.ShowSurface(_ownerWindow, ResolveScreenPosition(initialOrigin, entry.PinnedClientOrigin));
     }
 
-    private (int X, int Y)? ResolveScreenPosition(Point origin)
+    private (int X, int Y)? ResolveScreenPosition(Point origin, Point? pinnedClientOrigin)
     {
         if (_ownerWindow.Handle == 0)
         {
@@ -74,7 +74,7 @@ internal sealed class NativePopupHost : IPopupHost
 
         // Unconverted: dividing by the target monitor's scale and multiplying back by the popup's own
         // put it on the wrong monitor whenever the two differed.
-        var screenPx = _ownerWindow.ClientToScreen(origin);
+        var screenPx = _ownerWindow.PopupClientToScreen(origin, pinnedClientOrigin);
         return ((int)Math.Round(screenPx.X), (int)Math.Round(screenPx.Y));
     }
 
@@ -148,7 +148,7 @@ internal sealed class NativePopupHost : IPopupHost
                     popupWindow.WindowSize = WindowSize.Fixed(width, height);
                 }
 
-                var screenPx = _ownerWindow.ClientToScreen(origin);
+                var screenPx = _ownerWindow.PopupClientToScreen(origin, entry.PinnedClientOrigin);
                 popupWindow.MoveToScreenPixels((int)Math.Round(screenPx.X), (int)Math.Round(screenPx.Y));
                 if (!_layoutAgain) break;
             }
