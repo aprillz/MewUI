@@ -2,7 +2,7 @@
 
 [LiveChartsCore](https://github.com/beto-rodriguez/LiveCharts2)엔진을 순수 MewUI `IGraphicsContext` 백엔드로 컴파일해 동작하는 [MewUI](https://github.com/aprillz/MewUI)용 차트 확장입니다.
 
-**SkiaSharp 비의존.** LiveChartsCore 엔진(v2.0.4, MIT)을 이 어셈블리에 직접 컴파일해 넣고 MewUI 자체 그래픽 추상화로 그리므로, Win32/macOS/X11 전반의 모든 MewUI 백엔드(Direct2D, GDI, MewVG/OpenGL)에서 렌더링됩니다. 런타임 의존성은 `Aprillz.MewUI` 하나뿐입니다.
+**SkiaSharp 비의존.** LiveChartsCore 엔진(v2.0.5, MIT)을 이 어셈블리에 직접 컴파일해 넣고 MewUI 자체 그래픽 추상화로 그리므로, Win32/macOS/X11 전반의 모든 MewUI 백엔드(Direct2D, GDI, MewVG/OpenGL)에서 렌더링됩니다. 런타임 의존성은 `Aprillz.MewUI` 하나뿐입니다.
 
 ## 설치
 
@@ -65,7 +65,7 @@ git submodule update --init --recursive
 dotnet build extensions/MewUI.MewCharts/MewUI.MewCharts.csproj
 ```
 
-submodule(`ThirdParty/LiveCharts2`)은 태그 `2.0.4`에 고정되며 원본 그대로 유지됩니다. 모든 MewUI 백엔드 코드는 submodule 밖에 있습니다.
+submodule(`ThirdParty/LiveCharts2`)은 태그 `2.0.5`에 고정되며 원본 그대로 유지됩니다. 모든 MewUI 백엔드 코드는 submodule 밖에 있습니다.
 
 ## 샘플
 

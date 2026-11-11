@@ -2,7 +2,7 @@
 
 Charting for [MewUI](https://github.com/aprillz/MewUI), powered by the [LiveChartsCore](https://github.com/beto-rodriguez/LiveCharts2) engine compiled into a pure MewUI `IGraphicsContext` backend.
 
-**No SkiaSharp dependency.** The LiveChartsCore engine (v2.0.4, MIT) is compiled directly into this assembly and drawn through MewUI's own graphics abstraction, so it renders on every MewUI backend (Direct2D, GDI, MewVG/OpenGL) across Win32, macOS, and X11. The only runtime dependency is `Aprillz.MewUI` itself.
+**No SkiaSharp dependency.** The LiveChartsCore engine (v2.0.5, MIT) is compiled directly into this assembly and drawn through MewUI's own graphics abstraction, so it renders on every MewUI backend (Direct2D, GDI, MewVG/OpenGL) across Win32, macOS, and X11. The only runtime dependency is `Aprillz.MewUI` itself.
 
 ## Install
 
@@ -65,7 +65,7 @@ git submodule update --init --recursive
 dotnet build extensions/MewUI.MewCharts/MewUI.MewCharts.csproj
 ```
 
-The submodule (`ThirdParty/LiveCharts2`) is pinned to tag `2.0.4` and is kept pristine; all MewUI backend code lives outside it.
+The submodule (`ThirdParty/LiveCharts2`) is pinned to tag `2.0.5` and is kept pristine; all MewUI backend code lives outside it.
 
 ## Samples
 

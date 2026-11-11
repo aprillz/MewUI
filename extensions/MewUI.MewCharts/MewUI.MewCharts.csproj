@@ -11,7 +11,7 @@
          so our MewDrawingContext/MewPaint can override its internal abstract members without IVT. -->
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
 
-    <!-- LiveChartsCore 2.0.4 is not fully nullable-annotated; keep it from failing our build. -->
+    <!-- LiveChartsCore 2.0.5 is not fully nullable-annotated; keep it from failing our build. -->
     <Nullable>annotations</Nullable>
 
     <!-- Suppress warnings from the vendored LiveChartsCore source compiled into this assembly
@@ -33,12 +33,12 @@
     <EmbeddedResource Remove="ThirdParty\**" />
     <None Remove="ThirdParty\**" />
 
-    <!-- Vendored LiveChartsCore engine (pinned submodule @ 2.0.4), minus assembly-level attrs. -->
+    <!-- Vendored LiveChartsCore engine (pinned submodule @ 2.0.5), minus assembly-level attrs. -->
     <Compile Include="ThirdParty\LiveCharts2\src\LiveChartsCore\**\*.cs" Exclude="ThirdParty\LiveCharts2\src\LiveChartsCore\AssemblyInfo.cs;ThirdParty\LiveCharts2\src\LiveChartsCore\obj\**\*.cs;ThirdParty\LiveCharts2\src\LiveChartsCore\bin\**\*.cs" />
 
 
 
-    <!-- Vendored LiveChartsCore engine (pinned submodule @ 2.0.4), minus assembly-level attrs. -->
+    <!-- Vendored LiveChartsCore engine (pinned submodule @ 2.0.5), minus assembly-level attrs. -->
 
     <!-- Geo map data, kept under the engine's original manifest name. -->
   </ItemGroup>
