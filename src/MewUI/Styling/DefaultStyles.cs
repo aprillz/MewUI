@@ -17,6 +17,8 @@ public static class DefaultStyles
     // Types whose static constructor this class already forced, so a type without a style costs one runtime call.
     private static readonly HashSet<Type> _classConstructorRun = [];
 
+    private const double INACTIVE_SELECTION_SHARE = 0.16;
+
     private static Transition[] ColorTransitions =>
         field ??=
         [
@@ -1188,15 +1190,15 @@ public static class DefaultStyles
         };
 
     internal static Style CreateTextBaseStyle()
-        => CreateTextInputStyle(typeof(TextBase));
+        => CreateTextInputStyle(typeof(TextBase), TextBase.SelectionBackgroundProperty);
 
     internal static Style CreateMultiLineTextBoxStyle()
-        => CreateTextInputStyle(typeof(MultiLineTextBox));
+        => CreateTextInputStyle(typeof(MultiLineTextBox), TextBase.SelectionBackgroundProperty);
 
     internal static Style CreateSyntaxViewerStyle()
-        => CreateTextInputStyle(typeof(SyntaxViewer));
+        => CreateTextInputStyle(typeof(SyntaxViewer), SyntaxViewer.SelectionBackgroundProperty);
 
-    private static Style CreateTextInputStyle(Type targetType) =>
+    private static Style CreateTextInputStyle(Type targetType, MewProperty<Color> selectionBackground) =>
         new(targetType)
         {
             Transitions = ColorTransitions,
@@ -1209,6 +1211,8 @@ public static class DefaultStyles
                 Setter.Create(FrameworkElement.MinHeightProperty, t => t.Metrics.BaseControlHeight),
                 Setter.Create(Control.CornerRadiusProperty, t => t.Metrics.ControlCornerRadius),
                 Setter.Create(Control.BorderThicknessProperty, t => t.Metrics.ControlBorderThickness),
+                // A neutral tint while unfocused keeps the selection visible without reading as the active one.
+                Setter.Create(selectionBackground, t => t.Palette.ControlBackground.Lerp(t.Palette.WindowText, INACTIVE_SELECTION_SHARE)),
             ],
             Triggers =
             [
@@ -1220,7 +1224,11 @@ public static class DefaultStyles
                 new StateTrigger
                 {
                     Match = VisualStateFlags.Focused,
-                    Setters = [Setter.Create(Control.BorderBrushProperty, t => t.Palette.Accent)],
+                    Setters =
+                    [
+                        Setter.Create(Control.BorderBrushProperty, t => t.Palette.Accent),
+                        Setter.Create(selectionBackground, t => t.Palette.SelectionBackground),
+                    ],
                 },
                 // Disabled
                 new StateTrigger

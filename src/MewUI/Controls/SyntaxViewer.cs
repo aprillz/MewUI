@@ -31,6 +31,10 @@ public sealed partial class SyntaxViewer : Control, IVisualTreeHost, ITextViewHo
         MewProperty<Color?>.Register<SyntaxViewer>(nameof(SelectionForeground), null,
             MewPropertyOptions.AffectsRender);
 
+    public static readonly MewProperty<Color> SelectionBackgroundProperty =
+        MewProperty<Color>.Register<SyntaxViewer>(nameof(SelectionBackground), default,
+            MewPropertyOptions.AffectsRender);
+
     private StringTextDocument _document = new(string.Empty);
     private TextViewLayout? _view;
     private IGraphicsFactory? _viewFactory;
@@ -89,6 +93,16 @@ public sealed partial class SyntaxViewer : Control, IVisualTreeHost, ITextViewHo
     {
         get => GetValue(SelectionForegroundProperty);
         set => SetValue(SelectionForegroundProperty, value);
+    }
+
+    /// <summary>
+    /// Gets or sets the color painted behind the selected text; the default style dims it while the
+    /// control does not have focus.
+    /// </summary>
+    public Color SelectionBackground
+    {
+        get => GetValue(SelectionBackgroundProperty);
+        set => SetValue(SelectionBackgroundProperty, value);
     }
 
     /// <summary>Gets or sets whether lines wrap at the viewport width.</summary>
@@ -590,7 +604,7 @@ public sealed partial class SyntaxViewer : Control, IVisualTreeHost, ITextViewHo
             line,
             new TextRange(SelectionStart, SelectionLength),
             Theme.Palette.SelectionText,
-            Theme.Palette.SelectionBackground,
+            SelectionBackground,
             out var span)
             // Recoloring the glyphs re-segments the runs on every drag frame, so the default keeps
             // their colors and only SelectionForeground opts into the cost.

@@ -419,7 +419,7 @@ public abstract class SingleLineTextBase : TextBase
                 line,
                 selection,
                 Theme.Palette.SelectionText,
-                Theme.Palette.SelectionBackground,
+                SelectionBackground,
                 out var selectionSpan))
         {
             // Recoloring the glyphs re-segments the runs on every drag frame, so the default keeps

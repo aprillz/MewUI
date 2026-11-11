@@ -43,6 +43,10 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextC
         MewProperty<Color?>.Register<TextBase>(nameof(SelectionForeground), null,
             MewPropertyOptions.AffectsRender);
 
+    public static readonly MewProperty<Color> SelectionBackgroundProperty =
+        MewProperty<Color>.Register<TextBase>(nameof(SelectionBackground), default,
+            MewPropertyOptions.AffectsRender);
+
     public static readonly MewProperty<bool> AcceptTabProperty =
         MewProperty<bool>.Register<TextBase>(nameof(AcceptTab), false);
 
@@ -130,6 +134,16 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextC
     {
         get => GetValue(SelectionForegroundProperty);
         set => SetValue(SelectionForegroundProperty, value);
+    }
+
+    /// <summary>
+    /// Gets or sets the color painted behind the selected text; the default style dims it while the
+    /// control does not have focus.
+    /// </summary>
+    public Color SelectionBackground
+    {
+        get => GetValue(SelectionBackgroundProperty);
+        set => SetValue(SelectionBackgroundProperty, value);
     }
 
     /// <summary>Occurs when the text changes.</summary>
