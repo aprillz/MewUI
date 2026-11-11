@@ -208,7 +208,7 @@ internal sealed class MenuRow : Control, IVisualTreeHost
         if (item.IsCheckable && item.IsChecked)
         {
             var checkCenter = new Point(paddedRow.X + _columns.IconSize / 2, paddedRow.Y + paddedRow.Height / 2);
-            Glyph.Draw(context, checkCenter, CHECK_GLYPH_SIZE, foreground, GlyphKind.MenuCheckMark, CHECK_GLYPH_THICKNESS);
+            Glyph.Draw(context, checkCenter, CHECK_GLYPH_SIZE, foreground, GlyphKind.CheckMark, CHECK_GLYPH_THICKNESS);
         }
 
         double textLeft = paddedRow.X;

@@ -23,9 +23,6 @@ public enum GlyphKind
 
     WindowMaximize,
     WindowRestore,
-
-    // Check with a right angle between its strokes, the tail twice as long as the head
-    MenuCheckMark,
 }
 
 public static class Glyph
@@ -75,17 +72,6 @@ public static class Glyph
                 return;
 
             case GlyphKind.CheckMark:
-            {
-                var g = _cachedPath ??= new PathGeometry();
-                g.Reset();
-                g.MoveTo(center.X - half, center.Y + half * 0.1);
-                g.LineTo(center.X - half * 0.1, center.Y + half);
-                g.LineTo(center.X + half, center.Y - half);
-                context.DrawPath(g, color, thickness);
-                return;
-            }
-
-            case GlyphKind.MenuCheckMark:
             {
                 // Both strokes run at 45 degrees, so the mark is three units wide and two tall.
                 double unit = half * 2 / 3;
