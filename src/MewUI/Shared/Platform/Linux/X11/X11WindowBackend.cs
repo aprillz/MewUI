@@ -709,6 +709,11 @@ internal sealed class X11WindowBackend : IWindowBackend
 
     private void CreateWindow()
     {
+        if (Aprillz.MewUI.Automation.AutomationGate.IsSupported)
+        {
+            Automation.AtSpiServer.Start();
+        }
+
         Display = _host.Display;
         if (Display == 0)
         {

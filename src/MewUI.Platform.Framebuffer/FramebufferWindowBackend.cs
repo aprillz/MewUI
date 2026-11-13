@@ -36,6 +36,11 @@ internal sealed class FramebufferWindowBackend : IWindowBackend
 
     internal FramebufferWindowBackend(FramebufferPlatformHost host, Window window, IFramebufferOutput output)
     {
+        if (Aprillz.MewUI.Automation.AutomationGate.IsSupported)
+        {
+            Automation.AtSpiServer.Start();
+        }
+
         _host = host;
         _output = output;
         Window = window;
