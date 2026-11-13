@@ -110,6 +110,8 @@ nud.Template = new DelegateControlTemplate<NumericUpDown>((owner, ctx) =>
 
 `ScrollBar.PART_TRACK`은 `Track`을 받습니다. 컨트롤이 범위·값·뷰포트·방향을 트랙에 밀어 넣고, 트랙의 `Thumb`이 끌리면 값으로 바꾸며, 트랙의 감소·증가 요소를 누르면(그 요소가 `RepeatButton`이면 그 `Click`으로) `LargeChange`만큼 이동합니다. 트랙은 `Thumb`, `DecreaseElement`, `IncreaseElement`를 배치만 하고 아무것도 그리지 않으므로 모양은 템플릿이 그 요소들에 줍니다. 파트가 없으면 템플릿을 적용한 스크롤바는 휠과 코드로만 움직입니다.
 
+`Slider.PART_TRACK`도 `Track`을 받습니다. 컨트롤이 범위·값·방향을 트랙에 밀어 넣고(세로 슬라이더는 `IsDirectionReversed`를 켜서 최소값이 아래에 옵니다), 트랙의 `Thumb`이 끌리면 값으로 바꾸며, 트랙의 다른 곳을 누르면 값을 그 지점으로 옮기고 놓을 때까지 포인터를 따라갑니다. 채움 색은 슬라이더의 `Fill`이므로 보통 `ctx.Bind(decrease, Control.BackgroundProperty, Slider.FillProperty)`로 감소 요소의 `Background`를 묶습니다. 파트가 없으면 템플릿을 적용한 슬라이더는 키, 휠, 코드로만 값이 바뀝니다.
+
 `SegmentedControl`과 `ButtonGroup`은 `SegmentedBase.PART_ITEMS_HOST`로 등록한 `Border`가 필요합니다. 컨트롤이 세그먼트 띠를 그 호스트의 `Child`에 넣고 세그먼트의 생성과 선택은 계속 컨트롤이 맡으며, 띠가 구분선을 직접 그리고 양 끝 세그먼트를 호스트 가장자리에 붙입니다. 띠가 컨트롤 내용의 전부라서 이 파트 없이 템플릿을 적용하면 예외가 납니다.
 
 `TabControl`은 `TabControl.PART_HEADERS_HOST`로 등록한 `Border`가 필요하며, 이 호스트가 탭 헤더 줄과 넘침 버튼을 받습니다. 헤더의 측정·배치·선택은 계속 컨트롤이 맡습니다. 템플릿 어디에든 둔 `ContentPresenter`는 원본을 지정하지 않아도 선택된 탭의 내용을 보여 주고, 탭 내용의 논리 소유자는 계속 `TabControl`입니다.
