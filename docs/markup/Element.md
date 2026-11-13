@@ -186,6 +186,7 @@ Receiver: `SyntaxViewer`.
 
 | Method | Sets | Summary |
 |---|---|---|
+| `SelectionBackground(Color value)` | `SelectionBackground` | Sets the color painted behind the selected text; the default style dims it while the control does not have focus. |
 | `SelectionForeground(Color? value)` | `SelectionForeground` | Sets the color the selected glyphs are painted in; null keeps their own colors, so a colorized document stays readable through a selection. |
 | `TabSize(int value)` | `TabSize` | Sets the tab width in space characters. |
 | `Text(string value)` | `Text` | Sets the text presented. |
