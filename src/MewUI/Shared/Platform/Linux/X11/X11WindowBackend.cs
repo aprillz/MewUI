@@ -189,6 +189,17 @@ internal sealed class X11WindowBackend : IWindowBackend
             RenderNow();
         }
 
+        if (!Window.ShowActivated)
+        {
+            // EWMH: a _NET_WM_USER_TIME of 0 asks the window manager not to focus the window when it maps.
+            unsafe
+            {
+                nint userTime = 0;
+                var userTimeAtom = NativeX11.XInternAtom(Display, "_NET_WM_USER_TIME", false);
+                NativeX11.XChangeProperty(Display, Handle, userTimeAtom, _cardinalAtom, 32, 0 /* PropModeReplace */, (nint)(&userTime), 1);
+            }
+        }
+
         NativeX11.XMapWindow(Display, Handle);
 
         NativeX11.XFlush(Display);
@@ -200,8 +211,11 @@ internal sealed class X11WindowBackend : IWindowBackend
 
         // Some IM modules don't start preedit until the IC is focused.
         // Relying solely on FocusIn can miss cases where focus is already on the window when mapped.
-        SetWindowActive(true);
-        _inputMethod?.OnFocusIn();
+        if (Window.ShowActivated)
+        {
+            SetWindowActive(true);
+            _inputMethod?.OnFocusIn();
+        }
     }
 
     public void Hide()

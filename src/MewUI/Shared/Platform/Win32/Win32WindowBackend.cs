@@ -104,7 +104,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
     {
         if (_presented)
         {
-            User32.ShowWindow(Handle, ShowWindowCommands.SW_SHOW);
+            User32.ShowWindow(Handle, Window.ShowsWithoutActivation ? ShowWindowCommands.SW_SHOWNA : ShowWindowCommands.SW_SHOW);
             return;
         }
         _presented = true;
@@ -118,21 +118,29 @@ internal sealed class Win32WindowBackend : IWindowBackend
             EnterFullScreen();
         }
 
-        var showCmd = Window.IsNonActivatingSurface
+        int showCmd;
+        if (Window.IsNonActivatingSurface)
+        {
             // Non-activating surfaces must not take activation away from the owner window.
-            ? ShowWindowCommands.SW_SHOWNOACTIVATE
-            : Window.WindowState switch
+            showCmd = ShowWindowCommands.SW_SHOWNOACTIVATE;
+        }
+        else
+        {
+            bool activate = Window.ShowActivated;
+            showCmd = Window.WindowState switch
             {
+                // Win32 has no command that maximizes without activating.
                 Controls.WindowState.Maximized => ShowWindowCommands.SW_SHOWMAXIMIZED,
-                Controls.WindowState.Minimized => ShowWindowCommands.SW_SHOWMINIMIZED,
-                _ => ShowWindowCommands.SW_SHOW,
+                Controls.WindowState.Minimized => activate ? ShowWindowCommands.SW_SHOWMINIMIZED : ShowWindowCommands.SW_SHOWMINNOACTIVE,
+                _ => activate ? ShowWindowCommands.SW_SHOW : ShowWindowCommands.SW_SHOWNOACTIVATE,
             };
+        }
 
         // Maximize/minimize set the window geometry as part of the reveal, so painting beforehand would
         // paint at the wrong (restored) size. For those, reveal first then force a synchronous paint at
         // the final size. Every other case paints while still hidden so the first on-screen frame is the
         // fully-laid-out content (including Loaded-time changes) with no flash.
-        if (showCmd is ShowWindowCommands.SW_SHOWMAXIMIZED or ShowWindowCommands.SW_SHOWMINIMIZED)
+        if (showCmd is ShowWindowCommands.SW_SHOWMAXIMIZED or ShowWindowCommands.SW_SHOWMINIMIZED or ShowWindowCommands.SW_SHOWMINNOACTIVE)
         {
             User32.ShowWindow(Handle, showCmd);
             User32.UpdateWindow(Handle);

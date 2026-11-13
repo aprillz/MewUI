@@ -231,7 +231,14 @@ internal sealed class MacOSWindowBackend : IWindowBackend
                 break;
 
             default:
-                MacOSWindowInterop.ShowWindow(_nsWindow);
+                if (_window.ShowActivated)
+                {
+                    MacOSWindowInterop.ShowWindow(_nsWindow);
+                }
+                else
+                {
+                    MacOSWindowInterop.OrderFrontWindow(_nsWindow);
+                }
                 break;
         }
 
