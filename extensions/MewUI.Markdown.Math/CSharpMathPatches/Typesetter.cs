@@ -1,4 +1,4 @@
-// Patched copy of CSharpMath 67d5b474 CSharpMath/Display/Typesetter.cs: adds OverAnnotation and ExtensibleArrow.
+// Patched copy of CSharpMath 67d5b474 CSharpMath/Display/Typesetter.cs: adds OverAnnotation and ExtensibleArrow, and sizes UnderAnnotation to its brace and label.
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -304,8 +304,6 @@ namespace CSharpMath.Display {
           case UnderAnnotation underAnnotation:
             AddDisplayLine(false);
             AddInterElementSpace(prevAtom, underAnnotation);
-            innerListDisplay = Typesetter<TFont, TGlyph>.CreateLine
-              (underAnnotation.InnerList, _font, _context, _style, true);
             var underAnnotationDisplay = MakeUnderAnnotation(underAnnotation, atom.IndexRange);
             _displayAtoms.Add(underAnnotationDisplay);
             _currentPosition.X += underAnnotationDisplay.Width;
@@ -761,47 +759,29 @@ namespace CSharpMath.Display {
       return glyphDisplay;
     }
 
-    private UnderAnnotationDisplay<TFont, TGlyph> MakeUnderAnnotation(UnderAnnotation underAnnotation, Range range) {
-
-      var innerListDisplay = CreateLine(underAnnotation.InnerList, _font, _context, _style, _cramped, true);
-
-      ListDisplay<TFont, TGlyph>? underListDisplay = null;
-      if (underAnnotation.UnderList is { Count: > 0 }) {
-        underListDisplay = CreateLine(underAnnotation.UnderList, _font, _context, _scriptStyle, _subscriptCramped, true);
+    private AnnotationStackDisplay<TFont, TGlyph> MakeUnderAnnotation(UnderAnnotation underAnnotation, Range range) {
+      // Upstream kept the inner list's width while centering it under a wider brace, so the next atom overlapped.
+      var inner = CreateLine(underAnnotation.InnerList, _font, _context, _style, _cramped, true);
+      ListDisplay<TFont, TGlyph>? label = null;
+      if (underAnnotation.UnderList != null && underAnnotation.UnderList.Count > 0) {
+        label = CreateLine(underAnnotation.UnderList, _font, _context, _scriptStyle, _subscriptCramped, true);
+      }
+      var brace = MakeStretchedGlyph(underAnnotation.Nucleus, inner.Width);
+      float gap = _mathTable.UnderbarVerticalGap(_styleFont);
+      float width = Math.Max(inner.Width, brace.Width);
+      if (label != null) {
+        width = Math.Max(width, label.Width);
       }
 
-      float axisHeight = _mathTable.AxisHeight(_styleFont);
-
-      var annotationSingleGlyph = _context.GlyphFinder.FindGlyphForCharacterAtIndex(_font, 0, underAnnotation.Nucleus);
-
-      var glyph = FindHorizontalGlyph(annotationSingleGlyph, innerListDisplay.Width,
-        out float glyphAscent, out float glyphDescent, out float glyphWidth);
-
-      var lineShiftUp = innerListDisplay.Descent;
-      glyphDescent += lineShiftUp;
-
-      var glyphDisplay =
-      innerListDisplay.Width > glyphWidth ? ConstructHorizontalGlyph(annotationSingleGlyph, innerListDisplay.Width, glyphAscent, glyphDescent) as IGlyphDisplay<TFont, TGlyph>
-         :
-        new GlyphDisplay<TFont, TGlyph>
-          (glyph, Range.NotFound, _styleFont, glyphAscent, glyphDescent, glyphWidth);
-
-      glyphDisplay!.Position = new PointF(_currentPosition.X, glyphDisplay!.Position.Y - lineShiftUp);
-
-      var delta = (glyphDisplay.Width - innerListDisplay.Width) / 2;
-      innerListDisplay.Position = new PointF(_currentPosition.X + delta, _currentPosition.Y);
-
-      var glArray = new RentedArray<TGlyph>(annotationSingleGlyph);
-      var boundingBox = _context.GlyphBoundsProvider.GetBoundingRectsForGlyphs(_styleFont, glArray.Result, 1).Single();
-
-      float underListBasedDescent = 0;
-      if (underListDisplay is not null) {
-        var delta1 = (glyphDisplay.Width - underListDisplay.Width) / 2;
-        underListBasedDescent = axisHeight + underListDisplay.Ascent + boundingBox.Height;
-        underListDisplay.Position = new PointF(_currentPosition.X + delta1, glyphDisplay!.Position.Y - underListBasedDescent);
+      var origin = _currentPosition;
+      inner.Position = new PointF(origin.X + (width - inner.Width) / 2, origin.Y);
+      float braceBaseline = -(inner.Descent + gap + brace.Ascent);
+      brace.Position = new PointF(origin.X + (width - brace.Width) / 2, origin.Y + braceBaseline);
+      if (label == null) {
+        return new AnnotationStackDisplay<TFont, TGlyph>(new IDisplay<TFont, TGlyph>[] { inner, brace }, width, range, origin);
       }
-
-      return new UnderAnnotationDisplay<TFont, TGlyph>(innerListDisplay, underListDisplay, glyphDisplay!, underListBasedDescent, _currentPosition);
+      label.Position = new PointF(origin.X + (width - label.Width) / 2, origin.Y + braceBaseline - brace.Descent - gap - label.Ascent);
+      return new AnnotationStackDisplay<TFont, TGlyph>(new IDisplay<TFont, TGlyph>[] { inner, brace, label }, width, range, origin);
     }
 
     private AnnotationStackDisplay<TFont, TGlyph> MakeOverAnnotation(OverAnnotation overAnnotation) {

@@ -196,6 +196,19 @@ public sealed class MarkdownMathTests
     }
 
     [TestMethod]
+    [DataRow("\\underbrace{c}", "\\underbrace{c}_{\\text{a long label}}")]
+    [DataRow("\\overbrace{c}", "\\overbrace{c}^{\\text{a long label}}")]
+    public void BraceWidensToALabelWiderThanItsContent(string unlabeled, string labeled)
+    {
+        double contentWidth = new MathFormula("c", display: true).Measure(16).Width;
+        double unlabeledWidth = new MathFormula(unlabeled, display: true).Measure(16).Width;
+        double labeledWidth = new MathFormula(labeled, display: true).Measure(16).Width;
+
+        Assert.IsGreaterThanOrEqualTo(contentWidth, unlabeledWidth);
+        Assert.IsGreaterThan(unlabeledWidth * 2, labeledWidth);
+    }
+
+    [TestMethod]
     public void ExtensibleArrowStretchesToItsLabel()
     {
         (double shortWidth, double shortAscent, _) = new MathFormula("\\xrightarrow{f}", display: true).Measure(16);
