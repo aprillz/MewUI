@@ -1,5 +1,14 @@
 namespace Aprillz.MewUI.Automation;
 
+/// <summary>A moment in an element's life that readers announce, apart from property, structure, and focus changes.</summary>
+internal enum AutomationEventKind
+{
+    MenuOpened,
+    MenuClosed,
+    ToolTipOpened,
+    ToolTipClosed,
+}
+
 /// <summary>Receives the automation tree's change notifications; each consumer of the tree registers one.</summary>
 internal interface IAutomationEventSink
 {
@@ -8,6 +17,8 @@ internal interface IAutomationEventSink
     void OnStructureChanged(AutomationPeer peer);
 
     void OnFocusChanged(AutomationPeer peer);
+
+    void OnEvent(AutomationPeer peer, AutomationEventKind kind);
 }
 
 /// <summary>Fans automation events out to the registered sinks. Used on the UI thread only.</summary>
@@ -59,6 +70,14 @@ internal static class AutomationEvents
         foreach (var sink in _sinks)
         {
             sink.OnFocusChanged(peer);
+        }
+    }
+
+    internal static void RaiseEvent(AutomationPeer peer, AutomationEventKind kind)
+    {
+        foreach (var sink in _sinks)
+        {
+            sink.OnEvent(peer, kind);
         }
     }
 }

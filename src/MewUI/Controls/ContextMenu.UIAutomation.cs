@@ -10,6 +10,8 @@ public sealed partial class ContextMenu : IMenuAutomationHost
 
     int IMenuAutomationHost.OpenEntryIndex => _openSubMenuIndex;
 
+    int IMenuAutomationHost.HotEntryIndex => _hotIndex;
+
     bool IMenuAutomationHost.InvokesEntries => true;
 
     bool IMenuAutomationHost.TryGetEntryBounds(int index, out Rect bounds) => TryGetEntryRowBounds(index, out bounds);
@@ -35,4 +37,29 @@ public sealed partial class ContextMenu : IMenuAutomationHost
     }
 
     void IMenuAutomationHost.CloseOpenEntry() => CloseSubMenu();
+
+    /// <summary>Tells readers the highlight is about to move to the entry under the pointer.</summary>
+    private void QueueHotEntryAnnouncement(MouseEventArgs e)
+    {
+        if (!AutomationEvents.HasSinks)
+        {
+            return;
+        }
+
+        int index = HitTestEntryIndex(TransformFromRoot(e.Position));
+        if (index >= 0 && index != _hotIndex && GetAutomationPeer() is MenuAutomationPeer peer)
+        {
+            peer.QueueHotEntryAnnouncement(index);
+        }
+    }
+
+    /// <summary>Tells readers about the entry a key moves the highlight to, once the key has been handled.</summary>
+    private void QueueHotEntryAnnouncementAfterKey()
+    {
+        if (AutomationEvents.HasSinks && GetAutomationPeer() is MenuAutomationPeer peer)
+        {
+            // Which entry the key leaves highlighted is known only after it is handled, so nothing is said at once.
+            peer.QueueHotEntryAnnouncement(-1);
+        }
+    }
 }

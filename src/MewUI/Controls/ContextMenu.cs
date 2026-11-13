@@ -1125,6 +1125,11 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
 
     protected override void OnMouseMove(MouseEventArgs e)
     {
+        if (Automation.AutomationGate.IsSupported)
+        {
+            QueueHotEntryAnnouncement(e);
+        }
+
         base.OnMouseMove(e);
         if (e.Handled)
         {
@@ -1216,6 +1221,11 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
 
     protected override void OnKeyDown(KeyEventArgs e)
     {
+        if (Automation.AutomationGate.IsSupported)
+        {
+            QueueHotEntryAnnouncementAfterKey();
+        }
+
         base.OnKeyDown(e);
 
         // A key an open submenu left unhandled bubbles here; only the menu that has the focus answers.

@@ -12,6 +12,9 @@ internal interface IMenuAutomationHost
     /// <summary>The entry whose submenu is open, or -1.</summary>
     int OpenEntryIndex { get; }
 
+    /// <summary>The highlighted entry the keyboard acts on, or -1.</summary>
+    int HotEntryIndex { get; }
+
     /// <summary>True when an entry without a submenu runs its command; false for a bar whose entries only open menus.</summary>
     bool InvokesEntries { get; }
 

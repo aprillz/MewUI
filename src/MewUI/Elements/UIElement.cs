@@ -155,7 +155,7 @@ public abstract partial class UIElement : Element
     {
         if (Automation.AutomationGate.IsSupported)
         {
-            AutomationPeerIfCreated?.NotifyOwnerPropertyChanged(property);
+            Automation.ElementAutomationEvents.OnPropertyChanged(this, property);
         }
 
         if (property.AffectsLayout)

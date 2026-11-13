@@ -71,7 +71,12 @@ public class UIElementAutomationPeer : AutomationPeer
 
     protected override bool IsKeyboardFocusableCore() => Owner.Focusable && Owner.IsEffectivelyEnabled;
 
-    protected override bool HasKeyboardFocusCore() => Owner.IsFocused;
+    protected override bool HasKeyboardFocusCore()
+    {
+        // A leaf stands in for the focused element below it, which has no peer of its own.
+        bool focused = Owner.IsFocused || (IsLeaf && Owner.IsFocusWithin);
+        return focused && FocusedDescendant == null;
+    }
 
     protected override Rect GetBoundingRectangleCore()
     {
@@ -126,7 +131,7 @@ public class UIElementAutomationPeer : AutomationPeer
         {
             if (Owner.IsFocused)
             {
-                RaiseFocusChangedEvent();
+                AnnounceFocus();
             }
 
             RaisePropertyChangedEvent(AutomationProperty.HasKeyboardFocusProperty, !Owner.IsFocused, Owner.IsFocused);
@@ -151,6 +156,63 @@ public class UIElementAutomationPeer : AutomationPeer
     }
 
     internal override void NotifyOwnerPropertyChanged(MewProperty property) => OnOwnerPropertyChanged(property);
+
+    /// <summary>
+    /// The part of a focused control that the keyboard acts on, such as a list's current item or a menu's highlighted
+    /// entry, when that part has its own peer; readers are told it, not the control, has focus.
+    /// </summary>
+    internal virtual AutomationPeer? FocusedDescendant => null;
+
+    private DispatcherMergeKey? _focusAnnouncementKey;
+    private Action? _announceFocus;
+    private AutomationPeer? _announcedDescendant;
+
+    /// <summary>
+    /// Announces the focused part again once layout has realized it, when the part the keyboard acts on changed while
+    /// the control kept focus. Several changes in one pass are announced once.
+    /// </summary>
+    internal void QueueFocusAnnouncement()
+    {
+        if (!AutomationEvents.HasSinks)
+        {
+            return;
+        }
+
+        var dispatcher = Application.IsRunning ? Application.Current.Dispatcher as IDispatcherCore : null;
+        if (dispatcher != null)
+        {
+            _focusAnnouncementKey ??= new DispatcherMergeKey(DispatcherPriority.Background);
+            _announceFocus ??= AnnounceFocusIfFocused;
+            dispatcher.PostMerged(_focusAnnouncementKey, _announceFocus, DispatcherPriority.Background);
+        }
+        else
+        {
+            AnnounceFocusIfFocused();
+        }
+    }
+
+    private void AnnounceFocusIfFocused()
+    {
+        // A queued announcement repeats nothing: a key that left the focused part where it was says nothing.
+        if (Owner.IsFocused && !ReferenceEquals(FocusedDescendant, _announcedDescendant))
+        {
+            AnnounceFocus();
+        }
+    }
+
+    private void AnnounceFocus()
+    {
+        var descendant = FocusedDescendant;
+        _announcedDescendant = descendant;
+        if (descendant != null)
+        {
+            descendant.RaiseFocusChangedFromTree();
+        }
+        else
+        {
+            RaiseFocusChangedEvent();
+        }
+    }
 
     /// <summary>Announces that a recycled container now shows another item: its name and its parent's children changed.</summary>
     private protected void RaiseRebound()

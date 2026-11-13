@@ -389,6 +389,10 @@ public sealed class AutomationTreeTests
 
         public void OnFocusChanged(AutomationPeer peer) => _focuses.Add(peer);
 
+        public void OnEvent(AutomationPeer peer, AutomationEventKind kind)
+        {
+        }
+
         public int PropertyOf(AutomationPeer peer, AutomationProperty property)
             => _properties.Count(entry => entry.Peer == peer && entry.Property == property);
 

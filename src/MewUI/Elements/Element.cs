@@ -130,8 +130,7 @@ public abstract partial class Element : MewObject
 
                 if (Automation.AutomationGate.IsSupported)
                 {
-                    UIElement.NotifyAutomationStructureChanged(previousParent);
-                    UIElement.NotifyAutomationStructureChanged(value);
+                    Automation.ElementAutomationEvents.OnParentChanged(this, previousParent, value);
                 }
 
                 // Which children a visual draws, and in what order, is its composition.

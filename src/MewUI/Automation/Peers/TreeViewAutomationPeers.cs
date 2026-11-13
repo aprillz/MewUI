@@ -71,6 +71,21 @@ internal sealed class TreeViewAutomationPeer : UIElementAutomationPeer, ISelecti
     public void SetScrollPercent(double horizontalPercent, double verticalPercent)
         => ScrollViewerScroll.SetPercent(this, Viewer, horizontalPercent, verticalPercent);
 
+    internal override AutomationPeer? FocusedDescendant
+        => OwnerTree.TryGetContainer(OwnerTree.ItemsSource.SelectedIndex, out var row) && row.IsVisible
+            ? row.GetAutomationPeer()
+            : null;
+
+    protected override void OnOwnerPropertyChanged(MewProperty property)
+    {
+        if ((property == TreeView.SelectedItemProperty || property == TreeView.SelectedNodeProperty) && Owner.IsFocused)
+        {
+            QueueFocusAnnouncement();
+        }
+
+        base.OnOwnerPropertyChanged(property);
+    }
+
     /// <summary>The realized rows by flat index, in index order.</summary>
     internal static SortedDictionary<int, ItemContainer> RealizedRows(TreeView tree)
     {
@@ -226,6 +241,9 @@ internal sealed class TreeItemAutomationPeer : UIElementAutomationPeer, IExpandC
     public bool IsSelected => OwnerRow.IsSelected;
 
     public AutomationPeer? SelectionContainer => OwnerTree?.GetAutomationPeer();
+
+    protected override bool HasKeyboardFocusCore()
+        => OwnerTree is TreeView tree && tree.IsFocused && tree.ItemsSource.SelectedIndex == OwnerRow.Index;
 
     public void Select()
     {
