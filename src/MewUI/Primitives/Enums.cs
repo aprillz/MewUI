@@ -29,13 +29,23 @@ public enum StretchDirection
 }
 
 /// <summary>
-/// Specifies how <see cref="Rect"/> values used as an image view box are interpreted.
+/// Specifies how <see cref="Rect"/> values used as an image viewbox are interpreted.
 /// </summary>
+public enum ImageViewboxUnits
+{
+    /// <summary>Viewbox values are specified in pixels.</summary>
+    Pixels,
+    /// <summary>Viewbox values are specified relative to the image bounds (0..1).</summary>
+    RelativeToBoundingBox
+}
+
+/// <summary>Obsolete name of <see cref="ImageViewboxUnits"/>.</summary>
+[Obsolete("Use ImageViewboxUnits.")]
 public enum ImageViewBoxUnits
 {
-    /// <summary>View box values are specified in pixels.</summary>
+    /// <summary>Viewbox values are specified in pixels.</summary>
     Pixels,
-    /// <summary>View box values are specified relative to the image bounds (0..1).</summary>
+    /// <summary>Viewbox values are specified relative to the image bounds (0..1).</summary>
     RelativeToBoundingBox
 }
 

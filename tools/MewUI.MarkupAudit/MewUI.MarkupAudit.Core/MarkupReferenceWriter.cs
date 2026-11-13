@@ -113,7 +113,7 @@ public static class MarkupReferenceWriter
             "Shape, Line, Rectangle, PathShape, and GlyphElement.",
             ["Aprillz.MewUI.Shape", "Aprillz.MewUI.Line", "Aprillz.MewUI.Rectangle", "Aprillz.MewUI.PathShape", CONTROLS + "GlyphElement"]),
         new("Image", "Image",
-            "Image source, stretch, alignment, and view box.",
+            "Image source, stretch, alignment, and viewbox.",
             [CONTROLS + "Image"]),
         new("Text", "Text",
             "TextBlock, Run, MarkupTextBlock, and Label.",

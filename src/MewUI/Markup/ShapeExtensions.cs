@@ -20,6 +20,18 @@ public static class ShapeExtensions
         return shape;
     }
 
+    /// <summary>Sets the source rectangle of a stretch; obsolete name of the Viewbox extension.</summary>
+    /// <typeparam name="T">Shape type.</typeparam>
+    /// <param name="shape">Target shape.</param>
+    /// <param name="viewbox">Source rectangle in the geometry's own coordinates.</param>
+    /// <returns>The shape for chaining.</returns>
+    [Obsolete("Use Viewbox.")]
+    public static T ViewBox<T>(this T shape, Rect? viewbox) where T : Shape
+    {
+        shape.Viewbox = viewbox;
+        return shape;
+    }
+
     /// <summary>Sets the stroke brush and thickness.</summary>
     /// <typeparam name="T">Shape type.</typeparam>
     /// <param name="shape">Target shape.</param>

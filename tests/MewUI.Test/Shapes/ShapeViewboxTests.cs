@@ -11,9 +11,9 @@ namespace MewUI.Test.Shapes;
 /// can declare the grid instead.
 /// </summary>
 [TestClass]
-public sealed class ShapeViewBoxTests
+public sealed class ShapeViewboxTests
 {
-    private static PathShape Host(Window window, PathGeometry geometry, Rect? viewBox)
+    private static PathShape Host(Window window, PathGeometry geometry, Rect? viewbox)
     {
         var shape = new PathShape
         {
@@ -22,7 +22,7 @@ public sealed class ShapeViewBoxTests
             Stretch = Stretch.Uniform,
             Width = 24,
             Height = 24,
-            ViewBox = viewBox,
+            Viewbox = viewbox,
         };
 
         window.Content = shape;
@@ -61,7 +61,7 @@ public sealed class ShapeViewBoxTests
     }
 
     [TestMethod]
-    public void WithoutAViewBox_TheInkStillDrivesTheStretch()
+    public void WithoutAViewbox_TheInkStillDrivesTheStretch()
     {
         if (!OperatingSystem.IsWindows())
         {
@@ -70,9 +70,9 @@ public sealed class ShapeViewBoxTests
         }
 
         var tight = PathGeometry.Parse("M9 9 H15 V15 H9 Z");
-        var shape = Host(HeadlessWindow.Create(), tight, viewBox: null);
+        var shape = Host(HeadlessWindow.Create(), tight, viewbox: null);
 
-        Assert.IsNull(shape.ViewBox, "an unset ViewBox leaves the previous behaviour in place");
+        Assert.IsNull(shape.Viewbox, "an unset Viewbox leaves the previous behaviour in place");
         Assert.AreEqual(24, shape.Bounds.Width);
     }
 }
