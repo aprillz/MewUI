@@ -62,4 +62,6 @@ public sealed partial class ContextMenu : IMenuAutomationHost
             peer.QueueHotEntryAnnouncement(-1);
         }
     }
+
+    protected override AutomationPeer? OnCreateAutomationPeer() => new MenuAutomationPeer(this);
 }

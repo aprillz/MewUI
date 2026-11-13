@@ -9,7 +9,23 @@ public abstract partial class UIElement
     /// otherwise. Null leaves the element out of the automation tree and presents its children in its place, which
     /// is right for panels and decorators.
     /// </summary>
-    protected virtual AutomationPeer? OnCreateAutomationPeer() => AutomationPeerFactory.Create(this);
+    protected virtual AutomationPeer? OnCreateAutomationPeer()
+    {
+        // Created here, not in an override: one in TextBlockBase or Image would renumber their compiler-generated
+        // members and change the output of apps that leave automation off.
+        if (this is TextBlockBase)
+        {
+            return new TextBlockAutomationPeer(this);
+        }
+        else if (this is Image image)
+        {
+            return new ImageAutomationPeer(image);
+        }
+        else
+        {
+            return null;
+        }
+    }
 
     /// <summary>Gets the element's automation peer, creating it on first use; null when automation is off or the element has none.</summary>
     public AutomationPeer? GetAutomationPeer()
@@ -21,7 +37,8 @@ public abstract partial class UIElement
 
         if (!AutomationPeerStore.TryGet(this, out var peer))
         {
-            peer = OnCreateAutomationPeer();
+            // An element below a leaf is presented by the leaf; it gets no peer of its own.
+            peer = AutomationPeerFactory.IsBelowLeaf(this) ? null : OnCreateAutomationPeer();
             AutomationPeerStore.Set(this, peer);
         }
 

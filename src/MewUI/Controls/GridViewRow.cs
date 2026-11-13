@@ -13,7 +13,7 @@ namespace Aprillz.MewUI.Controls;
 /// rather than repeating it in every cell template. It also supplies <see cref="Item"/> as the
 /// operand of commands invoked from within it.
 /// </remarks>
-public sealed class GridViewRow : Control, IVisualTreeHost, ICommandArgumentSource
+public sealed partial class GridViewRow : Control, IVisualTreeHost, ICommandArgumentSource
 {
     // Removes beforefieldinit so the registration below does not depend on some other static field
     // being read: trimming drops the initializer of a field nothing reads.

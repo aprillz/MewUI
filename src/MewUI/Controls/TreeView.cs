@@ -1488,7 +1488,7 @@ public sealed class TreeViewExpansionEventArgs
 /// Row container of a <see cref="TreeView"/>. It spans the whole row, so it owns the expander
 /// chevron and the indent the row draws under its content.
 /// </summary>
-internal sealed class TreeRowContainer : ItemContainer
+internal sealed partial class TreeRowContainer : ItemContainer
 {
     private double _indent;
     private int _depth;

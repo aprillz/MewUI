@@ -3,7 +3,7 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// Base class for controls that display a value within a range.
 /// </summary>
-public abstract class RangeBase : Control
+public abstract partial class RangeBase : Control
 {
     public static readonly MewProperty<double> ValueProperty =
         MewProperty<double>.Register<RangeBase>(nameof(Value), 0.0,

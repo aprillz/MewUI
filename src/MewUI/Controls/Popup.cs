@@ -27,7 +27,7 @@ public sealed class PopupClosedEventArgs : EventArgs
 /// focus, so the owner keeps driving the input. Use <see cref="PopupOwnerBase"/> instead for a
 /// control that is itself the trigger and wants the focus to follow into the popup.
 /// </summary>
-public class Popup : FrameworkElement, IVisualTreeHost, ILogicalTreeHost
+public partial class Popup : FrameworkElement, IVisualTreeHost, ILogicalTreeHost
 {
     private PopupCloseKind _closeKind = PopupCloseKind.UserInitiated;
 
