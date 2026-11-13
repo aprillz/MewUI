@@ -12,6 +12,12 @@
     <ProjectReference Include="..\MewUI\MewUI.csproj" />
   </ItemGroup>
 
+  <!-- AT-SPI2 accessibility over DBus, served when the session has an accessibility bus. -->
+  <ItemGroup>
+    <PackageReference Include="Tmds.DBus.Protocol" Version="0.94.2" />
+    <Compile Include="..\MewUI\Shared\Platform\Linux\Automation\*.cs" LinkBase="Platform\Linux\Automation" />
+  </ItemGroup>
+
   <ItemGroup>
     <Compile Include="..\MewUI\Shared\Platform\Linux\LinuxDispatcher.cs" LinkBase="Platform\Linux" />
     <Compile Include="..\MewUI\Shared\Platform\Linux\LinuxFontDefaults.cs" LinkBase="Platform\Linux" />
