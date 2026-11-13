@@ -1,5 +1,6 @@
 using Aprillz.MewUI;
 using Aprillz.MewUI.Controls;
+using MewUI.Test.Infrastructure;
 
 namespace MewUI.Test.Controls;
 
@@ -101,6 +102,63 @@ public sealed class NavigationViewPaneTests
 
         Laid(view, WIDE);
         Assert.AreEqual(2, count);
+    }
+
+    [TestMethod]
+    public void ClosedOverlayPane_KeepsItsRowsLaidOut_ButIsNotDrawn()
+    {
+        // Toggling the overlay must not re-lay out every row at zero size and back.
+        var view = new NavigationView { PaneDisplayMode = PaneDisplayMode.Overlay, IsPaneOpen = false };
+        view.Items(new[] { "Buttons", "Toggles" }, title => title);
+        var window = HeadlessWindow.Create((int)NARROW, 500);
+        window.Content = view;
+        window.PerformLayout();
+
+        var label = FindText(view, "Buttons");
+        Assert.IsNotNull(label);
+        var row = label.Parent;
+        while (row is not null and not ItemContainer)
+        {
+            row = row.Parent;
+        }
+
+        Assert.IsInstanceOfType<ItemContainer>(row);
+        var bounds = ((ItemContainer)row).Bounds;
+        Assert.IsTrue(bounds.Width > 0 && bounds.Height > 0, $"row bounds {bounds}");
+        Assert.IsTrue(IsUnderHeldElement(row), "the closed pane is held out of view");
+    }
+
+    private static TextBlock? FindText(Element root, string text)
+    {
+        if (root is TextBlock block && block.Text == text)
+        {
+            return block;
+        }
+
+        TextBlock? found = null;
+        if (root is IVisualTreeHost host)
+        {
+            host.VisitChildren(child =>
+            {
+                found = FindText(child, text);
+                return found == null;
+            });
+        }
+
+        return found;
+    }
+
+    private static bool IsUnderHeldElement(Element element)
+    {
+        for (var current = element as UIElement; current != null; current = current.Parent as UIElement)
+        {
+            if (current.IsHeldOutOfView)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     [TestMethod]
