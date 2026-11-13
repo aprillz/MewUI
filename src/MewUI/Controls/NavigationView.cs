@@ -509,8 +509,9 @@ public sealed partial class NavigationView : Control, IVisualTreeHost
         double paneX = minimal ? inner.X - (1 - _overlayProgress) * PaneWidth : inner.X;
         _paneRect = new Rect(paneX, inner.Y, paneWidth, inner.Height);
 
-        // A closed overlay is not drawn, which the layout states by giving the pane no area.
-        _paneHost.Arrange(IsPaneDrawn ? _paneRect : Rect.Empty);
+        // A closed overlay keeps its off-screen place, so toggling does not re-lay out every row at zero size.
+        _paneHost.Arrange(_paneRect);
+        _paneHost.IsHeldOutOfView = !IsPaneDrawn;
 
         // The hamburger stays pinned to the top-left in every mode.
         _paneToggle.Arrange(new Rect(inner.X, inner.Y, CompactSlot, CompactSlot));
