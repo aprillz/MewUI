@@ -49,7 +49,7 @@ partial class GalleryView
                         bind: (view, item) =>
                         {
                             view.Data = item.Geometry;
-                            view.ViewBox = IconViewBox(item.Geometry);
+                            view.Viewbox = IconViewbox(item.Geometry);
                         }),
 
                 new GridViewColumn<IconItem>()

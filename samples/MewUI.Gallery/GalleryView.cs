@@ -109,7 +109,7 @@ partial class GalleryView : UserControl
     }
 
     /// <summary>One icon's geometry and the design grid it was drawn on.</summary>
-    private sealed record NamedIcon(PathGeometry Geometry, Rect ViewBox);
+    private sealed record NamedIcon(PathGeometry Geometry, Rect Viewbox);
 
     // One value per requested name. The dictionary can arrive after the shapes exist, and item templates
     // recycle their shapes, so the shapes bind to these instead of being refilled by hand.
@@ -123,7 +123,7 @@ partial class GalleryView : UserControl
 
         // Without the design grid, Uniform fits the ink, so an icon drawn with room around it comes out
         // larger than one drawn to the edges even though both sit in the same 16 DIP slot.
-        shape.Bind(Shape.ViewBoxProperty, icon, x => (Rect?)x.ViewBox);
+        shape.Bind(Shape.ViewboxProperty, icon, x => (Rect?)x.Viewbox);
     }
 
     private static ObservableValue<NamedIcon> NamedIconValue(string name)
@@ -158,7 +158,7 @@ partial class GalleryView : UserControl
 
         // Shared by every shape bound to this name, so it must not be mutated afterwards.
         geometry.Freeze();
-        return new NamedIcon(geometry, IconViewBox(geometry));
+        return new NamedIcon(geometry, IconViewbox(geometry));
     }
 
     public GalleryView(Window window)
@@ -279,11 +279,11 @@ partial class GalleryView : UserControl
     }
 
     // The icon set is drawn on standard grids and the resource carries no metadata, so the grid is the
-    // smallest standard one that covers the ink. Handing that to ViewBox keeps the margin the designer
+    // smallest standard one that covers the ink. Handing that to Viewbox keeps the margin the designer
     // left: stretching to the ink instead scales every icon by however tightly it happens to be drawn.
     private static readonly double[] _iconGrids = [16, 20, 24, 28, 32, 48];
 
-    private static Rect IconViewBox(PathGeometry geometry)
+    private static Rect IconViewbox(PathGeometry geometry)
     {
         var ink = geometry.GetBounds();
         double extent = Math.Max(ink.Right, ink.Bottom);
