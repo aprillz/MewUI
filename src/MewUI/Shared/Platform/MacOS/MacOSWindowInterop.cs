@@ -2620,6 +2620,14 @@ internal static unsafe class MacOSWindowInterop
         backend = null!;
         return false;
     }
+
+    /// <summary>The class of the view that holds each window's content, registered on first use.</summary>
+    internal static nint EnsureContentViewClass()
+    {
+        EnsureInitialized();
+        EnsureTextInputViewSubclass();
+        return ClsMewUITextInputView;
+    }
 }
 
 [StructLayout(LayoutKind.Sequential)]

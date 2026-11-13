@@ -1129,6 +1129,11 @@ internal sealed class MacOSWindowBackend : IWindowBackend
 
     private void EnsureCreated()
     {
+        if (Aprillz.MewUI.Automation.AutomationGate.IsSupported)
+        {
+            Automation.AxProvider.EnsureInstalled();
+        }
+
         if (_nsWindow != 0)
         {
             return;
