@@ -26,6 +26,22 @@ public sealed partial class MenuBar : Control, IPopupOwner, IVisualTreeHost
     // menus resolve against the content that was active when the interaction started.
     private CommandTarget? _preMenuTarget;
 
+    // Between opening a drop-down (or the bar taking the keys) and the interaction ending, and the
+    // element that had the focus before, which gets it back at the end.
+    private bool _isMenuMode;
+    private UIElement? _focusReturn;
+
+    // Set while a drop-down closes to make way for another one or for the bar's own key selection.
+    private bool _keepMenuModeOnClose;
+    private readonly MenuLetterKeys _letterKeys = new();
+
+    private enum DropDownSelection
+    {
+        None,
+        First,
+        Last,
+    }
+
     /// <summary>
     /// Gets the menu items collection.
     /// </summary>
@@ -187,7 +203,7 @@ public sealed partial class MenuBar : Control, IPopupOwner, IVisualTreeHost
             if (parsed.accessKey != default)
             {
                 int index = i; // capture for closure
-                window.AccessKeyManager.Register(parsed.accessKey, this, () => OpenMenu(index));
+                window.AccessKeyManager.Register(parsed.accessKey, this, () => OpenMenu(index, DropDownSelection.First));
             }
         }
     }
@@ -298,7 +314,12 @@ public sealed partial class MenuBar : Control, IPopupOwner, IVisualTreeHost
     protected override void OnMouseLeave()
     {
         base.OnMouseLeave();
-        SetHotIndex(-1);
+
+        // While the bar has the keys, the highlight is the key selection and stays.
+        if (!IsFocused)
+        {
+            SetHotIndex(-1);
+        }
     }
 
     protected override void OnMouseMove(MouseEventArgs e)
@@ -334,7 +355,7 @@ public sealed partial class MenuBar : Control, IPopupOwner, IVisualTreeHost
 
         if (_openIndex == -1 && FindVisualRoot() is Window window)
         {
-            _preMenuTarget = window.CommandRouter.CaptureTarget();
+            _preMenuTarget = CaptureMenuTarget(window);
         }
 
         Focus();
@@ -352,7 +373,7 @@ public sealed partial class MenuBar : Control, IPopupOwner, IVisualTreeHost
         e.Handled = true;
     }
 
-    private void OpenMenu(int index)
+    private void OpenMenu(int index, DropDownSelection selection = DropDownSelection.None)
     {
         if (index < 0 || index >= _items.Count)
         {
@@ -362,7 +383,7 @@ public sealed partial class MenuBar : Control, IPopupOwner, IVisualTreeHost
         var item = _items[index];
         if (item.SubMenu == null || !item.IsEffectivelyEnabled)
         {
-            CloseOpenMenu();
+            CloseOpenMenuKeepingMode();
             return;
         }
 
@@ -372,10 +393,12 @@ public sealed partial class MenuBar : Control, IPopupOwner, IVisualTreeHost
             return;
         }
 
+        EnterMenuMode(window.FocusManager.FocusedElement);
+
         // Read the pre-menu target before CloseOpenMenu (a hover switch closes the previous popup,
         // which clears the pending capture) and restore it for the next switch.
-        var target = _preMenuTarget ?? window.CommandRouter.CaptureTarget();
-        CloseOpenMenu();
+        var target = _preMenuTarget ?? CaptureMenuTarget(window);
+        CloseOpenMenuKeepingMode();
         _preMenuTarget = target;
 
         SetOpenIndex(index);
@@ -385,6 +408,7 @@ public sealed partial class MenuBar : Control, IPopupOwner, IVisualTreeHost
         popup.FontSize = FontSize;
         popup.FontWeight = FontWeight;
         popup.SetCommandTarget(target);
+        popup.SetDropDownOwner(this);
 
         _openPopup = popup;
 
@@ -392,6 +416,254 @@ public sealed partial class MenuBar : Control, IPopupOwner, IVisualTreeHost
         popup.PlacementOffset = new Point(0, 1);
         var anchorBounds = _itemBounds.Count > index ? TransformToRoot(_itemBounds[index]) : Rect.Empty;
         popup.Show(this, anchorBounds);
+
+        if (selection != DropDownSelection.None)
+        {
+            popup.EnterFromKeyboard(fromEnd: selection == DropDownSelection.Last);
+        }
+    }
+
+    private void CloseOpenMenuKeepingMode()
+    {
+        _keepMenuModeOnClose = true;
+        try
+        {
+            CloseOpenMenu();
+        }
+        finally
+        {
+            _keepMenuModeOnClose = false;
+        }
+    }
+
+    /// <summary>
+    /// Starts the menu interaction, remembering <paramref name="focusedBefore"/> to give the focus back to
+    /// at the end.
+    /// </summary>
+    private void EnterMenuMode(UIElement? focusedBefore)
+    {
+        if (_isMenuMode)
+        {
+            return;
+        }
+
+        _isMenuMode = true;
+        _focusReturn = ReferenceEquals(focusedBefore, this) ? null : focusedBefore;
+    }
+
+    /// <summary>
+    /// The command target of the opened menus: the element the focus is given back to, so commands act
+    /// on the content and not on the bar that took the focus.
+    /// </summary>
+    private CommandTarget CaptureMenuTarget(Window window)
+        => _focusReturn != null && ReferenceEquals(_focusReturn.FindVisualRoot(), window)
+            ? CommandTarget.From(_focusReturn)
+            : window.CommandRouter.CaptureTarget();
+
+    /// <summary>
+    /// Ends the menu interaction: closes the drop-down and, when the bar still has the focus, hands it
+    /// back to the element that had it before.
+    /// </summary>
+    private void ExitMenuMode()
+    {
+        if (!_isMenuMode)
+        {
+            return;
+        }
+
+        // Closed while still in the interaction, so the focus landing on the bar does not start a new one.
+        CloseOpenMenuKeepingMode();
+        _isMenuMode = false;
+        var focusReturn = _focusReturn;
+        _focusReturn = null;
+
+        if (!IsMouseOver)
+        {
+            SetHotIndex(-1);
+        }
+
+        if (IsFocused && FindVisualRoot() is Window window)
+        {
+            if (focusReturn == null || !ReferenceEquals(focusReturn.FindVisualRoot(), window) ||
+                !window.FocusManager.SetFocus(focusReturn))
+            {
+                window.FocusManager.ClearFocus();
+            }
+        }
+    }
+
+    protected override void OnGotFocus()
+    {
+        base.OnGotFocus();
+
+        // A click focuses the bar before the bar sees the press, so the element to give the focus back to
+        // is the one the focus came from.
+        if (FindVisualRoot() is Window window)
+        {
+            EnterMenuMode(window.FocusManager.PreviousFocusedElement);
+        }
+    }
+
+    protected override void OnLostFocus()
+    {
+        base.OnLostFocus();
+
+        // The focus going anywhere but the bar's own drop-down ends the interaction where it went.
+        if (_openIndex == -1)
+        {
+            _isMenuMode = false;
+            _focusReturn = null;
+            if (!IsMouseOver)
+            {
+                SetHotIndex(-1);
+            }
+        }
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+
+        // A key the drop-down left unhandled bubbles here; the bar answers only while it has the focus.
+        if (e.Handled || !IsFocused || e.AltKey || e.ControlKey || e.MetaKey)
+        {
+            return;
+        }
+
+        switch (e.Key)
+        {
+            case Key.Left:
+                MoveHotFromKeyboard(_hotIndex, -1);
+                break;
+            case Key.Right:
+                MoveHotFromKeyboard(_hotIndex, 1);
+                break;
+            case Key.Home:
+                MoveHotFromKeyboard(-1, 1);
+                break;
+            case Key.End:
+                MoveHotFromKeyboard(_items.Count, -1);
+                break;
+            case Key.Down:
+            case Key.Enter:
+                OpenHotFromKeyboard(DropDownSelection.First);
+                break;
+            case Key.Up:
+                OpenHotFromKeyboard(DropDownSelection.Last);
+                break;
+            case Key.Escape:
+                if (_isMenuMode)
+                {
+                    ExitMenuMode();
+                    e.Handled = true;
+                }
+
+                return;
+            default:
+                if (!TryHandleLetterKey(e.Key))
+                {
+                    return;
+                }
+
+                break;
+        }
+
+        e.Handled = true;
+    }
+
+    private void OpenHotFromKeyboard(DropDownSelection selection)
+    {
+        int index = _hotIndex >= 0 ? _hotIndex : FindEnabledItem(-1, 1);
+        if (index >= 0)
+        {
+            SetHotIndex(index);
+            OpenMenu(index, selection);
+        }
+    }
+
+    private void MoveHotFromKeyboard(int from, int direction)
+    {
+        int index = FindEnabledItem(from, direction);
+        if (index >= 0)
+        {
+            SetHotIndex(index);
+        }
+    }
+
+    /// <summary>
+    /// Highlights the item a letter key selects, and opens it when the letter is its own access key.
+    /// </summary>
+    private bool TryHandleLetterKey(Key key)
+    {
+        if (!_letterKeys.TryFind(_items, key, _hotIndex, out int index, out bool activate))
+        {
+            return false;
+        }
+
+        SetHotIndex(index);
+        if (activate)
+        {
+            OpenMenu(index, DropDownSelection.First);
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// The next enabled item past <paramref name="from"/> in <paramref name="direction"/>, wrapping around
+    /// the ends, or -1; an index outside the items starts from the end the direction leaves.
+    /// </summary>
+    private int FindEnabledItem(int from, int direction)
+    {
+        int count = _items.Count;
+        if (from < 0 || from >= count)
+        {
+            from = direction > 0 ? -1 : count;
+        }
+
+        for (int step = 1; step <= count; step++)
+        {
+            int index = (((from + (step * direction)) % count) + count) % count;
+            if (_items[index].IsEffectivelyEnabled)
+            {
+                return index;
+            }
+        }
+
+        return -1;
+    }
+
+    /// <summary>
+    /// Opens the drop-down of the neighboring item in <paramref name="direction"/> with its first entry
+    /// highlighted; an item without a drop-down is highlighted on the bar instead.
+    /// </summary>
+    internal void MoveDropDownFromKeyboard(int direction)
+    {
+        int index = FindEnabledItem(_openIndex, direction);
+        if (index < 0 || index == _openIndex)
+        {
+            return;
+        }
+
+        SetHotIndex(index);
+        if (_items[index].SubMenu != null)
+        {
+            OpenMenu(index, DropDownSelection.First);
+        }
+        else
+        {
+            CloseOpenMenuKeepingMode();
+            Focus();
+        }
+    }
+
+    /// <summary>Closes the drop-down and gives the bar the keys with its item highlighted.</summary>
+    internal void CloseDropDownFromKeyboard()
+    {
+        int index = _openIndex;
+        CloseOpenMenuKeepingMode();
+        Focus();
+        SetHotIndex(index);
     }
 
     private void CloseOpenMenu()
@@ -418,6 +690,12 @@ public sealed partial class MenuBar : Control, IPopupOwner, IVisualTreeHost
             _openPopup = null;
             SetOpenIndex(-1);
             _preMenuTarget = null;
+
+            // An invoked item, a click elsewhere or the trigger clicked again ends the interaction.
+            if (!_keepMenuModeOnClose)
+            {
+                ExitMenuMode();
+            }
         }
     }
 

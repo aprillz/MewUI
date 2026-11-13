@@ -35,6 +35,10 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
     private ContextMenu? _openSubMenu;
     private int _openSubMenuIndex = -1;
     private ContextMenu? _parentMenu;
+
+    // The bar this menu drops down from: its left and right keys move to the neighboring drop-down.
+    private MenuBar? _dropDownOwner;
+    private readonly MenuLetterKeys _letterKeys = new();
     private double _maxTextWidth;
 
     /// <summary>The caption width measure asked for; the render pass must not grant less.</summary>
@@ -338,6 +342,9 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
 
         _presetCommandTarget = target;
     }
+
+    /// <summary>Marks the menu as the drop-down of a menu bar item.</summary>
+    internal void SetDropDownOwner(MenuBar menuBar) => _dropDownOwner = menuBar;
 
     private void UpdateCommandPresentation(Window window)
     {
@@ -1125,6 +1132,14 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
         }
 
         int index = HitTestEntryIndex(TransformFromRoot(e.Position));
+
+        // The menu under the pointer takes the keys, except over the row whose submenu is open, so the
+        // pointer passing back over that row leaves the submenu open.
+        if (index >= 0 && index != _openSubMenuIndex && !IsFocused)
+        {
+            Focus();
+        }
+
         SetHotIndex(index);
 
         if (index >= 0 && index < Items.Count && Items[index] is MenuItem item && item.SubMenu != null && item.IsEffectivelyEnabled)
@@ -1203,75 +1218,259 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
     {
         base.OnKeyDown(e);
 
-        if (e.Handled)
+        // A key an open submenu left unhandled bubbles here; only the menu that has the focus answers.
+        if (e.Handled || !IsFocused || e.AltKey || e.ControlKey || e.MetaKey || FindVisualRoot() is not Window window)
         {
             return;
         }
 
-        if (e.Key == Key.Escape)
+        switch (e.Key)
         {
-            var root = FindVisualRoot();
-            if (root is Window window)
+            case Key.Escape:
+                CloseLevelFromKeyboard(window);
+                break;
+            case Key.Down:
+                MoveHotFromKeyboard(_hotIndex, 1);
+                break;
+            case Key.Up:
+                MoveHotFromKeyboard(_hotIndex, -1);
+                break;
+            case Key.Tab:
+                // As in Qt menus outside Apple platforms; left to the window, Tab would move the focus out
+                // and close the menu.
+                MoveHotFromKeyboard(_hotIndex, e.ShiftKey ? -1 : 1);
+                break;
+            case Key.Home:
+                MoveHotFromKeyboard(-1, 1);
+                break;
+            case Key.End:
+                MoveHotFromKeyboard(Items.Count, -1);
+                break;
+            case Key.Right:
+                if (!TryEnterSubMenuFromKeyboard(_hotIndex))
+                {
+                    RootMenu()._dropDownOwner?.MoveDropDownFromKeyboard(1);
+                }
+
+                break;
+            case Key.Left:
+                if (_parentMenu != null)
+                {
+                    _parentMenu.CloseSubMenuFromKeyboard();
+                }
+                else
+                {
+                    _dropDownOwner?.MoveDropDownFromKeyboard(-1);
+                }
+
+                break;
+            case Key.Enter:
+                ActivateHotFromKeyboard(window);
+                break;
+            default:
+                HandleLetterKey(e, window);
+                return;
+        }
+
+        // Handled even when nothing moved, so the keys never reach the element the menu opened on.
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// Escape backs out one level: an open submenu, else this menu, handing the keys to whatever opened it.
+    /// </summary>
+    private void CloseLevelFromKeyboard(Window window)
+    {
+        if (_openSubMenu != null)
+        {
+            CloseSubMenuFromKeyboard();
+        }
+        else if (_parentMenu != null)
+        {
+            _parentMenu.CloseSubMenuFromKeyboard();
+        }
+        else if (_dropDownOwner != null)
+        {
+            _dropDownOwner.CloseDropDownFromKeyboard();
+        }
+        else
+        {
+            window.ClosePopup(this);
+        }
+    }
+
+    private ContextMenu RootMenu()
+    {
+        var menu = this;
+        while (menu._parentMenu != null)
+        {
+            menu = menu._parentMenu;
+        }
+
+        return menu;
+    }
+
+    /// <summary>
+    /// Takes the keys and highlights the first selectable entry, or the last when <paramref name="fromEnd"/>.
+    /// </summary>
+    internal void EnterFromKeyboard(bool fromEnd)
+    {
+        Focus();
+        MoveHotFromKeyboard(fromEnd ? Items.Count : -1, fromEnd ? -1 : 1);
+    }
+
+    /// <summary>
+    /// Highlights the next selectable entry past <paramref name="from"/> in <paramref name="direction"/>,
+    /// wrapping around the ends; an index outside the items starts from the end the direction leaves.
+    /// </summary>
+    private void MoveHotFromKeyboard(int from, int direction)
+    {
+        int count = Items.Count;
+        if (from < 0 || from >= count)
+        {
+            from = direction > 0 ? -1 : count;
+        }
+
+        for (int step = 1; step <= count; step++)
+        {
+            int index = (((from + (step * direction)) % count) + count) % count;
+            if (Items[index] is not MenuItem item || !item.IsEffectivelyEnabled)
             {
-                // Close only this menu; parent menus remain open.
-                CloseSubMenu();
-                window.ClosePopup(this);
-                e.Handled = true;
+                continue;
             }
 
+            if (_openSubMenu != null && index != _openSubMenuIndex)
+            {
+                CloseSubMenu();
+            }
+
+            EnsureEntryVisible(index);
+            SetHotIndex(index);
+            return;
+        }
+    }
+
+    /// <summary>Opens the submenu of the entry at <paramref name="index"/> and gives it the keys.</summary>
+    private bool TryEnterSubMenuFromKeyboard(int index)
+    {
+        if (index < 0 || index >= Items.Count || Items[index] is not MenuItem item ||
+            item.SubMenu == null || !item.IsEffectivelyEnabled)
+        {
+            return false;
+        }
+
+        if (_openSubMenu == null || _openSubMenuIndex != index)
+        {
+            EnsureEntryVisible(index);
+            if (!TryGetEntryRowBounds(index, out var rowBounds))
+            {
+                return false;
+            }
+
+            OpenSubMenu(index, item.SubMenu, rowBounds);
+        }
+
+        SetHotIndex(index);
+        _openSubMenu?.EnterFromKeyboard(fromEnd: false);
+        return true;
+    }
+
+    /// <summary>Closes the open submenu and takes the keys back with its row highlighted.</summary>
+    private void CloseSubMenuFromKeyboard()
+    {
+        int index = _openSubMenuIndex;
+        CloseSubMenu();
+        Focus();
+        SetHotIndex(index);
+    }
+
+    private void ActivateHotFromKeyboard(Window window)
+    {
+        // With nothing highlighted, Enter highlights the first item, as Qt menus do.
+        if (_hotIndex < 0)
+        {
+            MoveHotFromKeyboard(-1, 1);
             return;
         }
 
-        // Access key matching - character only, no modifiers (except Shift for uppercase)
-        if (!e.AltKey && !e.ControlKey && !e.MetaKey)
+        if (_hotIndex >= Items.Count || Items[_hotIndex] is not MenuItem item || !item.IsEffectivelyEnabled)
         {
-            TryActivateByAccessKey(e);
+            return;
+        }
+
+        if (item.SubMenu != null)
+        {
+            TryEnterSubMenuFromKeyboard(_hotIndex);
+            return;
+        }
+
+        InvokeItem(item);
+        CloseHierarchy(window);
+    }
+
+    /// <summary>Scrolls the menu so the whole row of the entry at <paramref name="index"/> is in view.</summary>
+    private void EnsureEntryVisible(int index)
+    {
+        if (!_vBar.IsVisible || index < 0 || index >= Items.Count)
+        {
+            return;
+        }
+
+        double top = 0;
+        for (int entryIndex = 0; entryIndex < index; entryIndex++)
+        {
+            top += GetEntryHeight(Items[entryIndex]);
+        }
+
+        double bottom = top + GetEntryHeight(Items[index]);
+        double offset;
+        if (top < _verticalOffset)
+        {
+            offset = top;
+        }
+        else if (bottom > _verticalOffset + _viewportHeight)
+        {
+            offset = bottom - _viewportHeight;
+        }
+        else
+        {
+            return;
+        }
+
+        _scroll.DpiScale = GetDpi() / 96.0;
+        _scroll.SetMetricsDip(1, _extentHeight, _viewportHeight);
+        if (_scroll.SetOffsetDip(1, offset))
+        {
+            _verticalOffset = _scroll.GetOffsetDip(1);
+            _vBar.Value = _verticalOffset;
+            ArrangeRows();
         }
     }
 
     private static string GetDisplayText(MenuItem item)
         => item.GetParsedText().displayText;
 
-    private void TryActivateByAccessKey(KeyEventArgs e)
+    /// <summary>
+    /// Highlights the item a letter key selects, and activates it when the letter is its own access key.
+    /// </summary>
+    private void HandleLetterKey(KeyEventArgs e, Window window)
     {
-        var ch = e.Key switch
+        if (!_letterKeys.TryFind(Items, e.Key, _hotIndex, out int index, out bool activate))
         {
-            >= Key.A and <= Key.Z => (char)('A' + (e.Key - Key.A)),
-            >= Key.D0 and <= Key.D9 => (char)('0' + (e.Key - Key.D0)),
-            _ => default,
-        };
-
-        if (ch == default) return;
-        ch = char.ToUpperInvariant(ch);
-
-        foreach (var entry in Menu.Items)
-        {
-            if (entry is not MenuItem item || !item.IsEffectivelyEnabled)
-                continue;
-
-            var parsed = item.GetParsedText();
-            if (parsed.accessKey == default)
-                continue;
-
-            if (char.ToUpperInvariant(parsed.accessKey) != ch)
-                continue;
-
-            if (item.SubMenu != null)
-            {
-                int index = Menu.Items.IndexOf(item);
-                if (index >= 0 && TryGetEntryRowBounds(index, out var rowBounds))
-                    OpenSubMenu(index, item.SubMenu, rowBounds);
-            }
-            else
-            {
-                InvokeItem(item);
-                var root = FindVisualRoot();
-                if (root is Window window)
-                    CloseHierarchy(window);
-            }
-
-            e.Handled = true;
             return;
+        }
+
+        e.Handled = true;
+        if (_openSubMenu != null && index != _openSubMenuIndex)
+        {
+            CloseSubMenu();
+        }
+
+        EnsureEntryVisible(index);
+        SetHotIndex(index);
+        if (activate)
+        {
+            ActivateHotFromKeyboard(window);
         }
     }
 
