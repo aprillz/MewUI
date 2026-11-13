@@ -23,9 +23,10 @@
     <None Remove="ThirdParty\**" />
   </ItemGroup>
 
-  <!-- CSharpMath typesetting: the parser, atoms and displays, and the painter front end; the editor, the keyboard and the text painter are left out. -->
+  <!-- CSharpMath typesetting: the parser, atoms and displays, and the painter front end; the editor, the keyboard and the text painter are left out.
+       Typesetter.cs and Relation.cs come from CSharpMathPatches instead, patched for \overbrace and \xrightarrow; re-apply on a submodule update. -->
   <ItemGroup Label="CSharpMath">
-    <Compile Include="ThirdParty\CSharpMath\CSharpMath\**\*.cs" Exclude="ThirdParty\CSharpMath\CSharpMath\Editor\**;ThirdParty\CSharpMath\CSharpMath\obj\**;ThirdParty\CSharpMath\CSharpMath\bin\**" Link="ThirdParty\CSharpMath\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="ThirdParty\CSharpMath\CSharpMath\**\*.cs" Exclude="ThirdParty\CSharpMath\CSharpMath\Editor\**;ThirdParty\CSharpMath\CSharpMath\obj\**;ThirdParty\CSharpMath\CSharpMath\bin\**;ThirdParty\CSharpMath\CSharpMath\Display\Typesetter.cs;ThirdParty\CSharpMath\CSharpMath\Atom\Atoms\Relation.cs" Link="ThirdParty\CSharpMath\%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="ThirdParty\CSharpMath\CSharpMath.Rendering\BackEnd\*.cs" Link="ThirdParty\CSharpMath.Rendering\BackEnd\%(Filename)%(Extension)" />
     <Compile Include="ThirdParty\CSharpMath\CSharpMath.Rendering\FrontEnd\*.cs" Exclude="ThirdParty\CSharpMath\CSharpMath.Rendering\FrontEnd\MathKeyboard.cs;ThirdParty\CSharpMath\CSharpMath.Rendering\FrontEnd\TextPainter.cs" Link="ThirdParty\CSharpMath.Rendering\FrontEnd\%(Filename)%(Extension)" />
     <EmbeddedResource Include="ThirdParty\CSharpMath\CSharpMath.Rendering\Reference Fonts\*.otf" LogicalName="CSharpMath.Rendering.Reference_Fonts.%(Filename)%(Extension)" Link="ThirdParty\CSharpMath.Rendering\Reference Fonts\%(Filename)%(Extension)" />

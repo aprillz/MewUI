@@ -37,6 +37,6 @@ A formula that CSharpMath cannot parse shows CSharpMath's error text in its plac
 
 ## LaTeX coverage
 
-CSharpMath covers the common set: fractions, roots, sums, integrals, limits, Greek letters, `\mathbb`, `\mathcal`, `\mathrm`, `\mathbf`, `\text`, `\left`/`\right`, `\underbrace`, `\not`, and the `aligned`, `cases`, `pmatrix`, `bmatrix`, `vmatrix` and `Vmatrix` environments. The extension rewrites a few commands CSharpMath lacks: `\dfrac` and `\tfrac` become `\frac`, and `\boldsymbol` becomes `\mathbf`. `\overbrace`, `\xrightarrow` and `\xleftarrow` are not supported.
+CSharpMath covers the common set: fractions, roots, sums, integrals, limits, Greek letters, `\mathbb`, `\mathcal`, `\mathrm`, `\mathbf`, `\text`, `\left`/`\right`, `\underbrace`, `\not`, and the `aligned`, `cases`, `pmatrix`, `bmatrix`, `vmatrix` and `Vmatrix` environments. The extension rewrites a few commands CSharpMath lacks: `\dfrac` and `\tfrac` become `\frac`, and `\boldsymbol` becomes `\mathbf`. It also adds `\overbrace{...}^{...}`, `\xrightarrow[...]{...}` and `\xleftarrow[...]{...}`.
 
 Block formulas are not part of the document selection and have no copy button.
