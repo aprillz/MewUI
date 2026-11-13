@@ -22,6 +22,43 @@ internal sealed class MenuAutomationPeer : UIElementAutomationPeer
 
     internal override bool IsLeaf => true;
 
+    internal override AutomationPeer? FocusedDescendant => EntryPeerAt(MenuHost.HotEntryIndex);
+
+    /// <summary>
+    /// Announces the highlighted entry once the menu has applied the input in progress. <paramref name="index"/> is the
+    /// entry the highlight moves to, or -1 when only the handled input tells.
+    /// </summary>
+    internal void QueueHotEntryAnnouncement(int index)
+    {
+        if (Application.IsRunning)
+        {
+            // Queued, so the announcement reads the highlight the menu is about to apply.
+            QueueFocusAnnouncement();
+        }
+        else if (Owner.IsFocused && EntryPeerAt(index) is AutomationPeer entry)
+        {
+            entry.RaiseFocusChangedFromTree();
+        }
+    }
+
+    private AutomationPeer? EntryPeerAt(int index)
+    {
+        if (index < 0)
+        {
+            return null;
+        }
+
+        foreach (var child in GetChildren())
+        {
+            if (child is MenuEntryAutomationPeer entry && entry.Index == index)
+            {
+                return entry;
+            }
+        }
+
+        return null;
+    }
+
     protected override IReadOnlyList<AutomationPeer> GetChildrenCore()
     {
         var host = MenuHost;
@@ -112,6 +149,8 @@ internal class MenuEntryAutomationPeer : PartAutomationPeer
     protected override string GetNameCore() => Item.GetParsedText().displayText;
 
     protected override bool IsEnabledCore() => base.IsEnabledCore() && Item.IsEffectivelyEnabled;
+
+    protected override bool HasKeyboardFocusCore() => Host.IsFocused && MenuHost.HotEntryIndex == Index;
 
     protected override bool TryGetBoundsInHost(out Rect bounds)
     {

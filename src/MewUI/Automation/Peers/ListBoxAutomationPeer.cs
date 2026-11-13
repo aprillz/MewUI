@@ -90,11 +90,20 @@ internal sealed class ListBoxAutomationPeer : ItemsControlAutomationPeer, ISelec
         return selection;
     }
 
+    internal override AutomationPeer? FocusedDescendant
+        => OwnerList.TryGetContainer(OwnerList.SelectedIndex, out var container) && container.IsVisible
+            ? container.GetAutomationPeer()
+            : null;
+
     protected override void OnOwnerPropertyChanged(MewProperty property)
     {
         if (property == ListBox.SelectedIndexProperty)
         {
             RaisePropertyChangedEvent(AutomationProperty.SelectionProperty, null, OwnerList.SelectedIndex);
+            if (Owner.IsFocused)
+            {
+                QueueFocusAnnouncement();
+            }
         }
 
         base.OnOwnerPropertyChanged(property);
@@ -112,6 +121,8 @@ internal class ItemContainerAutomationPeer : UIElementAutomationPeer, IScrollIte
     private protected ItemContainer OwnerContainer => (ItemContainer)Owner;
 
     protected override AutomationControlType GetControlTypeCore() => AutomationControlType.ListItem;
+
+    internal override bool IsLeaf => OwnerContainer.EffectiveContent is TextBlockBase or Label;
 
     protected override string GetOwnerName()
     {
@@ -178,6 +189,9 @@ internal sealed class ListBoxItemAutomationPeer : ItemContainerAutomationPeer, I
     public bool IsSelected => OwnerContainer.IsSelected;
 
     public AutomationPeer? SelectionContainer => OwnerList?.GetAutomationPeer();
+
+    protected override bool HasKeyboardFocusCore()
+        => OwnerList is ListBox list && list.IsFocused && list.SelectedIndex == OwnerContainer.Index;
 
     public void Select()
     {

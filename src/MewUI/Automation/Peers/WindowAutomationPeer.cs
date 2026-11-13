@@ -12,7 +12,18 @@ internal sealed class WindowAutomationPeer : UIElementAutomationPeer
 
     private Window OwnerWindow => (Window)Owner;
 
-    protected override AutomationControlType GetControlTypeCore() => AutomationControlType.Window;
+    protected override AutomationControlType GetControlTypeCore()
+    {
+        if (OwnerWindow.Kind == WindowKind.Popup)
+        {
+            // A popup surface only carries content shown from another window, whose own peer says what it is.
+            return AutomationControlType.Pane;
+        }
+        else
+        {
+            return AutomationControlType.Window;
+        }
+    }
 
     protected override string GetOwnerName() => OwnerWindow.Title;
 

@@ -40,11 +40,18 @@ internal sealed class GridViewAutomationPeer : ItemsControlAutomationPeer, ISele
         return selection;
     }
 
+    internal override AutomationPeer? FocusedDescendant
+        => OwnerGrid.TryGetContainer(OwnerGrid.SelectedIndex, out var row) && row.IsVisible ? row.GetAutomationPeer() : null;
+
     protected override void OnOwnerPropertyChanged(MewProperty property)
     {
         if (property == GridView.SelectedIndexProperty)
         {
             RaisePropertyChangedEvent(AutomationProperty.SelectionProperty, null, OwnerGrid.SelectedIndex);
+            if (Owner.IsFocused)
+            {
+                QueueFocusAnnouncement();
+            }
         }
 
         base.OnOwnerPropertyChanged(property);
@@ -80,6 +87,9 @@ internal sealed class GridViewRowAutomationPeer : UIElementAutomationPeer, ISele
     public bool IsSelected => OwnerRow.IsSelected;
 
     public AutomationPeer? SelectionContainer => OwnerGrid?.GetAutomationPeer();
+
+    protected override bool HasKeyboardFocusCore()
+        => OwnerGrid is GridView grid && grid.IsFocused && grid.SelectedIndex == OwnerRow.Index;
 
     public void Select()
     {

@@ -102,4 +102,14 @@ public abstract class AutomationPeer
     }
 
     internal void RaiseStructureChangedFromTree() => RaiseStructureChangedEvent();
+
+    internal void RaiseFocusChangedFromTree() => RaiseFocusChangedEvent();
+
+    internal void RaiseEventFromTree(AutomationEventKind kind)
+    {
+        if (AutomationEvents.HasSinks)
+        {
+            AutomationEvents.RaiseEvent(this, kind);
+        }
+    }
 }
