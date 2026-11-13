@@ -54,7 +54,7 @@ partial class GalleryView
             ),
 
             Card(
-                "Image ViewBox",
+                "Image Viewbox",
                 new StackPanel()
                     .Vertical()
                     .Spacing(8)
@@ -72,13 +72,13 @@ partial class GalleryView
 
                                 new Image()
                                     .BindSource(Resources.April)
-                                    .ViewBoxRelative(new Rect(0.25, 0.25, 0.5, 0.5))
+                                    .ViewboxRelative(new Rect(0.25, 0.25, 0.5, 0.5))
                                     .StretchMode(Stretch.UniformToFill)
                                     .ImageScaleQuality(ImageScaleQuality.HighQuality)
                             ),
 
                         new TextBlock()
-                            .Text("Left: full image (Uniform). Right: ViewBox (center 50%) + UniformToFill.")
+                            .Text("Left: full image (Uniform). Right: Viewbox (center 50%) + UniformToFill.")
                             .FontSize(ThemeFontSize.Small)
                     )
             )

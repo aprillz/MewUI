@@ -27,7 +27,7 @@ internal sealed class DraggablePreview : Canvas
         {
             Data = geometry,
             Stretch = Stretch.Fill,
-            ViewBox = new Rect(0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT),
+            Viewbox = new Rect(0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT),
             Width = PREVIEW_WIDTH,
             Height = PREVIEW_HEIGHT,
             IsHitTestVisible = false,
