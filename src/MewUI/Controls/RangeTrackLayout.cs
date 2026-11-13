@@ -2,7 +2,7 @@ namespace Aprillz.MewUI.Controls;
 
 /// <summary>
 /// Geometry of a value track: where the thumb and the two paging regions sit for a value in a range, and
-/// the value a point or a drag distance stands for. The drawn ScrollBar and <see cref="Track"/> share it,
+/// the value a point or a drag distance stands for. The drawn ScrollBar and Slider and <see cref="Track"/> share it,
 /// so a template part and the built-in drawing agree.
 /// </summary>
 internal readonly struct RangeTrackLayout

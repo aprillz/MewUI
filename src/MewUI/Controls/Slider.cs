@@ -11,7 +11,17 @@ public sealed partial class Slider : RangeBase
     private static readonly bool _defaultStyleRegistered =
         DefaultStyles.Register<Slider>(DefaultStyles.CreateSliderStyle);
 
+    /// <summary>
+    /// The optional track part of a template. The control pushes its range, value and orientation into it, moves
+    /// the value to a press on it and maps its thumb's drags to the value.
+    /// </summary>
+    public const string PART_TRACK = "PART_Track";
+
     private bool _isDragging;
+
+    private Track? _trackPart;
+    private Thumb? _thumbPart;
+    private double _thumbDragStartValue;
 
     public static readonly MewProperty<Color> FillProperty =
         MewProperty<Color>.Register<Slider>(nameof(Fill), default, MewPropertyOptions.AffectsRender);
@@ -32,6 +42,9 @@ public sealed partial class Slider : RangeBase
     // Extent across the track while the matching Width or Height is left unset.
     private const double DEFAULT_THICKNESS = 24;
 
+    // Thickness of the drawn track; the thumb is wider so it reads as the handle.
+    private const double TRACK_THICKNESS = 4;
+
     private WheelNotchAccumulator _wheelAccumulator;
 
     static Slider()
@@ -46,8 +59,8 @@ public sealed partial class Slider : RangeBase
     /// Gets or sets the direction of the track; a vertical slider has its minimum at the bottom.
     /// </summary>
     /// <remarks>
-    /// While the extent across the track is unset it defaults to 24 DIPs (Height when horizontal,
-    /// Width when vertical).
+    /// While the extent across the track is unset and no template is applied, it defaults to 24 DIPs
+    /// (Height when horizontal, Width when vertical).
     /// </remarks>
     public Orientation Orientation
     {
@@ -55,11 +68,12 @@ public sealed partial class Slider : RangeBase
         set => SetValue(OrientationProperty, value);
     }
 
+    // A template sizes the slider from its own tree, so the default thickness is the built-in drawing's only.
     internal override double LayoutWidth
-        => Orientation == Orientation.Vertical && !PropertyStore.HasOwnValue(WidthProperty.Id) ? DEFAULT_THICKNESS : Width;
+        => !HasTemplateInstance && Orientation == Orientation.Vertical && !PropertyStore.HasOwnValue(WidthProperty.Id) ? DEFAULT_THICKNESS : Width;
 
     internal override double LayoutHeight
-        => Orientation == Orientation.Horizontal && !PropertyStore.HasOwnValue(HeightProperty.Id) ? DEFAULT_THICKNESS : Height;
+        => !HasTemplateInstance && Orientation == Orientation.Horizontal && !PropertyStore.HasOwnValue(HeightProperty.Id) ? DEFAULT_THICKNESS : Height;
 
     /// <summary>
     /// Gets or sets whether the mouse wheel changes the value by
@@ -96,6 +110,11 @@ public sealed partial class Slider : RangeBase
 
     protected override Size MeasureContent(Size availableSize)
     {
+        if (HasTemplateInstance)
+        {
+            return base.MeasureContent(availableSize);
+        }
+
         if (Orientation == Orientation.Vertical)
         {
             return new Size(ThumbSize, ThumbSize * 3);
@@ -108,13 +127,17 @@ public sealed partial class Slider : RangeBase
 
     protected override void OnRender(IGraphicsContext context)
     {
-        var bounds = Bounds;
-        var contentBounds = bounds.Deflate(Padding);
-        double fraction = GetNormalizedValue();
+        // A template owns the control's entire visuals; the built-in track and thumb would double-render.
+        if (HasTemplateInstance)
+        {
+            return;
+        }
 
-        // Track, inset half a thumb on both ends so the thumb at either extreme stays inside
-        // the control bounds; ink past them is cut by any caching or clipping ancestor.
-        const double TRACK_THICKNESS = 4;
+        var contentBounds = Bounds.Deflate(Padding);
+        var layout = ComputeLayout(contentBounds);
+
+        // The visible track runs between the thumb centers at either extreme, so the thumb stays inside the
+        // control bounds; ink past them is cut by any caching or clipping ancestor.
         Rect trackRect;
         Rect fillRect;
         Rect thumbRect;
@@ -126,13 +149,11 @@ public sealed partial class Slider : RangeBase
                 TRACK_THICKNESS,
                 Math.Max(0, contentBounds.Height - ThumbSize));
 
-            double fillHeight = trackRect.Height * fraction;
+            // Shorter than the thumb, the track has no length; the thumb stays at the top and nothing is filled.
+            double fillHeight = Math.Min(layout.DecreaseRect.Height, trackRect.Height);
             fillRect = new Rect(trackRect.X, trackRect.Bottom - fillHeight, trackRect.Width, fillHeight);
-
-            double thumbY = trackRect.Bottom - fillHeight - ThumbSize / 2;
-            thumbY = Math.Clamp(thumbY, contentBounds.Y, Math.Max(contentBounds.Y, contentBounds.Bottom - ThumbSize));
-            double thumbX = contentBounds.X + (contentBounds.Width - ThumbSize) / 2;
-            thumbRect = new Rect(thumbX, thumbY, ThumbSize, ThumbSize);
+            double thumbY = Math.Clamp(layout.ThumbRect.Y, contentBounds.Y, Math.Max(contentBounds.Y, contentBounds.Bottom - ThumbSize));
+            thumbRect = new Rect(contentBounds.X + (contentBounds.Width - ThumbSize) / 2, thumbY, ThumbSize, ThumbSize);
         }
         else
         {
@@ -142,22 +163,16 @@ public sealed partial class Slider : RangeBase
                 Math.Max(0, contentBounds.Width - ThumbSize),
                 TRACK_THICKNESS);
 
-            fillRect = new Rect(trackRect.X, trackRect.Y, trackRect.Width * fraction, trackRect.Height);
-
-            double thumbX = trackRect.X + trackRect.Width * fraction - ThumbSize / 2;
-            thumbX = Math.Clamp(thumbX, contentBounds.X, Math.Max(contentBounds.X, contentBounds.Right - ThumbSize));
-            double thumbY = contentBounds.Y + (contentBounds.Height - ThumbSize) / 2;
-            thumbRect = new Rect(thumbX, thumbY, ThumbSize, ThumbSize);
+            fillRect = new Rect(trackRect.X, trackRect.Y, Math.Min(layout.DecreaseRect.Width, trackRect.Width), trackRect.Height);
+            double thumbX = Math.Clamp(layout.ThumbRect.X, contentBounds.X, Math.Max(contentBounds.X, contentBounds.Right - ThumbSize));
+            thumbRect = new Rect(thumbX, contentBounds.Y + (contentBounds.Height - ThumbSize) / 2, ThumbSize, ThumbSize);
         }
 
-        var trackBg = Background;
-
-        context.FillRoundedRectangle(trackRect, 2, 2, trackBg);
+        context.FillRoundedRectangle(trackRect, 2, 2, Background);
 
         if (Theme.Metrics.ControlBorderThickness > 0)
         {
-            var trackBorder = BorderBrush;
-            context.DrawRoundedRectangle(trackRect, 2, 2, trackBorder, Theme.Metrics.ControlBorderThickness, strokeInset: true);
+            context.DrawRoundedRectangle(trackRect, 2, 2, BorderBrush, Theme.Metrics.ControlBorderThickness, strokeInset: true);
         }
 
         if (fillRect.Width > 0 && fillRect.Height > 0)
@@ -165,15 +180,75 @@ public sealed partial class Slider : RangeBase
             context.FillRoundedRectangle(fillRect, 2, 2, Fill);
         }
 
-        var thumbFill = ThumbBrush;
-
-        context.FillEllipse(thumbRect.Deflate(BorderThickness / 2.0), thumbFill);
-        var thumbBorder = ThumbBorderBrush;
+        context.FillEllipse(thumbRect.Deflate(BorderThickness / 2.0), ThumbBrush);
 
         if (BorderThickness > 0)
         {
-            context.DrawEllipse(thumbRect, thumbBorder, BorderThickness, strokeInset: true);
+            context.DrawEllipse(thumbRect, ThumbBorderBrush, BorderThickness, strokeInset: true);
         }
+    }
+
+    /// <summary>The built-in geometry: a fixed-size thumb travelling the content area, minimum at the bottom when vertical.</summary>
+    private RangeTrackLayout ComputeLayout(Rect area)
+        => RangeTrackLayout.Compute(
+            area, Orientation, isDirectionReversed: Orientation == Orientation.Vertical, Minimum, Maximum, Value,
+            viewportSize: double.NaN, ThumbSize, minThumbLength: 0);
+
+    private protected override void OnTemplateInstanceAttached()
+    {
+        base.OnTemplateInstanceAttached();
+
+        _trackPart = GetTemplateChild<Track>(PART_TRACK);
+        if (_trackPart == null)
+        {
+            return;
+        }
+
+        var context = TemplateContext!;
+        context.Bind(_trackPart, Track.MinimumProperty, MinimumProperty);
+        context.Bind(_trackPart, Track.MaximumProperty, MaximumProperty);
+        context.Bind(_trackPart, Track.ValueProperty, ValueProperty);
+        context.Bind(_trackPart, Track.OrientationProperty, OrientationProperty);
+        context.Bind(_trackPart, Track.IsDirectionReversedProperty, OrientationProperty,
+            static (Orientation orientation) => orientation == Orientation.Vertical);
+
+        _thumbPart = _trackPart.Thumb;
+        if (_thumbPart != null)
+        {
+            _thumbPart.DragStarted += OnThumbDragStarted;
+            _thumbPart.DragDelta += OnThumbDragDelta;
+        }
+    }
+
+    private protected override void OnTemplateInstanceDetached()
+    {
+        base.OnTemplateInstanceDetached();
+
+        if (_thumbPart != null)
+        {
+            _thumbPart.DragStarted -= OnThumbDragStarted;
+            _thumbPart.DragDelta -= OnThumbDragDelta;
+            _thumbPart = null;
+        }
+
+        _trackPart = null;
+    }
+
+    private void OnThumbDragStarted()
+    {
+        Focus();
+        _thumbDragStartValue = Value;
+    }
+
+    private void OnThumbDragDelta(Vector delta)
+    {
+        if (_trackPart == null || !IsEffectivelyEnabled)
+        {
+            return;
+        }
+
+        double distance = Orientation == Orientation.Vertical ? delta.Y : delta.X;
+        SetValueInternal(_thumbDragStartValue + _trackPart.ValueFromDistance(distance), true);
     }
 
     protected override void OnMouseDown(MouseEventArgs e)
@@ -186,6 +261,13 @@ public sealed partial class Slider : RangeBase
         }
 
         Focus();
+
+        // The thumb part handles its own press; without a track part a press only takes focus.
+        if (HasTemplateInstance && (e.Handled || _trackPart == null))
+        {
+            return;
+        }
+
         SetValueFromPosition(TransformFromRoot(e.Position));
 
         var root = FindVisualRoot();
@@ -341,24 +423,9 @@ public sealed partial class Slider : RangeBase
 
     private void SetValueFromPosition(Point position)
     {
-        // Mirrors the render-side track inset so a click lands on the value under the pointer.
-        var contentBounds = Bounds.Deflate(Padding);
-        double fraction;
-        if (Orientation == Orientation.Vertical)
-        {
-            double bottom = contentBounds.Bottom - ThumbSize / 2;
-            double height = Math.Max(1e-6, contentBounds.Height - ThumbSize);
-            fraction = Math.Clamp((bottom - position.Y) / height, 0, 1);
-        }
-        else
-        {
-            double left = contentBounds.X + ThumbSize / 2;
-            double width = Math.Max(1e-6, contentBounds.Width - ThumbSize);
-            fraction = Math.Clamp((position.X - left) / width, 0, 1);
-        }
-
-        double range = Maximum - Minimum;
-        double value = range <= 0 ? Minimum : Minimum + fraction * range;
+        double value = _trackPart != null
+            ? _trackPart.ValueFromPoint(position)
+            : ComputeLayout(Bounds.Deflate(Padding)).ValueFromPoint(position);
         SetValueInternal(value, true);
     }
 

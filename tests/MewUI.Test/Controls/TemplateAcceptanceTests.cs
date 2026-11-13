@@ -16,7 +16,6 @@ public sealed class TemplateAcceptanceTests
     // Controls whose template is built but not used yet; the value names the control-templating plan stage.
     private static readonly Dictionary<Type, string> _deferred = new()
     {
-        [typeof(Slider)] = "T2",
         [typeof(ScrollViewer)] = "T4",
         [typeof(ItemsControl)] = "T4",
         [typeof(ListBox)] = "T4",
