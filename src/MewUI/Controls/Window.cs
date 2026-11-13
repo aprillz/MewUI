@@ -772,6 +772,9 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         MewProperty<bool>.Register<Window>(nameof(ShowInTaskbar), true, MewPropertyOptions.None,
             static (self, _, _) => self._backend?.SetShowInTaskbar(self.ShowInTaskbar));
 
+    public static readonly MewProperty<bool> ShowActivatedProperty =
+        MewProperty<bool>.Register<Window>(nameof(ShowActivated), true);
+
     /// <summary>
     /// Gets or sets the window title.
     /// </summary>
@@ -850,6 +853,9 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     /// activation away from its owner. Backends consult it wherever a window could be activated.
     /// </summary>
     internal bool IsNonActivatingSurface => _kind is WindowKind.Popup or WindowKind.Overlay;
+
+    /// <summary>Whether showing this window must leave the current activation where it is.</summary>
+    internal bool ShowsWithoutActivation => IsNonActivatingSurface || !ShowActivated;
 
     /// <summary>Whether this surface lets the mouse through to whatever is underneath.</summary>
     internal bool IsInputTransparentSurface { get; set; }
@@ -1099,6 +1105,16 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     {
         get => GetValue(ShowInTaskbarProperty);
         set => SetValue(ShowInTaskbarProperty, value);
+    }
+
+    /// <summary>
+    /// Gets or sets whether showing the window activates it; where a platform cannot maximize without
+    /// activating, a window shown maximized is activated regardless.
+    /// </summary>
+    public bool ShowActivated
+    {
+        get => GetValue(ShowActivatedProperty);
+        set => SetValue(ShowActivatedProperty, value);
     }
 
     /// <summary>

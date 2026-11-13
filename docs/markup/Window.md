@@ -45,6 +45,7 @@ Receiver: `Window` and derived types (`where T : Window`).
 | `OnWindowStateChanged(Action<WindowState> handler)` | `event WindowStateChanged` | Subscribes handler to WindowStateChanged. Raised when WindowState changes. |
 | `PlatformOptions(PlatformWindowOptions value)` | `PlatformOptions` | Sets the platform-specific window options; options for a mismatched platform throw InvalidOperationException at backend attach time. |
 | `Resizable(double width, double height, double minWidth = 0, double minHeight = 0, double maxWidth = double.PositiveInfinity, double maxHeight = double.PositiveInfinity)` |  | Sets the window as resizable with optional min/max constraints. |
+| `ShowActivated(bool value = true)` | `ShowActivated` | Sets whether showing the window activates it; where a platform cannot maximize without activating, a window shown maximized is activated regardless. |
 | `ShowInTaskbar(bool value = true)` | `ShowInTaskbar` | Sets whether the window appears in the taskbar. |
 | `ShowToast(string text)` |  | Shows a toast notification that auto-dismisses after a duration based on text length. |
 | `StartCenterOwner()` | `StartupLocation = CenterOwner` | Sets the window to open centered on the owner window. The owner is provided when calling Show or ShowDialogAsync. |
