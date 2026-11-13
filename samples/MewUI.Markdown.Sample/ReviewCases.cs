@@ -1,4 +1,4 @@
-internal sealed record ReviewCase(string Name, string Notes, string Markdown, bool UseHtmlFormatting = false);
+internal sealed record ReviewCase(string Name, string Notes, string Markdown, bool UseHtmlFormatting = false, bool UseMath = false);
 
 internal static class ReviewCases
 {
@@ -462,7 +462,211 @@ internal static class ReviewCases
                 """"),
             new("18 Long document", "200 repeated sections for scroll/resize review. Not a virtualization or performance pass.",
                 "# Long document\n\n" + string.Join("\n\n", Enumerable.Range(1, 200).Select(index =>
-                    $"## Section {index}\n\nParagraph {index}: **bold**, *italic*, `code`, 한글 🌍 and [link {index}](https://example.test/{index}). Resize and scroll to check layout stability.")))
+                    $"## Section {index}\n\nParagraph {index}: **bold**, *italic*, `code`, 한글 🌍 and [link {index}](https://example.test/{index}). Resize and scroll to check layout stability."))),
+            new("19 Math Extension", "LaTeX formulas: inline and display math, matrices, cases and aligned equations. Selecting this case turns Math on.", """
+                # Math Extension
+
+
+                ## 1. Inline formulas
+                1. Universal gravitation: $F = G\dfrac{m_1 m_2}{r^2}$
+                2. Pythagorean theorem: $a^2 + b^2 = c^2$
+                3. Change of logarithm base: $\log_a b = \dfrac{\ln b}{\ln a}$
+                4. Trigonometric identity: $\sin^2\alpha + \cos^2\alpha = 1$
+                5. Arithmetic sequence term: $a_n = a_1 + (n-1)d$
+                6. Geometric series sum: $S_n = \dfrac{a_1(1-q^n)}{1-q}\ (q\neq1)$
+                7. Distance between two points: $d = \sqrt{(x_2-x_1)^2+(y_2-y_1)^2}$
+                8. Depressed cubic equation: $x^3 + px + q = 0$
+                9. Modulus of a complex number: $|z| = \sqrt{x^2+y^2},\ z=x+yi$
+                10. Expected value: $E(X) = \sum x_i P(X=x_i)$
+                11. Wave speed and wavelength: $c = \lambda \nu$
+                12. Ideal gas law: $PV = nRT$
+                13. Derivative notation: $y' = \dfrac{dy}{dx}$
+                14. Permutations: $\mathrm{A}_n^k = \dfrac{n!}{(n-k)!}$
+                15. Combinations: $\mathrm{C}_n^k = \dfrac{n!}{k!(n-k)!}$
+
+                ## 2. Basic display formulas
+
+                ### 2.1 Trigonometric functions and sum formulas
+                $$\sin(\alpha\pm\beta)=\sin\alpha\cos\beta\pm\cos\alpha\sin\beta$$
+                $$\cos(\alpha\pm\beta)=\cos\alpha\cos\beta\mp\sin\alpha\sin\beta$$
+                $$\tan2\theta=\frac{2\tan\theta}{1-\tan^2\theta}$$
+                $$\sin^2\frac{\theta}{2}=\frac{1-\cos\theta}{2},\quad \cos^2\frac{\theta}{2}=\frac{1+\cos\theta}{2}$$
+
+                ### 2.2 Limits and notable limits
+                $$\lim_{x\to0}\frac{\sin x}{x}=1$$
+                $$\lim_{x\to\infty}\left(1+\frac1x\right)^x=e$$
+                $$\lim_{n\to\infty}\left(1+\frac1n\right)^n=e$$
+                $$\lim_{x\to+\infty}\frac{\ln x}{x}=0$$
+
+                ### 2.3 Indefinite and definite integrals
+                $$\int x^n dx=\frac{x^{n+1}}{n+1}+C\quad(n\neq-1)$$
+                $$\int\frac1x dx=\ln|x|+C$$
+                $$\int\sin x dx=-\cos x+C,\quad \int\cos x dx=\sin x+C$$
+                $$\int_{a}^{b}f(x)dx=F(b)-F(a),\quad F'(x)=f(x)$$
+                $$\int_{-\infty}^{+\infty}e^{-ax^2}dx=\sqrt{\frac{\pi}{a}}\quad(a>0)$$
+
+                ### 2.4 Series
+                $$\sum_{k=0}^{\infty}x^k=\frac{1}{1-x}\quad(|x|<1)$$
+                $$\sum_{k=1}^{\infty}\frac1{k^2}=\frac{\pi^2}{6}$$
+                $$\sum_{k=1}^{\infty}\frac1{k^4}=\frac{\pi^4}{90}$$
+                $$e^x=\sum_{n=0}^{\infty}\frac{x^n}{n!}$$
+                $$\sin x=\sum_{n=0}^{\infty}\frac{(-1)^n x^{2n+1}}{(2n+1)!}$$
+
+                ### 2.5 Exponentials, logarithms and hyperbolic functions
+                $$a^x=e^{x\ln a}$$
+                $$\ln(ab)=\ln a+\ln b,\quad \ln\frac{a}{b}=\ln a-\ln b$$
+                $$\sinh x=\frac{e^x-e^{-x}}{2},\quad \cosh x=\frac{e^x+e^{-x}}{2}$$
+
+                ## 3. Linear algebra: matrices, determinants, vectors and inverses
+
+                ### 3.1 2x2 and 3x3 matrices
+                $$M = \begin{pmatrix} 1 & -2 \\ 3 & 4 \end{pmatrix}$$
+                $$B = \begin{pmatrix} 2 & 0 & 1 \\ -1 & 5 & 3 \\ 4 & -2 & 0 \end{pmatrix}$$
+
+                ### 3.2 Determinants
+                $$\det\begin{pmatrix}a&b\\c&d\end{pmatrix}=ad-bc$$
+                $$\begin{vmatrix}
+                a_{11} & a_{12} & a_{13}\\
+                a_{21} & a_{22} & a_{23}\\
+                a_{31} & a_{32} & a_{33}
+                \end{vmatrix}
+                =a_{11}a_{22}a_{33}+a_{12}a_{23}a_{31}+a_{13}a_{21}a_{32}
+                -a_{13}a_{22}a_{31}-a_{12}a_{21}a_{33}-a_{11}a_{23}a_{32}$$
+
+                ### 3.3 Column and row vectors
+                $$\boldsymbol{v}=\begin{pmatrix}x\\y\\z\end{pmatrix},\quad \boldsymbol{u}=(a,b,c)$$
+
+                ### 3.4 Matrix multiplication and the identity matrix
+                $$\begin{pmatrix}a&b\\c&d\end{pmatrix}\begin{pmatrix}e&f\\g&h\end{pmatrix}=
+                \begin{pmatrix}ae+bg&af+bh\\ce+dg&cf+dh\end{pmatrix}$$
+                $$I_3=\begin{pmatrix}1&0&0\\0&1&0\\0&0&1\end{pmatrix}$$
+
+                ### 3.5 Inverse of a 2x2 matrix
+                $$\begin{pmatrix}a&b\\c&d\end{pmatrix}^{-1}=\frac1{ad-bc}\begin{pmatrix}d&-b\\-c&a\end{pmatrix}$$
+
+                ### 3.6 Dot product and norm
+                $$\boldsymbol{a}\cdot\boldsymbol{b}=a_1b_1+a_2b_2+a_3b_3$$
+                $$\|\boldsymbol{x}\|=\sqrt{x_1^2+x_2^2+\dots+x_n^2}$$
+
+                ## 4. Calculus: partial derivatives, total differential, multiple integrals and gradient
+
+                ### 4.1 Higher-order and mixed partial derivatives
+                $$\frac{d^2y}{dx^2}=\frac{d}{dx}\left(\frac{dy}{dx}\right)$$
+                $$\frac{\partial^2 u}{\partial x\partial y}=\frac{\partial}{\partial x}\left(\frac{\partial u}{\partial y}\right)$$
+
+                ### 4.2 Total differential
+                $$du=\frac{\partial u}{\partial x}dx+\frac{\partial u}{\partial y}dy+\frac{\partial u}{\partial z}dz$$
+
+                ### 4.3 Gradient operator
+                $$\nabla f=\left(\frac{\partial f}{\partial x},\frac{\partial f}{\partial y},\frac{\partial f}{\partial z}\right)$$
+
+                ### 4.4 Double integral in polar coordinates
+                $$\iint_D f(x,y)dxdy=\int_{\alpha}^{\beta}\int_{r_1(\theta)}^{r_2(\theta)}f(r\cos\theta,r\sin\theta)\cdot r\,dr d\theta$$
+
+                ### 4.5 Two-dimensional Gaussian integral
+                $$\iint_{-\infty}^{+\infty}e^{-(x^2+y^2)}dxdy=\pi$$
+
+                ## 5. Piecewise, sign and min/max functions
+                $$\mathrm{sgn}(x)=
+                \begin{cases}
+                1 & x>0\\
+                0 & x=0\\
+                -1 & x<0
+                \end{cases}$$
+
+                $$g(x)=
+                \begin{cases}
+                \ln x & x>1\\
+                x-1 & 0<x\le1\\
+                x^2 & x\le0
+                \end{cases}$$
+
+                $$|x|=
+                \begin{cases}
+                x & x\ge0\\
+                -x & x<0
+                \end{cases}$$
+
+                $$h(t)=
+                \begin{cases}
+                e^{-kt}\sin\omega t & t\ge0\\
+                0 & t<0
+                \end{cases}$$
+
+                ## 6. Differential equations
+
+                ### 6.1 General solution of a first-order linear ODE
+                $$y'+P(x)y=Q(x),\quad y=e^{-\int Pdx}\left(\int Q e^{\int Pdx}dx+C\right)$$
+
+                ### 6.2 Second-order homogeneous ODE with constant coefficients
+                $$y''+py'+qy=0$$
+
+                ### 6.3 One-dimensional wave equation
+                $$\frac{\partial^2 u}{\partial t^2}=c^2\frac{\partial^2 u}{\partial x^2}$$
+
+                ### 6.4 Heat equation
+                $$\frac{\partial u}{\partial t}=a^2\frac{\partial^2 u}{\partial x^2}$$
+
+                ## 7. Probability and statistics
+
+                ### 7.1 Normal distribution density
+                $$f(x)=\frac{1}{\sqrt{2\pi}\sigma}\exp\left\{-\frac{(x-\mu)^2}{2\sigma^2}\right\}$$
+
+                ### 7.2 Variance
+                $$D(X)=E(X^2)-[E(X)]^2$$
+
+                ### 7.3 Binomial distribution
+                $$P(X=k)=\mathrm{C}_n^k p^k (1-p)^{n-k}$$
+
+                ### 7.4 Covariance
+                $$\mathrm{Cov}(X,Y)=E[(X-EX)(Y-EY)]$$
+
+                ## 8. Geometry, vector analysis and physics
+
+                ### 8.1 Surface area and volume of a sphere
+                $$S=4\pi R^2,\quad V=\frac43\pi R^3$$
+
+                ### 8.2 Coulomb's law in vector form
+                $$\boldsymbol{F}=k\frac{q_1 q_2}{r^2}\boldsymbol{e}_r$$
+
+                ### 8.3 Kinetic and mechanical energy
+                $$E_k=\frac12 mv^2,\quad E_p=mgh$$
+
+                ### 8.4 Angular momentum
+                $$\boldsymbol{L}=\boldsymbol{r}\times m\boldsymbol{v}$$
+
+                ## 9. Additional LaTeX styles
+
+                ### 9.1 Aligned equations
+                $$
+                \begin{aligned}
+                f(x) &= (x+1)^2 \\
+                     &= x^2 + 2x + 1
+                \end{aligned}
+                $$
+
+                ### 9.2 Matrix environments
+                $$
+                A = \begin{bmatrix} 1 & 2 \\ 3 & 4 \end{bmatrix}, \quad
+                B = \begin{vmatrix} 1 & 2 \\ 3 & 4 \end{vmatrix}, \quad
+                C = \begin{Vmatrix} 1 & 2 \\ 3 & 4 \end{Vmatrix}
+                $$
+
+                ### 9.3 Math fonts and text
+                $$
+                \mathbb{R}, \mathbb{Z}, \mathbb{N}, \mathbb{Q}, \mathbb{C}
+                $$
+                $$
+                \mathcal{L}, \mathcal{F}, \mathcal{H}
+                $$
+                $$
+                \text{Let } x \in \mathbb{R} \text{ and } y > 0.
+                $$
+
+                ### 9.4 Over/under braces and arrows
+                $$\underbrace{a + b + c}_{\text{3 terms}} + \overbrace{x + y}^{\text{2 terms}}$$
+                $$A \xrightarrow{\text{reaction}} B \quad A \xleftarrow{y} B$$
+                """, UseMath: true)
         ];
         string overview = "# Markdown case catalogue\n\nCommonMark core + enabled GFM + unsupported syntax. Select a category for focused inspection.\n\n" +
             string.Join("\n\n", cases.Take(15).Select(entry => "# " + entry.Name + "\n\n" + entry.Markdown));
