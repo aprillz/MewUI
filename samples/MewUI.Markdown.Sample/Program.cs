@@ -112,6 +112,8 @@ public class DemoWindow : Window
         {
             htmlEnabled = entry.UseHtmlFormatting;
             ((TextBlock)html.Content!).Text(htmlEnabled ? "HTML: on" : "HTML: off");
+            mathEnabled = entry.UseMath;
+            ((TextBlock)math.Content!).Text(mathEnabled ? "Math: on" : "Math: off");
             ApplyOptions();
             title.Text(entry.Name);
             description.Text(entry.Notes);
