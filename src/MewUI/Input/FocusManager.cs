@@ -29,6 +29,12 @@ public sealed class FocusManager
     public UIElement? FocusedElement { get; private set; }
 
     /// <summary>
+    /// Gets the element that had the focus before the last focus change, for an element gaining the
+    /// focus to learn where it came from.
+    /// </summary>
+    internal UIElement? PreviousFocusedElement { get; private set; }
+
+    /// <summary>
     /// Sets focus to the specified element after resolving its default focus target; returns false when
     /// the element cannot take focus.
     /// </summary>
@@ -78,6 +84,7 @@ public sealed class FocusManager
             _window.CancelImeComposition();
         }
 
+        PreviousFocusedElement = oldElement;
         FocusedElement = element;
 
         UpdateFocusWithin(oldElement, element);
