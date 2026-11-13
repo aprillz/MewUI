@@ -624,14 +624,9 @@ internal sealed class Win32WindowBackend : IWindowBackend
         const uint SWP_NOMOVE = 0x0002;
         const uint SWP_NOZORDER = 0x0004;
         const uint SWP_NOACTIVATE = 0x0010;
-        uint flags = SWP_NOMOVE | SWP_NOZORDER;
-        // A non-activating surface must not be pulled to the foreground by a programmatic resize
-        // (the fit-to-content resize runs right after Show and would otherwise steal the owner's activation).
-        if (Window.IsNonActivatingSurface)
-        {
-            flags |= SWP_NOACTIVATE;
-        }
-        User32.SetWindowPos(Handle, 0, 0, 0, windowW, windowH, flags);
+        // Without SWP_NOACTIVATE a programmatic resize activates the window and raises it, which takes
+        // activation from another window (closing its menus) and reorders topmost windows.
+        User32.SetWindowPos(Handle, 0, 0, 0, windowW, windowH, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
     }
 
     public Point GetPosition()
