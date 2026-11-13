@@ -23,6 +23,15 @@
   <ItemGroup>
     <!-- The remote scripts pass this to the runner: it carries the default per-test timeout. -->
     <None Include="test.runsettings" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <!-- The out-of-process UI Automation client that UiaProviderTests drives. -->
+    <None Include="UiaProbe.ps1" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <!-- The out-of-process accessibility client that AxProviderTests drives, compiled on the Mac at first use. -->
+    <None Include="AxProbe.swift" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Serves the automation tree, which UiaProviderTests reads through UI Automation. -->
+    <RuntimeHostConfigurationOption Include="Aprillz.MewUI.Automation.Enabled" Value="true" />
   </ItemGroup>
 
   <ItemGroup>
