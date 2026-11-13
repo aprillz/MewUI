@@ -29,6 +29,9 @@ public sealed partial class ProgressBar : RangeBase
             MewPropertyOptions.AffectsRender,
             static (self, _, isIndeterminate) => self.OnIsIndeterminateChanged(isIndeterminate));
 
+    public static readonly MewProperty<Color> FillProperty =
+        MewProperty<Color>.Register<ProgressBar>(nameof(Fill), default, MewPropertyOptions.AffectsRender);
+
     // Indicator block width relative to the track in indeterminate mode.
     private const double INDICATOR_RATIO = 0.3;
     private const double CYCLE_DURATION_MS = 2000;
@@ -49,6 +52,15 @@ public sealed partial class ProgressBar : RangeBase
     {
         get => GetValue(IsIndeterminateProperty);
         set => SetValue(IsIndeterminateProperty, value);
+    }
+
+    /// <summary>
+    /// Gets or sets the color of the part of the bar that shows the value or the indeterminate sweep.
+    /// </summary>
+    public Color Fill
+    {
+        get => GetValue(FillProperty);
+        set => SetValue(FillProperty, value);
     }
 
     private void OnIsIndeterminateChanged(bool isIndeterminate)
@@ -130,7 +142,7 @@ public sealed partial class ProgressBar : RangeBase
 
         if (fillRect.Width > 0)
         {
-            var fillColor = Foreground;
+            var fillColor = Fill;
             if (radius - 1 > 0)
             {
                 double rx = Math.Min(radius - 1, fillRect.Height / 2.0);

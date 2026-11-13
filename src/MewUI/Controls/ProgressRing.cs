@@ -18,6 +18,9 @@ public sealed partial class ProgressRing : RangeBase
             MewPropertyOptions.AffectsRender,
             static (self, _, isIndeterminate) => self.OnIsIndeterminateChanged(isIndeterminate));
 
+    public static readonly MewProperty<Color> FillProperty =
+        MewProperty<Color>.Register<ProgressRing>(nameof(Fill), default, MewPropertyOptions.AffectsRender);
+
     // Stroke thickness relative to the ring's side length.
     private const double THICKNESS_RATIO = 0.125;
     private const double MIN_THICKNESS = 2;
@@ -48,6 +51,15 @@ public sealed partial class ProgressRing : RangeBase
     {
         get => GetValue(IsIndeterminateProperty);
         set => SetValue(IsIndeterminateProperty, value);
+    }
+
+    /// <summary>
+    /// Gets or sets the color of the arc that shows the value or the indeterminate spin.
+    /// </summary>
+    public Color Fill
+    {
+        get => GetValue(FillProperty);
+        set => SetValue(FillProperty, value);
     }
 
     private void OnIsIndeterminateChanged(bool isIndeterminate)
@@ -126,7 +138,7 @@ public sealed partial class ProgressRing : RangeBase
             return;
         }
 
-        var indicator = Foreground;
+        var indicator = Fill;
         if (sweepDegrees >= 360)
         {
             context.DrawEllipse(new Rect(centerX - radius, centerY - radius, radius * 2, radius * 2), indicator, thickness);

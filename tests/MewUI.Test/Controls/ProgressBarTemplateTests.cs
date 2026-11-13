@@ -16,7 +16,7 @@ public sealed class ProgressBarTemplateTests
             var track = new Border { Width = TRACK_WIDTH, Height = 8, Child = indicator };
             ctx.Register(ProgressBar.PART_TRACK, track);
             ctx.Register(ProgressBar.PART_INDICATOR, indicator);
-            ctx.Bind(indicator, Control.BackgroundProperty, TextElement.ForegroundProperty);
+            ctx.Bind(indicator, Control.BackgroundProperty, ProgressBar.FillProperty);
             return track;
         });
 
@@ -36,7 +36,7 @@ public sealed class ProgressBarTemplateTests
         window.PerformLayout();
 
         Assert.AreEqual(TRACK_WIDTH * 0.25, indicator.Bounds.Width, 0.01, "a quarter of the range fills a quarter of the track");
-        Assert.AreEqual(bar.Foreground, indicator.Background, "the indicator color comes from Foreground through the template binding");
+        Assert.AreEqual(bar.Fill, indicator.Background, "the indicator color comes from Fill through the template binding");
 
         bar.Value = 50;
         window.PerformLayout();
@@ -68,7 +68,7 @@ public sealed class ProgressBarTemplateTests
     }
 
     [TestMethod]
-    public void ClearTemplate_RestoresTheDrawnBarInForeground()
+    public void ClearTemplate_RestoresTheDrawnBarInFill()
     {
         if (!OperatingSystem.IsWindows())
         {
@@ -83,17 +83,17 @@ public sealed class ProgressBarTemplateTests
         window.PerformLayout();
 
         bar.Template = null;
-        bar.Foreground = Color.FromRgb(200, 10, 10);
+        bar.Fill = Color.FromRgb(200, 10, 10);
         window.PerformLayout();
 
         var recorder = new FillRecordingContext();
         bar.Render(recorder);
 
-        CollectionAssert.Contains(recorder.FillColors, bar.Foreground, "the drawn bar fills with Foreground");
+        CollectionAssert.Contains(recorder.FillColors, bar.Fill, "the drawn bar fills with Fill");
     }
 
     [TestMethod]
-    public void DefaultStyle_GivesForegroundTheAccentAndDisabledAccent()
+    public void DefaultStyle_GivesFillTheAccentAndDisabledAccent()
     {
         if (!OperatingSystem.IsWindows())
         {
@@ -104,18 +104,23 @@ public sealed class ProgressBarTemplateTests
         var window = HeadlessWindow.Create();
         var bar = new ProgressBar { Value = 50 };
         var ring = new ProgressRing { Value = 50 };
-        window.Content = new StackPanel().Children(bar, ring);
+        var slider = new Slider { Value = 50 };
+        // The slider style animates its colors on a state change, so the disabled one starts disabled.
+        var disabledSlider = new Slider { Value = 50, IsEnabled = false };
+        window.Content = new StackPanel().Children(bar, ring, slider, disabledSlider);
         window.PerformLayout();
 
-        Assert.AreEqual(bar.ThemeInternal.Palette.Accent, bar.Foreground, "the bar fills with the accent by default");
-        Assert.AreEqual(ring.ThemeInternal.Palette.Accent, ring.Foreground, "the ring fills with the accent by default");
+        Assert.AreEqual(bar.ThemeInternal.Palette.Accent, bar.Fill, "the bar fills with the accent by default");
+        Assert.AreEqual(ring.ThemeInternal.Palette.Accent, ring.Fill, "the ring fills with the accent by default");
+        Assert.AreEqual(slider.ThemeInternal.Palette.Accent, slider.Fill, "the slider fills with the accent by default");
 
         bar.IsEnabled = false;
         ring.IsEnabled = false;
         window.PerformLayout();
 
-        Assert.AreEqual(bar.ThemeInternal.Palette.DisabledAccent, bar.Foreground, "a disabled bar fills with the disabled accent");
-        Assert.AreEqual(ring.ThemeInternal.Palette.DisabledAccent, ring.Foreground, "a disabled ring fills with the disabled accent");
+        Assert.AreEqual(bar.ThemeInternal.Palette.DisabledAccent, bar.Fill, "a disabled bar fills with the disabled accent");
+        Assert.AreEqual(ring.ThemeInternal.Palette.DisabledAccent, ring.Fill, "a disabled ring fills with the disabled accent");
+        Assert.AreEqual(disabledSlider.ThemeInternal.Palette.DisabledAccent, disabledSlider.Fill, "a disabled slider fills with the disabled accent");
     }
 
     private sealed class FillRecordingContext : NoOpGraphicsContext
