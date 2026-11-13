@@ -48,47 +48,95 @@ public static class ImageExtensions
     }
 
     /// <summary>
-    /// Sets the view box and units.
+    /// Sets the viewbox and units.
     /// </summary>
     /// <param name="image">Target image.</param>
-    /// <param name="viewBox">View box rectangle.</param>
-    /// <param name="units">View box units.</param>
+    /// <param name="viewbox">Viewbox rectangle.</param>
+    /// <param name="units">Viewbox units.</param>
     /// <returns>The image for chaining.</returns>
-    public static Image ViewBox(
+    public static Image Viewbox(
         this Image image,
-        [FluentSetsMember(nameof(Image.ViewBox))] Rect? viewBox,
-        [FluentSetsMember(nameof(Image.ViewBoxUnits))] ImageViewBoxUnits units = ImageViewBoxUnits.Pixels)
+        [FluentSetsMember(nameof(Image.Viewbox))] Rect? viewbox,
+        [FluentSetsMember(nameof(Image.ViewboxUnits))] ImageViewboxUnits units = ImageViewboxUnits.Pixels)
     {
-        image.ViewBox = viewBox;
-        image.ViewBoxUnits = units;
+        image.Viewbox = viewbox;
+        image.ViewboxUnits = units;
         return image;
     }
 
     /// <summary>
-    /// Sets the view box with pixel units.
+    /// Sets the viewbox with pixel units.
     /// </summary>
     /// <param name="image">Target image.</param>
-    /// <param name="viewBox">View box rectangle.</param>
+    /// <param name="viewbox">Viewbox rectangle.</param>
     /// <returns>The image for chaining.</returns>
-    [FluentSetsConstant(nameof(Image.ViewBoxUnits), ImageViewBoxUnits.Pixels)]
-    public static Image ViewBoxPixels(this Image image, [FluentSetsMember(nameof(Image.ViewBox))] Rect? viewBox)
+    [FluentSetsConstant(nameof(Image.ViewboxUnits), ImageViewboxUnits.Pixels)]
+    public static Image ViewboxPixels(this Image image, [FluentSetsMember(nameof(Image.Viewbox))] Rect? viewbox)
     {
-        image.ViewBox = viewBox;
-        image.ViewBoxUnits = ImageViewBoxUnits.Pixels;
+        image.Viewbox = viewbox;
+        image.ViewboxUnits = ImageViewboxUnits.Pixels;
         return image;
     }
 
     /// <summary>
-    /// Sets the view box with relative units.
+    /// Sets the viewbox with relative units.
     /// </summary>
     /// <param name="image">Target image.</param>
-    /// <param name="viewBox">View box rectangle.</param>
+    /// <param name="viewbox">Viewbox rectangle.</param>
     /// <returns>The image for chaining.</returns>
-    [FluentSetsConstant(nameof(Image.ViewBoxUnits), ImageViewBoxUnits.RelativeToBoundingBox)]
-    public static Image ViewBoxRelative(this Image image, [FluentSetsMember(nameof(Image.ViewBox))] Rect? viewBox)
+    [FluentSetsConstant(nameof(Image.ViewboxUnits), ImageViewboxUnits.RelativeToBoundingBox)]
+    public static Image ViewboxRelative(this Image image, [FluentSetsMember(nameof(Image.Viewbox))] Rect? viewbox)
     {
-        image.ViewBox = viewBox;
-        image.ViewBoxUnits = ImageViewBoxUnits.RelativeToBoundingBox;
+        image.Viewbox = viewbox;
+        image.ViewboxUnits = ImageViewboxUnits.RelativeToBoundingBox;
+        return image;
+    }
+
+    /// <summary>Sets the viewbox and units; obsolete name of <see cref="Viewbox(Image, Rect?, ImageViewboxUnits)"/>.</summary>
+    /// <param name="image">Target image.</param>
+    /// <param name="viewBox">Viewbox rectangle.</param>
+    /// <param name="units">Viewbox units.</param>
+    /// <returns>The image for chaining.</returns>
+    [Obsolete("Use Viewbox.")]
+    public static Image ViewBox(this Image image, Rect? viewBox, ImageViewBoxUnits units = ImageViewBoxUnits.Pixels)
+    {
+        image.Viewbox = viewBox;
+        image.ViewboxUnits = (ImageViewboxUnits)units;
+        return image;
+    }
+
+    /// <summary>Sets the viewbox with pixel units; obsolete name of <see cref="ViewboxPixels"/>.</summary>
+    /// <param name="image">Target image.</param>
+    /// <param name="viewBox">Viewbox rectangle.</param>
+    /// <returns>The image for chaining.</returns>
+    [Obsolete("Use ViewboxPixels.")]
+    public static Image ViewBoxPixels(this Image image, Rect? viewBox)
+    {
+        image.Viewbox = viewBox;
+        image.ViewboxUnits = ImageViewboxUnits.Pixels;
+        return image;
+    }
+
+    /// <summary>Sets the viewbox with relative units; obsolete name of <see cref="ViewboxRelative"/>.</summary>
+    /// <param name="image">Target image.</param>
+    /// <param name="viewBox">Viewbox rectangle.</param>
+    /// <returns>The image for chaining.</returns>
+    [Obsolete("Use ViewboxRelative.")]
+    public static Image ViewBoxRelative(this Image image, Rect? viewBox)
+    {
+        image.Viewbox = viewBox;
+        image.ViewboxUnits = ImageViewboxUnits.RelativeToBoundingBox;
+        return image;
+    }
+
+    /// <summary>Sets the viewbox units; obsolete name of the ViewboxUnits extension.</summary>
+    /// <param name="image">Target image.</param>
+    /// <param name="units">Viewbox units.</param>
+    /// <returns>The image for chaining.</returns>
+    [Obsolete("Use ViewboxUnits.")]
+    public static Image ViewBoxUnits(this Image image, ImageViewBoxUnits units)
+    {
+        image.ViewboxUnits = (ImageViewboxUnits)units;
         return image;
     }
 }

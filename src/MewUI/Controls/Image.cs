@@ -15,11 +15,19 @@ public sealed partial class Image : FrameworkElement
     public static readonly MewProperty<Stretch> StretchModeProperty =
         MewProperty<Stretch>.Register<Image>(nameof(StretchMode), Stretch.Uniform, MewPropertyOptions.AffectsLayout);
 
-    public static readonly MewProperty<Rect?> ViewBoxProperty =
-        MewProperty<Rect?>.Register<Image>(nameof(ViewBox), null, MewPropertyOptions.AffectsLayout);
+    public static readonly MewProperty<Rect?> ViewboxProperty =
+        MewProperty<Rect?>.Register<Image>(nameof(Viewbox), null, MewPropertyOptions.AffectsLayout);
 
-    public static readonly MewProperty<ImageViewBoxUnits> ViewBoxUnitsProperty =
-        MewProperty<ImageViewBoxUnits>.Register<Image>(nameof(ViewBoxUnits), ImageViewBoxUnits.Pixels, MewPropertyOptions.AffectsLayout);
+    public static readonly MewProperty<ImageViewboxUnits> ViewboxUnitsProperty =
+        MewProperty<ImageViewboxUnits>.Register<Image>(nameof(ViewboxUnits), ImageViewboxUnits.Pixels, MewPropertyOptions.AffectsLayout);
+
+    /// <summary>Obsolete name of <see cref="ViewboxProperty"/>.</summary>
+    [Obsolete("Use ViewboxProperty.")]
+    public static readonly MewProperty<Rect?> ViewBoxProperty = ViewboxProperty;
+
+    /// <summary>Obsolete name of <see cref="ViewboxUnitsProperty"/>; its value type is now <see cref="ImageViewboxUnits"/>.</summary>
+    [Obsolete("Use ViewboxUnitsProperty.")]
+    public static readonly MewProperty<ImageViewboxUnits> ViewBoxUnitsProperty = ViewboxUnitsProperty;
 
     public static readonly MewProperty<ImageAlignmentX> AlignmentXProperty =
         MewProperty<ImageAlignmentX>.Register<Image>(nameof(AlignmentX), ImageAlignmentX.Center, MewPropertyOptions.AffectsRender);
@@ -70,19 +78,35 @@ public sealed partial class Image : FrameworkElement
     /// <summary>
     /// Gets or sets the viewbox region of the source image.
     /// </summary>
-    public Rect? ViewBox
+    public Rect? Viewbox
     {
-        get => GetValue(ViewBoxProperty);
-        set => SetValue(ViewBoxProperty, value);
+        get => GetValue(ViewboxProperty);
+        set => SetValue(ViewboxProperty, value);
     }
 
     /// <summary>
     /// Gets or sets the units for the viewbox coordinates.
     /// </summary>
+    public ImageViewboxUnits ViewboxUnits
+    {
+        get => GetValue(ViewboxUnitsProperty);
+        set => SetValue(ViewboxUnitsProperty, value);
+    }
+
+    /// <summary>Gets or sets the viewbox region; obsolete name of <see cref="Viewbox"/>.</summary>
+    [Obsolete("Use Viewbox.")]
+    public Rect? ViewBox
+    {
+        get => Viewbox;
+        set => Viewbox = value;
+    }
+
+    /// <summary>Gets or sets the viewbox units; obsolete name of <see cref="ViewboxUnits"/>.</summary>
+    [Obsolete("Use ViewboxUnits.")]
     public ImageViewBoxUnits ViewBoxUnits
     {
-        get => GetValue(ViewBoxUnitsProperty);
-        set => SetValue(ViewBoxUnitsProperty, value);
+        get => (ImageViewBoxUnits)ViewboxUnits;
+        set => ViewboxUnits = (ImageViewboxUnits)value;
     }
 
     /// <summary>
@@ -172,7 +196,7 @@ public sealed partial class Image : FrameworkElement
     /// </summary>
     /// <remarks>
     /// This reads pixels from the decoded <see cref="ImageSource"/> data (BGRA32) and maps the position through
-    /// <see cref="ViewBox"/>, <see cref="StretchMode"/>, and alignment. Returns <see langword="false"/> if the source
+    /// <see cref="Viewbox"/>, <see cref="StretchMode"/>, and alignment. Returns <see langword="false"/> if the source
     /// is not an <see cref="ImageSource"/>, decoding fails, or the position maps outside the source.
     /// </remarks>
     public bool TryPeekColor(Point positionDip, out Color color)
@@ -203,7 +227,7 @@ public sealed partial class Image : FrameworkElement
             orientation,
             metadata.PixelWidth,
             metadata.PixelHeight);
-        var srcRect = GetViewBoxPixels((int)intrinsicOrientedSize.Width, (int)intrinsicOrientedSize.Height);
+        var srcRect = GetViewboxPixels((int)intrinsicOrientedSize.Width, (int)intrinsicOrientedSize.Height);
         if (srcRect.Width <= 0 || srcRect.Height <= 0)
         {
             return false;
@@ -272,7 +296,7 @@ public sealed partial class Image : FrameworkElement
                 metadataOrientation,
                 metadata.PixelWidth,
                 metadata.PixelHeight);
-            var sourceRect = GetViewBoxPixels((int)metadataOrientedSize.Width, (int)metadataOrientedSize.Height);
+            var sourceRect = GetViewboxPixels((int)metadataOrientedSize.Width, (int)metadataOrientedSize.Height);
             return MeasureStretchedSize(sourceRect.Size, availableSize, StretchMode);
         }
 
@@ -282,11 +306,11 @@ public sealed partial class Image : FrameworkElement
             return Size.Empty;
         }
 
-        // Measurement and ViewBox are in oriented space, so a quarter-turned image measures with its
+        // Measurement and Viewbox are in oriented space, so a quarter-turned image measures with its
         // width and height swapped.
         var orientation = GetEffectiveOrientation();
         var orientedSize = OrientationTransform.GetOrientedSize(orientation, img.PixelWidth, img.PixelHeight);
-        var src = GetViewBoxPixels((int)orientedSize.Width, (int)orientedSize.Height);
+        var src = GetViewboxPixels((int)orientedSize.Width, (int)orientedSize.Height);
 
         // Pixels are treated as DIPs for now (1px == 1dip at 96dpi).
         return MeasureStretchedSize(src.Size, availableSize, StretchMode);
@@ -341,8 +365,8 @@ public sealed partial class Image : FrameworkElement
                 intrinsicRawWidth,
                 intrinsicRawHeight);
 
-            // ViewBox, Stretch and alignment are computed in oriented space (what the viewer sees).
-            var srcRect = GetViewBoxPixels((int)orientedSize.Width, (int)orientedSize.Height);
+            // Viewbox, Stretch and alignment are computed in oriented space (what the viewer sees).
+            var srcRect = GetViewboxPixels((int)orientedSize.Width, (int)orientedSize.Height);
             if (srcRect.Size.IsEmpty)
             {
                 return;
@@ -367,7 +391,7 @@ public sealed partial class Image : FrameworkElement
                 return;
             }
 
-            // Source and ViewBox stay in intrinsic coordinates. The actual resident texel dimensions
+            // Source and Viewbox stay in intrinsic coordinates. The actual resident texel dimensions
             // are consumed only by this internal draw adapter and never become layout/API dimensions.
             context.DrawImageOrientedScaled(
                 img,
@@ -386,12 +410,12 @@ public sealed partial class Image : FrameworkElement
         }
     }
 
-    private Rect GetViewBoxPixels(int pixelWidth, int pixelHeight)
+    private Rect GetViewboxPixels(int pixelWidth, int pixelHeight)
     {
         double iw = Math.Max(0, pixelWidth);
         double ih = Math.Max(0, pixelHeight);
         var full = new Rect(0, 0, iw, ih);
-        if (ViewBox is not Rect vb)
+        if (Viewbox is not Rect vb)
         {
             return full;
         }
@@ -409,7 +433,7 @@ public sealed partial class Image : FrameworkElement
             return full;
         }
 
-        if (ViewBoxUnits == ImageViewBoxUnits.RelativeToBoundingBox)
+        if (ViewboxUnits == ImageViewboxUnits.RelativeToBoundingBox)
         {
             x *= iw;
             y *= ih;

@@ -27,7 +27,7 @@ Receiver: `Shape` and derived types (`where T : Shape`).
 | `Stroke(Color color, double thickness = 1)` | `Stroke`, `StrokeThickness` | Sets the stroke to a solid color with the given thickness. |
 | `StrokeStyle(StrokeStyle value)` | `StrokeStyle` | Sets the stroke style (line cap, line join, dash pattern). |
 | `StrokeThickness(double value)` | `StrokeThickness` | Sets the stroke thickness in DIPs. |
-| `ViewBox(Rect? value)` | `ViewBox` | Sets the source rectangle a stretch maps onto the element, in the geometry's own coordinates; null uses the geometry's ink bounds. |
+| `Viewbox(Rect? value)` | `Viewbox` | Sets the source rectangle a stretch maps onto the element, in the geometry's own coordinates; null uses the geometry's ink bounds. |
 
 ### Line
 

@@ -33,8 +33,12 @@ public abstract class Shape : FrameworkElement
     /// <summary>
     /// The source rectangle a stretch maps onto the element, in the geometry's own coordinates; null uses the geometry's ink bounds.
     /// </summary>
-    public static readonly MewProperty<Rect?> ViewBoxProperty =
-        MewProperty<Rect?>.Register<Shape>(nameof(ViewBox), null, MewPropertyOptions.AffectsLayout);
+    public static readonly MewProperty<Rect?> ViewboxProperty =
+        MewProperty<Rect?>.Register<Shape>(nameof(Viewbox), null, MewPropertyOptions.AffectsLayout);
+
+    /// <summary>Obsolete name of <see cref="ViewboxProperty"/>.</summary>
+    [Obsolete("Use ViewboxProperty.")]
+    public static readonly MewProperty<Rect?> ViewBoxProperty = ViewboxProperty;
 
     /// <summary>
     /// Gets or sets the brush used to fill the shape interior; null draws no fill.
@@ -90,10 +94,18 @@ public abstract class Shape : FrameworkElement
     /// survives: stretching to the ink bounds instead scales each icon by however tightly it happens to
     /// be drawn, and a row of them comes out at different optical weights.
     /// </remarks>
+    public Rect? Viewbox
+    {
+        get => GetValue(ViewboxProperty);
+        set => SetValue(ViewboxProperty, value);
+    }
+
+    /// <summary>Gets or sets the source rectangle of a stretch; obsolete name of <see cref="Viewbox"/>.</summary>
+    [Obsolete("Use Viewbox.")]
     public Rect? ViewBox
     {
-        get => GetValue(ViewBoxProperty);
-        set => SetValue(ViewBoxProperty, value);
+        get => Viewbox;
+        set => Viewbox = value;
     }
 
     private Pen? _cachedPen;
@@ -199,7 +211,7 @@ public abstract class Shape : FrameworkElement
 
         // The declared grid wins over the ink: two icons drawn on the same grid then scale by the same
         // factor whatever margin each one leaves.
-        Rect geoBounds = ViewBox ?? geometry.GetBounds();
+        Rect geoBounds = Viewbox ?? geometry.GetBounds();
 
         // Match WPF's Path/Shape semantics: Stretch operates on the geometry (so its baked
         // path coordinates fit the element bounds), while Stroke is applied at the Path
