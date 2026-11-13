@@ -66,6 +66,7 @@ Receiver: `ProgressBar`.
 | `BindIsIndeterminate(ObservableValue<bool> source)` | `bind IsIndeterminate` | Binds the indeterminate state to an observable value. |
 | `BindValue(ObservableValue<TSource> source, Func<TSource, double> convert)` | `bind Value` | Binds the value to a converted observable value. |
 | `BindValue(ObservableValue<double> source)` | `bind Value` | Binds the value to an observable value. |
+| `Fill(Color value)` | `Fill` | Sets the color of the part of the bar that shows the value or the indeterminate sweep. |
 | `IsIndeterminate(bool value = true)` | `IsIndeterminate` | Sets whether the bar shows a repeating sweep animation instead of Value. |
 
 ### ProgressRing
@@ -78,6 +79,7 @@ Receiver: `ProgressRing`.
 | `BindIsIndeterminate(ObservableValue<bool> source)` | `bind IsIndeterminate` | Binds the indeterminate state to an observable value. |
 | `BindValue(ObservableValue<TSource> source, Func<TSource, double> convert)` | `bind Value` | Binds the value to a converted observable value. |
 | `BindValue(ObservableValue<double> source)` | `bind Value` | Binds the value to an observable value. |
+| `Fill(Color value)` | `Fill` | Sets the color of the arc that shows the value or the indeterminate spin. |
 | `IsIndeterminate(bool value = true)` | `IsIndeterminate` | Sets whether the ring shows a repeating spin animation instead of Value. |
 
 ### Slider
@@ -89,6 +91,7 @@ Receiver: `Slider`.
 | `BindValue(ObservableValue<TSource> source, Func<TSource, double> convert, Func<double, TSource> convertBack = null)` | `bind Value` | Binds the value to a converted observable value. |
 | `BindValue(ObservableValue<double> source)` | `bind Value` | Binds the value to an observable value. |
 | `ChangeOnWheel(bool value = true)` | `ChangeOnWheel` | Sets whether the mouse wheel changes the value by SmallChange per notch while the pointer is over the slider. |
+| `Fill(Color value)` | `Fill` | Sets the color of the track from the minimum up to the value. |
 | `Orientation(Orientation value)` | `Orientation` | Sets the direction of the track; a vertical slider has its minimum at the bottom. |
 | `ThumbBorderBrush(Color value)` | `ThumbBorderBrush` | Sets the thumb border color. |
 | `ThumbBrush(Color value)` | `ThumbBrush` | Sets the thumb color. |

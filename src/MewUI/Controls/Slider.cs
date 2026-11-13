@@ -13,6 +13,9 @@ public sealed partial class Slider : RangeBase
 
     private bool _isDragging;
 
+    public static readonly MewProperty<Color> FillProperty =
+        MewProperty<Color>.Register<Slider>(nameof(Fill), default, MewPropertyOptions.AffectsRender);
+
     public static readonly MewProperty<Color> ThumbBrushProperty =
         MewProperty<Color>.Register<Slider>(nameof(ThumbBrush), default, MewPropertyOptions.AffectsRender);
 
@@ -68,6 +71,13 @@ public sealed partial class Slider : RangeBase
         set => SetValue(ChangeOnWheelProperty, value);
     }
 
+    /// <summary>Gets or sets the color of the track from the minimum up to the value.</summary>
+    public Color Fill
+    {
+        get => GetValue(FillProperty);
+        set => SetValue(FillProperty, value);
+    }
+
     /// <summary>Gets or sets the thumb color.</summary>
     public Color ThumbBrush
     {
@@ -100,7 +110,6 @@ public sealed partial class Slider : RangeBase
     {
         var bounds = Bounds;
         var contentBounds = bounds.Deflate(Padding);
-        var state = CurrentVisualState;
         double fraction = GetNormalizedValue();
 
         // Track, inset half a thumb on both ends so the thumb at either extreme stays inside
@@ -153,8 +162,7 @@ public sealed partial class Slider : RangeBase
 
         if (fillRect.Width > 0 && fillRect.Height > 0)
         {
-            var fillColor = state.IsEnabled ? Theme.Palette.Accent : Theme.Palette.DisabledAccent;
-            context.FillRoundedRectangle(fillRect, 2, 2, fillColor);
+            context.FillRoundedRectangle(fillRect, 2, 2, Fill);
         }
 
         var thumbFill = ThumbBrush;

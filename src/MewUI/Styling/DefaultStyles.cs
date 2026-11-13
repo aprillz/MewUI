@@ -31,6 +31,7 @@ public static class DefaultStyles
         field ??=
         [
             ..ColorTransitions,
+            Transition.Create(Slider.FillProperty),
             Transition.Create(Slider.ThumbBrushProperty),
             Transition.Create(Slider.ThumbBorderBrushProperty),
         ];
@@ -475,8 +476,6 @@ public static class DefaultStyles
             ],
         };
 
-    // No triggers - thumb uses PickAccentBorder with its own thumbState (includes _isDragging).
-
     internal static Style CreateSliderStyle() =>
         new(typeof(Slider))
         {
@@ -485,6 +484,7 @@ public static class DefaultStyles
             [
                 Setter.Create(Control.BackgroundProperty, t => t.Palette.ControlBackground),
                 Setter.Create(Control.BorderBrushProperty, t => t.Palette.ControlBorder),
+                Setter.Create(Slider.FillProperty, t => t.Palette.Accent),
                 Setter.Create(Slider.ThumbBrushProperty, t => t.Palette.AccentText),
                 Setter.Create(Slider.ThumbBorderBrushProperty, t => t.Palette.ControlBorder),
                 Setter.Create(Control.CornerRadiusProperty, t => t.Metrics.ControlCornerRadius),
@@ -515,6 +515,7 @@ public static class DefaultStyles
                     [
                         Setter.Create(Control.BackgroundProperty, t => t.Palette.ButtonDisabledBackground),
                         Setter.Create(Control.BorderBrushProperty, t => t.Palette.ControlBorder),
+                        Setter.Create(Slider.FillProperty, t => t.Palette.DisabledAccent),
                         Setter.Create(Slider.ThumbBrushProperty, t => t.Palette.ButtonDisabledBackground),
                         Setter.Create(Slider.ThumbBorderBrushProperty, t => t.Palette.ControlBorder),
                     ],
@@ -569,7 +570,7 @@ public static class DefaultStyles
                 Setter.Create(Control.BackgroundProperty, t => t.Palette.ControlBackground),
                 Setter.Create(Control.BorderBrushProperty, t => t.Palette.ControlBorder),
                 Setter.Create(Control.BorderThicknessProperty, t => t.Metrics.ControlBorderThickness),
-                Setter.Create(TextElement.ForegroundProperty, t => t.Palette.Accent),
+                Setter.Create(ProgressBar.FillProperty, t => t.Palette.Accent),
             ],
             Triggers =
             [
@@ -577,7 +578,7 @@ public static class DefaultStyles
                 {
                     Match = VisualStateFlags.None,
                     Exclude = VisualStateFlags.Enabled,
-                    Setters = [Setter.Create(TextElement.ForegroundProperty, t => t.Palette.DisabledAccent)],
+                    Setters = [Setter.Create(ProgressBar.FillProperty, t => t.Palette.DisabledAccent)],
                 },
             ],
         };
@@ -588,7 +589,7 @@ public static class DefaultStyles
             Setters =
             [
                 Setter.Create(Control.BackgroundProperty, t => t.Palette.ControlBorder.WithAlpha(128)),
-                Setter.Create(TextElement.ForegroundProperty, t => t.Palette.Accent),
+                Setter.Create(ProgressRing.FillProperty, t => t.Palette.Accent),
             ],
             Triggers =
             [
@@ -596,7 +597,7 @@ public static class DefaultStyles
                 {
                     Match = VisualStateFlags.None,
                     Exclude = VisualStateFlags.Enabled,
-                    Setters = [Setter.Create(TextElement.ForegroundProperty, t => t.Palette.DisabledAccent)],
+                    Setters = [Setter.Create(ProgressRing.FillProperty, t => t.Palette.DisabledAccent)],
                 },
             ],
         };
