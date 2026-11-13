@@ -114,4 +114,8 @@ Windows, Linux(X11), 브라우저에서 MewUI는 터치 입력을 직접 해석�
 
 컨트롤의 이름은 `AutomationProperties.Name`을 설정했으면 그 값이고, 아니면 `AutomationProperties.LabeledBy`가 가리키는 요소의 텍스트, 그것도 없으면 컨트롤 자신의 텍스트다. 버튼은 내용, 텍스트 상자는 플레이스홀더, 탭은 헤더, 메뉴 항목은 액세스 키 표시를 뺀 텍스트를 쓴다. 패널과 테두리는 트리에 나타나지 않고 그 자식이 그 자리에 보인다. `AutomationProperties.AccessibilityView`를 `Raw`로 두면 요소가 트리에서 빠진다. 드롭다운 목록이나 메뉴처럼 창에 열린 팝업은 창의 자식이다.
 
+키보드 포커스는 키보드가 실제로 다루는 부분에 있다고 알린다. 포커스를 가진 목록, 트리, 그리드에서는 선택된 항목이, 열린 메뉴에서는 강조된 항목이 포커스를 가진다. 메뉴와 툴팁이 열리고 닫히는 것도 알린다. 편집 상자는 스크린리더가 글자, 단어, 줄 단위로 텍스트를 읽고 캐럿과 선택을 따라갈 수 있게 한다.
+
+이 트리는 운영체제의 접근성 인터페이스로 내보내져 스크린리더와 오토메이션 도구가 창의 컨트롤을 읽고 조작한다. Windows는 UI 오토메이션(내레이터, Accessibility Insights, FlaUI), macOS는 NSAccessibility(VoiceOver, Accessibility Inspector), Linux(X11, 프레임버퍼)는 AT-SPI2(Orca, Accerciser)다. Windows에서는 클라이언트가 창의 트리를 처음 요청하기 전에는 아무것도 준비하지 않는다. Linux에서는 세션의 접근성이 켜져 있을 때, 시작할 때든 나중에 스크린리더가 켜질 때든, 접근성 버스에 애플리케이션을 등록한다. 드롭다운 목록이나 메뉴처럼 자체 팝업 창에 뜨는 팝업은 그 팝업 창의 트리에 있다. 브라우저 플랫폼은 트리를 내보내지 않는다.
+
 기본값 `false`에서는 `GetAutomationPeer()`가 null을 돌려주고, 트림·NativeAOT 게시에서 오토메이션 코드가 빠진다.
