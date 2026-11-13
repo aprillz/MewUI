@@ -6,7 +6,7 @@ namespace Aprillz.MewUI.Controls;
 /// A lightweight element that displays a <see cref="GlyphKind"/> shape.
 /// Foreground color is inherited from ancestors.
 /// </summary>
-public sealed class GlyphElement : FrameworkElement
+public sealed partial class GlyphElement : FrameworkElement
 {
     public static readonly MewProperty<GlyphKind> KindProperty =
         MewProperty<GlyphKind>.Register<GlyphElement>(nameof(Kind), GlyphKind.ChevronDown, MewPropertyOptions.AffectsRender);

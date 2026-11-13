@@ -1,3 +1,5 @@
+using Aprillz.MewUI.Automation;
+
 namespace Aprillz.MewUI.Controls;
 
 public sealed partial class GridView
@@ -22,4 +24,6 @@ public sealed partial class GridView
     }
 
     internal IMultiSelectableItemsView? RowMultiView => _core.MultiView;
+
+    protected override AutomationPeer? OnCreateAutomationPeer() => new GridViewAutomationPeer(this);
 }

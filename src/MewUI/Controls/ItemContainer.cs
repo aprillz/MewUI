@@ -15,7 +15,7 @@ namespace Aprillz.MewUI.Controls;
 /// operand of commands invoked from within it, so a typed handler registered on an ancestor
 /// receives the item a context menu or shortcut acted on.
 /// </remarks>
-public class ItemContainer : ContentControl, ICommandArgumentSource
+public partial class ItemContainer : ContentControl, ICommandArgumentSource
 {
     // Removes beforefieldinit so the registration below does not depend on some other static field
     // being read: trimming drops the initializer of a field nothing reads.

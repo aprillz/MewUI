@@ -20,7 +20,7 @@ public enum ScrollMode
 /// <summary>
 /// A scrollable content container with horizontal and vertical scrollbars.
 /// </summary>
-public sealed class ScrollViewer : ContentControl
+public sealed partial class ScrollViewer : ContentControl
     , IVisualTreeHost
     , IFocusIntoViewHost
 {

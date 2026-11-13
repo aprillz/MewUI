@@ -1,3 +1,5 @@
+using Aprillz.MewUI.Automation;
+
 namespace Aprillz.MewUI.Controls;
 
 public sealed partial class TreeView
@@ -20,4 +22,6 @@ public sealed partial class TreeView
 
     /// <summary>Expands or collapses a row the way its glyph does, raising <see cref="Expanding"/> or <see cref="Collapsing"/>.</summary>
     internal bool SetExpandedFromAutomation(int index, bool expanded) => TrySetExpanded(index, expanded);
+
+    protected override AutomationPeer? OnCreateAutomationPeer() => new TreeViewAutomationPeer(this);
 }

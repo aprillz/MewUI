@@ -23,4 +23,6 @@ public partial class Window
         var bottomRight = PopupClientToScreen(clientRect.BottomRight, pinnedOrigin);
         return new Rect(topLeft.X, topLeft.Y, Math.Max(0, bottomRight.X - topLeft.X), Math.Max(0, bottomRight.Y - topLeft.Y));
     }
+
+    protected override AutomationPeer? OnCreateAutomationPeer() => new WindowAutomationPeer(this);
 }
