@@ -172,6 +172,41 @@ public sealed class MarkdownMathTests
     }
 
     [TestMethod]
+    [DataRow("\\overbrace{a+b}^{n}")]
+    [DataRow("\\underbrace{a + b + c}_{\\text{3 terms}} + \\overbrace{x + y}^{\\text{2 terms}}")]
+    [DataRow("A \\xrightarrow[u]{f} B \\quad A \\xleftarrow{y} B")]
+    [DataRow("A \\xrightarrow{f} -B")]
+    public void PatchedCommandsParseAndRecord(string latex)
+    {
+        MathFormula formula = new(latex, display: true);
+
+        Assert.IsNull(formula.ErrorMessage, formula.ErrorMessage);
+        Assert.IsNotEmpty(formula.GetDrawing(16).Commands.ToArray());
+    }
+
+    [TestMethod]
+    public void OverbraceRaisesItsLabelAboveTheBrace()
+    {
+        double plain = new MathFormula("a+b", display: true).Measure(16).Ascent;
+        double braced = new MathFormula("\\overbrace{a+b}", display: true).Measure(16).Ascent;
+        double labeled = new MathFormula("\\overbrace{a+b}^{n}", display: true).Measure(16).Ascent;
+
+        Assert.IsGreaterThan(plain, braced);
+        Assert.IsGreaterThan(braced, labeled);
+    }
+
+    [TestMethod]
+    public void ExtensibleArrowStretchesToItsLabel()
+    {
+        (double shortWidth, double shortAscent, _) = new MathFormula("\\xrightarrow{f}", display: true).Measure(16);
+        (double longWidth, _, _) = new MathFormula("\\xrightarrow{\\text{a long label}}", display: true).Measure(16);
+        (_, double plainAscent, _) = new MathFormula("\\rightarrow", display: true).Measure(16);
+
+        Assert.IsGreaterThan(shortWidth * 2, longWidth);
+        Assert.IsGreaterThan(plainAscent, shortAscent);
+    }
+
+    [TestMethod]
     public void FormulaCacheDropsTheLeastRecentlyUsed()
     {
         MathFormulaCache cache = new(capacity: 2);

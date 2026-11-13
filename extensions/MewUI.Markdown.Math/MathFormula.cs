@@ -24,6 +24,7 @@ internal sealed class MathFormula
     /// <summary>Parses <paramref name="latex"/>; bad LaTeX is kept and draws as CSharpMath's own error text.</summary>
     public MathFormula(string latex, bool display)
     {
+        MathCommands.EnsureRegistered();
         _painter = new Painter
         {
             LineStyle = display ? LineStyle.Display : LineStyle.Text,

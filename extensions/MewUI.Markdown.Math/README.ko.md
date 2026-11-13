@@ -37,6 +37,6 @@ CSharpMath가 해석하지 못한 수식은 그 자리에 CSharpMath의 오류 �
 
 ## LaTeX 지원 범위
 
-CSharpMath는 분수, 근호, 합, 적분, 극한, 그리스 문자, `\mathbb`, `\mathcal`, `\mathrm`, `\mathbf`, `\text`, `\left`/`\right`, `\underbrace`, `\not`, 그리고 `aligned`, `cases`, `pmatrix`, `bmatrix`, `vmatrix`, `Vmatrix` 환경을 지원합니다. 확장은 CSharpMath에 없는 명령 몇 가지를 고쳐 씁니다. `\dfrac`과 `\tfrac`은 `\frac`으로, `\boldsymbol`은 `\mathbf`로 바꿉니다. `\overbrace`, `\xrightarrow`, `\xleftarrow`는 지원하지 않습니다.
+CSharpMath는 분수, 근호, 합, 적분, 극한, 그리스 문자, `\mathbb`, `\mathcal`, `\mathrm`, `\mathbf`, `\text`, `\left`/`\right`, `\underbrace`, `\not`, 그리고 `aligned`, `cases`, `pmatrix`, `bmatrix`, `vmatrix`, `Vmatrix` 환경을 지원합니다. 확장은 CSharpMath에 없는 명령 몇 가지를 고쳐 씁니다. `\dfrac`과 `\tfrac`은 `\frac`으로, `\boldsymbol`은 `\mathbf`로 바꿉니다. 또한 `\overbrace{...}^{...}`, `\xrightarrow[...]{...}`, `\xleftarrow[...]{...}`를 추가합니다.
 
 블록 수식은 문서 선택에 포함되지 않으며 복사 버튼이 없습니다.
