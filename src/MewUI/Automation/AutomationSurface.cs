@@ -86,6 +86,27 @@ internal static class AutomationSurface
         return window.AutomationClientToScreen(bounds, ElementOf(peer));
     }
 
+    /// <summary>A rectangle in the client area of <paramref name="peer"/>'s window, in screen units.</summary>
+    internal static Rect ClientToScreen(AutomationPeer peer, Rect clientRect)
+        => peer.GetWindow() is Window window && !clientRect.IsEmpty ? window.AutomationClientToScreen(clientRect, ElementOf(peer)) : Rect.Empty;
+
+    /// <summary>A screen point in the client area of <paramref name="peer"/>'s window, in DIPs.</summary>
+    internal static Point ScreenToClient(AutomationPeer peer, Point screenPoint)
+    {
+        if (peer.GetWindow() is not Window window)
+        {
+            return screenPoint;
+        }
+
+        // Inverted through a known rectangle, so a popup that stays where it opened converts as it does; the
+        // rectangle is large so whole-pixel rounding barely moves the scale.
+        const double PROBE_SIZE = 1000;
+        var probe = window.AutomationClientToScreen(new Rect(0, 0, PROBE_SIZE, PROBE_SIZE), ElementOf(peer));
+        double scaleX = probe.Width > 0 ? probe.Width / PROBE_SIZE : 1;
+        double scaleY = probe.Height > 0 ? probe.Height / PROBE_SIZE : 1;
+        return new Point((screenPoint.X - probe.X) / scaleX, (screenPoint.Y - probe.Y) / scaleY);
+    }
+
     /// <summary>
     /// The deepest shown peer under <paramref name="screenPoint"/> in the tree below <paramref name="root"/>, the
     /// topmost child first; <paramref name="root"/> itself when none of its children is there.

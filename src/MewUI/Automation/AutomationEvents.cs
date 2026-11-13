@@ -7,6 +7,8 @@ internal enum AutomationEventKind
     MenuClosed,
     ToolTipOpened,
     ToolTipClosed,
+    TextChanged,
+    TextSelectionChanged,
 }
 
 /// <summary>Receives the automation tree's change notifications; each consumer of the tree registers one.</summary>
