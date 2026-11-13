@@ -714,6 +714,20 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
     public nint ProcessMessage(uint msg, nint wParam, nint lParam)
     {
+        if (Aprillz.MewUI.Automation.AutomationGate.IsSupported)
+        {
+            if (msg == WindowMessages.WM_GETOBJECT
+                && Automation.UiaProvider.TryAnswerGetObject(Window, Handle, wParam, lParam, out nint automationResult))
+            {
+                return automationResult;
+            }
+
+            if (msg == WindowMessages.WM_DESTROY)
+            {
+                Automation.UiaProvider.OnWindowDestroying(Window, Handle);
+            }
+        }
+
         if (Window.HasNativeMessageHandler)
         {
             var hookArgs = new Win32NativeMessageEventArgs(msg, wParam, lParam);
