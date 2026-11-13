@@ -20,6 +20,7 @@ Receiver: `TextBase` and derived types (`where T : TextBase`).
 | `OnTextCompositionUpdate(Action<TextCompositionEventArgs> handler)` | `event TextCompositionUpdate` | Subscribes handler to TextCompositionUpdate. Occurs when the IME composition text changes. |
 | `OnTextInput(Action<TextInputEventArgs> handler)` | `event TextInput` | Subscribes handler to TextInput. Occurs when the control receives text input. |
 | `Placeholder(string value)` | `Placeholder` | Sets the placeholder text shown while the document is empty. |
+| `SelectionBackground(Color value)` | `SelectionBackground` | Sets the color painted behind the selected text; the default style dims it while the control does not have focus. |
 | `SelectionForeground(Color? value)` | `SelectionForeground` | Sets the color the selected glyphs are painted in; null keeps their own colors, so a colorized document stays readable through a selection. |
 
 ### MultiLineTextBox
