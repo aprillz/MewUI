@@ -341,6 +341,32 @@ public sealed class WindowlessRunTests
     }
 
     [TestMethod]
+    public void Shutdown_KeepsItsExitCodeWhenAWindowClosesAfterIt()
+    {
+        EnsureRegistered();
+        Hosts.Enqueue(new LifecyclePlatformHost());
+        var previous = Environment.ExitCode;
+
+        try
+        {
+            // Under OnLastWindowClose the last window closing would otherwise ask for a shutdown with code 0.
+            Application.Run(() =>
+            {
+                var window = new Window();
+                Application.Current.RegisterWindow(window);
+                Application.Shutdown(6);
+                window.Close();
+            });
+
+            Assert.AreEqual(6, Environment.ExitCode);
+        }
+        finally
+        {
+            Environment.ExitCode = previous;
+        }
+    }
+
+    [TestMethod]
     public void Run_ResetsTheExitCodeFromThePreviousRun()
     {
         EnsureRegistered();
