@@ -112,4 +112,8 @@ internal static partial class BrowserExports
 
     [JSExport]
     internal static void FocusChanged(bool focused) => BrowserPlatform.FocusChanged(focused);
+
+    /// <summary>True when the application asks to stay as the page is about to unload.</summary>
+    [JSExport]
+    internal static bool BeforeUnload() => BrowserPlatform.BeforeUnload();
 }
