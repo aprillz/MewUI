@@ -354,6 +354,8 @@ Application.Create()
 Application.Shutdown(2);   // loop ends, process exits with 2
 ```
 
+On macOS and Linux, SIGTERM (sent by `kill` or a service manager stopping the application) calls `Application.Shutdown()`, so `Run` returns instead of the process ending in place.
+
 ### 5.5 Recommended patterns
 - Default: let the user close windows; the app exits with the last one.
 - An "Exit" menu/button that should honor confirmation: call `mainWindow.Close()` so the `Closing` handler can prompt and cancel.
@@ -440,6 +442,30 @@ foreach (var w in openWindows)
     if (!await w.CloseAsync()) return;   // one cancel aborts the exit
 // all closed - the app exits by the last-window rule
 ```
+
+### 5.7 Quit requests from the system: ShutdownRequested
+When the operating system asks the application to quit, `Application.ShutdownRequested` is raised.
+
+```csharp
+Application.Current.ShutdownRequested += args =>
+{
+    if (backgroundJob.IsRunning)
+        args.Cancel = true;   // keep running; no window is asked
+};
+```
+
+Unless the event cancels, the windows are asked to close one by one, newest first, through the normal close path:
+
+- Each window's `Closing` can cancel, including through a deferral; a cancel ends the attempt and the application keeps running. Windows already closed by then stay closed.
+- Once every window has closed, the run ends and `Application.Run(...)` returns, whatever `ShutdownMode` says.
+- A second request while one is still closing windows joins it.
+
+| Platform | Requests | Notes |
+|---|---|---|
+| macOS | Quit from the Dock, logout, restart, shut down | The application ends the process itself, so macOS sees the request as refused: a logout stops once and has to be repeated after the application has quit. |
+| Windows | Sign out, restart, shut down, an installer closing running applications | Windows needs the answer at once. A window whose `Closing` waits on a deferral holds the session open, and Windows lists the application as preventing it until the user decides. Once the session ends the process can be stopped at any moment, so code after `Run` is not guaranteed to finish; `ShutdownRequested`, `Closing` and `Closed` run before the answer. A forced end of the session (low battery) asks nothing and calls `Application.Shutdown()`. |
+| Linux (X11) | Logout through a session manager (GNOME, KDE, Xfce) that lets applications talk to the user | A cancel cancels the logout. Without a session manager nothing is raised. |
+| Browser | Closing the tab or leaving the page | Only the event is raised, since the page cannot wait for windows; a cancel makes the browser ask the user whether to leave. The page has to forward its `beforeunload` event; see [Browser bootstrap](BrowserBootstrap.md). |
 
 ---
 

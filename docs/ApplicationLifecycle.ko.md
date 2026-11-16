@@ -353,6 +353,8 @@ Application.Create()
 Application.Shutdown(2);   // 루프 종료, 프로세스 종료 코드 2
 ```
 
+macOS와 Linux에서 SIGTERM(`kill`이나 서비스 관리자가 애플리케이션을 멈출 때 보냄)을 받으면 `Application.Shutdown()`을 호출하므로, 프로세스가 그 자리에서 끝나지 않고 `Run`이 반환된다.
+
 ### 5.5 권장 패턴
 - 기본: 사용자가 창을 닫게 두면 마지막 창과 함께 앱이 종료된다.
 - 확인 절차를 존중해야 하는 "종료" 메뉴/버튼: `mainWindow.Close()`를 호출해 `Closing` 핸들러가 확인/취소를 결정하게 한다.
@@ -439,6 +441,30 @@ foreach (var w in openWindows)
     if (!await w.CloseAsync()) return;   // 하나라도 취소하면 종료 중단
 // 전부 닫힘 - 마지막 창 규칙으로 앱 종료
 ```
+
+### 5.7 시스템의 종료 요청: ShutdownRequested
+운영체제가 애플리케이션에 종료를 요청하면 `Application.ShutdownRequested`가 발생한다.
+
+```csharp
+Application.Current.ShutdownRequested += args =>
+{
+    if (backgroundJob.IsRunning)
+        args.Cancel = true;   // 계속 실행한다. 창에는 묻지 않는다
+};
+```
+
+이벤트가 취소하지 않으면 창을 최근에 연 것부터 하나씩 보통의 닫기 경로로 닫는다:
+
+- 각 창의 `Closing`이 취소할 수 있고 deferral도 쓸 수 있다. 하나라도 취소하면 종료 시도를 멈추고 애플리케이션은 계속 실행된다. 그 전에 이미 닫힌 창은 닫힌 채로 남는다.
+- 모든 창이 닫히면 `ShutdownMode`와 관계없이 실행이 끝나고 `Application.Run(...)`이 반환된다.
+- 창을 닫는 중에 다시 들어온 요청은 진행 중인 요청에 합류한다.
+
+| 플랫폼 | 요청 | 참고 |
+|---|---|---|
+| macOS | Dock의 종료, 로그아웃, 재시동, 시스템 종료 | 프로세스는 애플리케이션이 스스로 끝내므로 macOS는 요청을 거절된 것으로 본다. 로그아웃은 한 번 중단되고, 애플리케이션이 종료된 뒤 다시 해야 한다. |
+| Windows | 로그아웃, 다시 시작, 시스템 종료, 실행 중인 앱을 닫는 설치 프로그램 | Windows는 답을 바로 받아야 한다. `Closing`이 deferral로 결정을 미룬 창은 세션 종료를 막고, 사용자가 결정할 때까지 Windows는 이 애플리케이션을 종료를 막는 앱으로 표시한다. 세션이 끝나면 프로세스가 언제든 중지될 수 있어 `Run` 뒤의 코드가 끝까지 실행된다는 보장은 없다. `ShutdownRequested`, `Closing`, `Closed`는 답하기 전에 실행된다. 강제 종료(배터리 부족 등)에서는 묻지 않고 `Application.Shutdown()`을 호출한다. |
+| Linux (X11) | 사용자와 상호작용을 허용하는 세션 관리자(GNOME, KDE, Xfce)의 로그아웃 | 취소하면 로그아웃이 취소된다. 세션 관리자가 없으면 발생하지 않는다. |
+| 브라우저 | 탭 닫기, 다른 페이지로 이동 | 페이지는 창이 닫히기를 기다릴 수 없어 이벤트만 발생한다. 취소하면 브라우저가 사용자에게 떠날지 묻는다. 페이지가 `beforeunload` 이벤트를 넘겨야 한다([브라우저 부트스트랩](BrowserBootstrap.ko.md) 참고). |
 
 ---
 
