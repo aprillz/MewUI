@@ -29,6 +29,7 @@ public sealed class X11PlatformHost : IPlatformHost
     private long _lastThemePollTick;
     private int _systemThemeDirty;
     private LinuxGSettingsMonitor? _gsettingsThemeMonitor;
+    private XsmpSessionClient? _sessionClient;
     private LinuxDispatcher? _dispatcher;
     private long _lastDpiPollTick;
     private nint _resourceManagerAtom;
@@ -132,6 +133,8 @@ public sealed class X11PlatformHost : IPlatformHost
                 });
             }
 
+            _sessionClient = XsmpSessionClient.TryConnect();
+
             // Start after dispatcher is ready so timers/postbacks work immediately.
             app.OnHostLoopStarting(mainWindow);
 
@@ -162,6 +165,8 @@ public sealed class X11PlatformHost : IPlatformHost
             }
 
             CloseWakePipe();
+            _sessionClient?.Dispose();
+            _sessionClient = null;
             _gsettingsThemeMonitor?.Dispose();
             _gsettingsThemeMonitor = null;
             LinuxThemeDetector.GnomeChangesMonitored = false;
@@ -325,6 +330,8 @@ public sealed class X11PlatformHost : IPlatformHost
 
     private void DrainAndProcessEvents()
     {
+        _sessionClient?.ProcessPending();
+
         while (_running && NativeX11.XPending(Display) != 0)
         {
             NativeX11.XNextEvent(Display, out var ev);
@@ -1160,7 +1167,7 @@ public sealed class X11PlatformHost : IPlatformHost
         bool wakeSignaled = false;
         unsafe
         {
-            PollFd* fds = stackalloc PollFd[2];
+            PollFd* fds = stackalloc PollFd[3];
             fds[0] = new PollFd
             {
                 fd = _xConnectionFd,
@@ -1172,7 +1179,20 @@ public sealed class X11PlatformHost : IPlatformHost
                 events = PollEvents.POLLIN
             };
 
-            _ = LibC.Poll(fds, 2, timeoutMs);
+            // A message from the session manager wakes the loop like an X event; it is handled with them.
+            nuint count = 2;
+            int sessionFd = _sessionClient?.FileDescriptor ?? -1;
+            if (sessionFd >= 0)
+            {
+                fds[2] = new PollFd
+                {
+                    fd = sessionFd,
+                    events = PollEvents.POLLIN
+                };
+                count = 3;
+            }
+
+            _ = LibC.Poll(fds, count, timeoutMs);
             wakeSignaled = (fds[1].revents & PollEvents.POLLIN) != 0;
         }
 
