@@ -18,7 +18,9 @@ partial class GalleryView
             InpcBindingCard(),
             BindingPathCard(),
             InpcNestedPathCard(),
-            CollectionPathCard()
+            CollectionPathCard(),
+            MultiBindingNameCard(),
+            MultiBindingSourcesCard()
         );
 
     private FrameworkElement ObservableValueBindingCard()
