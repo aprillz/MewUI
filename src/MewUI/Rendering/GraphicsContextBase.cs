@@ -9,7 +9,7 @@ namespace Aprillz.MewUI.Rendering;
 /// Provides viewport-based early culling, pixel-snap and geometric-transform logic
 /// so that all backends share the same canonical behaviour.
 /// </summary>
-internal abstract class GraphicsContextBase : IGraphicsContext, ITextBackendRenderContext
+internal abstract partial class GraphicsContextBase : IGraphicsContext, ITextBackendRenderContext
 {
     /// <summary>Frame-bound text drawing surface; one shared implementation, not a backend specialization point.</summary>
     public ITextRenderContext Text => _textRenderContext ??= TextServices.GetRenderContext(this);
@@ -154,17 +154,6 @@ internal abstract class GraphicsContextBase : IGraphicsContext, ITextBackendRend
     /// Ends the innermost <see cref="BeginOpaqueBackdrop"/> scope; the default ignores it.
     /// </summary>
     public virtual void EndOpaqueBackdrop() { }
-
-    /// <summary>
-    /// Multiplies the opacity of the scope. The default folds it into <see cref="GlobalAlpha"/>,
-    /// which every backend honours; override to composite the scope as one group instead.
-    /// </summary>
-    public virtual void BeginOpacity(double opacity) => BeginAlphaScope(opacity);
-
-    /// <summary>
-    /// Ends the innermost <see cref="BeginOpacity"/> scope.
-    /// </summary>
-    public virtual void EndOpacity() => Restore();
 
     #region State Management (template methods - cull rect tracking)
 
@@ -490,6 +479,12 @@ internal abstract class GraphicsContextBase : IGraphicsContext, ITextBackendRend
         double height,
         double letterSpacing)
     {
+        // A run is drawn by the context that made it, the open layer's while there is one.
+        if (_layerTarget is ITextBackendRenderContext layer)
+        {
+            return layer.CreateRun(text, font, width, height, letterSpacing);
+        }
+
         var format = new BackendTextFormat
         {
             Font = font,
@@ -521,6 +516,12 @@ internal abstract class GraphicsContextBase : IGraphicsContext, ITextBackendRend
 
     void ITextBackendRenderContext.DrawRun(ITextBackendRun run, Point origin, Color color, object? owner)
     {
+        if (_layerTarget is ITextBackendRenderContext layer)
+        {
+            layer.DrawRun(run, origin, color, owner);
+            return;
+        }
+
         if (run is not GraphicsBackendTextRun realized)
         {
             throw new ArgumentException("The text run was created by a different graphics backend.", nameof(run));
@@ -590,6 +591,7 @@ internal abstract class GraphicsContextBase : IGraphicsContext, ITextBackendRend
         if (!IsActive) return;
         try
         {
+            CloseOpacityScopes();
             OnEndFrame();
         }
         finally
@@ -668,16 +670,6 @@ internal abstract class GraphicsContextBase : IGraphicsContext, ITextBackendRend
 
     public virtual float GlobalAlpha { get => 1f; set { } }
 
-    float IGraphicsContext.GlobalAlpha
-    {
-        get => _drawingAlpha;
-        set
-        {
-            _drawingAlpha = value;
-            GlobalAlpha = _compositionAlpha * value;
-        }
-    }
-
     /// <summary>
     /// Multiplies an alpha the framework applies around the drawing that follows, which that drawing's own
     /// <see cref="IGraphicsContext.GlobalAlpha"/> multiplies onto and cannot replace. The enclosing
@@ -685,8 +677,15 @@ internal abstract class GraphicsContextBase : IGraphicsContext, ITextBackendRend
     /// </summary>
     internal void MultiplyCompositionAlpha(float alpha)
     {
-        _compositionAlpha *= alpha;
-        GlobalAlpha = _compositionAlpha * _drawingAlpha;
+        if (_layerTarget != null)
+        {
+            CompositionAlpha.Multiply(_layerTarget, alpha);
+        }
+        else
+        {
+            _compositionAlpha *= alpha;
+            GlobalAlpha = _compositionAlpha * _drawingAlpha;
+        }
     }
 
     /// <summary>

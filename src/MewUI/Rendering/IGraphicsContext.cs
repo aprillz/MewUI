@@ -69,9 +69,8 @@ namespace Aprillz.MewUI.Rendering
         void EndOpaqueBackdrop();
 
         /// <summary>
-        /// Multiplies the opacity of everything drawn up to the matching <see cref="EndOpacity"/>.
-        /// Backends that can composite the scope as one group do so; the rest multiply per primitive,
-        /// which differs only where the scope's drawing overlaps itself.
+        /// Fades everything drawn up to the matching <see cref="EndOpacity"/> as one group, so drawing that
+        /// overlaps itself inside the scope fades once instead of darkening where it overlaps.
         /// </summary>
         void BeginOpacity(double opacity);
 

@@ -132,6 +132,14 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, ITextBackendFactory, 
     /// <inheritdoc/>
     public IGraphicsContext CreateContext(IRenderTarget target)
     {
+        var context = CreateBackendContext(target);
+        // GDI cannot blend a group itself, so an opacity scope draws on a layer taken from here.
+        ((GraphicsContextBase)context).OpacityLayerFactory = this;
+        return context;
+    }
+
+    private IGraphicsContext CreateBackendContext(IRenderTarget target)
+    {
         ArgumentNullException.ThrowIfNull(target);
 
         if (target is IRenderSurface surface)
