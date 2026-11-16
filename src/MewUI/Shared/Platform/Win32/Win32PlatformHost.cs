@@ -30,6 +30,8 @@ public sealed class Win32PlatformHost : IPlatformHost
     private nint _moduleHandle;
     private SynchronizationContext? _previousSynchronizationContext;
     private nint _dispatcherHwnd;
+    // Hidden top-level window that hears session-end queries, which a message-only window never receives.
+    private nint _sessionHwnd;
     private Win32Dispatcher? _dispatcher;
     private Application? _app;
     private ThemeVariant _lastSystemTheme = ThemeVariant.Light;
@@ -202,6 +204,7 @@ public sealed class Win32PlatformHost : IPlatformHost
             _previousSynchronizationContext = SynchronizationContext.Current;
             EnsureDispatcher(app);
             _app = app;
+            CreateSessionWindow();
 
             EnsureRenderEvent();
 
@@ -478,6 +481,19 @@ public sealed class Win32PlatformHost : IPlatformHost
                     {
                         return 0;
                     }
+                    return 0;
+            }
+        }
+
+        if (hWnd == _sessionHwnd && _sessionHwnd != 0)
+        {
+            switch (msg)
+            {
+                case WindowMessages.WM_QUERYENDSESSION:
+                    return QueryEndSession(lParam);
+
+                case WindowMessages.WM_ENDSESSION:
+                    EndSession(wParam != 0);
                     return 0;
             }
         }
@@ -897,6 +913,70 @@ public sealed class Win32PlatformHost : IPlatformHost
         SynchronizationContext.SetSynchronizationContext(_dispatcher);
     }
 
+    private void CreateSessionWindow()
+    {
+        if (_sessionHwnd != 0)
+        {
+            return;
+        }
+
+        // Never shown; a tool window style keeps it out of the taskbar and Alt+Tab even so.
+        _sessionHwnd = User32.CreateWindowEx(
+            WindowStylesEx.WS_EX_TOOLWINDOW,
+            WindowClassName,
+            "AprillzMewUI_Session",
+            dwStyle: WindowStyles.WS_POPUP,
+            x: 0,
+            y: 0,
+            nWidth: 0,
+            nHeight: 0,
+            hWndParent: 0,
+            hMenu: 0,
+            hInstance: _moduleHandle,
+            lpParam: 0);
+    }
+
+    /// <summary>
+    /// Answers whether the session may end: the application hears the request and its windows are asked to
+    /// close. The answer is due before returning, so a window whose Closing waits on the user blocks the end
+    /// of the session; Windows then lists the app as preventing it, and the app quits once the user decides.
+    /// </summary>
+    private nint QueryEndSession(nint lParam)
+    {
+        const long ENDSESSION_CRITICAL = 0x40000000;
+        var app = _app;
+        if (app == null || !_running)
+        {
+            return 1;
+        }
+
+        if ((lParam & ENDSESSION_CRITICAL) != 0)
+        {
+            // The session ends whatever the answer, so nothing is asked.
+            Application.Shutdown();
+            return 1;
+        }
+
+        bool? granted = null;
+        app.RequestShutdownFromSystem(result => granted = result);
+        if (granted == null)
+        {
+            // Windows close through posted messages, so they are pumped here until the request is decided.
+            RunNestedLoop(() => granted == null && !app.IsSystemQuitWaitingOnDecision);
+        }
+
+        return granted == true ? 1 : 0;
+    }
+
+    private void EndSession(bool ending)
+    {
+        // The process can end at any moment after this returns; the run is told to end in case it still goes on.
+        if (ending && _running)
+        {
+            Application.Shutdown();
+        }
+    }
+
     private void Shutdown(Application app)
     {
         SynchronizationContext.SetSynchronizationContext(_previousSynchronizationContext);
@@ -912,6 +992,12 @@ public sealed class Win32PlatformHost : IPlatformHost
             }
         }
         _windows.Clear();
+
+        if (_sessionHwnd != 0 && User32.IsWindow(_sessionHwnd))
+        {
+            User32.DestroyWindow(_sessionHwnd);
+        }
+        _sessionHwnd = 0;
 
         _dispatcher = null;
         if (_dispatcherHwnd != 0 && User32.IsWindow(_dispatcherHwnd))
