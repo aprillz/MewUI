@@ -56,14 +56,12 @@ internal sealed class ApplicationRuntime : IDisposable
         }
     }
 
-    internal void Unregister(Window window, ShutdownMode shutdownMode)
+    /// <summary>Removes the window and reports whether the shutdown mode ends the run with it.</summary>
+    internal bool Unregister(Window window, ShutdownMode shutdownMode)
     {
         bool wasMainWindow = ReferenceEquals(window, MainWindow);
         _windows.Remove(window);
-        if (Application.ShouldShutdownAfterClose(shutdownMode, wasMainWindow, _windows.Count))
-        {
-            Application.Shutdown();
-        }
+        return Application.ShouldShutdownAfterClose(shutdownMode, wasMainWindow, _windows.Count);
     }
 
     // Theme broadcast iterates a snapshot so a handler that registers or unregisters a window mid-broadcast

@@ -32,6 +32,8 @@ public sealed class Application
     // for the duration of a Run; created at run start, disposed at run end.
     private ApplicationRuntime? _runtime;
     private Action<string[]>? _startup;
+    // Set by Shutdown; windows closing after it must not ask again, which would reset the exit code to 0.
+    private volatile bool _shutdownRequested;
 
     /// <summary>
     /// Gets or sets when the run loop ends automatically as windows close; the default is
@@ -682,7 +684,13 @@ public sealed class Application
 
     // The shutdown decision is owned by ApplicationRuntime (policy-driven, one place) rather than each
     // platform host; hosts only maintain their own hwnd registry for routing.
-    internal void UnregisterWindow(Window window) => _runtime?.Unregister(window, ShutdownMode);
+    internal void UnregisterWindow(Window window)
+    {
+        if (_runtime?.Unregister(window, ShutdownMode) == true && !_shutdownRequested)
+        {
+            Shutdown();
+        }
+    }
 
     // Pure decision so the policy is unit-testable in isolation.
     internal static bool ShouldShutdownAfterClose(ShutdownMode mode, bool wasMainWindow, int remainingWindows)
@@ -750,7 +758,11 @@ public sealed class Application
 
         // Read once: a run ending on another thread would otherwise null the field between the two uses.
         var app = _current;
-        app?.PlatformHost.Quit(app);
+        if (app != null)
+        {
+            app._shutdownRequested = true;
+            app.PlatformHost.Quit(app);
+        }
     }
 
     /// <summary>
