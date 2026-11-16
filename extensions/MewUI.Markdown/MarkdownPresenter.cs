@@ -342,7 +342,7 @@ public partial class MarkdownPresenter : Control, ISubtreeInvalidationHost, ILog
         var copyIcon = new PathShape
         {
             Data = PathGeometry.Parse("M7 7 L19 7 L19 19 L7 19 Z M5 17 L3 17 L3 3 L17 3 L17 5"),
-            ViewBox = new Rect(0, 0, 22, 22),
+            Viewbox = new Rect(0, 0, 22, 22),
             Stretch = Stretch.Uniform,
             Width = 16,
             Height = 16,
