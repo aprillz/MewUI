@@ -43,6 +43,18 @@ public sealed class BindingPathSegmentTests
                     where TRoot : class
                     where TOwner : class, System.ComponentModel.INotifyPropertyChanged => null;
             }
+
+            public sealed class BindingInput<TValue> { }
+
+            public static class BindingInput
+            {
+                public static BindingInput<TValue> From<TSource, TValue>(
+                    TSource source,
+                    System.Func<TSource, TValue> getter,
+                    [System.Runtime.CompilerServices.CallerArgumentExpression(nameof(getter))]
+                    string getterExpression = null)
+                    where TSource : class, System.ComponentModel.INotifyPropertyChanged => null;
+            }
         }
 
         public class Person : System.ComponentModel.INotifyPropertyChanged
@@ -84,6 +96,18 @@ public sealed class BindingPathSegmentTests
                     Aprillz.MewUI.MewProperty<T> property,
                     TSource source,
                     System.Func<TSource, T> getter)
+                    where TElement : MewObject
+                    where TSource : class, System.ComponentModel.INotifyPropertyChanged => element;
+
+                public static TElement Bind<TElement, TProp, TSource, T1, T2>(
+                    this TElement element,
+                    Aprillz.MewUI.MewProperty<TProp> property,
+                    TSource source,
+                    System.Func<TSource, T1> first,
+                    System.Func<TSource, T2> second,
+                    System.Func<T1, T2, TProp> combine,
+                    [System.Runtime.CompilerServices.CallerArgumentExpression(nameof(first))] string firstExpression = null,
+                    [System.Runtime.CompilerServices.CallerArgumentExpression(nameof(second))] string secondExpression = null)
                     where TElement : MewObject
                     where TSource : class, System.ComponentModel.INotifyPropertyChanged => element;
             }
@@ -272,6 +296,59 @@ public sealed class BindingPathSegmentTests
                     => label.Bind(Label.TextProperty, person, x => x.Profile.DisplayName);
             }
             """ + BindingApi + GeneratorMarker;
+
+        await VerifyAsync(source, source);
+    }
+
+    [TestMethod]
+    public async Task ReportsDottedInputGetter_WhenTheGeneratorDidNotRun()
+    {
+        var source = """
+            using Aprillz.MewUI;
+
+            class C
+            {
+                object M(Person person)
+                    => BindingInput.From(person, {|MEW1203:x => x.Profile.DisplayName|});
+            }
+            """ + BindingApi;
+
+        await VerifyAsync(source, source);
+    }
+
+    [TestMethod]
+    public async Task NoDiagnostic_ForADottedInputGetterWhenTheGeneratorMarkerIsPresent()
+    {
+        var source = """
+            using Aprillz.MewUI;
+
+            class C
+            {
+                object M(Person person)
+                    => BindingInput.From(person, x => x.Profile.DisplayName);
+            }
+            """ + BindingApi + GeneratorMarker;
+
+        await VerifyAsync(source, source);
+    }
+
+    [TestMethod]
+    public async Task ReportsEachDottedCombinedGetter_WhenTheGeneratorDidNotRun()
+    {
+        var source = """
+            using Aprillz.MewUI.Controls;
+
+            class C
+            {
+                object M(Label label, Person person)
+                    => label.Bind(
+                        Label.TextProperty,
+                        person,
+                        {|MEW1203:x => x.Profile.DisplayName|},
+                        x => x.Name,
+                        static (display, name) => display + name);
+            }
+            """ + BindingApi;
 
         await VerifyAsync(source, source);
     }

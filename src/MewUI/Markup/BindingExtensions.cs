@@ -6,7 +6,7 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// Fluent binding extension methods that preserve the concrete element type for chaining.
 /// </summary>
-public static class BindingExtensions
+public static partial class BindingExtensions
 {
     /// <summary>
     /// Binds a <see cref="MewProperty{T}"/> to an <see cref="ObservableValue{T}"/> and returns the
@@ -165,6 +165,29 @@ public static class BindingExtensions
     }
 
     /// <summary>
+    /// Binds a property to a notifying property of <paramref name="source"/>, showing
+    /// <paramref name="fallbackValue"/> while a null intermediate breaks the path, and returns the
+    /// element for chaining; omitting <paramref name="setter"/> makes the binding
+    /// <see cref="BindingMode.OneWay"/>.
+    /// </summary>
+    public static TElement Bind<TElement, TSource, T>(
+        this TElement element,
+        MewProperty<T> property,
+        TSource source,
+        Func<TSource, T> getter,
+        T fallbackValue,
+        Action<TSource, T>? setter = null,
+        BindingMode? mode = null,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
+        where TElement : MewObject
+        where TSource : class, INotifyPropertyChanged
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        element.SetBinding(property, source, getter, fallbackValue, setter, mode, getterExpression);
+        return element;
+    }
+
+    /// <summary>
     /// Binds a property to a converted single notifying property of <paramref name="source"/> and
     /// returns the element for chaining.
     /// </summary>
@@ -184,6 +207,39 @@ public static class BindingExtensions
         ArgumentNullException.ThrowIfNull(element);
         element.SetBinding(
             property, source, getter, convert, setter, convertBack, mode, getterExpression);
+        return element;
+    }
+
+    /// <summary>
+    /// Binds a property to a converted notifying property of <paramref name="source"/>, showing
+    /// <paramref name="fallbackValue"/> while a null intermediate breaks the path, and returns the
+    /// element for chaining.
+    /// </summary>
+    public static TElement Bind<TElement, TProp, TSource, TValue>(
+        this TElement element,
+        MewProperty<TProp> property,
+        TSource source,
+        Func<TSource, TValue> getter,
+        Func<TValue, TProp> convert,
+        TProp fallbackValue,
+        Action<TSource, TValue>? setter = null,
+        Func<TProp, TValue>? convertBack = null,
+        BindingMode? mode = null,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
+        where TElement : MewObject
+        where TSource : class, INotifyPropertyChanged
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        element.SetBinding(
+            property,
+            source,
+            getter,
+            convert,
+            fallbackValue,
+            setter,
+            convertBack,
+            mode,
+            getterExpression);
         return element;
     }
 

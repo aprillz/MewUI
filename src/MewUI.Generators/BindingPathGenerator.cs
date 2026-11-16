@@ -17,6 +17,8 @@ namespace Aprillz.MewUI.Generators;
 public sealed class BindingPathGenerator : IIncrementalGenerator
 {
     private const string MARKER_HINT_NAME = "BindingPathGeneratorMarker.g.cs";
+
+    private static readonly string[] _combinedGetterNames = ["first", "second", "third", "fourth"];
     private const string ATTRIBUTE_HINT_NAME = "InterceptsLocationAttribute.g.cs";
     private const string INTERCEPTOR_HINT_NAME = "BindingPathInterceptors.g.cs";
 
@@ -77,7 +79,7 @@ public sealed class BindingPathGenerator : IIncrementalGenerator
         {
             Expression: MemberAccessExpressionSyntax
             {
-                Name: IdentifierNameSyntax { Identifier.ValueText: "Bind" or "SetBinding" },
+                Name: IdentifierNameSyntax { Identifier.ValueText: "Bind" or "SetBinding" or "From" },
             },
         };
 
@@ -94,14 +96,34 @@ public sealed class BindingPathGenerator : IIncrementalGenerator
 
         var owner = method.ContainingType;
         bool isExtension = method.Name == "Bind";
-        if (isExtension
-            ? owner.ToDisplayString() != "Aprillz.MewUI.Controls.BindingExtensions"
-            : owner.ToDisplayString() != "Aprillz.MewUI.Controls.MewObject")
+        bool isInput = method.Name == "From";
+        string expectedOwner;
+        if (isInput)
+        {
+            expectedOwner = "Aprillz.MewUI.BindingInput";
+        }
+        else if (isExtension)
+        {
+            expectedOwner = "Aprillz.MewUI.Controls.BindingExtensions";
+        }
+        else
+        {
+            expectedOwner = "Aprillz.MewUI.Controls.MewObject";
+        }
+
+        if (owner.ToDisplayString() != expectedOwner)
         {
             return null;
         }
 
         var parameters = method.ReducedFrom?.Parameters ?? method.Parameters;
+        if (IndexOfParameter(parameters, "combine") >= 0)
+        {
+            return IndexOfParameter(parameters, "source") >= 0
+                ? TransformCombined(context, invocation, method, parameters, isExtension, cancellationToken)
+                : null;
+        }
+
         if (IndexOfParameter(parameters, "getter") < 0)
         {
             return null;
@@ -138,8 +160,11 @@ public sealed class BindingPathGenerator : IIncrementalGenerator
 
         // A single member is what the runtime reads on its own. Intercepting is only worth it when
         // a setter can be synthesized, which is what lets a TwoWay target write back without one.
+        // An input is only read, so it never needs one.
         if (steps.Count == 1
-            && (segments[0].Kind != BindingSegmentKind.Notifying || segments[0].SetterBody == null))
+            && (isInput
+                || segments[0].Kind != BindingSegmentKind.Notifying
+                || segments[0].SetterBody == null))
         {
             return null;
         }
@@ -148,6 +173,17 @@ public sealed class BindingPathGenerator : IIncrementalGenerator
         if (location == null)
         {
             return null;
+        }
+
+        if (isInput)
+        {
+            var inputGetter = (INamedTypeSymbol)parameters[IndexOfParameter(parameters, "getter")].Type;
+            return BindingCall.InputInterception(
+                location.Version,
+                location.Data,
+                Display(parameters[IndexOfParameter(parameters, "source")].Type),
+                Display(inputGetter.TypeArguments[1]),
+                segments);
         }
 
         var receiver = ((MemberAccessExpressionSyntax)invocation.Expression).Expression;
@@ -166,11 +202,102 @@ public sealed class BindingPathGenerator : IIncrementalGenerator
             location.Data,
             isExtension,
             IndexOfParameter(parameters, "convert") >= 0,
+            IndexOfParameter(parameters, "fallbackValue") >= 0,
             Display(receiverType),
             Display(Substitute(sourceType, method)),
             Display(Substitute(propertyType.TypeArguments[0], method)),
             Display(Substitute(getterDelegate.TypeArguments[1], method)),
             segments);
+    }
+
+    private static BindingCall? TransformCombined(
+        GeneratorSyntaxContext context,
+        InvocationExpressionSyntax invocation,
+        IMethodSymbol method,
+        ImmutableArray<IParameterSymbol> parameters,
+        bool isExtension,
+        CancellationToken cancellationToken)
+    {
+        var arguments = invocation.ArgumentList.Arguments;
+        var getters = new List<CombinedGetter>();
+        var unsupported = new List<UnsupportedGetterCall>();
+        bool nested = false;
+        foreach (string name in _combinedGetterNames)
+        {
+            int parameterIndex = IndexOfParameter(parameters, name);
+            if (parameterIndex < 0)
+            {
+                break;
+            }
+
+            var getterDelegate = (INamedTypeSymbol)parameters[parameterIndex].Type;
+            string valueType = Display(Substitute(getterDelegate.TypeArguments[1], method));
+            List<BindingSegment>? segments = null;
+            if (FindArgument(arguments, parameters, name, isExtension)
+                is AnonymousFunctionExpressionSyntax getter)
+            {
+                var steps = BindingChain.TryReadSteps(context.SemanticModel, getter);
+                if (steps == null)
+                {
+                    if (!IsSingleMemberAccess(getter))
+                    {
+                        unsupported.Add(new UnsupportedGetterCall(getter.GetLocation(), getter.ToString()));
+                    }
+                }
+                else
+                {
+                    segments = BindingChain.TryResolveSegments(
+                        context.SemanticModel.Compilation, context.SemanticModel, steps);
+                    if (segments == null)
+                    {
+                        unsupported.Add(new UnsupportedGetterCall(getter.GetLocation(), getter.ToString()));
+                    }
+                    else if (steps.Count > 1)
+                    {
+                        nested = true;
+                    }
+                }
+            }
+
+            getters.Add(new CombinedGetter(name, valueType, segments));
+        }
+
+        if (unsupported.Count > 0)
+        {
+            return BindingCall.Unsupported(unsupported);
+        }
+
+        // Single members are read by the runtime; only a nested getter needs a generated path.
+        if (!nested)
+        {
+            return null;
+        }
+
+        var location = context.SemanticModel.GetInterceptableLocation(invocation, cancellationToken);
+        if (location == null)
+        {
+            return null;
+        }
+
+        var receiver = ((MemberAccessExpressionSyntax)invocation.Expression).Expression;
+        if (context.SemanticModel.GetTypeInfo(receiver, cancellationToken).Type is not ITypeSymbol
+            receiverType)
+        {
+            return null;
+        }
+
+        var sourceType = parameters[IndexOfParameter(parameters, "source")].Type;
+        var propertyType = (INamedTypeSymbol)parameters[IndexOfParameter(parameters, "property")].Type;
+
+        return BindingCall.CombinedInterception(
+            location.Version,
+            location.Data,
+            isExtension,
+            IndexOfParameter(parameters, "fallbackValue") >= 0,
+            Display(receiverType),
+            Display(Substitute(sourceType, method)),
+            Display(Substitute(propertyType.TypeArguments[0], method)),
+            getters);
     }
 
     private static bool IsSingleMemberAccess(AnonymousFunctionExpressionSyntax lambda)
@@ -251,10 +378,14 @@ public sealed class BindingPathGenerator : IIncrementalGenerator
                 continue;
             }
 
-            if (call.UnsupportedLocation != null)
+            if (call.UnsupportedGetters != null)
             {
-                context.ReportDiagnostic(Diagnostic.Create(
-                    UnsupportedGetter, call.UnsupportedLocation, call.UnsupportedText));
+                foreach (var getter in call.UnsupportedGetters)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        UnsupportedGetter, getter.Location, getter.Text));
+                }
+
                 continue;
             }
 
@@ -300,15 +431,39 @@ public sealed class BindingPathGenerator : IIncrementalGenerator
 
     private static void AppendPath(StringBuilder builder, BindingCall call, int index)
     {
-        builder.AppendLine(
-            $"        private static readonly global::Aprillz.MewUI.BindingPath<{call.SourceType}, {call.ValueType}> _path{index} =");
-        builder.AppendLine(
-            $"            global::Aprillz.MewUI.BindingPath.From<{call.SourceType}>()");
-        for (int segment = 0; segment < call.Segments!.Count; segment++)
+        if (call.Getters == null)
         {
-            bool isLeaf = segment == call.Segments.Count - 1;
+            AppendPath(builder, $"_path{index}", call.SourceType, call.ValueType, call.Segments!);
+            return;
+        }
+
+        for (int getter = 0; getter < call.Getters.Count; getter++)
+        {
+            var segments = call.Getters[getter].Segments;
+            if (segments != null)
+            {
+                AppendPath(
+                    builder, $"_path{index}_{getter}", call.SourceType, call.Getters[getter].ValueType, segments);
+            }
+        }
+    }
+
+    private static void AppendPath(
+        StringBuilder builder,
+        string name,
+        string sourceType,
+        string valueType,
+        List<BindingSegment> segments)
+    {
+        builder.AppendLine(
+            $"        private static readonly global::Aprillz.MewUI.BindingPath<{sourceType}, {valueType}> {name} =");
+        builder.AppendLine(
+            $"            global::Aprillz.MewUI.BindingPath.From<{sourceType}>()");
+        for (int segment = 0; segment < segments.Count; segment++)
+        {
+            bool isLeaf = segment == segments.Count - 1;
             builder.AppendLine(
-                "                " + FormatSegment(call.Segments[segment])
+                "                " + FormatSegment(segments[segment])
                     + (isLeaf ? ";" : string.Empty));
         }
 
@@ -320,6 +475,25 @@ public sealed class BindingPathGenerator : IIncrementalGenerator
         string path = $"_path{index}";
         builder.AppendLine(
             $"        [global::System.Runtime.CompilerServices.InterceptsLocation({call.Version}, \"{call.Data}\")]");
+
+        if (call.IsInput)
+        {
+            builder.AppendLine(
+                $"        internal static global::Aprillz.MewUI.BindingInput<{call.ValueType}> From{index}(");
+            builder.AppendLine($"            {call.SourceType} source,");
+            builder.AppendLine(
+                $"            global::System.Func<{call.SourceType}, {call.ValueType}> getter,");
+            builder.AppendLine("            string? getterExpression = null)");
+            builder.AppendLine($"            => global::Aprillz.MewUI.BindingInput.From(source, {path});");
+            builder.AppendLine();
+            return;
+        }
+
+        if (call.Getters != null)
+        {
+            AppendCombinedInterceptor(builder, call, index);
+            return;
+        }
 
         string returnType = call.IsExtension ? call.ReceiverType : "void";
         string name = call.IsExtension ? $"Bind{index}" : $"SetBinding{index}";
@@ -335,6 +509,11 @@ public sealed class BindingPathGenerator : IIncrementalGenerator
                 $"            global::System.Func<{call.ValueType}, {call.PropertyType}> convert,");
         }
 
+        if (call.HasFallback)
+        {
+            builder.AppendLine($"            {call.PropertyType} fallbackValue,");
+        }
+
         builder.AppendLine(
             $"            global::System.Action<{call.SourceType}, {call.ValueType}>? setter = null,");
         if (call.HasConvert)
@@ -346,9 +525,74 @@ public sealed class BindingPathGenerator : IIncrementalGenerator
         builder.AppendLine("            global::Aprillz.MewUI.BindingMode? mode = null,");
         builder.AppendLine("            string? getterExpression = null)");
         builder.AppendLine("        {");
+        string fallback = call.HasFallback ? "fallbackValue" : "default!";
         builder.AppendLine(call.HasConvert
-            ? $"            target.SetBinding(property, source, {path}, convert, convertBack, mode, default!);"
-            : $"            target.SetBinding(property, source, {path}, mode, default!);");
+            ? $"            target.SetBinding(property, source, {path}, convert, convertBack, mode, {fallback});"
+            : $"            target.SetBinding(property, source, {path}, mode, {fallback});");
+        if (call.IsExtension)
+        {
+            builder.AppendLine("            return target;");
+        }
+
+        builder.AppendLine("        }");
+        builder.AppendLine();
+    }
+
+    private static void AppendCombinedInterceptor(StringBuilder builder, BindingCall call, int index)
+    {
+        var getters = call.Getters!;
+        string returnType = call.IsExtension ? call.ReceiverType : "void";
+        string name = call.IsExtension ? $"Bind{index}" : $"SetBinding{index}";
+        var combineTypes = new List<string>();
+        foreach (var getter in getters)
+        {
+            combineTypes.Add(getter.ValueType);
+        }
+
+        combineTypes.Add(call.PropertyType);
+
+        builder.AppendLine($"        internal static {returnType} {name}(");
+        builder.AppendLine($"            this {call.ReceiverType} target,");
+        builder.AppendLine($"            global::Aprillz.MewUI.MewProperty<{call.PropertyType}> property,");
+        builder.AppendLine($"            {call.SourceType} source,");
+        foreach (var getter in getters)
+        {
+            builder.AppendLine(
+                $"            global::System.Func<{call.SourceType}, {getter.ValueType}> {getter.Name},");
+        }
+
+        if (call.HasFallback)
+        {
+            builder.AppendLine($"            {call.PropertyType} fallbackValue,");
+        }
+
+        builder.AppendLine(
+            $"            global::System.Func<{string.Join(", ", combineTypes)}> combine,");
+        for (int getter = 0; getter < getters.Count; getter++)
+        {
+            string terminator = getter == getters.Count - 1 ? ")" : ",";
+            builder.AppendLine($"            string? {getters[getter].Name}Expression = null{terminator}");
+        }
+
+        builder.AppendLine("        {");
+        builder.AppendLine("            target.SetBinding(");
+        builder.AppendLine("                property,");
+        for (int getter = 0; getter < getters.Count; getter++)
+        {
+            string getterName = getters[getter].Name;
+            string input = getters[getter].Segments == null
+                ? $"global::Aprillz.MewUI.BindingInput.From(source, {getterName}, {getterName}Expression)"
+                : $"global::Aprillz.MewUI.BindingInput.From(source, _path{index}_{getter})";
+            builder.AppendLine($"                {input},");
+        }
+
+        if (call.HasFallback)
+        {
+            builder.AppendLine("                fallbackValue,");
+        }
+
+        builder.AppendLine("                combine);");
+
         if (call.IsExtension)
         {
             builder.AppendLine("            return target;");
@@ -392,7 +636,11 @@ public sealed class BindingPathGenerator : IIncrementalGenerator
 
         public bool IsExtension { get; private set; }
 
+        public bool IsInput { get; private set; }
+
         public bool HasConvert { get; private set; }
+
+        public bool HasFallback { get; private set; }
 
         public string ReceiverType { get; private set; } = string.Empty;
 
@@ -404,18 +652,22 @@ public sealed class BindingPathGenerator : IIncrementalGenerator
 
         public List<BindingSegment>? Segments { get; private set; }
 
-        public Location? UnsupportedLocation { get; private set; }
+        public List<CombinedGetter>? Getters { get; private set; }
 
-        public string? UnsupportedText { get; private set; }
+        public List<UnsupportedGetterCall>? UnsupportedGetters { get; private set; }
 
         public static BindingCall Unsupported(Location location, string text)
-            => new() { UnsupportedLocation = location, UnsupportedText = text };
+            => new() { UnsupportedGetters = [new UnsupportedGetterCall(location, text)] };
+
+        public static BindingCall Unsupported(List<UnsupportedGetterCall> getters)
+            => new() { UnsupportedGetters = getters };
 
         public static BindingCall Interception(
             int version,
             string data,
             bool isExtension,
             bool hasConvert,
+            bool hasFallback,
             string receiverType,
             string sourceType,
             string propertyType,
@@ -427,11 +679,66 @@ public sealed class BindingPathGenerator : IIncrementalGenerator
                 Data = data,
                 IsExtension = isExtension,
                 HasConvert = hasConvert,
+                HasFallback = hasFallback,
                 ReceiverType = receiverType,
                 SourceType = sourceType,
                 PropertyType = propertyType,
                 ValueType = valueType,
                 Segments = segments,
             };
+
+        public static BindingCall InputInterception(
+            int version,
+            string data,
+            string sourceType,
+            string valueType,
+            List<BindingSegment> segments)
+            => new()
+            {
+                Version = version,
+                Data = data,
+                IsInput = true,
+                SourceType = sourceType,
+                ValueType = valueType,
+                Segments = segments,
+            };
+
+        public static BindingCall CombinedInterception(
+            int version,
+            string data,
+            bool isExtension,
+            bool hasFallback,
+            string receiverType,
+            string sourceType,
+            string propertyType,
+            List<CombinedGetter> getters)
+            => new()
+            {
+                Version = version,
+                Data = data,
+                IsExtension = isExtension,
+                HasFallback = hasFallback,
+                ReceiverType = receiverType,
+                SourceType = sourceType,
+                PropertyType = propertyType,
+                Getters = getters,
+            };
+    }
+
+    private sealed class CombinedGetter(string name, string valueType, List<BindingSegment>? segments)
+    {
+        public string Name { get; } = name;
+
+        public string ValueType { get; } = valueType;
+
+        // Null when the runtime reads the getter itself: a single member or a non-lambda argument.
+        public List<BindingSegment>? Segments { get; } = segments;
+    }
+
+    private sealed class UnsupportedGetterCall(Location location, string text)
+    {
+        public Location Location { get; } = location;
+
+        public string Text { get; } = text;
     }
 }

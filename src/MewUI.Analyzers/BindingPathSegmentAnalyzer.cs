@@ -20,6 +20,11 @@ public sealed class BindingPathSegmentAnalyzer : DiagnosticAnalyzer
     private const string GENERATOR_MARKER = "Aprillz.MewUI.Generated.BindingPathGeneratorMarker";
     private const string BIND_EXTENSIONS_TYPE = "Aprillz.MewUI.Controls.BindingExtensions";
     private const string MEW_OBJECT_TYPE = "Aprillz.MewUI.Controls.MewObject";
+    private const string BINDING_INPUT_TYPE = "Aprillz.MewUI.BindingInput";
+
+    // The getter of a single binding or input, then the getters of a same-source combined binding.
+    private static readonly string[] _sugarGetterParameters =
+        [GETTER_PARAMETER, "first", "second", "third", "fourth"];
 
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics
         => ImmutableArray.Create(
@@ -56,7 +61,7 @@ public sealed class BindingPathSegmentAnalyzer : DiagnosticAnalyzer
         {
             AnalyzeGetterSegment(context, invocation, memberAccess, method);
         }
-        else if (method.Name is "Bind" or "SetBinding")
+        else if (method.Name is "Bind" or "SetBinding" or "From")
         {
             AnalyzeSugarCall(context, invocation, method);
         }
@@ -68,13 +73,10 @@ public sealed class BindingPathSegmentAnalyzer : DiagnosticAnalyzer
         IMethodSymbol method)
     {
         string ownerType = method.ContainingType?.ToDisplayString() ?? string.Empty;
-        if (ownerType != BIND_EXTENSIONS_TYPE && ownerType != MEW_OBJECT_TYPE)
-        {
-            return;
-        }
-
-        if (FindGetterArgument(invocation, method) is not AnonymousFunctionExpressionSyntax getter ||
-            CountChainMembers(getter) < 2)
+        bool isSugarOwner = method.Name == "From"
+            ? ownerType == BINDING_INPUT_TYPE
+            : ownerType == BIND_EXTENSIONS_TYPE || ownerType == MEW_OBJECT_TYPE;
+        if (!isSugarOwner)
         {
             return;
         }
@@ -86,8 +88,15 @@ public sealed class BindingPathSegmentAnalyzer : DiagnosticAnalyzer
             return;
         }
 
-        context.ReportDiagnostic(Diagnostic.Create(
-            BindingDiagnostics.GeneratorRequired, getter.GetLocation(), getter.ToString()));
+        foreach (string parameterName in _sugarGetterParameters)
+        {
+            if (FindArgument(invocation, method, parameterName) is AnonymousFunctionExpressionSyntax getter &&
+                CountChainMembers(getter) >= 2)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    BindingDiagnostics.GeneratorRequired, getter.GetLocation(), getter.ToString()));
+            }
+        }
     }
 
     private static int CountChainMembers(AnonymousFunctionExpressionSyntax lambda)
@@ -239,11 +248,17 @@ public sealed class BindingPathSegmentAnalyzer : DiagnosticAnalyzer
     private static ExpressionSyntax? FindGetterArgument(
         InvocationExpressionSyntax invocation,
         IMethodSymbol method)
+        => FindArgument(invocation, method, GETTER_PARAMETER);
+
+    private static ExpressionSyntax? FindArgument(
+        InvocationExpressionSyntax invocation,
+        IMethodSymbol method,
+        string parameterName)
     {
         int target = -1;
         for (int index = 0; index < method.Parameters.Length; index++)
         {
-            if (method.Parameters[index].Name == GETTER_PARAMETER)
+            if (method.Parameters[index].Name == parameterName)
             {
                 target = index;
                 break;
@@ -261,7 +276,7 @@ public sealed class BindingPathSegmentAnalyzer : DiagnosticAnalyzer
             var argument = arguments[index];
             if (argument.NameColon is NameColonSyntax named)
             {
-                if (named.Name.Identifier.ValueText == GETTER_PARAMETER)
+                if (named.Name.Identifier.ValueText == parameterName)
                 {
                     return argument.Expression;
                 }

@@ -11,7 +11,7 @@ namespace Aprillz.MewUI.Controls;
 /// subscriptions do not, so register them from <see cref="IDataTemplate.Bind"/> rather than
 /// <see cref="IDataTemplate.Build"/>.
 /// </remarks>
-public sealed class TemplateContext : IDisposable
+public sealed partial class TemplateContext : IDisposable
 {
     private readonly Dictionary<string, UIElement> _namedElements = new(StringComparer.Ordinal);
     private readonly List<ICleanup> _cleanup = new();
