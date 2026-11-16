@@ -705,7 +705,7 @@ internal sealed class PreviewSession : IDisposable
         return window;
     }
 
-    private void OnDeltaApplied()
+    private void OnDeltaApplied(IReadOnlyList<Element> rebuilt)
     {
         long start = Stopwatch.GetTimestamp();
 
@@ -713,10 +713,39 @@ internal sealed class PreviewSession : IDisposable
         // silently miss controls created during the session.
         _targets = null;
         SendTargets();
-        RebuildActiveTarget("delta");
+
+        var window = _activeWindow;
+        if (window != null && ContainsNodeOf(rebuilt, window))
+        {
+            // The framework already rebuilt this target; building it again would only lose state.
+            SendStatus($"Previewing {_activeTargetId}", updateKind: "delta");
+            MarkDirty(window);
+        }
+        else
+        {
+            // Covers what the framework cannot rebuild in place: component wrappers whose control
+            // builds in its constructor, and code reached only through paths it does not track.
+            RebuildActiveTarget("delta");
+        }
 
         long elapsedMs = (Stopwatch.GetTimestamp() - start) * 1000 / Stopwatch.Frequency;
         PreviewTrace.Log($"delta handled in {elapsedMs}ms (rescan + rebuild)");
+    }
+
+    private static bool ContainsNodeOf(IReadOnlyList<Element> nodes, Window window)
+    {
+        for (int index = 0; index < nodes.Count; index++)
+        {
+            for (Element? current = nodes[index]; current != null; current = current.Parent)
+            {
+                if (ReferenceEquals(current, window))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private void RebuildActiveTarget(string updateKind)
