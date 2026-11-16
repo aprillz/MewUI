@@ -15,14 +15,16 @@ namespace Aprillz.MewUI.HotReload;
 /// </summary>
 internal static class MewUiHotReload
 {
-    private static readonly DispatcherMergeKey mergeKey = new(DispatcherPriority.Background);
+    private static readonly DispatcherMergeKey _mergeKey = new(DispatcherPriority.Input);
     private static readonly object _pendingLock = new();
     private static readonly HashSet<Type> _pendingTypes = new();
 
     // A null updatedTypes from the runtime means "unknown scope" (any type may have changed),
     // which is sticky across accumulated deltas until the next drain.
     private static bool _pendingUnknownScope;
-    private static bool reloading;
+    private static readonly List<WeakReference<Element>> _failedOwners = new();
+    private static bool _hasPending;
+    private static bool _reloading;
 
     /// <summary>
     /// Accumulates a Hot Reload delta and schedules a coalesced UI-thread reload.
@@ -38,13 +40,19 @@ internal static class MewUiHotReload
             }
             else
             {
-                for (int i = 0; i < updatedTypes.Length; i++)
+                for (int index = 0; index < updatedTypes.Length; index++)
                 {
-                    _pendingTypes.Add(updatedTypes[i]);
+                    _pendingTypes.Add(updatedTypes[index]);
                 }
             }
+            _hasPending = true;
         }
 
+        ScheduleDrain();
+    }
+
+    private static void ScheduleDrain()
+    {
         var dispatcher = Application.IsRunning ? Application.Current.Dispatcher : null;
         if (dispatcher == null)
         {
@@ -53,64 +61,129 @@ internal static class MewUiHotReload
 
         // PostMerged coalesces only the execution count; the pending set above merges the payload,
         // so no delta's types are lost even when merged into a single run.
-        (dispatcher as IDispatcherCore)?.PostMerged(mergeKey, DrainOnUiThread, DispatcherPriority.Input);
+        (dispatcher as IDispatcherCore)?.PostMerged(_mergeKey, DrainOnUiThread, DispatcherPriority.Input);
     }
 
     private static void DrainOnUiThread()
     {
-        if (reloading)
+        if (_reloading || !Application.IsRunning)
         {
-            return;
-        }
-
-        if (!Application.IsRunning)
-        {
+            // A build that pumps the dispatcher (a modal dialog) re-enters here; the pending delta
+            // stays queued and is drained once the outer pass finishes.
             return;
         }
 
         Type[]? scope;
         lock (_pendingLock)
         {
+            if (!_hasPending)
+            {
+                return;
+            }
             scope = _pendingUnknownScope ? null : [.. _pendingTypes];
             _pendingTypes.Clear();
             _pendingUnknownScope = false;
+            _hasPending = false;
         }
 
-        reloading = true;
+        List<Element> rebuilt;
+        _reloading = true;
         try
         {
             Application.Current.InvalidateStyleCachesForHotReload();
+            var reachability = HotReloadReachability.Shared;
+            var changes = reachability.DetectChanges(scope);
             var entries = HotReloadRegistry.SnapshotAndSweep();
-            var reactions = HotReloadPlanner.Plan(entries);
-            ExecuteReactions(reactions, scope);
+            var plan = HotReloadPlanner.Plan(entries, changes, reachability);
+            rebuilt = ExecuteReactions(plan.Reactions);
+            int repainted = Repaint(plan.RepaintTypes);
             Application.Current.RefreshStylesAfterHotReload();
+            LogOutcome(scope, changes, plan, entries.Count, rebuilt.Count, repainted);
         }
         finally
         {
-            reloading = false;
+            _reloading = false;
         }
 
-        // Observers may react to deltas the IL-hash filter above ignores (it only checks
-        // registered build methods), so this fires even when zero nodes were rebuilt.
-        DeltaApplied?.Invoke();
+        lock (_pendingLock)
+        {
+            if (_hasPending)
+            {
+                ScheduleDrain();
+            }
+        }
+
+        DeltaApplied?.Invoke(rebuilt);
     }
 
     /// <summary>
-    /// Raised on the UI thread after each Hot Reload delta drain, regardless of whether any
-    /// registered node was rebuilt.
+    /// Raised on the UI thread after each Hot Reload delta drain with the nodes that were rebuilt,
+    /// which is empty when the delta touched no tracked build code.
     /// </summary>
-    internal static event Action? DeltaApplied;
+    internal static event Action<IReadOnlyList<Element>>? DeltaApplied;
 
-    private static void ExecuteReactions(List<HotReloadReaction> reactions, Type[]? scope)
+    private static void LogOutcome(Type[]? scope, HotReloadReachability.Changes changes, HotReloadPlan plan,
+        int registeredBuilds, int rebuiltCount, int repaintedCount)
     {
-        Log($"scope={(scope == null ? "unknown" : scope.Length + " types")}, reactions={reactions.Count}");
+        var message = $"scope={(scope == null ? "unknown" : scope.Length + " types")}, changed methods={changes.Methods.Count}"
+            + $", rebuilt={rebuiltCount}, repainted={repaintedCount}, handler-only={plan.HandlerOnlyChanges}";
+        if (plan.RebuildAllReason != null)
+        {
+            message += $"; re-ran every registered build because {plan.RebuildAllReason}";
+            if (registeredBuilds == 0)
+            {
+                message += "; nothing is registered to re-run, so build windows with Window.Build(...) or an OnBuild() override";
+            }
+        }
+        Log(message);
+    }
 
+    /// <summary>Re-measures and re-renders the live elements of <paramref name="types"/>; returns how many.</summary>
+    private static int Repaint(List<Type> types)
+    {
+        if (types.Count == 0)
+        {
+            return 0;
+        }
+
+        int count = 0;
+        var windows = Application.Current.AllWindows;
+        for (int index = 0; index < windows.Count; index++)
+        {
+            VisualTree.Visit(windows[index], element =>
+            {
+                if (IsInstanceOfAny(element, types))
+                {
+                    element.InvalidateMeasure();
+                    element.InvalidateVisual();
+                    count++;
+                }
+            });
+        }
+        return count;
+    }
+
+    private static bool IsInstanceOfAny(Element element, List<Type> types)
+    {
+        for (Type? current = element.GetType(); current != null; current = current.BaseType)
+        {
+            var definition = current.IsGenericType ? current.GetGenericTypeDefinition() : current;
+            if (types.Contains(definition))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static List<Element> ExecuteReactions(List<HotReloadReaction> reactions)
+    {
         // Resolve each reaction to a rebuildable node. Template refresh currently falls back to
         // rebuilding the nearest rebuildable ancestor (granular item refresh is a follow-up).
         var targets = new List<Element>();
-        for (int i = 0; i < reactions.Count; i++)
+        for (int index = 0; index < reactions.Count; index++)
         {
-            var reaction = reactions[i];
+            var reaction = reactions[index];
             Element? target = reaction.Kind == HotReloadReactionKind.RebuildNode
                 ? reaction.Owner
                 : NearestRebuildable(reaction.Owner);
@@ -121,12 +194,24 @@ internal static class MewUiHotReload
             }
         }
 
+        // A node whose last rebuild threw keeps the old content; it is retried with the next delta,
+        // which is usually the fix for the error.
+        foreach (var failed in _failedOwners)
+        {
+            if (failed.TryGetTarget(out var owner) && !targets.Contains(owner))
+            {
+                targets.Add(owner);
+            }
+        }
+        _failedOwners.Clear();
+
         // Shallowest-first: an ancestor rebuild detaches descendants, which we then skip.
         targets.Sort(static (left, right) => Depth(left).CompareTo(Depth(right)));
 
-        for (int i = 0; i < targets.Count; i++)
+        var rebuilt = new List<Element>();
+        for (int index = 0; index < targets.Count; index++)
         {
-            var target = targets[i];
+            var target = targets[index];
             if (!IsAttached(target))
             {
                 continue;
@@ -135,12 +220,17 @@ internal static class MewUiHotReload
             try
             {
                 Rebuild(target);
+                rebuilt.Add(target);
             }
-            catch
+            catch (Exception ex)
             {
                 // Isolate: one node's rebuild failure must not abort the others.
+                _failedOwners.Add(new WeakReference<Element>(target));
+                Log($"rebuild of {target.GetType().FullName} failed; retried with the next change: {ex}");
             }
         }
+
+        return rebuilt;
     }
 
     private static void Rebuild(Element target)
