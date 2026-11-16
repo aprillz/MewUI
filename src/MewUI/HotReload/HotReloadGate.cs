@@ -4,7 +4,8 @@ namespace Aprillz.MewUI.HotReload;
 
 /// <summary>
 /// Single gate for the Hot Reload path: active only when the runtime supports metadata updates
-/// (JIT/debug) and the app has not opted out. False (and trim-constant) in release/AOT.
+/// (JIT/debug) and the app has not opted out, or always in an editor preview session, which
+/// updates only through it. False (and trim-constant) in release/AOT.
 /// </summary>
 internal static class HotReloadGate
 {
@@ -21,7 +22,7 @@ internal static class HotReloadGate
                 return false;
             }
 
-            return !(AppContext.TryGetSwitch(ENABLED_SWITCH, out bool enabled) && !enabled);
+            return Design.IsPreviewMode || !(AppContext.TryGetSwitch(ENABLED_SWITCH, out bool enabled) && !enabled);
         }
     }
 }

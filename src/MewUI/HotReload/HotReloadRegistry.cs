@@ -12,7 +12,7 @@ internal enum HotReloadRole
 
 /// <summary>
 /// One tracked UI-producing method (a build method or a template build function) with the
-/// element it belongs to and the last known normalized-IL hash.
+/// element it belongs to. Change baselines live in <see cref="HotReloadReachability"/>.
 /// </summary>
 internal sealed class HotReloadEntry
 {
@@ -21,13 +21,11 @@ internal sealed class HotReloadEntry
     internal required HotReloadRole Role { get; init; }
 
     internal required WeakReference<Element> Owner { get; init; }
-
-    internal byte[]? Baseline { get; set; }
 }
 
 /// <summary>
-/// Debug-only registry of UI-producing methods. Event handlers are intentionally NOT registered,
-/// so a handler edit changes no registered method and triggers no reaction.
+/// Debug-only registry of UI-producing methods. Event handlers are intentionally NOT registered
+/// and stay outside the tracked reach, so a handler edit triggers no reaction.
 /// </summary>
 internal static class HotReloadRegistry
 {
@@ -111,9 +109,11 @@ internal static class HotReloadRegistry
                 Method = method,
                 Role = role,
                 Owner = new WeakReference<Element>(owner),
-                Baseline = IlNormalizer.Hash(method),
             });
         }
+
+        // Baselines must be taken before the first edit, so the closure is recorded at registration.
+        HotReloadReachability.Shared.Track(method);
     }
 
     /// <summary>Returns the live entries, dropping any whose owner has been collected.</summary>
