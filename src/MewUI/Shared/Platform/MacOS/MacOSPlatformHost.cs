@@ -710,9 +710,9 @@ public sealed class MacOSPlatformHost : IPlatformHost
             return;
         }
 
+        // Ends the loop only: terminate: would exit the process before Run returns.
         _running = false;
         MacOSInterop.TrySetThemeChangedCallback(null);
-        MacOSInterop.RequestTerminate();
     }
 
     public void DoEvents()
@@ -803,7 +803,22 @@ public sealed class MacOSPlatformHost : IPlatformHost
     public void Dispose()
     {
         _running = false;
+        // Shutdown leaves its windows open, and windows closed in the loop's last pass are not reaped yet.
+        var remaining = _windows.Values.ToArray();
+        foreach (var backend in remaining)
+        {
+            backend.Hide();
+        }
+
+        // Disposing a window closes its owned windows, so every window is hidden before any is disposed.
+        foreach (var backend in remaining)
+        {
+            backend.Dispose();
+        }
+
         _windows.Clear();
+        // The loop no longer turns to send these changes to the window server, so none would leave the screen.
+        MacOSInterop.FlushPendingWindowChanges();
         _dispatcher = null;
         _app = null;
         MacOSInterop.TrySetThemeChangedCallback(null);
