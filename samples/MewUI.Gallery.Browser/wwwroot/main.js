@@ -311,6 +311,14 @@ document.addEventListener('visibilitychange', () => {
     }
 });
 canvas.addEventListener('pointerleave', () => { wake(); app.PointerLeave(); });
+// Closing the tab or leaving the page asks the application first; when it asks to stay, the browser
+// asks the user whether to leave.
+window.addEventListener('beforeunload', event => {
+    if (app.BeforeUnload()) {
+        event.preventDefault();
+        event.returnValue = '';
+    }
+});
 
 // MewUI counts wheel movement in notches with +Y up and +X left, while the DOM reports pixels,
 // lines or pages with +Y down and +X right.
