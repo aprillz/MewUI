@@ -4,6 +4,7 @@ const textInput = document.getElementById('textinput');
 const loader = document.getElementById('loader');
 const loaderBar = loader.querySelector('.bar');
 const loaderStage = loader.querySelector('.stage');
+const ended = document.getElementById('ended');
 
 // Downloads fill the bar up to this point; the stages after them take the rest.
 const DOWNLOAD_PROGRESS_SHARE = 85;
@@ -75,6 +76,8 @@ const { createTextInputBridge } = await import(`./mewui-text-input.js${new URL(i
 let frameScheduled = false;
 let idleFrames = 0;
 let wakeTimer = 0;
+// Set once the app's run has ended; no frame is drawn after that.
+let appEnded = false;
 const IDLE_FRAMES_BEFORE_SLEEP = 3;
 
 // Opt-in frame timing for looking at a device remotely: ?metrics posts batches to ./metrics on the
@@ -438,6 +441,10 @@ loadResources();
 // The loop idles instead of repainting at the display's refresh rate: a frame runs only while the
 // app reports work, and anything that can change the screen wakes it again.
 function wake() {
+    if (appEnded) {
+        return;
+    }
+
     idleFrames = 0;
     if (wakeTimer !== 0) {
         clearTimeout(wakeTimer);
@@ -465,6 +472,10 @@ function sleepUntilNextTimer() {
 // a smooth curve step.
 function frame(frameTimeMs) {
     frameScheduled = false;
+    if (appEnded) {
+        return;
+    }
+
     try {
         const dpr = syncCanvasSize();
         const renderStartMs = metricsEnabled ? performance.now() : 0;
@@ -536,8 +547,34 @@ function frame(frameTimeMs) {
     }
 }
 
+// The run ends when the app shuts down, its window closed included, and runMain then resolves with the
+// exit code. The page stays loaded, and the canvas would keep the last frame with nothing answering
+// input, so the frames stop and the page says the app has ended, with a way to start it again.
+function showEnded(exitCode) {
+    appEnded = true;
+    if (wakeTimer !== 0) {
+        clearTimeout(wakeTimer);
+        wakeTimer = 0;
+    }
+
+    textInput.blur();
+    loader.remove();
+    canvas.style.visibility = 'hidden';
+    ended.querySelector('.detail').textContent = exitCode === 0 ? '' : `Exit code ${exitCode}`;
+    ended.hidden = false;
+    ended.querySelector('button').focus();
+}
+
+ended.querySelector('button').addEventListener('click', () => location.reload());
+
 wake();
 window.addEventListener('resize', wake);
+runPromise.then(exitCode => {
+    // A failed start resolves with nothing here; reportFatal has shown it already.
+    if (exitCode !== undefined) {
+        showEnded(exitCode);
+    }
+});
 runPromise.catch(error => {
     showStatus('MewUI Gallery failed - see console');
     console.error('MewUI Gallery runtime failed.', error);

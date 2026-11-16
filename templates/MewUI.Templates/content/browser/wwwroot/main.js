@@ -4,6 +4,7 @@
 const canvas = document.getElementById('canvas');
 const textInput = document.getElementById('textinput');
 const loader = document.getElementById('loader');
+const ended = document.getElementById('ended');
 
 function reportFatal(error) {
     const detail = error && (error.message || error.reason && error.reason.message || error.reason) || error;
@@ -42,7 +43,8 @@ const darkScheme = window.matchMedia('(prefers-color-scheme: dark)');
 app.SetSystemDarkMode(darkScheme.matches);
 darkScheme.addEventListener('change', event => { wake(); app.SetSystemDarkMode(event.matches); });
 
-runMain(config.mainAssemblyName, []).catch(reportFatal);
+// The promise settles with the exit code when the run ends; see "End of the run" below.
+runMain(config.mainAssemblyName, []).then(exitCode => showEnded(exitCode), reportFatal);
 
 // --- Canvas size ---
 
@@ -294,8 +296,14 @@ const IDLE_FRAMES_BEFORE_SLEEP = 3;
 let frameScheduled = false;
 let idleFrames = 0;
 let wakeTimer = 0;
+// Set once the app's run has ended; no frame is drawn after that.
+let appEnded = false;
 
 function wake() {
+    if (appEnded) {
+        return;
+    }
+
     idleFrames = 0;
     if (wakeTimer !== 0) {
         clearTimeout(wakeTimer);
@@ -321,6 +329,10 @@ function sleepUntilNextTimer() {
 // instead moves by however long the frame took to get there.
 function frame(frameTimeMs) {
     frameScheduled = false;
+    if (appEnded) {
+        return;
+    }
+
     try {
         const dpr = syncCanvasSize();
         const drew = app.RenderFrame(canvasCssWidth, canvasCssHeight, dpr, canvas.width, canvas.height,
@@ -348,3 +360,28 @@ function frame(frameTimeMs) {
 
 wake();
 window.addEventListener('resize', wake);
+
+// --- End of the run ---
+
+// The run ends when the app shuts down, its window closed included. The page stays loaded, and the
+// canvas would keep the last frame with nothing answering input, so the frames stop and the page says
+// the app has ended, with a way to start it again.
+function showEnded(exitCode) {
+    appEnded = true;
+    if (wakeTimer !== 0) {
+        clearTimeout(wakeTimer);
+        wakeTimer = 0;
+    }
+
+    textInput.blur();
+    loader.hidden = true;
+    canvas.style.visibility = 'hidden';
+    if (exitCode !== 0) {
+        ended.querySelector('.message').textContent += ` (exit code ${exitCode})`;
+    }
+
+    ended.hidden = false;
+    ended.querySelector('button').focus();
+}
+
+ended.querySelector('button').addEventListener('click', () => location.reload());
