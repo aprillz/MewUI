@@ -39,36 +39,42 @@ What you edit determines **how much is rebuilt** and **which state survives**.
 | What you edit | When it shows | Rebuild scope | State preserved |
 | --- | --- | --- | --- |
 | Window `.Build(...)`/`OnBuild()` / UserControl `OnBuild()` body | on save | that one window/control | everything **outside** that node (siblings, other windows) |
-| Event handler body (`.OnClick(...)`, etc.) | on next event | **none** | **all** state |
-| Item template build function (`ItemTemplate`, etc.) | on save | the control using that template | everything outside that control |
+| Code a build runs: helper methods in any type of your app, constructors of controls it creates, overrides it calls | on save | every window/control whose build runs that code | everything outside those nodes |
+| Event handler body (`.OnClick(...)`, `+=`, etc.) and the code only handlers run (view-model methods they call, for example) | on next event | **none** | **all** state |
+| Rendering, layout, or input override of a custom control (`MeasureOverride`, `OnRender`, ...) | on save | none: the live instances of that control are re-measured and re-rendered | **all** state |
+| Item template build function (`ItemTemplate`, etc.) | on save | the window/control whose build sets that template | everything outside that node |
+| Any other app code (a method nothing in the UI calls, a class only startup code uses, ...) | on save | **every** registered build | everything outside the rebuilt nodes |
 | Default style definition | on next rebuild | (rides along a rebuild) | — |
 | Signature / structural change (rude edit) | after app restart | everything | none |
 
 ### Why it works this way
 
-**1) Change detection is per build-function body, not per type.**
-The runtime only tells us *which types* changed. But in C# markup, build code and event handlers
-usually live in the same type (same file), so looking at types alone would treat a handler edit as a
-build change. Instead, MewUI compares whether **the registered build function's body actually
-changed**. It ignores compiler noise (metadata-token reshuffling and the like), so editing only a
-handler inside the same type does not change the build function's body and does not cause a rebuild.
+**1) Change detection follows the code a build runs.**
+
+The runtime only tells us *which types* changed, and in C# markup build code and event handlers usually live in the same type. So for each registered build function MewUI records the methods that build runs: the methods it calls, the constructors of the objects it creates, the overrides those calls dispatch to, and the lambdas it runs while building, followed through your app's own debug-built assemblies. It records the code the build's event handlers run the same way, and keeps a baseline of every other method in the types either of them touches. On each change it compares the bodies of those methods, ignoring compiler noise such as metadata-token reshuffling, and rebuilds the nodes whose build runs a changed method.
 
 **2) Editing a handler needs no rebuild.**
-.NET replaces the method body in place. The event delegate wired up during the build is still there,
-and the next event runs the replaced body. So the window is not rebuilt, and in-progress input,
-scroll position, and selection are preserved.
 
-**3) Only the shallowest affected node is rebuilt.**
-When several nodes' build functions changed, rebuilding an ancestor re-creates its children, so only
-the ancestor is rebuilt. Unchanged parts and other windows are left alone.
+A lambda or method handed to an event subscription (an `OnXxx(...)` markup method or `+=`) is not run by the build, and neither is the code it calls. .NET replaces the method body in place, the delegate wired up during the build stays, and the next event runs the new body. The window is not rebuilt, and in-progress input, scroll position, and selection are preserved.
+
+**3) A framework callback only needs a repaint.**
+
+An override the framework calls on a live control, such as `MeasureOverride` or `OnRender`, already runs its new body the next time the framework calls it. MewUI invalidates the measure and the rendering of that control's live instances so that call happens now, without rebuilding anything.
+
+**4) What cannot be traced re-runs every build.**
+
+A changed method that no registered build and no handler runs (code reached through reflection or a delegate stored for later, a method nothing calls, a class only startup code uses) could still affect what is on screen, and MewUI cannot tell where. In that case it re-runs every registered build, as Blazor and Flutter do for every change, and the console line says which change caused it. Types the change adds never cause this: nothing ran them before, and the edited code that calls them is detected on its own.
+
+**5) Only the shallowest affected node is rebuilt.**
+
+When several nodes are affected, rebuilding an ancestor re-creates its children, so only the ancestor is rebuilt. Unaffected parts and other windows are left alone.
 
 The same principles imply these limits:
 
-- If a build function only calls a **helper in another type** and you edit just that helper, the build
-  function's body is unchanged and the edit may not be detected. Edit the build function (or code in
-  the same type) to apply it.
-- Signature, base-type, or structural changes cannot be applied as a delta by the runtime (a rude
-  edit) and require a restart.
+- A delegate handed to anything other than an event subscription counts as build code. Editing it (a binding converter, for example) rebuilds the node that creates it, even if the delegate itself runs later.
+- Code in libraries built in Release is not tracked.
+- A control that builds its content in its constructor is refreshed by rebuilding the window or control whose build creates it. A window built directly in `Main` (`new Window().Content(...)`) has no build to re-run, so give it a `.Build(...)` callback or an `OnBuild()` override.
+- Signature, base-type, or structural changes cannot be applied as a delta by the runtime (a rude edit) and require a restart.
 
 ---
 
@@ -164,4 +170,5 @@ Run with `dotnet watch run`, then edit the `TextBlock` text to see the change ap
 - **State inside a rebuilt node is reset.** Keep state you need to preserve in a view-model/service
   outside the build function. (Handler edits do not rebuild, so their state is preserved.)
 - Hot Reload works only in debug (JIT); it does nothing in release/NativeAOT builds.
-- Changes that arrive before an `Application`/`Dispatcher` exists are ignored.
+- Changes that arrive before the app starts running need no rebuild: the windows build with the edited code.
+- Each applied change prints a `[MewUI HotReload]` line to the console error stream with the number of changed methods, rebuilt nodes, repainted elements, and handler-only changes, and the reason when every build was re-run. A rebuild that throws is reported there too; the other nodes are still rebuilt, and the failed node keeps its previous content and is retried with the next change.
