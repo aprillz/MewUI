@@ -20,6 +20,11 @@
       white-space: pre-wrap; }
     #loader[hidden] { display: none; }
     #loader.failed { color: #c0475e; }
+    /* Shown once the app has ended; the canvas behind it would only hold the last frame. */
+    #ended { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 16px; background: inherit; color: #6b6b76; font: 16px system-ui, sans-serif; }
+    #ended[hidden] { display: none; }
+    #ended button { padding: 6px 16px; font: inherit; cursor: pointer; }
     /* Kept on screen at one transparent pixel row: a field the browser treats as hidden is not a live
        IME target, and main.js moves it onto the caret so the IME draws its candidates there. */
     #textinput { position: fixed; top: 0; left: 0; width: 200px; height: 1px; opacity: 0;
@@ -30,6 +35,10 @@
   <canvas id="canvas"></canvas>
   <input id="textinput" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
   <div id="loader">Loading...</div>
+  <div id="ended" hidden>
+    <div class="message">MewUIBrowserApp has ended.</div>
+    <button type="button">Start again</button>
+  </div>
   <script type="module" src="./main.js"></script>
 </body>
 </html>

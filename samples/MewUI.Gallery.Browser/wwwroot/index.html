@@ -40,6 +40,20 @@
     #loader.failed .stage { color: var(--loader-error); }
     @keyframes loader-breathe { 50% { transform: scale(.94); opacity: .8; } }
     @media (prefers-reduced-motion: reduce) { #loader img { animation: none; } }
+    /* Shown once the app has ended; the canvas behind it would only hold the last frame. */
+    #ended { --ended-fg: #7a6aa8; --ended-button: #7a6aa8; --ended-button-fg: #ffffff;
+      position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 18px; background: inherit; color: var(--ended-fg);
+      font: 18px system-ui, sans-serif; text-align: center; }
+    @media (prefers-color-scheme: dark) {
+      #ended { --ended-fg: #b8aee0; --ended-button: #a18aed; --ended-button-fg: #202124; }
+    }
+    #ended[hidden] { display: none; }
+    #ended img { width: 96px; height: 96px; opacity: .6; }
+    #ended .detail { font-size: 14px; opacity: .8; }
+    #ended .detail:empty { display: none; }
+    #ended button { margin-top: 9px; padding: 8px 18px; border: 0; border-radius: 6px; cursor: pointer;
+      background: var(--ended-button); color: var(--ended-button-fg); font: 15px system-ui, sans-serif; }
     /* Reports a frame failure after the loader has gone; sized so it stays readable on a phone. */
     #status { position: fixed; right: 8px; bottom: 8px; padding: 4px 7px; color: white;
       background: rgba(0, 0, 0, .65); font: 12px sans-serif; pointer-events: none;
@@ -60,6 +74,12 @@
     <img src="./logo.svg" alt="" width="96" height="96">
     <div class="track"><div class="bar"></div></div>
     <div class="stage">Loading .NET runtime</div>
+  </div>
+  <div id="ended" hidden>
+    <img src="./logo.svg" alt="" width="96" height="96">
+    <div class="message">MewUI Gallery has ended.</div>
+    <div class="detail"></div>
+    <button type="button">Start again</button>
   </div>
   <div id="status" hidden></div>
   <script type="module" src="./main.js"></script>
