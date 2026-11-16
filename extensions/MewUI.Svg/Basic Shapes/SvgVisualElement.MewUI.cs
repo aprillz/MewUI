@@ -43,14 +43,21 @@ public abstract partial class SvgVisualElement : SvgElement, ISvgBoundable, ISvg
             if (PushTransforms(renderer))
             {
                 var hasClip = SetClip(renderer);
+                float elementOpacity = FixOpacityValue(Opacity);
+                // SVG opacity fades the element as a whole: a stroke over its fill, or children over each other,
+                // fade once together. What draws one part alone fades the same per call, without a layer.
+                bool fadesAsGroup = elementOpacity < 1f && DrawsPartsThatCanOverlap();
+                if (fadesAsGroup)
+                {
+                    renderer.GraphicsContext.BeginOpacity(elementOpacity);
+                }
+                else if (elementOpacity < 1f)
+                {
+                    renderer.GraphicsContext.GlobalAlpha *= elementOpacity;
+                }
+
                 try
                 {
-                    float elementOpacity = FixOpacityValue(Opacity);
-                    if (elementOpacity < 1f)
-                    {
-                        renderer.GraphicsContext.GlobalAlpha *= elementOpacity;
-                    }
-
                     if (Renderable)
                     {
                         RenderFillAndStroke(renderer);
@@ -62,6 +69,11 @@ public abstract partial class SvgVisualElement : SvgElement, ISvgBoundable, ISvg
                 }
                 finally
                 {
+                    if (fadesAsGroup)
+                    {
+                        renderer.GraphicsContext.EndOpacity();
+                    }
+
                     ResetClip(renderer, hasClip);
                 }
             }
@@ -70,6 +82,27 @@ public abstract partial class SvgVisualElement : SvgElement, ISvgBoundable, ISvg
         {
             PopTransforms(renderer);
         }
+    }
+
+    /// <summary>
+    /// Whether this element draws more than one part, which can overlap: children, text, markers, or both a
+    /// fill and a stroke. A shape that paints only its fill or only its stroke draws one part.
+    /// </summary>
+    private bool DrawsPartsThatCanOverlap()
+    {
+        if (!Renderable || this is not SvgPathBasedElement)
+        {
+            return true;
+        }
+
+        if (this is SvgMarkerElement marker && (marker.MarkerStart != null || marker.MarkerMid != null || marker.MarkerEnd != null))
+        {
+            return true;
+        }
+
+        bool fills = Fill != null && Fill != SvgPaintServer.None;
+        bool strokes = Stroke != null && Stroke != SvgPaintServer.None && StrokeWidth.Value > 0f;
+        return fills && strokes;
     }
 
     private bool RenderFilter(ISvgRenderer renderer)
