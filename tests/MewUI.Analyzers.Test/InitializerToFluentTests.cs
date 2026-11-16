@@ -250,12 +250,12 @@ public sealed class InitializerToFluentTests
         }
 
         public struct Rect { }
-        public enum ImageViewBoxUnits { Pixels, RelativeToBoundingBox }
+        public enum ImageViewboxUnits { Pixels, RelativeToBoundingBox }
 
         public class Image : Widget
         {
-            public Rect? ViewBox { get; set; }
-            public ImageViewBoxUnits ViewBoxUnits { get; set; }
+            public Rect? Viewbox { get; set; }
+            public ImageViewboxUnits ViewboxUnits { get; set; }
         }
 
         public static class WidgetExtensions
@@ -288,15 +288,15 @@ public sealed class InitializerToFluentTests
             public static T Stroke<T>(this T shape, [Aprillz.MewUI.FluentSetsMember(nameof(Shape.Stroke))] Brush brush, double thickness) where T : Shape { shape.Stroke = brush; shape.StrokeThickness = thickness; return shape; }
             public static T StrokeThickness<T>(this T shape, double value) where T : Shape { shape.StrokeThickness = value; return shape; }
 
-            public static Image ViewBox(
+            public static Image Viewbox(
                 this Image image,
-                [Aprillz.MewUI.FluentSetsMember(nameof(Image.ViewBox))] Rect? viewBox,
-                [Aprillz.MewUI.FluentSetsMember(nameof(Image.ViewBoxUnits))] ImageViewBoxUnits units = ImageViewBoxUnits.Pixels)
-            { image.ViewBox = viewBox; image.ViewBoxUnits = units; return image; }
+                [Aprillz.MewUI.FluentSetsMember(nameof(Image.Viewbox))] Rect? viewbox,
+                [Aprillz.MewUI.FluentSetsMember(nameof(Image.ViewboxUnits))] ImageViewboxUnits units = ImageViewboxUnits.Pixels)
+            { image.Viewbox = viewbox; image.ViewboxUnits = units; return image; }
 
-            [Aprillz.MewUI.FluentSetsConstant(nameof(Image.ViewBoxUnits), ImageViewBoxUnits.Pixels)]
-            public static Image ViewBoxPixels(this Image image, [Aprillz.MewUI.FluentSetsMember(nameof(Image.ViewBox))] Rect? viewBox)
-            { image.ViewBox = viewBox; image.ViewBoxUnits = ImageViewBoxUnits.Pixels; return image; }
+            [Aprillz.MewUI.FluentSetsConstant(nameof(Image.ViewboxUnits), ImageViewboxUnits.Pixels)]
+            public static Image ViewboxPixels(this Image image, [Aprillz.MewUI.FluentSetsMember(nameof(Image.Viewbox))] Rect? viewbox)
+            { image.Viewbox = viewbox; image.ViewboxUnits = ImageViewboxUnits.Pixels; return image; }
         }
 
         namespace Aprillz.MewUI
@@ -985,14 +985,14 @@ public sealed class InitializerToFluentTests
     [TestMethod]
     public async Task Combined_PrefersShorthandOverComposite_WhenConstantMatches()
     {
-        // Both `ViewBox(r, units)` and `ViewBoxPixels(r)` consume the two members; the combined
+        // Both `Viewbox(r, units)` and `ViewboxPixels(r)` consume the two members; the combined
         // shorthand passes fewer arguments and wins.
         var source = """
             class C
             {
                 object M(Rect rect)
                 {
-                    var i = new {|MEW1101:Image|} { ViewBox = rect, ViewBoxUnits = ImageViewBoxUnits.Pixels, Width = 5 };
+                    var i = new {|MEW1101:Image|} { Viewbox = rect, ViewboxUnits = ImageViewboxUnits.Pixels, Width = 5 };
                     return i;
                 }
             }
@@ -1004,7 +1004,7 @@ public sealed class InitializerToFluentTests
                 object M(Rect rect)
                 {
                     var i = new Image()
-                        .ViewBoxPixels(rect)
+                        .ViewboxPixels(rect)
                         .Width(5);
                     return i;
                 }
@@ -1022,7 +1022,7 @@ public sealed class InitializerToFluentTests
             {
                 object M(Rect rect)
                 {
-                    var i = new {|MEW1101:Image|} { ViewBox = rect, ViewBoxUnits = ImageViewBoxUnits.RelativeToBoundingBox, Width = 5 };
+                    var i = new {|MEW1101:Image|} { Viewbox = rect, ViewboxUnits = ImageViewboxUnits.RelativeToBoundingBox, Width = 5 };
                     return i;
                 }
             }
@@ -1034,7 +1034,7 @@ public sealed class InitializerToFluentTests
                 object M(Rect rect)
                 {
                     var i = new Image()
-                        .ViewBox(rect, ImageViewBoxUnits.RelativeToBoundingBox)
+                        .Viewbox(rect, ImageViewboxUnits.RelativeToBoundingBox)
                         .Width(5);
                     return i;
                 }
@@ -1047,13 +1047,13 @@ public sealed class InitializerToFluentTests
     [TestMethod]
     public async Task Combined_NotUsed_WhenConstantMemberIsMissing()
     {
-        // Neither the combined shorthand nor the composite applies to `ViewBox` alone.
+        // Neither the combined shorthand nor the composite applies to `Viewbox` alone.
         var source = """
             class C
             {
                 object M(Rect rect)
                 {
-                    var i = new {|MEW1101:Image|} { ViewBox = rect, Width = 5 };
+                    var i = new {|MEW1101:Image|} { Viewbox = rect, Width = 5 };
                     return i;
                 }
             }
@@ -1064,7 +1064,7 @@ public sealed class InitializerToFluentTests
             {
                 object M(Rect rect)
                 {
-                    var i = new Image() { ViewBox = rect }.Width(5);
+                    var i = new Image() { Viewbox = rect }.Width(5);
                     return i;
                 }
             }
