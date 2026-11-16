@@ -533,6 +533,35 @@ public sealed class WindowlessRunTests
 #if NET10_0_OR_GREATER
     // The browser platform targets net10.0 only, so the test project references it only there.
     [TestMethod]
+    public void BrowserBeforeUnload_RaisesShutdownRequestedWithoutAskingTheWindows()
+    {
+        EnsureRegistered();
+        Hosts.Enqueue(new LifecyclePlatformHost());
+        bool keptWhenCancelled = false;
+        bool keptWhenAllowed = true;
+        bool windowAsked = false;
+
+        Application.Run(() =>
+        {
+            var window = new Window();
+            window.Closing += _ => windowAsked = true;
+            Application.Current.RegisterWindow(window);
+
+            bool cancel = true;
+            Application.Current.ShutdownRequested += args => args.Cancel = cancel;
+            keptWhenCancelled = BrowserPlatform.BeforeUnload();
+            cancel = false;
+            keptWhenAllowed = BrowserPlatform.BeforeUnload();
+            Application.Shutdown();
+        });
+
+        Assert.IsTrue(keptWhenCancelled);
+        Assert.IsFalse(keptWhenAllowed);
+        Assert.IsFalse(windowAsked);
+    }
+#endif
+
+    [TestMethod]
     public void Run_ResetsTheExitCodeFromThePreviousRun()
     {
         EnsureRegistered();
