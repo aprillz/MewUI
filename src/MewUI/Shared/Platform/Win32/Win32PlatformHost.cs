@@ -903,9 +903,13 @@ public sealed class Win32PlatformHost : IPlatformHost
         app.Dispatcher = null;
         _app = null;
 
-        foreach (var backend in _windows.Values.ToArray())
+        // A posted WM_CLOSE would never be delivered now; DestroyWindow runs WM_DESTROY and takes owned windows.
+        foreach (var hwnd in _windows.Keys.ToArray())
         {
-            backend.Window.Close();
+            if (User32.IsWindow(hwnd))
+            {
+                User32.DestroyWindow(hwnd);
+            }
         }
         _windows.Clear();
 
