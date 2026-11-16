@@ -32,6 +32,8 @@ public sealed class Application
     // for the duration of a Run; created at run start, disposed at run end.
     private ApplicationRuntime? _runtime;
     private Action<string[]>? _startup;
+    // The quit request from the system whose windows are closing; a repeated request joins it.
+    private SystemQuitAttempt? _systemQuit;
     // Set by Shutdown; windows closing after it must not ask again, which would reset the exit code to 0.
     private volatile bool _shutdownRequested;
 
@@ -126,6 +128,14 @@ public sealed class Application
     /// Occurs when the theme changes, with the old and new theme.
     /// </summary>
     public event Action<Theme, Theme>? ThemeChanged;
+
+    /// <summary>
+    /// Occurs when the operating system asks the application to quit, for example at logout, on platforms
+    /// that report such requests. Set <see cref="ShutdownRequestedEventArgs.Cancel"/> to keep running;
+    /// otherwise each window is asked to close, its <see cref="Window.Closing"/> able to keep it open, and
+    /// the run ends once every window has closed.
+    /// </summary>
+    public event Action<ShutdownRequestedEventArgs>? ShutdownRequested;
 
     /// <summary>
     /// Occurs when the theme mode changes.
@@ -686,7 +696,21 @@ public sealed class Application
     // platform host; hosts only maintain their own hwnd registry for routing.
     internal void UnregisterWindow(Window window)
     {
-        if (_runtime?.Unregister(window, ShutdownMode) == true && !_shutdownRequested)
+        var runtime = _runtime;
+        if (runtime == null)
+        {
+            return;
+        }
+
+        bool endsRun = runtime.Unregister(window, ShutdownMode);
+        if (_systemQuit != null && runtime.Windows.Count == 0)
+        {
+            // Granted here, before the shutdown below ends the loop the awaiting close would resume on.
+            CompleteSystemQuit(granted: true);
+            endsRun = true;
+        }
+
+        if (endsRun && !_shutdownRequested)
         {
             Shutdown();
         }
@@ -763,6 +787,116 @@ public sealed class Application
             app._shutdownRequested = true;
             app.PlatformHost.Quit(app);
         }
+    }
+
+    /// <summary>
+    /// Raises <see cref="ShutdownRequested"/> and reports whether a handler cancelled it, for a host that
+    /// cannot wait for windows to close.
+    /// </summary>
+    internal bool IsShutdownRequestCancelled()
+    {
+        var args = new ShutdownRequestedEventArgs();
+        ShutdownRequested?.Invoke(args);
+        return args.Cancel;
+    }
+
+    /// <summary>
+    /// Handles a quit request from the operating system: raises <see cref="ShutdownRequested"/>, then closes
+    /// the windows newest first through their normal close and shuts down once none is left. A cancel from
+    /// the event or from any window's <see cref="Window.Closing"/> ends the attempt and the run goes on.
+    /// <paramref name="decided"/> learns the outcome, true just before the run ends.
+    /// </summary>
+    internal void RequestShutdownFromSystem(Action<bool>? decided = null)
+    {
+        var dispatcher = Dispatcher;
+        if (dispatcher != null && !dispatcher.IsOnUIThread)
+        {
+            dispatcher.BeginInvoke(() => RequestShutdownFromSystem(decided));
+            return;
+        }
+
+        if (_systemQuit != null)
+        {
+            _systemQuit.Decided += decided;
+            return;
+        }
+
+        if (IsShutdownRequestCancelled())
+        {
+            decided?.Invoke(false);
+            return;
+        }
+
+        var attempt = new SystemQuitAttempt { Decided = decided };
+        _systemQuit = attempt;
+        CloseWindowsThenShutdown(attempt);
+    }
+
+    /// <summary>
+    /// Whether the quit request from the system waits on a window whose <see cref="Window.Closing"/> took a
+    /// deferral, which only the user can resolve.
+    /// </summary>
+    internal bool IsSystemQuitWaitingOnDecision => _systemQuit?.ClosingWindow?.IsCloseDecisionPending == true;
+
+    private async void CloseWindowsThenShutdown(SystemQuitAttempt attempt)
+    {
+        try
+        {
+            Window? previous = null;
+            while (ReferenceEquals(_systemQuit, attempt))
+            {
+                var windows = SnapshotWindows();
+                if (windows.Length == 0)
+                {
+                    CompleteSystemQuit(granted: true);
+                    if (ReferenceEquals(_current, this) && !_shutdownRequested)
+                    {
+                        Shutdown();
+                    }
+
+                    return;
+                }
+
+                // Newest first, so a dialog closes before the window that owns it.
+                var newest = windows[windows.Length - 1];
+                if (ReferenceEquals(newest, previous))
+                {
+                    // It reported closed but is still registered; asking it again would never end.
+                    CompleteSystemQuit(granted: false);
+                    return;
+                }
+
+                previous = newest;
+                attempt.ClosingWindow = newest;
+                if (!await newest.CloseAsync() && ReferenceEquals(_systemQuit, attempt))
+                {
+                    CompleteSystemQuit(granted: false);
+                    return;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            if (ReferenceEquals(_systemQuit, attempt))
+            {
+                CompleteSystemQuit(granted: false);
+            }
+
+            RouteLifecycleException(ex);
+        }
+    }
+
+    private void CompleteSystemQuit(bool granted)
+    {
+        var attempt = _systemQuit;
+        _systemQuit = null;
+        attempt?.Decided?.Invoke(granted);
+    }
+
+    private sealed class SystemQuitAttempt
+    {
+        internal Action<bool>? Decided;
+        internal Window? ClosingWindow;
     }
 
     /// <summary>

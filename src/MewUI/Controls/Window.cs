@@ -1596,6 +1596,9 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     private bool _closeApproved;
     private bool _closeDecisionPending;
 
+    /// <summary>Whether a <see cref="Closing"/> handler deferred the close and has not decided yet.</summary>
+    internal bool IsCloseDecisionPending => _closeDecisionPending;
+
     /// <summary>
     /// Closes the window.
     /// </summary>
