@@ -305,7 +305,7 @@ new Label().Bind(Label.TextProperty, vm, DisplayNamePath, fallbackValue: "-");
 
 ### 4.4 null과 fallback
 
-- 중간 값이 null이면 경로를 값 없음 상태로 보고 `fallbackValue`를 씁니다.
+- 중간 값이 null이면 경로를 값 없음 상태로 보고 `fallbackValue`를 씁니다. 3.2절의 getter 오버로드도 getter나 `convert` 바로 뒤에서 이 값을 받습니다.
 - 관찰 가능한 중간 값이 다시 non-null이 되면 경로를 자동으로 다시 연결합니다.
 - **마지막 세그먼트의 null은 실제 소스 값**이며 fallback으로 대체하지 않습니다.
 - selector가 null `ObservableValue`를 반환하면 잘못된 경로이므로 예외를 던집니다.
@@ -357,27 +357,50 @@ BindingPath.From<AppViewModel>()
 
 ## 5. 여러 소스 결합
 
-하나의 표시 값이 소스 둘 이상에 의존하면 경로로 표현할 수 없습니다. 경로는 한 단계에 구독이 하나씩만 붙기 때문입니다. **뷰모델이 결합해서 알리는 것**이 답입니다.
+하나의 표시 값이 소스 둘 이상에 의존하면 경로로 표현할 수 없습니다. 경로는 한 단계에 구독이 하나씩만 붙기 때문입니다. 그래서 `Bind`는 입력 둘에서 넷까지와 결합 함수도 받으며, 입력 중 하나라도 바뀌면 값을 다시 계산합니다.
+
+입력이 모두 같은 뷰모델의 알림 속성이면 소스 뒤에 getter를 나열하고 결합 함수를 마지막에 넘깁니다.
 
 ```csharp
-// 좋음: 뷰모델이 FullName을 계산해 알리고, 뷰는 하나만 봅니다
-new Label().Bind(Label.TextProperty, vm, x => x.FullName);
+new TextBlock().Bind(TextBlock.TextProperty, vm,
+    x => x.FirstName,
+    x => x.LastName,
+    (first, last) => $"{first} {last}");
 ```
 
-뷰모델을 고칠 수 없다면 구독을 직접 엮습니다.
+입력이 서로 다른 객체나 서로 다른 종류의 소스에서 오면 입력마다 `BindingInput.From`으로 감쌉니다.
 
 ```csharp
-new Label()
-    .Apply(label =>
-    {
-        void Update() => label.Text = $"{firstName.Value} {lastName.Value}".Trim();
-        firstName.Changed += Update;
-        lastName.Changed += Update;
-        Update();
-    })
+new TextBlock().Bind(TextBlock.TextProperty,
+    BindingInput.From(order, x => x.Customer.Name),
+    BindingInput.From(quantitySlider, RangeBase.ValueProperty),
+    BindingInput.From(unitPrice),
+    (customer, count, price) => $"{customer}: {count * price:0.00}");
 ```
 
-소스가 하나인 계산에는 이 패턴이 필요 없습니다. 3.3의 `convert`를 쓰세요.
+| 입력 | 소스 |
+|------|------|
+| `BindingInput.From(vm, x => x.Name)` | INPC 속성 (2.2절). 점 표기 getter는 4.1절을 따릅니다 |
+| `BindingInput.From(root, path)` | `BindingPath` (4.2절) |
+| `BindingInput.From(observable)` | `ObservableValue<T>` (2.1절) |
+| `BindingInput.From(element, RangeBase.ValueProperty)` | 다른 요소의 속성 (2.3절) |
+
+- 이 바인딩은 항상 단방향입니다. `TextBox.Text`처럼 기본값이 양방향인 대상에서도 마찬가지이며, 사용자가 입력한 값은 입력이 바뀔 때까지만 대상에 남습니다.
+- 결합 함수는 모든 입력을 읽을 수 있을 때만 호출됩니다. 중간 객체가 null이어서 경로가 끊긴 입력이 있으면 대상에는 속성 타입의 기본값이 표시되고, 결합 함수 바로 앞에 `fallbackValue`를 넘기면 그 값이 표시됩니다. 입력이 실제로 가진 null은 결합 함수에 값으로 전달됩니다.
+- 입력을 읽지 못하거나 결합 함수가 예외를 던지면 대상은 마지막 값을 유지하고 바인딩 오류를 보고합니다. 다음 변경 때 다시 시도합니다.
+- `BindingInput.From`으로 만든 입력은 여러 바인딩에 쓸 수 있습니다. 바인딩마다 소스를 따로 관찰하며, `ClearBinding`, 대상 dispose, `TemplateContext.Reset`이 다른 바인딩과 똑같이 정리합니다.
+
+```csharp
+new TextBlock().Bind(TextBlock.TextProperty, vm,
+    x => x.Customer.Name,
+    x => x.Total,
+    "-",                                   // fallbackValue
+    (name, total) => $"{name}: {total}");
+```
+
+뷰모델이 결합 값을 가질 수 있다면 뷰모델이 계산해서 알리는 편(예: `FullName` 속성)이 여전히 더 단순합니다. 뷰가 하나만 보면 되기 때문입니다.
+
+소스가 하나인 계산에는 이 방법이 필요 없습니다. 3.3의 `convert`를 쓰세요.
 
 ---
 
@@ -462,6 +485,10 @@ counter.Unsubscribe(OnChanged);
 | `Bind(MewProperty<T>, TSource, Func<TSource, ObservableValue<T>>)` | 기본 | 소유자를 통해 도달하는 `ObservableValue` |
 | `Bind(MewProperty<T>, MewObject, MewProperty<T>)` | 기본 | 다른 요소의 속성 (2.3절) |
 | `Bind(MewProperty<T>, TRoot, BindingPath<TRoot, T>, mode?, fallbackValue?)` | 기본 | 경로 (4절) |
+| `Bind(MewProperty<T>, TSource, getter, fallbackValue, setter?)` | 대상 기본값 | fallback이 있는 INPC 소스 (4.4절) |
+| `Bind(MewProperty<TProp>, TSource, getter, convert, fallbackValue, setter?, convertBack?)` | convertBack 있으면 양방향 | fallback이 있는 INPC 변환 (4.4절) |
+| `Bind(MewProperty<TProp>, TSource, getter1, getter2, fallbackValue?, combine)` | 단방향 | 한 소스의 속성 둘에서 넷 (5절) |
+| `Bind(MewProperty<TProp>, BindingInput<T1>, BindingInput<T2>, fallbackValue?, combine)` | 단방향 | 입력 둘에서 넷 (5절) |
 
 `SetBinding`이 같은 조합을 제공하며 `Bind`는 그 위의 플루언트 래퍼입니다.
 

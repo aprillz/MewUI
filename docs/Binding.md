@@ -305,7 +305,7 @@ A non-observing `Then(getter)` is evaluated on the initial attach and whenever a
 
 ### 4.4 Null and fallback
 
-- A null intermediate makes the path unavailable and applies `fallbackValue`.
+- A null intermediate makes the path unavailable and applies `fallbackValue`. The getter overloads of 3.2 take one as well, right after the getter or `convert`.
 - When an observed intermediate becomes non-null again, the path reconnects automatically.
 - **Null from the last segment is the real source value** and is not replaced by the fallback.
 - A selector that returns a null `ObservableValue` is a broken path and throws.
@@ -357,27 +357,50 @@ An index that no longer exists makes the path unavailable and applies `fallbackV
 
 ## 5. Combining Several Sources
 
-A displayed value that depends on more than one source cannot be expressed as a path, because a path is a chain with one subscription per step. **Let the view model combine and notify.**
+A displayed value that depends on more than one source cannot be expressed as a path, because a path is a chain with one subscription per step. `Bind` therefore also takes two to four inputs and a combine function, and recomputes the value whenever any input changes.
+
+When every input is a notifying property of the same view model, pass the getters after the source and the combine function last.
 
 ```csharp
-// Good: the view model computes FullName and notifies, so the view watches one thing
-new Label().Bind(Label.TextProperty, vm, x => x.FullName);
+new TextBlock().Bind(TextBlock.TextProperty, vm,
+    x => x.FirstName,
+    x => x.LastName,
+    (first, last) => $"{first} {last}");
 ```
 
-When the view model cannot be changed, wire the subscriptions yourself.
+When the inputs come from different objects or from different kinds of source, wrap each one in `BindingInput.From`.
 
 ```csharp
-new Label()
-    .Apply(label =>
-    {
-        void Update() => label.Text = $"{firstName.Value} {lastName.Value}".Trim();
-        firstName.Changed += Update;
-        lastName.Changed += Update;
-        Update();
-    })
+new TextBlock().Bind(TextBlock.TextProperty,
+    BindingInput.From(order, x => x.Customer.Name),
+    BindingInput.From(quantitySlider, RangeBase.ValueProperty),
+    BindingInput.From(unitPrice),
+    (customer, count, price) => $"{customer}: {count * price:0.00}");
 ```
 
-A computation over a single source does not need this pattern. Use `convert` from 3.3.
+| Input | Source |
+|-------|--------|
+| `BindingInput.From(vm, x => x.Name)` | An INotifyPropertyChanged property (2.2). A dotted getter follows 4.1 |
+| `BindingInput.From(root, path)` | A `BindingPath` (4.2) |
+| `BindingInput.From(observable)` | An `ObservableValue<T>` (2.1) |
+| `BindingInput.From(element, RangeBase.ValueProperty)` | Another element's property (2.3) |
+
+- The binding is always one-way, also on a target that is two-way by default such as `TextBox.Text`. What the user types stays on the target until an input changes.
+- The combine function runs only while every input is available. While a null intermediate breaks an input's path, the target shows the property type's default value, or `fallbackValue` when you pass one right before the combine function. A `null` that an input actually holds reaches the combine function as a value.
+- When an input cannot be read or the combine function throws, the target keeps its last value and the binding reports the error. The next change tries again.
+- An input from `BindingInput.From` can be used in several bindings. Each binding observes the source on its own, and `ClearBinding`, disposing the target, and `TemplateContext.Reset` release it like any other binding.
+
+```csharp
+new TextBlock().Bind(TextBlock.TextProperty, vm,
+    x => x.Customer.Name,
+    x => x.Total,
+    "-",                                   // fallbackValue
+    (name, total) => $"{name}: {total}");
+```
+
+When the view model can own the combined value, letting it compute and notify (a `FullName` property, for example) is still simpler, because the view then watches one thing.
+
+A computation over a single source does not need any of this. Use `convert` from 3.3.
 
 ---
 
@@ -462,6 +485,10 @@ counter.Unsubscribe(OnChanged);
 | `Bind(MewProperty<T>, TSource, Func<TSource, ObservableValue<T>>)` | Default | `ObservableValue` reached through an owner |
 | `Bind(MewProperty<T>, MewObject, MewProperty<T>)` | Default | Another element's property (2.3) |
 | `Bind(MewProperty<T>, TRoot, BindingPath<TRoot, T>, mode?, fallbackValue?)` | Default | Path (section 4) |
+| `Bind(MewProperty<T>, TSource, getter, fallbackValue, setter?)` | Target default | INotifyPropertyChanged source with a fallback (4.4) |
+| `Bind(MewProperty<TProp>, TSource, getter, convert, fallbackValue, setter?, convertBack?)` | Two-way with convertBack | Converted, with a fallback (4.4) |
+| `Bind(MewProperty<TProp>, TSource, getter1, getter2, fallbackValue?, combine)` | One-way | Two to four properties of one source (section 5) |
+| `Bind(MewProperty<TProp>, BindingInput<T1>, BindingInput<T2>, fallbackValue?, combine)` | One-way | Two to four inputs (section 5) |
 
 `SetBinding` offers the same set; `Bind` is the fluent wrapper over it.
 
