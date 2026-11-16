@@ -67,6 +67,22 @@ public sealed class BindingPathGeneratorTests
                     where TRoot : class
                     where TOwner : class, System.ComponentModel.INotifyPropertyChanged => null;
             }
+
+            public sealed class BindingInput<TValue> { }
+
+            public static class BindingInput
+            {
+                public static BindingInput<TValue> From<TRoot, TValue>(
+                    TRoot source, BindingPath<TRoot, TValue> path)
+                    where TRoot : class => null;
+
+                public static BindingInput<TValue> From<TSource, TValue>(
+                    TSource source,
+                    System.Func<TSource, TValue> getter,
+                    [System.Runtime.CompilerServices.CallerArgumentExpression(nameof(getter))]
+                    string getterExpression = null)
+                    where TSource : class, System.ComponentModel.INotifyPropertyChanged => null;
+            }
         }
 
         namespace Aprillz.MewUI.Controls
@@ -94,10 +110,65 @@ public sealed class BindingPathGeneratorTests
                     where TSource : class, System.ComponentModel.INotifyPropertyChanged
                 {
                 }
+
+                public void SetBinding<TProp, T1, T2>(
+                    Aprillz.MewUI.MewProperty<TProp> property,
+                    Aprillz.MewUI.BindingInput<T1> first,
+                    Aprillz.MewUI.BindingInput<T2> second,
+                    System.Func<T1, T2, TProp> combine)
+                {
+                }
+
+                public void SetBinding<TProp, T1, T2>(
+                    Aprillz.MewUI.MewProperty<TProp> property,
+                    Aprillz.MewUI.BindingInput<T1> first,
+                    Aprillz.MewUI.BindingInput<T2> second,
+                    TProp fallbackValue,
+                    System.Func<T1, T2, TProp> combine)
+                {
+                }
             }
 
             public static class BindingExtensions
             {
+                public static TElement Bind<TElement, TSource, T>(
+                    this TElement element,
+                    Aprillz.MewUI.MewProperty<T> property,
+                    TSource source,
+                    System.Func<TSource, T> getter,
+                    T fallbackValue,
+                    System.Action<TSource, T> setter = null,
+                    Aprillz.MewUI.BindingMode? mode = null,
+                    [System.Runtime.CompilerServices.CallerArgumentExpression(nameof(getter))]
+                    string getterExpression = null)
+                    where TElement : MewObject
+                    where TSource : class, System.ComponentModel.INotifyPropertyChanged => element;
+
+                public static TElement Bind<TElement, TProp, TSource, T1, T2>(
+                    this TElement element,
+                    Aprillz.MewUI.MewProperty<TProp> property,
+                    TSource source,
+                    System.Func<TSource, T1> first,
+                    System.Func<TSource, T2> second,
+                    System.Func<T1, T2, TProp> combine,
+                    [System.Runtime.CompilerServices.CallerArgumentExpression(nameof(first))] string firstExpression = null,
+                    [System.Runtime.CompilerServices.CallerArgumentExpression(nameof(second))] string secondExpression = null)
+                    where TElement : MewObject
+                    where TSource : class, System.ComponentModel.INotifyPropertyChanged => element;
+
+                public static TElement Bind<TElement, TProp, TSource, T1, T2>(
+                    this TElement element,
+                    Aprillz.MewUI.MewProperty<TProp> property,
+                    TSource source,
+                    System.Func<TSource, T1> first,
+                    System.Func<TSource, T2> second,
+                    TProp fallbackValue,
+                    System.Func<T1, T2, TProp> combine,
+                    [System.Runtime.CompilerServices.CallerArgumentExpression(nameof(first))] string firstExpression = null,
+                    [System.Runtime.CompilerServices.CallerArgumentExpression(nameof(second))] string secondExpression = null)
+                    where TElement : MewObject
+                    where TSource : class, System.ComponentModel.INotifyPropertyChanged => element;
+
                 public static TElement Bind<TElement, TSource, T>(
                     this TElement element,
                     Aprillz.MewUI.MewProperty<T> property,
@@ -280,10 +351,94 @@ public sealed class BindingPathGeneratorTests
         Assert.IsEmpty(single);
     }
 
-    private static string RunExpectingSuccess(string getter, string property = "Label.TextProperty")
+    [TestMethod]
+    public void InputMemberChain_IsSplitIntoNotifyingSegments()
     {
-        var diagnostics = Run(getter, out string generated, property);
+        string generated = ExpectSuccess(
+            CompileInput("x => x.Profile.DisplayName", out string output), output);
 
+        StringAssert.Contains(generated, ".ThenNotifying(static value => value.Profile)");
+        StringAssert.Contains(generated, "BindingInput<string> From0(");
+        StringAssert.Contains(generated, "global::Aprillz.MewUI.BindingInput.From(source, _path0)");
+    }
+
+    [TestMethod]
+    public void CombinedNestedGetter_GetsAPathForEveryLambda()
+    {
+        string generated = RunExpectingSuccess(
+            "x => x.Profile.DisplayName, x => x.Current, static (name, current) => name");
+
+        StringAssert.Contains(generated, "_path0_0 =");
+        StringAssert.Contains(generated, "_path0_1 =");
+        StringAssert.Contains(generated, "global::Aprillz.MewUI.BindingInput.From(source, _path0_0)");
+        StringAssert.Contains(generated, "global::Aprillz.MewUI.BindingInput.From(source, _path0_1)");
+        StringAssert.Contains(generated, "combine);");
+    }
+
+    [TestMethod]
+    public void CombinedFallback_IsPassedThrough()
+    {
+        string generated = RunExpectingSuccess(
+            "x => x.Profile.DisplayName, x => x.Current, \"none\", static (name, current) => name");
+
+        StringAssert.Contains(generated, "string fallbackValue,");
+        StringAssert.Contains(generated, "                fallbackValue,");
+    }
+
+    [TestMethod]
+    public void CombinedSingleMembers_AreLeftToTheRuntime()
+    {
+        var diagnostics = Run(
+            "x => x.Profile, x => x.Current, static (profile, current) => \"\"", out string generated);
+
+        Assert.IsFalse(diagnostics.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error));
+        Assert.IsEmpty(generated);
+    }
+
+    [TestMethod]
+    public void CombinedComputedGetter_IsReported()
+    {
+        var diagnostics = Run(
+            "x => x.Profile.DisplayName, x => x.Compute().Trim(), static (name, text) => name", out _);
+
+        Assert.AreEqual(
+            "MEWG001",
+            diagnostics.Single(diagnostic => diagnostic.Id.StartsWith("MEWG")).Id);
+    }
+
+    [TestMethod]
+    public void SingleGetterFallback_IsPassedThrough()
+    {
+        string generated = RunExpectingSuccess("x => x.Profile.DisplayName, \"none\"");
+
+        StringAssert.Contains(generated, "string fallbackValue,");
+        StringAssert.Contains(generated, "mode, fallbackValue);");
+    }
+
+    [TestMethod]
+    public void InputSingleMember_IsLeftToTheRuntime()
+    {
+        var diagnostics = CompileInput("x => x.Current", out string generated);
+
+        Assert.IsFalse(diagnostics.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error));
+        Assert.IsEmpty(generated);
+    }
+
+    [TestMethod]
+    public void InputComputedGetter_IsReported()
+    {
+        var diagnostics = CompileInput("x => x.Compute().Trim()", out _);
+
+        Assert.AreEqual(
+            "MEWG001",
+            diagnostics.Single(diagnostic => diagnostic.Id.StartsWith("MEWG")).Id);
+    }
+
+    private static string RunExpectingSuccess(string getter, string property = "Label.TextProperty")
+        => ExpectSuccess(Run(getter, out string generated, property), generated);
+
+    private static string ExpectSuccess(ImmutableArray<Diagnostic> diagnostics, string generated)
+    {
         var errors = diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
         Assert.IsEmpty(
             errors,
@@ -298,6 +453,12 @@ public sealed class BindingPathGeneratorTests
         string getter,
         out string generated,
         string property = "Label.TextProperty")
+        => Compile($"label.Bind({property}, model, {getter});", out generated);
+
+    private static ImmutableArray<Diagnostic> CompileInput(string getter, out string generated)
+        => Compile($"var input = Aprillz.MewUI.BindingInput.From(model, {getter});", out generated);
+
+    private static ImmutableArray<Diagnostic> Compile(string statement, out string generated)
     {
         string source = $$"""
             using Aprillz.MewUI.Controls;
@@ -312,7 +473,7 @@ public sealed class BindingPathGeneratorTests
                 {
                     var label = new Label();
                     var model = new ViewModel();
-                    label.Bind({{property}}, model, {{getter}});
+                    {{statement}}
                 }
             }
             """ + BINDING_API;

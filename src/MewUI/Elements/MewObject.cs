@@ -7,7 +7,7 @@ namespace Aprillz.MewUI.Controls;
 /// Base class providing the MewProperty system (per-instance value storage, change notification and
 /// data binding), analogous to WPF's DependencyObject.
 /// </summary>
-public abstract class MewObject : IPropertyOwner
+public abstract partial class MewObject : IPropertyOwner
 {
     private PropertyValueStore? _propertyStore;
     private Dictionary<int, IPropertyBinding>? _propertyBindings;
@@ -692,6 +692,39 @@ public abstract class MewObject : IPropertyOwner
         BindingMode? mode = null,
         [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TSource : class, INotifyPropertyChanged
+        => SetNotifyingBinding(property, source, getter, setter, mode, getterExpression, default!);
+
+    /// <summary>
+    /// Binds a property to a notifying property of <paramref name="source"/> and shows
+    /// <paramref name="fallbackValue"/> while a null intermediate breaks the path. Omitting
+    /// <paramref name="setter"/> makes the binding OneWay. Replaces any existing binding for the
+    /// same property.
+    /// </summary>
+    /// <exception cref="ArgumentException">
+    /// Thrown when <paramref name="getter"/> is not a single member access such as
+    /// <c>x =&gt; x.Name</c> and the binding path generator did not rewrite it.
+    /// </exception>
+    public void SetBinding<TSource, T>(
+        MewProperty<T> property,
+        TSource source,
+        Func<TSource, T> getter,
+        T fallbackValue,
+        Action<TSource, T>? setter = null,
+        BindingMode? mode = null,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
+        where TSource : class, INotifyPropertyChanged
+        => SetNotifyingBinding(
+            property, source, getter, setter, mode, getterExpression, fallbackValue);
+
+    private void SetNotifyingBinding<TSource, T>(
+        MewProperty<T> property,
+        TSource source,
+        Func<TSource, T> getter,
+        Action<TSource, T>? setter,
+        BindingMode? mode,
+        string? getterExpression,
+        T fallbackValue)
+        where TSource : class, INotifyPropertyChanged
     {
         ArgumentNullException.ThrowIfNull(property);
         ArgumentNullException.ThrowIfNull(source);
@@ -706,7 +739,7 @@ public abstract class MewObject : IPropertyOwner
             throw new ArgumentException(BuildMissingSetterMessage(property), nameof(setter));
         }
 
-        SetBinding(property, source, path, resolvedMode, fallbackValue: default!);
+        SetBinding(property, source, path, resolvedMode, fallbackValue);
     }
 
     /// <summary>
@@ -728,6 +761,60 @@ public abstract class MewObject : IPropertyOwner
         BindingMode? mode = null,
         [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TSource : class, INotifyPropertyChanged
+        => SetConvertedNotifyingBinding(
+            property,
+            source,
+            getter,
+            convert,
+            setter,
+            convertBack,
+            mode,
+            getterExpression,
+            default!);
+
+    /// <summary>
+    /// Binds a property to a converted notifying property of <paramref name="source"/> and shows
+    /// <paramref name="fallbackValue"/> while a null intermediate breaks the path. The binding is
+    /// TwoWay only when both <paramref name="setter"/> and <paramref name="convertBack"/> are
+    /// supplied.
+    /// </summary>
+    /// <exception cref="ArgumentException">
+    /// Thrown when <paramref name="getter"/> is not a single member access such as
+    /// <c>x =&gt; x.Name</c> and the binding path generator did not rewrite it.
+    /// </exception>
+    public void SetBinding<TProp, TSource, TValue>(
+        MewProperty<TProp> property,
+        TSource source,
+        Func<TSource, TValue> getter,
+        Func<TValue, TProp> convert,
+        TProp fallbackValue,
+        Action<TSource, TValue>? setter = null,
+        Func<TProp, TValue>? convertBack = null,
+        BindingMode? mode = null,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
+        where TSource : class, INotifyPropertyChanged
+        => SetConvertedNotifyingBinding(
+            property,
+            source,
+            getter,
+            convert,
+            setter,
+            convertBack,
+            mode,
+            getterExpression,
+            fallbackValue);
+
+    private void SetConvertedNotifyingBinding<TProp, TSource, TValue>(
+        MewProperty<TProp> property,
+        TSource source,
+        Func<TSource, TValue> getter,
+        Func<TValue, TProp> convert,
+        Action<TSource, TValue>? setter,
+        Func<TProp, TValue>? convertBack,
+        BindingMode? mode,
+        string? getterExpression,
+        TProp fallbackValue)
+        where TSource : class, INotifyPropertyChanged
     {
         ArgumentNullException.ThrowIfNull(property);
         ArgumentNullException.ThrowIfNull(source);
@@ -748,8 +835,7 @@ public abstract class MewObject : IPropertyOwner
             resolvedMode = BindingMode.OneWay;
         }
 
-        SetBinding(
-            property, source, path, convert, convertBack, resolvedMode, fallbackValue: default!);
+        SetBinding(property, source, path, convert, convertBack, resolvedMode, fallbackValue);
     }
 
     /// <summary>

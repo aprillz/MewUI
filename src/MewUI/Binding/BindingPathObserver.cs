@@ -1,5 +1,19 @@
 namespace Aprillz.MewUI;
 
+internal interface IBindingValueObserver : IDisposable
+{
+    event Action? Changed;
+
+    bool IsAvailable { get; }
+
+    Exception? Error { get; }
+}
+
+internal interface IBindingValueObserver<out TValue> : IBindingValueObserver
+{
+    TValue CurrentValue { get; }
+}
+
 internal abstract class BindingPathObserver : IDisposable
 {
     internal abstract void OnSegmentChanged(int segmentIndex);
@@ -14,7 +28,8 @@ internal sealed class BindingPathSubscription(
     internal void OnChanged() => observer.OnSegmentChanged(segmentIndex);
 }
 
-internal sealed class BindingPathObserver<TRoot, TValue> : BindingPathObserver
+internal sealed class BindingPathObserver<TRoot, TValue>
+    : BindingPathObserver, IBindingValueObserver<TValue>
     where TRoot : class
 {
     private readonly IReadOnlyList<IBindingPathSegment> _segments;
@@ -53,13 +68,13 @@ internal sealed class BindingPathObserver<TRoot, TValue> : BindingPathObserver
         }
     }
 
-    internal event Action? Changed;
+    public event Action? Changed;
 
-    internal bool IsAvailable { get; private set; }
+    public bool IsAvailable { get; private set; }
 
-    internal Exception? Error { get; private set; }
+    public Exception? Error { get; private set; }
 
-    internal TValue CurrentValue { get; private set; } = default!;
+    public TValue CurrentValue { get; private set; } = default!;
 
     internal bool CanWrite => _segments.Count > 0 && _segments[^1].CanWrite;
 
