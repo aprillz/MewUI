@@ -636,7 +636,7 @@ public sealed class MarkdownPresenterTests
         Assert.AreEqual(20, button.MinWidth);
         Assert.AreEqual(20, button.MinHeight);
         Assert.AreEqual(Thickness.Zero, button.Padding);
-        Assert.AreEqual(new Rect(0, 0, 22, 22), icon.ViewBox);
+        Assert.AreEqual(new Rect(0, 0, 22, 22), icon.Viewbox);
         Assert.AreEqual(HorizontalAlignment.Center, icon.HorizontalAlignment);
         Assert.AreEqual(VerticalAlignment.Center, icon.VerticalAlignment);
         Assert.AreEqual(Size.Empty, overlay.DesiredSize);
