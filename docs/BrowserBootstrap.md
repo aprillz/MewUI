@@ -135,13 +135,15 @@ The members a complete host uses:
 | Wheel | `PointerWheel` |
 | Keyboard | `KeyDown`, `KeyUp`, `TextInput` |
 | IME | `CompositionStart`, `CompositionUpdate`, `CompositionEnd`, `GetTextInputState`, `ReplaceText`, `WantsTextInput`, `SyncTextCaret` |
-| Window state | `FocusChanged`, `SetSystemDarkMode` |
+| Window state | `FocusChanged`, `SetSystemDarkMode`, `BeforeUnload` |
 | Clipboard | `SetClipboardText` (paste), `ClipboardWriter` (copy) |
 | Caret | `CaretReporter` |
 
 The template's `main.js` looks the class up with `getAssemblyExports(config.mainAssemblyName)` and then by its namespace, so moving the class to another assembly or namespace means changing that line too.
 
 `SetSystemDarkMode` is the only way the application learns the color scheme, so the page reports it once at startup and on every `prefers-color-scheme` change.
+
+`BeforeUnload` raises `Application.ShutdownRequested` when the tab closes or the page navigates away. The page calls it from its `beforeunload` handler and cancels the event when it returns true, so the browser asks the user whether to leave.
 
 ---
 
@@ -189,6 +191,7 @@ function frame(frameTimeMs) {
 - `NextWakeDelayMs` returns the delay until the next timer, or -1 when nothing is due. With -1 the page waits for the next event.
 - Every event handler calls `wake()` before forwarding, so input restarts a sleeping loop.
 - The last argument is how long ago the browser timestamped the frame, from the timestamp `requestAnimationFrame` supplies. Reading the clock inside the frame instead makes animation curves step.
+- When the run ends, by closing the window or `Application.Shutdown()`, `RenderFrame` draws nothing more and the promise `runMain` returned resolves with the exit code. The page itself stays loaded, so without handling that the canvas keeps its last frame and ignores input. The template's `main.js` then stops the loop, hides the canvas and shows that the app has ended, with a button that reloads the page.
 
 ---
 

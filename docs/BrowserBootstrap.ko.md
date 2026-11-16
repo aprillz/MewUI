@@ -135,13 +135,15 @@ internal static partial class BrowserExports
 | 휠 | `PointerWheel` |
 | 키보드 | `KeyDown`, `KeyUp`, `TextInput` |
 | IME | `CompositionStart`, `CompositionUpdate`, `CompositionEnd`, `GetTextInputState`, `ReplaceText`, `WantsTextInput`, `SyncTextCaret` |
-| 창 상태 | `FocusChanged`, `SetSystemDarkMode` |
+| 창 상태 | `FocusChanged`, `SetSystemDarkMode`, `BeforeUnload` |
 | 클립보드 | `SetClipboardText`(붙여넣기), `ClipboardWriter`(복사) |
 | 캐럿 | `CaretReporter` |
 
 템플릿의 `main.js`는 `getAssemblyExports(config.mainAssemblyName)`로 얻은 객체에서 네임스페이스 경로로 이 클래스를 찾습니다. 클래스를 다른 어셈블리나 네임스페이스로 옮기면 그 줄도 함께 고쳐야 합니다.
 
 애플리케이션이 색 구성표를 알 수 있는 경로는 `SetSystemDarkMode`뿐이므로, 페이지는 시작 시 한 번, 그리고 `prefers-color-scheme`가 바뀔 때마다 이를 알립니다.
+
+`BeforeUnload`는 탭을 닫거나 다른 페이지로 이동할 때 `Application.ShutdownRequested`를 발생시킵니다. 페이지는 `beforeunload` 처리기에서 이를 호출하고, true가 반환되면 이벤트를 취소해 브라우저가 사용자에게 떠날지 묻게 합니다.
 
 ---
 
@@ -189,6 +191,7 @@ function frame(frameTimeMs) {
 - `NextWakeDelayMs`는 다음 타이머까지 남은 시간을 반환하고, 예정된 타이머가 없으면 -1을 반환합니다. -1이면 페이지는 다음 이벤트를 기다립니다.
 - 모든 이벤트 처리기는 전달하기 전에 `wake()`를 호출하므로, 입력이 멈춘 루프를 다시 시작합니다.
 - 마지막 인자는 `requestAnimationFrame`이 넘겨준 타임스탬프로부터 지난 시간입니다. 프레임 안에서 시계를 읽으면 애니메이션 곡선이 계단처럼 끊깁니다.
+- 창을 닫거나 `Application.Shutdown()`으로 실행이 끝나면 `RenderFrame`은 더 그리지 않고, `runMain`이 반환한 promise가 종료 코드와 함께 완료됩니다. 페이지 자체는 그대로 남으므로, 처리하지 않으면 캔버스가 마지막 프레임을 보인 채 입력에 반응하지 않습니다. 템플릿의 `main.js`는 이때 루프를 멈추고 캔버스를 숨긴 뒤, 앱이 끝났다는 안내와 페이지를 다시 불러오는 버튼을 보여 줍니다.
 
 ---
 
