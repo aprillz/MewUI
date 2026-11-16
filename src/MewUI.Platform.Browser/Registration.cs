@@ -169,6 +169,13 @@ public static class BrowserPlatform
     public static void ReplaceText(int replacePrevious, int replaceNext, string text)
         => BrowserPlatformHost.Active?.ReplaceText(replacePrevious, replaceNext, text);
 
+    /// <summary>
+    /// Raises <see cref="Application.ShutdownRequested"/> as the page is about to unload and returns true when
+    /// a handler cancelled it; the page's <c>beforeunload</c> handler then cancels the event so the browser
+    /// asks the user whether to leave. The page cannot wait, so no window is asked to close.
+    /// </summary>
+    public static bool BeforeUnload() => Application.IsRunning && Application.Current.IsShutdownRequestCancelled();
+
     public static void FocusChanged(bool focused)
     {
         // The page reports its focus once while the runtime is still booting, before a host exists;
