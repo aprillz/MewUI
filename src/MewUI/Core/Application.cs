@@ -1,3 +1,5 @@
+using System.Runtime.InteropServices;
+
 using Aprillz.MewUI.Platform;
 using Aprillz.MewUI.Rendering;
 using Aprillz.MewUI.Resources;
@@ -514,6 +516,7 @@ public sealed class Application
             }
 
             Application? app = null;
+            PosixSignalRegistration? terminateSignal = null;
             try
             {
                 // Each run starts from a clean exit code so a previous run's Shutdown value cannot be
@@ -534,10 +537,12 @@ public sealed class Application
                     app._runtime.MainWindow = mainWindow;
                     app.RegisterWindow(mainWindow);
                 }
+                terminateSignal = RegisterTerminateSignal();
                 app.RunCore(mainWindow);
             }
             finally
             {
+                terminateSignal?.Dispose();
                 try
                 {
                     if (app != null)
@@ -636,6 +641,31 @@ public sealed class Application
                 var host = Interlocked.Exchange(ref _defaultPlatformHost, null);
                 host?.Dispose();
             }
+        }
+    }
+
+    /// <summary>
+    /// Turns SIGTERM, which a service manager or kill sends to end the process, into
+    /// <see cref="Shutdown()"/>, so Run returns instead of the runtime ending the process.
+    /// </summary>
+    private static PosixSignalRegistration? RegisterTerminateSignal()
+    {
+        if (OperatingSystem.IsWindows() || OperatingSystem.IsBrowser() || OperatingSystem.IsWasi())
+        {
+            return null;
+        }
+
+        try
+        {
+            return PosixSignalRegistration.Create(PosixSignal.SIGTERM, static context =>
+            {
+                context.Cancel = true;
+                Shutdown();
+            });
+        }
+        catch (PlatformNotSupportedException)
+        {
+            return null;
         }
     }
 
