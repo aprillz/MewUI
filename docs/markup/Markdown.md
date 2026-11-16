@@ -3,6 +3,14 @@
 
 Fluent extensions declared by the `Aprillz.MewUI.Markdown` package.
 
+### MarkdownPipelineBuilder
+
+Receiver: `MarkdownPipelineBuilder`.
+
+| Method | Sets | Summary |
+|---|---|---|
+| `UseMathBracketDelimiters()` |  | Recognizes LaTeX's bracket delimiters as math: \(...\) as a MathInline, and \[...\] as a MathBlock when it has its lines to itself and a MathInline otherwise; an opening glued to a letter or digit, or left unclosed, still escapes its parenthesis or bracket. |
+
 ### MarkdownPresenter
 
 Receiver: `MarkdownPresenter` and derived types (`where T : MarkdownPresenter`).
