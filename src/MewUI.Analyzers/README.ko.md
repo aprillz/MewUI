@@ -76,7 +76,7 @@ new Border()
 5. **힌트 호출.** 매개변수에 `[FluentSetsMember]`가 있거나 메서드에 `[FluentSetsConstant]`가 있는 확장("확장이
    무엇을 설정하는지 선언하기" 절)은 선언한 멤버들을 대체한다. 복합 setter는 여러 멤버를 인자로 받고,
    축약형은 상수 대입을 무인자 호출로 바꾸며, 별칭은 멤버 하나를 이름이 다른 setter로 보내고, 결합형은
-   둘을 함께 한다(`ViewBox = r, ViewBoxUnits = ImageViewBoxUnits.Pixels` -> `.ViewBoxPixels(r)`).
+   둘을 함께 한다(`Viewbox = r, ViewboxUnits = ImageViewboxUnits.Pixels` -> `.ViewboxPixels(r)`).
 
    ```csharp
    new SplitButton { Command = save, CommandPresentationMode = CommandPresentationMode.TextAndIcon }
@@ -95,7 +95,7 @@ new Border()
    `.CenterHorizontal()`), 상수가 다르면 동명 setter로 폴백한다(`.VerticalAlignment(VerticalAlignment.Top)`).
 6. **우선순위.** 같은 멤버에서 시작할 수 있는 호출이 여럿이면 연속 멤버를 더 많이 소비하는 쪽이 이긴다.
    개수가 같으면 힌트 호출 > 동명 setter > `On` 접두 순이고, 힌트 호출끼리는 인자를 더 적게 넘기는 쪽이
-   이긴다(`.ViewBox(r, ImageViewBoxUnits.Pixels)`보다 `.ViewBoxPixels(r)`). 그다음 생성될 호출을 일반 C#처럼 바인딩해
+   이긴다(`.Viewbox(r, ImageViewboxUnits.Pixels)`보다 `.ViewboxPixels(r)`). 그다음 생성될 호출을 일반 C#처럼 바인딩해
    선택한 확장으로 해석될 때만 쓴다. 같은 우선순위의 후보를 그 방법으로도 가를 수 없으면(이름이 다른 두
    축약형이 같은 상수를 선언하는 경우 등) 그 멤버들은 이니셜라이저에 남긴다.
 7. **부분 변환.** 호출로 해석되지 않는 멤버는 잔여 이니셜라이저로 남음.
@@ -303,8 +303,8 @@ public static T Center<T>(this T element) where T : FrameworkElement
 호출은 매개변수 인자만 넘긴다.
 
 ```csharp
-[FluentSetsConstant(nameof(Image.ViewBoxUnits), ImageViewBoxUnits.Pixels)]
-public static Image ViewBoxPixels(this Image image, [FluentSetsMember(nameof(Image.ViewBox))] Rect? viewBox)
+[FluentSetsConstant(nameof(Image.ViewboxUnits), ImageViewboxUnits.Pixels)]
+public static Image ViewboxPixels(this Image image, [FluentSetsMember(nameof(Image.Viewbox))] Rect? viewbox)
 ```
 
 잘못된 선언(생성자 형상 불일치, 중복되거나 연속되지 않는 `order`, 중복 멤버, 빈 이름, 특성 없는

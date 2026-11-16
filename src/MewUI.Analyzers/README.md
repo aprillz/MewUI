@@ -81,8 +81,8 @@ visible: `dotnet_diagnostic.MEW1101.severity = suggestion`.
    `[FluentSetsConstant]` (see "Declaring what an extension sets") replaces the members it declares:
    a composite setter takes several members as its arguments, a shorthand replaces constant
    assignments with a parameterless call, an alias maps one member to a differently named setter, and
-   a combined method does both (`ViewBox = r, ViewBoxUnits = ImageViewBoxUnits.Pixels` ->
-   `.ViewBoxPixels(r)`).
+   a combined method does both (`Viewbox = r, ViewboxUnits = ImageViewboxUnits.Pixels` ->
+   `.ViewboxPixels(r)`).
 
    ```csharp
    new SplitButton { Command = save, CommandPresentationMode = CommandPresentationMode.TextAndIcon }
@@ -103,8 +103,8 @@ visible: `dotnet_diagnostic.MEW1101.severity = suggestion`.
    (`.VerticalAlignment(VerticalAlignment.Top)`).
 6. **Priority.** When several calls could start at the same member: the one consuming more
    contiguous members wins; at equal count a hinted call beats the same-name setter, which beats the
-   `On`-prefixed one; between hinted calls the one passing fewer arguments wins (`.ViewBoxPixels(r)`
-   over `.ViewBox(r, ImageViewBoxUnits.Pixels)`). The generated call is then bound like ordinary C# and kept only if it resolves
+   `On`-prefixed one; between hinted calls the one passing fewer arguments wins (`.ViewboxPixels(r)`
+   over `.Viewbox(r, ImageViewboxUnits.Pixels)`). The generated call is then bound like ordinary C# and kept only if it resolves
    to the chosen extension. If candidates of the same priority cannot be told apart that way (two
    differently named shorthands declaring the same constant, say), the members they cover stay in the
    initializer.
@@ -326,8 +326,8 @@ one or more `FluentSetsConstant` on the method. The contract is the parameters i
 the constants in `order`, and the generated call passes only the parameter arguments:
 
 ```csharp
-[FluentSetsConstant(nameof(Image.ViewBoxUnits), ImageViewBoxUnits.Pixels)]
-public static Image ViewBoxPixels(this Image image, [FluentSetsMember(nameof(Image.ViewBox))] Rect? viewBox)
+[FluentSetsConstant(nameof(Image.ViewboxUnits), ImageViewboxUnits.Pixels)]
+public static Image ViewboxPixels(this Image image, [FluentSetsMember(nameof(Image.Viewbox))] Rect? viewbox)
 ```
 
 A malformed declaration (wrong constructor shape, duplicate or non-contiguous `order`, duplicate
