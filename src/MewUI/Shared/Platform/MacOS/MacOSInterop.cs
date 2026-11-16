@@ -126,6 +126,8 @@ internal static unsafe class MacOSInterop
     private static nint ClsMewUIThemeObserver;
     private static nint _themeObserver;
     private static Action? _themeChangedCallback;
+    private static nint _applicationDelegate;
+    private static Action? _terminateRequestedCallback;
     private static readonly object _themeObserverGate = new();
 
     public static void EnsureApplicationInitialized()
@@ -900,6 +902,78 @@ internal static unsafe class MacOSInterop
             _themeChangedCallback = null;
             return false;
         }
+    }
+
+    /// <summary>
+    /// Routes a terminate request from the system, such as Quit in the Dock or a logout, to
+    /// <paramref name="callback"/> and cancels the native termination, so the application decides and ends
+    /// the process itself; null lets such a request terminate the process again.
+    /// </summary>
+    public static void SetTerminateRequestHandler(Action? callback)
+    {
+        EnsureApplicationInitialized();
+        Volatile.Write(ref _terminateRequestedCallback, callback);
+        if (callback != null)
+        {
+            EnsureApplicationDelegate();
+        }
+    }
+
+    private static void EnsureApplicationDelegate()
+    {
+        if (_applicationDelegate != 0 || ClsNSObject == 0)
+        {
+            return;
+        }
+
+        const string CLASS_NAME = "MewUIApplicationDelegate";
+        var cls = ObjC.GetClass(CLASS_NAME);
+        if (cls == 0)
+        {
+            cls = ObjC.AllocateClassPair(ClsNSObject, CLASS_NAME);
+            if (cls == 0)
+            {
+                return;
+            }
+
+            var imp = (nint)(delegate* unmanaged<nint, nint, nint, nuint>)&ApplicationShouldTerminateHandler;
+            _ = ObjC.AddMethod(cls, ObjC.Sel("applicationShouldTerminate:"), imp, "Q@:@");
+            ObjC.RegisterClassPair(cls);
+        }
+
+        var instance = ObjC.MsgSend_nint(cls, SelAlloc);
+        instance = instance != 0 ? ObjC.MsgSend_nint(instance, SelInit) : 0;
+        if (instance == 0)
+        {
+            return;
+        }
+
+        // NSApplication does not retain its delegate; this instance is never released, so it stays valid.
+        ObjC.MsgSend_void_nint_nint(_nsApp, ObjC.Sel("setDelegate:"), instance);
+        _applicationDelegate = instance;
+    }
+
+    [UnmanagedCallersOnly]
+    private static nuint ApplicationShouldTerminateHandler(nint self, nint _cmd, nint sender)
+    {
+        const nuint TERMINATE_CANCEL = 0;
+        const nuint TERMINATE_NOW = 1;
+        var callback = Volatile.Read(ref _terminateRequestedCallback);
+        if (callback == null)
+        {
+            return TERMINATE_NOW;
+        }
+
+        try
+        {
+            callback();
+        }
+        catch
+        {
+            // Never let an exception cross the unmanaged boundary.
+        }
+
+        return TERMINATE_CANCEL;
     }
 
     public static bool TryDequeueEvent(out nint ev)

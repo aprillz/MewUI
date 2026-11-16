@@ -330,6 +330,7 @@ public sealed class MacOSPlatformHost : IPlatformHost
             });
 
             MacOSInterop.EnsureApplicationInitialized();
+            MacOSInterop.SetTerminateRequestHandler(OnTerminateRequested);
             _lastSystemTheme = GetSystemThemeVariant();
             if (app.ThemeMode == ThemeVariant.System)
             {
@@ -357,7 +358,27 @@ public sealed class MacOSPlatformHost : IPlatformHost
             _dispatcher = null;
             _app = null;
             MacOSInterop.TrySetThemeChangedCallback(null);
+            MacOSInterop.SetTerminateRequestHandler(null);
             SynchronizationContext.SetSynchronizationContext(previousContext);
+        }
+    }
+
+    /// <summary>
+    /// Hands a quit request from the system to the application, which asks its windows to close and can be
+    /// refused, so Run returns instead of the process exiting in place.
+    /// </summary>
+    private static void OnTerminateRequested()
+    {
+        try
+        {
+            if (Application.IsRunning)
+            {
+                Application.Current.RequestShutdownFromSystem();
+            }
+        }
+        catch (Exception ex)
+        {
+            Application.RouteLifecycleException(ex);
         }
     }
 
