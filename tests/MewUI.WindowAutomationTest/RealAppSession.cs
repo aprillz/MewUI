@@ -59,8 +59,8 @@ public static class RealAppSession
     [AssemblyCleanup]
     public static void StopApplication()
     {
-        // Shutting down AppKit terminates the process before the test platform reports; the macOS entry point
-        // ends the process with the platform's exit code instead.
+        // On macOS the loop owns the main thread, which the entry point holds until the platform has reported,
+        // so the entry point ends the loop after that.
         if (_dispatcher is null || HostsLoopOnMainThread)
         {
             return;
@@ -68,6 +68,14 @@ public static class RealAppSession
 
         _dispatcher.BeginInvoke(static () => Application.Shutdown());
         _uiThread?.Join(TimeSpan.FromSeconds(10));
+    }
+
+    /// <summary>Ends the loop the macOS entry point hosts on the main thread, once that loop has come up.</summary>
+    internal static void EndMainThreadLoop()
+    {
+        // A run that matched no tests can finish before the loop starts, when a shutdown would do nothing.
+        _loopReady.Wait(TimeSpan.FromSeconds(15));
+        Application.Shutdown();
     }
 
     /// <summary>

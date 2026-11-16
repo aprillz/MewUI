@@ -68,7 +68,6 @@ internal static unsafe class MacOSInterop
     private static nint SelSendEvent;
     private static nint SelUpdateWindows;
     private static nint SelKeyWindow;
-    private static nint SelTerminate;
     private static nint SelPostEventAtStart;
     private static nint SelMainScreen;
     private static nint SelBackingScaleFactor;
@@ -151,7 +150,6 @@ internal static unsafe class MacOSInterop
         SelSendEvent = ObjC.Sel("sendEvent:");
         SelUpdateWindows = ObjC.Sel("updateWindows");
         SelKeyWindow = ObjC.Sel("keyWindow");
-        SelTerminate = ObjC.Sel("terminate:");
         SelPostEventAtStart = ObjC.Sel("postEvent:atStart:");
         SelMainScreen = ObjC.Sel("mainScreen");
         SelBackingScaleFactor = ObjC.Sel("backingScaleFactor");
@@ -815,11 +813,16 @@ internal static unsafe class MacOSInterop
         _frameworksLoaded = true;
     }
 
-    public static void RequestTerminate()
+    /// <summary>
+    /// Sends pending window changes, such as a window ordered out, to the window server now instead of at
+    /// the next turn of the event loop.
+    /// </summary>
+    public static void FlushPendingWindowChanges()
     {
-        if (_nsApp != 0)
+        nint transactionClass = ObjC.GetClass("CATransaction");
+        if (transactionClass != 0)
         {
-            ObjC.MsgSend_void_nint_nint(_nsApp, SelTerminate, 0);
+            ObjC.MsgSend_void(transactionClass, ObjC.Sel("flush"));
         }
     }
 

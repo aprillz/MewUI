@@ -21,11 +21,8 @@ internal static class MacMainThreadEntryPoint
             return await app.RunAsync();
         });
 
-        // The AppKit loop only ends by terminating the process, which would drop the platform's exit code,
-        // so the process ends here once the platform has reported.
-        _ = run.ContinueWith(
-            static finished => Environment.Exit(finished.IsCompletedSuccessfully ? finished.Result : 1),
-            TaskScheduler.Default);
+        // The loop ends once the platform has reported, and Run returning hands the platform's exit code back.
+        _ = run.ContinueWith(static _ => RealAppSession.EndMainThreadLoop(), TaskScheduler.Default);
 
         RealAppSession.RunLoop();
         return run.GetAwaiter().GetResult();
