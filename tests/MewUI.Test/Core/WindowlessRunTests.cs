@@ -559,7 +559,6 @@ public sealed class WindowlessRunTests
         Assert.IsFalse(keptWhenAllowed);
         Assert.IsFalse(windowAsked);
     }
-#endif
 
     [TestMethod]
     public void BrowserRun_CompletesAfterShutdownWithoutAnotherFrame()
@@ -584,6 +583,7 @@ public sealed class WindowlessRunTests
         Application.Shutdown();
         Assert.IsTrue(run.Wait(TimeSpan.FromSeconds(5)), "The run never completed after Shutdown.");
     }
+#endif
 
     [TestMethod]
     public void Run_ResetsTheExitCodeFromThePreviousRun()
