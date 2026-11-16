@@ -367,6 +367,172 @@ public sealed class WindowlessRunTests
     }
 
     [TestMethod]
+    public void SystemQuit_WithoutWindows_RaisesShutdownRequestedAndShutsDown()
+    {
+        EnsureRegistered();
+        var host = new LifecyclePlatformHost();
+        Hosts.Enqueue(host);
+        int requests = 0;
+
+        Application.Run(() =>
+        {
+            Application.Current.ShutdownRequested += _ => requests++;
+            Application.Current.RequestShutdownFromSystem();
+        });
+
+        Assert.AreEqual(1, requests);
+        Assert.IsTrue(host.QuitCalled);
+    }
+
+    [TestMethod]
+    public void SystemQuit_CancelledByShutdownRequested_LeavesTheWindowsOpen()
+    {
+        EnsureRegistered();
+        var host = new LifecyclePlatformHost();
+        Hosts.Enqueue(host);
+        var window = new Window();
+        bool closing = false;
+        window.Closing += _ => closing = true;
+
+        Application.Run(() =>
+        {
+            Application.Current.RegisterWindow(window);
+            Application.Current.ShutdownRequested += args => args.Cancel = true;
+            Application.Current.RequestShutdownFromSystem();
+        });
+
+        Assert.IsFalse(closing, "A cancelled request must not ask the windows.");
+        Assert.IsFalse(host.QuitCalled);
+    }
+
+    [TestMethod]
+    public void SystemQuit_ClosesTheWindowsNewestFirstAndShutsDownWhateverTheShutdownMode()
+    {
+        EnsureRegistered();
+        var host = new LifecyclePlatformHost();
+        Hosts.Enqueue(host);
+        var older = new Window();
+        var newer = new Window();
+        var order = new List<string>();
+        older.Closed += () => order.Add("older");
+        newer.Closed += () => order.Add("newer");
+
+        Application.Create()
+            .WithShutdownMode(ShutdownMode.OnExplicitShutdown)
+            .OnStartup(() =>
+            {
+                Application.Current.RegisterWindow(older);
+                Application.Current.RegisterWindow(newer);
+                Application.Current.RequestShutdownFromSystem();
+            })
+            .Run();
+
+        CollectionAssert.AreEqual(new[] { "newer", "older" }, order);
+        Assert.IsTrue(host.QuitCalled);
+    }
+
+    [TestMethod]
+    public void SystemQuit_AWindowThatCancelsItsClose_KeepsTheRunGoing()
+    {
+        EnsureRegistered();
+        var host = new LifecyclePlatformHost();
+        Hosts.Enqueue(host);
+        var older = new Window();
+        var newer = new Window();
+        bool olderClosed = false;
+        bool newerClosed = false;
+        older.Closing += args => args.Cancel = true;
+        older.Closed += () => olderClosed = true;
+        newer.Closed += () => newerClosed = true;
+
+        Application.Run(() =>
+        {
+            Application.Current.RegisterWindow(older);
+            Application.Current.RegisterWindow(newer);
+            Application.Current.RequestShutdownFromSystem();
+        });
+
+        Assert.IsTrue(newerClosed, "Windows asked before the one that refused have closed.");
+        Assert.IsFalse(olderClosed);
+        Assert.IsFalse(host.QuitCalled);
+    }
+
+    [TestMethod]
+    public void SystemQuit_ReportsTheGrantBeforeTheRunEnds()
+    {
+        EnsureRegistered();
+        var host = new LifecyclePlatformHost();
+        Hosts.Enqueue(host);
+        bool? granted = null;
+        bool quitWhenDecided = true;
+
+        Application.Run(() =>
+        {
+            Application.Current.RegisterWindow(new Window());
+            Application.Current.RequestShutdownFromSystem(result =>
+            {
+                granted = result;
+                quitWhenDecided = host.QuitCalled;
+            });
+        });
+
+        Assert.IsTrue(granted);
+        Assert.IsFalse(quitWhenDecided, "A host answering the system must hear the grant while its loop still runs.");
+        Assert.IsTrue(host.QuitCalled);
+    }
+
+    [TestMethod]
+    public void SystemQuit_ReportsARefusalFromAWindowOrTheEvent()
+    {
+        EnsureRegistered();
+        Hosts.Enqueue(new LifecyclePlatformHost());
+        bool? refusedByWindow = null;
+        bool? refusedByEvent = null;
+
+        Application.Run(() =>
+        {
+            var window = new Window();
+            window.Closing += args => args.Cancel = true;
+            Application.Current.RegisterWindow(window);
+            Application.Current.RequestShutdownFromSystem(result => refusedByWindow = result);
+
+            Application.Current.ShutdownRequested += args => args.Cancel = true;
+            Application.Current.RequestShutdownFromSystem(result => refusedByEvent = result);
+        });
+
+        Assert.IsFalse(refusedByWindow);
+        Assert.IsFalse(refusedByEvent);
+    }
+
+    [TestMethod]
+    public void SystemQuit_WaitsOnADeferredClose_AndEndsTheRunOnceItIsAllowed()
+    {
+        EnsureRegistered();
+        var host = new LifecyclePlatformHost();
+        Hosts.Enqueue(host);
+        bool waitingWhileDeferred = false;
+        bool? granted = null;
+
+        Application.Run(() =>
+        {
+            ClosingDeferral? deferral = null;
+            var window = new Window();
+            window.Closing += args => deferral = args.GetDeferral();
+            Application.Current.RegisterWindow(window);
+            Application.Current.RequestShutdownFromSystem(result => granted = result);
+
+            waitingWhileDeferred = Application.Current.IsSystemQuitWaitingOnDecision && granted == null;
+            deferral!.Complete();
+        });
+
+        Assert.IsTrue(waitingWhileDeferred);
+        Assert.IsTrue(granted);
+        Assert.IsTrue(host.QuitCalled);
+    }
+
+#if NET10_0_OR_GREATER
+    // The browser platform targets net10.0 only, so the test project references it only there.
+    [TestMethod]
     public void Run_ResetsTheExitCodeFromThePreviousRun()
     {
         EnsureRegistered();
