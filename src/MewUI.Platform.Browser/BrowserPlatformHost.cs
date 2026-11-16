@@ -91,6 +91,8 @@ internal sealed class BrowserPlatformHost : IPlatformHost
         }
 
         _running = false;
+        // Code awaiting the run resumes through the dispatcher, and only frames pump it, which stop here.
+        _dispatcher?.EndRun(_previousContext);
         _completion.TrySetResult();
     }
 
@@ -337,9 +339,47 @@ internal sealed class BrowserPlatformHost : IPlatformHost
 
     private sealed class BrowserDispatcher : ManagedUiDispatcher
     {
+        // Set when the run ends; from then on continuations go to the context the run started from.
+        private bool _runEnded;
+        private SynchronizationContext? _contextAfterRun;
+
         protected override int MaxPumpIterations => 8;
         protected override int NoTimerPollTimeout(int maxMs) => maxMs;
         protected override void DispatchDueTimer(Action action) => action();
+
+        /// <summary>
+        /// Hands the work still queued, and every continuation posted later, to <paramref name="contextAfterRun"/>,
+        /// or to the thread pool, which the page's event loop runs, when there is none.
+        /// </summary>
+        internal void EndRun(SynchronizationContext? contextAfterRun)
+        {
+            _runEnded = true;
+            _contextAfterRun = contextAfterRun;
+            RunOutside(ProcessWorkItems);
+        }
+
+        public override void Post(SendOrPostCallback callback, object? state)
+        {
+            if (_runEnded)
+            {
+                RunOutside(() => callback(state));
+                return;
+            }
+
+            base.Post(callback, state);
+        }
+
+        private void RunOutside(Action action)
+        {
+            if (_contextAfterRun != null)
+            {
+                _contextAfterRun.Post(static state => ((Action)state!)(), action);
+            }
+            else
+            {
+                ThreadPool.UnsafeQueueUserWorkItem(static state => state(), action, preferLocal: false);
+            }
+        }
     }
 
     private sealed class UnsupportedMessageBoxService : IMessageBoxService

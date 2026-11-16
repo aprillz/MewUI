@@ -562,6 +562,30 @@ public sealed class WindowlessRunTests
 #endif
 
     [TestMethod]
+    public void BrowserRun_CompletesAfterShutdownWithoutAnotherFrame()
+    {
+        EnsureRegistered();
+        Hosts.Enqueue(new Aprillz.MewUI.Platform.Browser.BrowserPlatformHost());
+        var previous = SynchronizationContext.Current;
+        Task run;
+        try
+        {
+            run = Application.Create().OnStartup(() => { }).RunAsync();
+        }
+        finally
+        {
+            // The host installs its dispatcher as the context for the run's code; the test thread gets its own back.
+            SynchronizationContext.SetSynchronizationContext(previous);
+        }
+
+        // As a later page event does: the run is under way, and the page stops drawing frames once it ends, so
+        // nothing pumps the host's dispatcher the awaiting code resumes through.
+        Assert.IsFalse(run.IsCompleted);
+        Application.Shutdown();
+        Assert.IsTrue(run.Wait(TimeSpan.FromSeconds(5)), "The run never completed after Shutdown.");
+    }
+
+    [TestMethod]
     public void Run_ResetsTheExitCodeFromThePreviousRun()
     {
         EnsureRegistered();
