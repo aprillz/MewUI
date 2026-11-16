@@ -293,20 +293,15 @@ internal sealed class MacOSWindowBackend : IWindowBackend
 
     public void Close()
     {
-        if (_nsWindow != 0)
+        if (_nsWindow == 0)
         {
-            if (_window.UsesBorderlessSurfaceChrome)
-            {
-                // Chrome-less surfaces use a borderless style mask, which has no Closable bit,
-                // so performClose: would be ignored (the window would stay on screen). Close directly.
-                // windowWillClose still fires RaiseClosedOnce.
-                MacOSWindowInterop.CloseWindowImmediate(_nsWindow);
-            }
-            else
-            {
-                MacOSWindowInterop.CloseWindow(_nsWindow);
-                // windowShouldClose → RequestClose, windowWillClose → RaiseClosedOnce
-            }
+            return;
+        }
+
+        // performClose: does nothing without an enabled close button (CanClose false, borderless), so ask here.
+        if (_window.RequestClose())
+        {
+            MacOSWindowInterop.CloseWindowImmediate(_nsWindow);
         }
     }
 
