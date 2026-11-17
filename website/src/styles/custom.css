@@ -19,3 +19,109 @@
   height: 2.25rem;
   width: auto;
 }
+
+@font-face {
+  font-family: 'Paperlogy';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('https://cdn.jsdelivr.net/gh/fonts-archive/Paperlogy/Paperlogy-4Regular.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Paperlogy';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('https://cdn.jsdelivr.net/gh/fonts-archive/Paperlogy/Paperlogy-6SemiBold.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Paperlogy';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('https://cdn.jsdelivr.net/gh/fonts-archive/Paperlogy/Paperlogy-7Bold.woff2') format('woff2');
+}
+
+:root[data-has-hero] {
+  --sl-font: 'Inter', system-ui, -apple-system, 'Segoe UI', 'Malgun Gothic', sans-serif;
+  --sl-font-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Code', 'Consolas', monospace;
+  --mew-font-display: 'Space Grotesk', var(--sl-font);
+  --mew-line: var(--sl-color-gray-5);
+}
+
+:root[data-has-hero]:lang(ko) {
+  --sl-font: 'Paperlogy', 'Inter', system-ui, -apple-system, 'Malgun Gothic', sans-serif;
+  --mew-font-display: 'Paperlogy', var(--sl-font);
+}
+
+:root[data-has-hero][data-theme='light'] {
+  --sl-color-bg: #fafafa;
+  --mew-line: #e8e8e8;
+}
+
+[data-has-hero] body {
+  font-feature-settings: 'cv05', 'ss03';
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+[data-has-hero] :is(h1, h2, h3) {
+  font-family: var(--mew-font-display);
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+}
+
+[data-has-hero] .hero h1 {
+  font-size: clamp(2rem, 4.6vw, 3rem);
+}
+
+[data-has-hero] .hero .tagline {
+  font-size: 1.15rem;
+  line-height: 1.6;
+}
+
+[data-has-hero] .hero .actions {
+  gap: 0.7rem;
+}
+
+[data-has-hero] .hero .sl-link-button {
+  justify-content: center;
+  padding: 0.7rem 1.2rem;
+  border-radius: 9px;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+[data-has-hero] .hero .sl-link-button.primary {
+  background: #8f54db;
+  border-color: #8f54db;
+  color: #ffffff;
+}
+
+[data-has-hero] .hero .sl-link-button.primary:hover {
+  background: #7c40cc;
+  border-color: #7c40cc;
+}
+
+[data-has-hero] .hero .sl-link-button.secondary {
+  border-color: var(--mew-line);
+}
+
+[data-has-hero] .hero .sl-link-button.secondary:hover {
+  border-color: #8f54db;
+  color: var(--sl-color-text-accent);
+}
+
+[data-has-hero] .card {
+  border-color: var(--mew-line);
+  border-radius: 12px;
+}
+
+[data-has-hero][data-theme='light'] .card {
+  background: #ffffff;
+}
