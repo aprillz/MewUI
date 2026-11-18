@@ -160,7 +160,8 @@ internal static class FrameRenderer
 
         while (entryIndex < endIndex)
         {
-            var entry = entries[entryIndex];
+            // By reference: an entry carries a rectangle and a matrix, and most visits read only its kind and child.
+            ref readonly var entry = ref entries[entryIndex];
             switch (entry.Kind)
             {
                 case CompositionEntryKind.Content:
@@ -169,7 +170,7 @@ internal static class FrameRenderer
                     break;
 
                 case CompositionEntryKind.Child:
-                    var childNode = scene.FindNode(entry.Child!);
+                    var childNode = node.FindChildNode(scene, entryIndex, entry.Child!);
                     if (childNode != null)
                     {
                         ReplayNode(scene, childNode, context, dirtyRect);
