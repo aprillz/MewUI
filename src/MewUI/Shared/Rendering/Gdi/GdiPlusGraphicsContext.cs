@@ -1238,7 +1238,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
             return color;
         }
 
-        return color.WithAlpha((byte)(color.A * _stateManager.GlobalAlpha));
+        return color.WithAlpha((byte)Math.Clamp((int)Math.Round(color.A * _stateManager.GlobalAlpha), 0, 255));
     }
 
     private void BuildGdipPath(nint gdipPath, PathGeometry path)
