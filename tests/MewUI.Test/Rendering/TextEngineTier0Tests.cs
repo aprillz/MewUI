@@ -300,8 +300,19 @@ public sealed class TextEngineTier0Tests
         Assert.AreEqual(RUNS_A_FRAME, renderContext.CachedLayoutCount,
             "The runs one frame draws did not all stay realized for the next frame.");
 
-        // Frames that draw little give the room back.
+        // A couple of frames that draw little keep the room: the frame after them may draw everything again.
         for (int frame = 0; frame < 2; frame++)
+        {
+            context.BeginFrame(surface);
+            renderContext.Draw(layouts[0], Point.Zero, new TextDrawOptions(Color.White));
+            context.EndFrame();
+        }
+
+        Assert.AreEqual(RUNS_A_FRAME, renderContext.CachedLayoutCount,
+            "Two quiet frames threw away the runs of the busy frames before them.");
+
+        // A long run of them gives the room back.
+        for (int frame = 0; frame < 200; frame++)
         {
             context.BeginFrame(surface);
             renderContext.Draw(layouts[0], Point.Zero, new TextDrawOptions(Color.White));

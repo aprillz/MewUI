@@ -11,7 +11,12 @@ internal sealed class ManagedTextRenderContext : ITextRenderContext, IDisposable
 {
     // What the cache holds when frames draw little text, and the most it grows to for frames that draw a lot.
     private const int REALIZATION_CAPACITY = 128;
-    private const int REALIZATION_CAPACITY_LIMIT = 4096;
+    private const int REALIZATION_CAPACITY_LIMIT = 16384;
+
+    // Frames in a row that have to draw less before the cache gives room back, about two seconds of them.
+    private const int FRAMES_BEFORE_SHRINKING = 120;
+    private int _smallerFrames;
+    private int _largestSmallerCapacity;
 
     // Runs asked for since the last frame ended. A frame that draws more runs than the cache holds
     // realizes every one of them again, every frame, so the capacity follows what a frame draws.
@@ -184,15 +189,20 @@ internal sealed class ManagedTextRenderContext : ITextRenderContext, IDisposable
     {
         var line = managed.ManagedLines[0];
         var font = managed.GetDefaultFont();
+        // Cutting the line down to what the clip shows needs the advance of every character, which is worth
+        // measuring for a long line scrolled under a narrow clip and not for a line the clip shows whole.
         Rect? clip = _context.GetClipBoundsLocal();
-        if (clip is Rect visibleClip)
+        if (clip is Rect visibleClip && !ShowsWholeLine(visibleClip, line, origin))
         {
             DrawFastPathVisibleRange(managed, line, origin, visibleClip, color, owner, font, transient);
             return;
         }
 
-        foreach (var segment in line.FastSegments ?? [])
+        var segments = line.FastSegments;
+        int segmentCount = segments?.Count ?? 0;
+        for (int segmentIndex = 0; segmentIndex < segmentCount; segmentIndex++)
         {
+            var segment = segments![segmentIndex];
             var bounds = GetFastPathBounds(line, origin, font, segment.X, segment.Width);
             var realized = GetOrCreateRun(managed, segment.Start, segment.Length, font, bounds.Width, bounds.Height, transient);
             if (realized is not null)
@@ -206,6 +216,16 @@ internal sealed class ManagedTextRenderContext : ITextRenderContext, IDisposable
         }
     }
 
+    private const double FAST_PATH_OVERSCAN = 32;
+
+    /// <summary>True when the clip, widened by the overscan a cut-down line is drawn with, spans the line from end to end.</summary>
+    private static bool ShowsWholeLine(Rect clip, ManagedTextLine line, Point origin)
+    {
+        var lineBounds = line.Metrics.Bounds;
+        double left = origin.X + lineBounds.X;
+        return left >= clip.Left - FAST_PATH_OVERSCAN && left + lineBounds.Width <= clip.Right + FAST_PATH_OVERSCAN;
+    }
+
     private void DrawFastPathVisibleRange(
         ManagedTextLayout managed,
         ManagedTextLine line,
@@ -216,7 +236,7 @@ internal sealed class ManagedTextRenderContext : ITextRenderContext, IDisposable
         IFont font,
         bool transient)
     {
-        const double OVERSCAN = 32;
+        const double OVERSCAN = FAST_PATH_OVERSCAN;
         double hitY = line.Metrics.Bounds.Y + line.Metrics.Bounds.Height * 0.5;
         CharacterHit startHit = managed.HitTestPoint(new Point(clip.Left - origin.X - OVERSCAN, hitY));
         CharacterHit endHit = managed.HitTestPoint(new Point(clip.Right - origin.X + OVERSCAN, hitY));
@@ -521,16 +541,33 @@ internal sealed class ManagedTextRenderContext : ITextRenderContext, IDisposable
 
     /// <summary>
     /// Sizes the cache for the frame that just ended: room for every run it drew and a quarter more,
-    /// never under the base capacity and never over the limit. A frame that draws less gives the room back.
+    /// never under the base capacity and never over the limit. It grows at once and gives room back only
+    /// after a run of frames that all drew less, sized for the largest of them.
     /// </summary>
     internal void FrameEnded()
     {
         int wanted = _runsThisFrame + (_runsThisFrame / 4);
         _runsThisFrame = 0;
         int capacity = Math.Clamp(wanted, REALIZATION_CAPACITY, REALIZATION_CAPACITY_LIMIT);
-        if (capacity != _runs.Capacity)
+        if (capacity >= _runs.Capacity)
         {
-            _runs.Capacity = capacity;
+            _smallerFrames = 0;
+            _largestSmallerCapacity = 0;
+            if (capacity != _runs.Capacity)
+            {
+                _runs.Capacity = capacity;
+            }
+
+            return;
+        }
+
+        // A frame that repaints one corner draws few runs, and the frame after it may draw them all again.
+        _largestSmallerCapacity = Math.Max(_largestSmallerCapacity, capacity);
+        if (++_smallerFrames >= FRAMES_BEFORE_SHRINKING)
+        {
+            _runs.Capacity = _largestSmallerCapacity;
+            _smallerFrames = 0;
+            _largestSmallerCapacity = 0;
         }
     }
 
