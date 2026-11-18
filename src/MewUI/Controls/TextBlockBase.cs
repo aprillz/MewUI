@@ -277,6 +277,13 @@ public abstract partial class TextBlockBase : TextElement, IDisposable
     {
         var wrapping = ResolveWrapping();
         alignmentOffset = 0;
+        if (wrapping == TextWrapping.NoWrap && TextTrimming == TextTrimming.None && TextAlignment == TextAlignment.Left)
+        {
+            // One unbroken line, neither cut nor moved inside the box, lays out the same at any box size, so the
+            // layout measure made is the one drawn and text that changes is laid out once, not twice.
+            return GetOrCreateTextLayout(_measureLayout, wrapping, double.PositiveInfinity, double.PositiveInfinity);
+        }
+
         if (wrapping == TextWrapping.NoWrap || !double.IsFinite(_measuredWrapWidth))
         {
             return GetOrCreateTextLayout(_renderLayout, wrapping, bounds.Width, bounds.Height);

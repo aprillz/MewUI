@@ -189,7 +189,13 @@ internal sealed partial class MewVGWin32GraphicsContext
             double.IsPositiveInfinity(bounds.Height) ? 0 : bounds.Height);
 
         Size measured;
-        if (format.Wrapping == TextWrapping.NoWrap)
+        if (format.Wrapping == TextWrapping.NoWrap && safeBounds.Width > 0 && safeBounds.Height > 0)
+        {
+            // A run arrives with the box the text engine measured for it, and drawing here reads only that
+            // box; measuring the text again would shape it a second time for nothing.
+            measured = new Size(safeBounds.Width, safeBounds.Height);
+        }
+        else if (format.Wrapping == TextWrapping.NoWrap)
         {
             measured = MeasureTextCore(text, format.Font);
         }
