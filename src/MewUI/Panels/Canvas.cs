@@ -95,7 +95,18 @@ public class Canvas : Panel
         }
 
         field = value;
-        element.InvalidateArrange();
+
+        // The canvas places the element, so only the canvas has to arrange again, as WPF's Canvas does. Asking
+        // the element itself would count as a change of its own layout, and the frame would draw it anew
+        // instead of moving what it drew.
+        if (element.Parent is Canvas canvas)
+        {
+            canvas.InvalidateArrange();
+        }
+        else
+        {
+            element.InvalidateArrange();
+        }
     }
 
     #endregion
