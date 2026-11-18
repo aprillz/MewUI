@@ -68,6 +68,7 @@ internal sealed class SceneCapture
         ArgumentNullException.ThrowIfNull(registry);
         ArgumentNullException.ThrowIfNull(layerRoots);
 
+        scene.NoteFrameWorkStarted();
         PromoteChangesOfVisualsWithoutNodes(scene, registry);
         QueueVisualsThatSettled(scene, registry);
         registry.BeginPass();
@@ -1088,7 +1089,7 @@ internal sealed class SceneCapture
         RenderDataRecorder recorder,
         bool compatibilitySubtree)
     {
-        if (node.ChangesEveryPass(scene.PassId + 1, scene.Clock()))
+        if (node.ChangesEveryPass(scene.PassId + 1, scene.Clock(), scene.AnimationGapTicks))
         {
             // Nothing replays a recording of content that is different again next frame, so none is taken
             // and the frame draws the visual itself, as it does for a slot that cannot be recorded.

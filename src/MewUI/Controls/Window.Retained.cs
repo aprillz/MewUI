@@ -833,7 +833,7 @@ public partial class Window
         }
 
         var node = _renderScene?.FindNode(layerRoot);
-        if (node != null && node.ChangesEveryPass(_renderScene!.PassId + 1, _renderScene.Clock()))
+        if (node != null && node.ChangesEveryPass(_renderScene!.PassId + 1, _renderScene.Clock(), _renderScene.AnimationGapTicks))
         {
             _rootOverTheFrameLastChange[layerRoot] = _keptFrameNumber;
             return true;
