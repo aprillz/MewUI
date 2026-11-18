@@ -133,7 +133,14 @@ public sealed class RetainedGroupOpacityTests
         }
 
         var turned = new RotationDecorator { Rotation = Rotation.Clockwise90, Child = new Border { Width = 60, Height = 30, Background = Color.FromArgb(255, 200, 80, 40) } };
-        var faded = new Border { Width = 60, Height = 30, Background = Color.FromArgb(255, 40, 80, 200), Opacity = 1 };
+        var faded = new Border
+        {
+            Width = 60,
+            Height = 30,
+            Background = Color.FromArgb(255, 40, 80, 200),
+            Opacity = 1,
+            Child = new Border { Width = 20, Height = 10, Background = Color.FromArgb(255, 220, 220, 60) },
+        };
         var root = new StackPanel { Orientation = Orientation.Vertical };
         root.Children(new ScrollViewer { Height = 40, Content = stack }, turned, faded);
 
@@ -165,6 +172,158 @@ public sealed class RetainedGroupOpacityTests
         window.PerformLayout();
         window.RenderFrameToSurface(surface);
         Assert.AreEqual(0, window.RetainedStatistics.GroupSurfaceCount, "a visual with no opacity left was given a surface");
+    }
+
+    [TestMethod]
+    [DataRow("Gdi")]
+    [DataRow("Direct2D")]
+    [DataRow("MewVG")]
+    public void OneShapeFaded_MakesNoSurfaceAndLooksTheSame(string backend)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("These backends are Windows-only.");
+        }
+
+        IGraphicsFactory factory = backend switch
+        {
+            "Gdi" => new GdiGraphicsFactory(),
+            "Direct2D" => new Aprillz.MewUI.Rendering.Direct2D.Direct2DGraphicsFactory(),
+            _ => new MewVGWin32GraphicsFactory(),
+        };
+        using var disposable = factory as IDisposable;
+        Application.DefaultGraphicsFactory = factory;
+        using var renderScope = factory is MewVGWin32GraphicsFactory ? factory.AcquireBackgroundRenderScope() : null;
+
+        var faded = new Border { Width = 90, Height = 70, Background = Color.FromArgb(255, 30, 120, 220), Opacity = 0.5 };
+        var backdrop = new Border { Background = Color.FromArgb(255, 250, 250, 250), Child = faded };
+
+        var window = HeadlessWindow.Create(WIDTH, HEIGHT);
+        window.Content = backdrop;
+        using var surface = factory.CreateSurface(RenderSurfaceDescriptor.Offscreen(WIDTH, HEIGHT, 1.0, hasAlpha: false));
+        window.PerformLayout();
+        window.RenderFrameToSurface(surface);
+        window.RetainedStatistics!.Reset();
+        faded.Opacity = 0.4;
+        window.PerformLayout();
+        window.RenderFrameToSurface(surface);
+        Assert.AreEqual(0, window.RetainedStatistics.GroupSurfaceCount, $"{backend}: one faded shape was given a surface of its own");
+
+        // The frame drawn straight from the visuals fades the same shape as a group.
+        using var reference = factory.CreateSurface(RenderSurfaceDescriptor.Offscreen(WIDTH, HEIGHT, 1.0, hasAlpha: false));
+        window.RenderReferenceFrameToSurface(reference);
+        var expected = new byte[WIDTH * HEIGHT * 4];
+        var shown = new byte[WIDTH * HEIGHT * 4];
+        var device = (IRenderDevice)factory;
+        Assert.IsTrue(device.TryReadPixels(reference, expected, WIDTH * 4) && device.TryReadPixels(surface, shown, WIDTH * 4));
+        int largest = 0;
+        for (int offset = 0; offset < expected.Length; offset++)
+        {
+            largest = Math.Max(largest, Math.Abs(expected[offset] - shown[offset]));
+        }
+
+        Assert.IsTrue(largest <= 1, $"{backend}: a shape faded without a group differs from one faded as a group by up to {largest}");
+    }
+
+    [TestMethod]
+    [DataRow("Gdi")]
+    [DataRow("MewVG")]
+    public void FadedGroupWhoseOpacityOrPlaceAloneChanged_BlendsItsKeptSurface(string backend)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("These backends are Windows-only.");
+        }
+
+        IGraphicsFactory factory = backend == "Gdi" ? new GdiGraphicsFactory() : new MewVGWin32GraphicsFactory();
+        using var disposable = factory as IDisposable;
+        Application.DefaultGraphicsFactory = factory;
+        using var renderScope = factory is MewVGWin32GraphicsFactory ? factory.AcquireBackgroundRenderScope() : null;
+
+        var lower = new Border { Width = 60, Height = 40, Background = Color.FromArgb(255, 30, 120, 220), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
+        var upper = new Border { Width = 60, Height = 40, Background = Color.FromArgb(255, 220, 140, 30), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(30, 20, 0, 0) };
+        var group = new Grid { Opacity = 0.5, Width = 90, Height = 60 };
+        group.Children(lower, upper);
+
+        // Layout puts the group on whole pixels; the decorator's transform is what can move it by part of one.
+        var mover = new TransformDecorator { Child = group };
+        Canvas.SetLeft(mover, 20);
+        Canvas.SetTop(mover, 30);
+        var canvas = new Canvas();
+        canvas.Children(mover);
+
+        var window = HeadlessWindow.Create(WIDTH, HEIGHT);
+        window.Content = new Border { Background = Color.FromArgb(255, 250, 250, 250), Child = canvas };
+        using var surface = factory.CreateSurface(RenderSurfaceDescriptor.Offscreen(WIDTH, HEIGHT, 1.0, hasAlpha: false));
+        Check(factory, window, surface, backend, "first frames");
+
+        window.RetainedStatistics!.Reset();
+        group.Opacity = 0.7;
+        Check(factory, window, surface, backend, "after the opacity changed");
+        Assert.AreEqual(0, window.RetainedStatistics.GroupSurfaceCount, $"{backend}: a group whose opacity alone changed was drawn again");
+        Assert.IsGreaterThan(0, window.RetainedStatistics.GroupLayerReuseCount, $"{backend}: the kept surface was not blended");
+
+        window.RetainedStatistics.Reset();
+        Canvas.SetLeft(mover, 47);
+        Check(factory, window, surface, backend, "after a move by whole pixels");
+        Assert.AreEqual(0, window.RetainedStatistics.GroupSurfaceCount, $"{backend}: a group moved by whole pixels was drawn again");
+
+        window.RetainedStatistics.Reset();
+        mover.Transform = System.Numerics.Matrix3x2.CreateTranslation(0.5f, 0);
+        Check(factory, window, surface, backend, "after a move by half a pixel");
+        Assert.IsGreaterThan(0, window.RetainedStatistics.GroupSurfaceCount, $"{backend}: a group moved by half a pixel blended the surface kept for the old place");
+
+        window.RetainedStatistics.Reset();
+        mover.Transform = System.Numerics.Matrix3x2.CreateTranslation(2.5f, 0);
+        Check(factory, window, surface, backend, "after its transform moved it by whole pixels");
+        Assert.AreEqual(0, window.RetainedStatistics.GroupSurfaceCount, $"{backend}: a group its own transform moved by whole pixels was drawn again");
+
+        window.RetainedStatistics.Reset();
+        upper.Background = Color.FromArgb(255, 200, 40, 160);
+        Check(factory, window, surface, backend, "after a child changed");
+        Assert.IsGreaterThan(0, window.RetainedStatistics.GroupSurfaceCount, $"{backend}: a group whose child changed blended its old surface");
+    }
+
+    [TestMethod]
+    [DataRow("Gdi")]
+    [DataRow("MewVG")]
+    public void FadedDecoratorMovedByItsOwnTransform_BlendsItsKeptSurface(string backend)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("These backends are Windows-only.");
+        }
+
+        IGraphicsFactory factory = backend == "Gdi" ? new GdiGraphicsFactory() : new MewVGWin32GraphicsFactory();
+        using var disposable = factory as IDisposable;
+        Application.DefaultGraphicsFactory = factory;
+        using var renderScope = factory is MewVGWin32GraphicsFactory ? factory.AcquireBackgroundRenderScope() : null;
+
+        var lower = new Border { Width = 60, Height = 40, Background = Color.FromArgb(255, 30, 120, 220), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
+        var upper = new Border { Width = 60, Height = 40, Background = Color.FromArgb(255, 220, 140, 30), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(30, 20, 0, 0) };
+        var content = new Grid { Width = 90, Height = 60 };
+        content.Children(lower, upper);
+
+        // The fade and the move are both the decorator's own, as a panel animated by its transform has them.
+        var panel = new TransformDecorator { Child = content, Opacity = 0.5 };
+        Canvas.SetLeft(panel, 20);
+        Canvas.SetTop(panel, 30);
+        var canvas = new Canvas();
+        canvas.Children(panel);
+
+        var window = HeadlessWindow.Create(WIDTH, HEIGHT);
+        window.Content = new Border { Background = Color.FromArgb(255, 250, 250, 250), Child = canvas };
+        using var surface = factory.CreateSurface(RenderSurfaceDescriptor.Offscreen(WIDTH, HEIGHT, 1.0, hasAlpha: false));
+        Check(factory, window, surface, backend, "first frames");
+
+        for (int step = 1; step <= 3; step++)
+        {
+            window.RetainedStatistics!.Reset();
+            panel.Transform = System.Numerics.Matrix3x2.CreateTranslation(step * 3, -step);
+            panel.Opacity = 0.5 + (step * 0.1);
+            Check(factory, window, surface, backend, $"after step {step} moved and faded it");
+            Assert.AreEqual(0, window.RetainedStatistics.GroupSurfaceCount, $"{backend}: step {step} drew the panel again");
+        }
     }
 
     private static void AssertOverlap(IGraphicsFactory factory, IRenderSurface surface, string backend, string label)

@@ -92,6 +92,39 @@ internal sealed class VisualNode : IDisposable
     /// <summary>How far the frame has moved since the plan was built, which offsets every clip and transform in it.</summary>
     internal Vector PlanLocalShift => Frame == null ? default : Frame.LocalOrigin - PlanFrameLocalOrigin;
 
+    /// <summary>
+    /// True when the visual and everything under it draw one filled shape or one image at most, so nothing
+    /// of it can show through another part of it when it fades.
+    /// </summary>
+    internal bool DrawsOneShapeAtMost
+    {
+        get
+        {
+            bool drawn = false;
+            var entries = Plan.Entries;
+            for (int entryIndex = 0; entryIndex < entries.Length; entryIndex++)
+            {
+                var entry = entries[entryIndex];
+                if (entry.Kind == CompositionEntryKind.Child)
+                {
+                    return false;
+                }
+
+                if (entry.Kind == CompositionEntryKind.Content && GetSlot(entry.SlotIndex) is RenderData data && !data.IsEmpty)
+                {
+                    if (drawn || !data.DrawsOneShapeAtMost)
+                    {
+                        return false;
+                    }
+
+                    drawn = true;
+                }
+            }
+
+            return true;
+        }
+    }
+
     /// <summary>True when a slot's recording cannot be replayed moved, so a move of the visual records it again.</summary>
     internal bool HasUnplaceableSlot
     {

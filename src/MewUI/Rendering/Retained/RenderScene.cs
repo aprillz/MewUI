@@ -22,6 +22,9 @@ internal sealed class RenderSceneStatistics
     /// <summary>Surfaces a replay made to blend a faded group as a whole.</summary>
     internal int GroupSurfaceCount { get; set; }
 
+    /// <summary>Faded groups a replay blended from the surface kept for them, without replaying what is under them.</summary>
+    internal int GroupLayerReuseCount { get; set; }
+
     /// <summary>Frames an update found moved by whole pixels, so their subtrees were shifted instead of visited.</summary>
     internal int FrameMoveCount { get; set; }
 
@@ -36,6 +39,7 @@ internal sealed class RenderSceneStatistics
         LiveFallbackCount = 0;
         CapturedNodeCount = 0;
         GroupSurfaceCount = 0;
+        GroupLayerReuseCount = 0;
         FrameMoveCount = 0;
         CarriedNodeCount = 0;
     }
@@ -67,6 +71,9 @@ internal sealed class RenderScene : IDisposable
 
     /// <summary>Makes the surfaces that faded groups are drawn into. Without one a group is faded call by call.</summary>
     internal IGraphicsFactory? GroupFactory { get; set; }
+
+    /// <summary>The surfaces kept for faded groups between frames.</summary>
+    internal GroupLayerCache GroupLayers { get; } = new();
 
     /// <summary>Nodes whose content is drawn live because it kept changing; looked over for ones that settled.</summary>
     internal List<VisualNode> DrawnLiveWhileChanging { get; } = [];
@@ -160,6 +167,7 @@ internal sealed class RenderScene : IDisposable
         }
 
         _frameWorkStarted = false;
+        GroupLayers.EndFrame();
     }
 
     /// <summary>Takes a node an update created once that update lands.</summary>
@@ -178,6 +186,7 @@ internal sealed class RenderScene : IDisposable
 
         DeviceGeneration = generation;
         MarkFullyDirty();
+        GroupLayers.Clear();
         foreach (var node in _nodes.Values)
         {
             node.ClearSlots();
@@ -304,5 +313,6 @@ internal sealed class RenderScene : IDisposable
 
         _nodes.Clear();
         Root = null;
+        GroupLayers.Dispose();
     }
 }
