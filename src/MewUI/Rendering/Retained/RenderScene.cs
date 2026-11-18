@@ -116,7 +116,50 @@ internal sealed class RenderScene : IDisposable
     internal int BeginPass()
     {
         PassTimestamp = Clock();
+        _passOpenedThisFrame = true;
         return ++PassId;
+    }
+
+    // Changes further apart than this are not an animation, however many passes in a row they fill:
+    // a blinking caret changes in every pass when nothing else does, half a second apart.
+    private const int ANIMATION_GAP_MS = 50;
+
+    // A frame that takes long to draw spaces the passes of an animation out by its own length.
+    private const int ANIMATION_GAP_FRAME_MULTIPLE = 3;
+
+    private bool _passOpenedThisFrame;
+    private long _lastFrameWorkTicks;
+    // When the frame's update began to capture, which is before its pass opens: recording is part of the frame.
+    private bool _frameWorkStarted;
+    private long _frameWorkStart;
+
+    /// <summary>
+    /// Longest time between two passes that still counts them as frames of one animation: a fixed floor,
+    /// or a few times what the last frame took to draw when that is longer.
+    /// </summary>
+    internal long AnimationGapTicks
+        => Math.Max(ANIMATION_GAP_MS * System.Diagnostics.Stopwatch.Frequency / 1000, _lastFrameWorkTicks * ANIMATION_GAP_FRAME_MULTIPLE);
+
+    /// <summary>Notes that the current frame's update has begun, before it records anything.</summary>
+    internal void NoteFrameWorkStarted()
+    {
+        if (!_frameWorkStarted)
+        {
+            _frameWorkStarted = true;
+            _frameWorkStart = Clock();
+        }
+    }
+
+    /// <summary>Notes that the frame the current pass was drawn in is over.</summary>
+    internal void NoteFrameEnded()
+    {
+        if (_passOpenedThisFrame)
+        {
+            _passOpenedThisFrame = false;
+            _lastFrameWorkTicks = Math.Max(0, Clock() - (_frameWorkStarted ? _frameWorkStart : PassTimestamp));
+        }
+
+        _frameWorkStarted = false;
     }
 
     /// <summary>Takes a node an update created once that update lands.</summary>

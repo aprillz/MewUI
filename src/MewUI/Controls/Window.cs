@@ -3074,6 +3074,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         finally
         {
             _renderFrameActive = false;
+            _renderScene?.NoteFrameEnded();
         }
     }
 
@@ -3087,9 +3088,16 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         double scale = TargetScale(surface);
         var clientSizeDip = new Size(surface.PixelWidth / scale, surface.PixelHeight / scale);
 
-        if (!TryRenderFrameWithOverlay(surface, clientSizeDip))
+        try
         {
-            RenderFrameCore(surface, clientSizeDip);
+            if (!TryRenderFrameWithOverlay(surface, clientSizeDip))
+            {
+                RenderFrameCore(surface, clientSizeDip);
+            }
+        }
+        finally
+        {
+            _renderScene?.NoteFrameEnded();
         }
     }
 

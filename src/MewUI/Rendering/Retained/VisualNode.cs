@@ -148,10 +148,6 @@ internal sealed class VisualNode : IDisposable
     // A recording is worth taking once it gets replayed; a run this long says it will not be.
     private const int CHANGED_PASSES_BEFORE_DRAWN_LIVE = 30;
 
-    // Changes further apart than this are not an animation, however many passes in a row they fill:
-    // a blinking caret changes in every pass when nothing else does, half a second apart.
-    private const int ANIMATION_GAP_MS = 50;
-
     private int _changedPassRun;
     private long _lastChangedTimestamp;
 
@@ -162,7 +158,7 @@ internal sealed class VisualNode : IDisposable
     /// Notes that a pass found the content changed, and keeps the run of passes in a row. A visual drawn
     /// live answers for its own box alone, so a recording that inked past that box ends the run.
     /// </summary>
-    internal void NoteContentChanged(int pass, long timestamp, bool inkStaysInsideTheVisual)
+    internal void NoteContentChanged(int pass, long timestamp, long animationGapTicks, bool inkStaysInsideTheVisual)
     {
         if (!inkStaysInsideTheVisual)
         {
@@ -171,7 +167,7 @@ internal sealed class VisualNode : IDisposable
         }
         else if (LastChangedPass != pass)
         {
-            bool continuesTheRun = LastChangedPass == pass - 1 && WithinAnimationGap(timestamp);
+            bool continuesTheRun = LastChangedPass == pass - 1 && timestamp - _lastChangedTimestamp <= animationGapTicks;
             _changedPassRun = continuesTheRun ? _changedPassRun + 1 : 1;
             LastChangedPass = pass;
         }
@@ -183,11 +179,8 @@ internal sealed class VisualNode : IDisposable
     /// Whether the content has changed in every one of the passes leading up to <paramref name="pass"/>,
     /// each close enough to the one before to be frames of an animation, the last of them just now.
     /// </summary>
-    internal bool ChangesEveryPass(int pass, long timestamp)
-        => _changedPassRun >= CHANGED_PASSES_BEFORE_DRAWN_LIVE && LastChangedPass >= pass - 1 && WithinAnimationGap(timestamp);
-
-    private bool WithinAnimationGap(long timestamp)
-        => timestamp - _lastChangedTimestamp <= ANIMATION_GAP_MS * System.Diagnostics.Stopwatch.Frequency / 1000;
+    internal bool ChangesEveryPass(int pass, long timestamp, long animationGapTicks)
+        => _changedPassRun >= CHANGED_PASSES_BEFORE_DRAWN_LIVE && LastChangedPass >= pass - 1 && timestamp - _lastChangedTimestamp <= animationGapTicks;
 
     internal bool HasContent
     {

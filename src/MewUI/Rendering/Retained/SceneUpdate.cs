@@ -385,7 +385,7 @@ internal sealed class SceneUpdate
                 continue;
             }
 
-            slot.Node.NoteContentChanged(passId, _scene.PassTimestamp, slot.Data == null || slot.StaysInsideTheVisual);
+            slot.Node.NoteContentChanged(passId, _scene.PassTimestamp, _scene.AnimationGapTicks, slot.Data == null || slot.StaysInsideTheVisual);
 
             bool wasDrawnLive = previous == null && slot.Node.NonRecordableReason != null;
             bool isDrawnLive = slot.Data == null;

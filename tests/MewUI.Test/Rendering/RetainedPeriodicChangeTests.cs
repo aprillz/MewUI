@@ -71,6 +71,69 @@ public sealed class RetainedPeriodicChangeTests
         }
     }
 
+    [TestMethod]
+    public void PassesOfASlowAnimation_StillCountAsOneAnimation()
+    {
+        long now = 1_000_000;
+        long millisecond = Stopwatch.Frequency / 1000;
+        using var scene = new Aprillz.MewUI.Rendering.Retained.RenderScene { Clock = () => now };
+        using var node = new Aprillz.MewUI.Rendering.Retained.VisualNode(new Border());
+
+        // Sixty passes, each drawn in 120 ms and following the one before at once: slower than the
+        // fixed gap allows, but as close together as an animation that takes this long to draw can be.
+        for (int frame = 0; frame < 60; frame++)
+        {
+            int pass = scene.BeginPass();
+            node.NoteContentChanged(pass, scene.PassTimestamp, scene.AnimationGapTicks, inkStaysInsideTheVisual: true);
+            now += 120 * millisecond;
+            scene.NoteFrameEnded();
+        }
+
+        Assert.IsTrue(
+            node.ChangesEveryPass(scene.PassId + 1, scene.Clock(), scene.AnimationGapTicks),
+            "an animation whose frames take 120 ms to draw was not taken for one");
+
+        // The same passes half a second apart with nothing drawn in between are a periodic change.
+        using var blinking = new Aprillz.MewUI.Rendering.Retained.VisualNode(new Border());
+        for (int frame = 0; frame < 60; frame++)
+        {
+            now += 500 * millisecond;
+            int pass = scene.BeginPass();
+            blinking.NoteContentChanged(pass, scene.PassTimestamp, scene.AnimationGapTicks, inkStaysInsideTheVisual: true);
+            now += millisecond;
+            scene.NoteFrameEnded();
+        }
+
+        Assert.IsFalse(
+            blinking.ChangesEveryPass(scene.PassId + 1, scene.Clock(), scene.AnimationGapTicks),
+            "a change every half second was taken for an animation");
+    }
+
+    [TestMethod]
+    public void PassesOfAnAnimationThatRecordsMostOfItsFrame_StillCountAsOneAnimation()
+    {
+        long now = 1_000_000;
+        long millisecond = Stopwatch.Frequency / 1000;
+        using var scene = new Aprillz.MewUI.Rendering.Retained.RenderScene { Clock = () => now };
+        using var node = new Aprillz.MewUI.Rendering.Retained.VisualNode(new Border());
+
+        // Each frame records for 100 ms before its pass opens and then draws for 10 ms: the frame is 110 ms of
+        // work, of which the pass alone saw 10.
+        for (int frame = 0; frame < 60; frame++)
+        {
+            scene.NoteFrameWorkStarted();
+            now += 100 * millisecond;
+            int pass = scene.BeginPass();
+            node.NoteContentChanged(pass, scene.PassTimestamp, scene.AnimationGapTicks, inkStaysInsideTheVisual: true);
+            now += 10 * millisecond;
+            scene.NoteFrameEnded();
+        }
+
+        Assert.IsTrue(
+            node.ChangesEveryPass(scene.PassId + 1, scene.Clock(), scene.AnimationGapTicks),
+            "an animation whose frames spend most of their time recording was not taken for one");
+    }
+
     private static void Frame(Window window, IRenderSurface surface)
     {
         window.PerformLayout();
