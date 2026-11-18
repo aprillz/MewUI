@@ -33,6 +33,9 @@ internal sealed class RenderData : IDisposable
     private readonly bool _pooled;
     private bool _disposed;
 
+    // 0 until asked, then 1 for yes and 2 for no.
+    private byte _drawsOneShapeAtMost;
+
     internal static RenderData Empty { get; } = new([], [], [], [], [], default);
 
     private RenderData(
@@ -101,6 +104,56 @@ internal sealed class RenderData : IDisposable
     internal bool EscapesAmbientClip { get; set; }
 
     internal int CommandCount => _commandCount;
+
+    /// <summary>
+    /// True when the commands draw one filled shape or one image at most. Nothing in such a recording can lie
+    /// over another part of it, so fading it call by call gives what fading it as a group gives.
+    /// </summary>
+    internal bool DrawsOneShapeAtMost
+    {
+        get
+        {
+            if (_drawsOneShapeAtMost == 0)
+            {
+                _drawsOneShapeAtMost = FindsOneShapeAtMost() ? (byte)1 : (byte)2;
+            }
+
+            return _drawsOneShapeAtMost == 1;
+        }
+    }
+
+    private bool FindsOneShapeAtMost()
+    {
+        int shapes = 0;
+        for (int commandIndex = 0; commandIndex < _commandCount; commandIndex++)
+        {
+            switch (_commands[commandIndex].Kind)
+            {
+                case RenderCommandKind.FillRectangle:
+                case RenderCommandKind.FillRoundedRectangle:
+                case RenderCommandKind.FillEllipse:
+                case RenderCommandKind.DrawImage:
+                    shapes++;
+                    break;
+
+                // A stroke can cross itself, text is many glyphs, and a scope of its own blends as a group.
+                case RenderCommandKind.DrawLine:
+                case RenderCommandKind.DrawRectangle:
+                case RenderCommandKind.DrawRoundedRectangle:
+                case RenderCommandKind.DrawEllipse:
+                case RenderCommandKind.DrawPath:
+                case RenderCommandKind.FillPath:
+                case RenderCommandKind.DrawBoxShadow:
+                case RenderCommandKind.DrawText:
+                case RenderCommandKind.DrawTextBackground:
+                case RenderCommandKind.DrawTextForeground:
+                case RenderCommandKind.BeginOpacity:
+                    return false;
+            }
+        }
+
+        return shapes <= 1;
+    }
 
     internal bool IsEmpty => _commandCount == 0;
 
