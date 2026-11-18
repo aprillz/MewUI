@@ -267,8 +267,37 @@ internal sealed class VisualNode : IDisposable
         }
     }
 
+    // The nodes of the plan's child entries, by entry index, as far as a replay has looked them up.
+    private VisualNode?[]? _childNodes;
+    private bool _disposed;
+
+    /// <summary>
+    /// The node of the child at <paramref name="entryIndex"/> of the plan. A replay that repaints several
+    /// areas walks the same children once per area, and this spares it the scene's lookup after the first.
+    /// </summary>
+    internal VisualNode? FindChildNode(RenderScene scene, int entryIndex, UIElement child)
+    {
+        var known = _childNodes;
+        if (known == null || known.Length != Plan.Entries.Length)
+        {
+            known = _childNodes = new VisualNode?[Plan.Entries.Length];
+        }
+
+        var node = known[entryIndex];
+        if (node != null && !node._disposed && ReferenceEquals(node.Element, child))
+        {
+            return node;
+        }
+
+        node = scene.FindNode(child);
+        known[entryIndex] = node;
+        return node;
+    }
+
     public void Dispose()
     {
+        _disposed = true;
+        _childNodes = null;
         ClearSlots();
         Plan = CompositionPlan.Empty;
     }
