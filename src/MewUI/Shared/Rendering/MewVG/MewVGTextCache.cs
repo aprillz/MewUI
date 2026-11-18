@@ -31,6 +31,8 @@ internal sealed class MewVGTextCache : IDisposable
     private byte[]? _transientBuffer;
     private long _currentBytes;
     private bool _disposed;
+    private MewVGGlyphAtlas? _glyphAtlas;
+    private readonly MewVGGlyphRunCache<MewVGTextCacheKey> _glyphRuns = new();
 
     public long MaxBytes
     {
@@ -42,6 +44,19 @@ internal sealed class MewVGTextCache : IDisposable
     {
         _vg = vg;
     }
+
+    /// <summary>The glyph atlas of this context, created on first use.</summary>
+    public MewVGGlyphAtlas GlyphAtlas => _glyphAtlas ??= new MewVGGlyphAtlas(_vg);
+
+    /// <summary>A text laid out earlier as atlas quads, while the atlas still holds the glyphs it samples.</summary>
+    public bool TryGetGlyphRun(MewVGTextCacheKey key, ReadOnlySpan<char> text, out MewVGGlyphRun run)
+        => _glyphRuns.TryGet(key, text, GlyphAtlas, out run);
+
+    /// <summary>Uploads the glyphs added since the last call; called before each flush of draws.</summary>
+    public void FlushGlyphUploads() => _glyphAtlas?.FlushUploads();
+
+    public void StoreGlyphRun(MewVGTextCacheKey key, ReadOnlySpan<char> text, MewVGGlyphRun run)
+        => _glyphRuns.Store(key, text, run);
 
     public bool TryGet(MewVGTextCacheKey key, ReadOnlySpan<char> text, out MewVGTextEntry entry)
     {
@@ -237,6 +252,7 @@ internal sealed class MewVGTextCache : IDisposable
         }
 
         _transientIndex = 0;
+        _glyphAtlas?.EndFrame();
         while (_pendingDeletes.Count > 0)
         {
             int imageId = _pendingDeletes.Dequeue();
@@ -279,6 +295,9 @@ internal sealed class MewVGTextCache : IDisposable
         _transientSlots.Clear();
         _transientIndex = 0;
         _transientBuffer = null;
+
+        _glyphAtlas?.Clear();
+        _glyphRuns.Clear();
     }
 
     public void Dispose()

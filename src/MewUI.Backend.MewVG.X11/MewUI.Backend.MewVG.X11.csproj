@@ -38,6 +38,7 @@
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\MewVGImage.cs" LinkBase="Rendering\MewVG" />
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\NvgStrokeHelper.cs" LinkBase="Rendering\MewVG" />
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\MewVGTextCache.cs" LinkBase="Rendering\MewVG" />
+    <Compile Include="..\MewUI\Shared\Rendering\MewVG\MewVGGlyphAtlas.cs" LinkBase="Rendering\MewVG" />
 
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\X11\*.cs" LinkBase="Rendering\MewVG\X11" />
 

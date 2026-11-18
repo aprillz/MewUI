@@ -36,6 +36,7 @@
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\MewVGImage.cs" LinkBase="Rendering\MewVG" />
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\NvgStrokeHelper.cs" LinkBase="Rendering\MewVG" />
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\MewVGTextCache.cs" LinkBase="Rendering\MewVG" />
+    <Compile Include="..\MewUI\Shared\Rendering\MewVG\MewVGGlyphAtlas.cs" LinkBase="Rendering\MewVG" />
 
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\IGLTextureSource.cs" LinkBase="Rendering\OpenGL" />
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\IOpenGLWindowResources.cs" LinkBase="Rendering\OpenGL" />

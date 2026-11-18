@@ -22,6 +22,8 @@ internal sealed partial class MewVGX11GraphicsContext
 {
     private readonly IFrameSession _frameSession;
     private readonly MewVGTextCache _textCache;
+    private readonly MewVGGlyphRunBuilder _glyphRunBuilder = new();
+    private FreeTypeAtlasGlyphTarget? _glyphTarget;
     private readonly Action<GpuInteropInvalidatedEventArgs>? _gpuInteropInvalidated;
     private readonly HashSet<GpuDeviceIdentity> _reportedExternalMismatches = new();
 
@@ -79,6 +81,8 @@ internal sealed partial class MewVGX11GraphicsContext
 
             // Flushed lazily by Lock/CopyPixels/GetPixelSpan. See Win32 EndFrame
             // comment for the rationale (folds N per-element sync barriers into 0–1).
+    partial void FlushGlyphUploads() => _textCache.FlushGlyphUploads();
+
     partial void EndFramePlatform()
     {
         try
@@ -87,6 +91,7 @@ internal sealed partial class MewVGX11GraphicsContext
             GL.Viewport(0, 0, _viewportWidthPx, _viewportHeightPx);
             ApplyPendingFrameClear();
 
+            FlushGlyphUploads();
             _vg.EndFrame();
             _frameSession.EndFrame();
         }
@@ -258,16 +263,15 @@ internal sealed partial class MewVGX11GraphicsContext
             drawX = snappedOrigin.X - insetLeftDip;
             drawY = snappedOrigin.Y - insetTopDip;
         }
-        double widthDip = widthPx / DpiScale;
-        double heightDip = heightPx / DpiScale;
         int letterSpacingPx = FreeTypeText.ToLetterSpacingPx(format.LetterSpacing, DpiScale);
 
+        // The colour is applied when the quads are drawn, so one layout serves a text in every colour.
         var key = new MewVGTextCacheKey(new TextCacheKey(
             string.GetHashCode(text),
             0,
             ftFont.FontPath,
             ftFont.PixelHeight,
-            color.ToArgb(),
+            0,
             widthPx,
             heightPx,
             (int)format.HorizontalAlignment,
@@ -278,47 +282,105 @@ internal sealed partial class MewVGX11GraphicsContext
             inkInset.Top,
             letterSpacingPx));
 
-        MewVGTextEntry entry;
+        if (!_transientText && _textCache.TryGetGlyphRun(key, text, out var cached))
+        {
+            DrawGlyphQuads(cached.Quads, cached.Segments, drawX, drawY, color);
+            return;
+        }
+
+        var atlas = _textCache.GlyphAtlas;
+        _glyphTarget ??= new FreeTypeAtlasGlyphTarget(_glyphRunBuilder);
+        _glyphTarget.Begin(atlas, widthPx, heightPx);
+        FreeTypeText.Layout(
+            text,
+            ftFont,
+            widthPx,
+            heightPx,
+            format.HorizontalAlignment,
+            format.VerticalAlignment,
+            format.Wrapping,
+            format.Trimming,
+            inkInset.Left,
+            inkInset.Top,
+            letterSpacingPx,
+            _glyphTarget);
+
         if (_transientText)
         {
-            var bmp = FreeTypeText.Rasterize(
-                text,
-                ftFont,
-                widthPx,
-                heightPx,
-                color,
-                format.HorizontalAlignment,
-                format.VerticalAlignment,
-                format.Wrapping,
-                format.Trimming,
-                inkInset.Left,
-                inkInset.Top,
-                letterSpacingPx);
-            entry = _textCache.UseTransient(bmp.Data.AsSpan(0, bmp.WidthPx * bmp.HeightPx * 4), bmp.WidthPx, bmp.HeightPx, linear: false);
+            DrawGlyphQuads(_glyphRunBuilder.Quads, _glyphRunBuilder.Segments, drawX, drawY, color);
         }
-        else if (!_textCache.TryGet(key, text, out entry))
+        else
         {
-            var bmp = FreeTypeText.Rasterize(
-                text,
-                ftFont,
-                widthPx,
-                heightPx,
-                color,
-                format.HorizontalAlignment,
-                format.VerticalAlignment,
-                format.Wrapping,
-                format.Trimming,
-                inkInset.Left,
-                inkInset.Top,
-                letterSpacingPx);
-            entry = _textCache.CreateImage(key, text, ref bmp);
+            var run = _glyphRunBuilder.ToRun();
+            _textCache.StoreGlyphRun(key, text, run);
+            DrawGlyphQuads(run.Quads, run.Segments, drawX, drawY, color);
+        }
+    }
+
+    /// <summary>
+    /// Turns the glyphs a FreeType layout places into atlas quads, adding glyphs the atlas lacks and cutting each
+    /// quad to the raster, which is all a glyph may cover.
+    /// </summary>
+    private sealed class FreeTypeAtlasGlyphTarget(MewVGGlyphRunBuilder builder) : IFreeTypeGlyphTarget
+    {
+        private MewVGGlyphAtlas _atlas = null!;
+        private int _widthPx;
+        private int _heightPx;
+
+        public void Begin(MewVGGlyphAtlas atlas, int widthPx, int heightPx)
+        {
+            _atlas = atlas;
+            _widthPx = widthPx;
+            _heightPx = heightPx;
+            builder.Reset();
         }
 
-        if (entry.ImageId == 0) return;
+        public void Coverage(FreeTypeFaceCache.FaceEntry face, uint glyphId, in FreeTypeFaceCache.FaceEntry.CoverageGlyph glyph, int left, int top, double scale)
+        {
+            if (!_atlas.TryGet(face, glyphId, out var atlasGlyph)
+                && !_atlas.TryAddCoverage(face, glyphId, glyph.Coverage, glyph.Width, glyph.Rows, out atlasGlyph))
+            {
+                return;
+            }
 
-        var drawRect = new Rect(drawX, drawY, widthDip, heightDip);
-        var srcRect = new Rect(entry.X, entry.Y, entry.WidthPx, entry.HeightPx);
-        DrawImagePattern(entry.ImageId, drawRect, alpha: 1f, sourceRect: srcRect, entry.AtlasWidthPx, entry.AtlasHeightPx);
+            Add(atlasGlyph, left, top, (int)(glyph.Width * scale), (int)(glyph.Rows * scale));
+        }
+
+        public void Color(FreeTypeFaceCache.FaceEntry face, uint glyphId, in FreeTypeFaceCache.FaceEntry.ScaledBitmap bitmap, int left, int top)
+        {
+            if (!_atlas.TryGet(face, glyphId, out var atlasGlyph)
+                && !_atlas.TryAddColor(face, glyphId, bitmap.Bgra, bitmap.Width, bitmap.Height, out atlasGlyph))
+            {
+                return;
+            }
+
+            Add(atlasGlyph, left, top, bitmap.Width, bitmap.Height);
+        }
+
+        private void Add(in MewVGAtlasGlyph glyph, int left, int top, int width, int height)
+        {
+            int right = Math.Min(left + width, _widthPx);
+            int bottom = Math.Min(top + height, _heightPx);
+            int clippedLeft = Math.Max(left, 0);
+            int clippedTop = Math.Max(top, 0);
+            if (right <= clippedLeft || bottom <= clippedTop)
+            {
+                return;
+            }
+
+            // Texels per raster pixel: one, except for a bitmap font drawn at another size.
+            float sourceScaleX = (float)glyph.Width / width;
+            float sourceScaleY = (float)glyph.Height / height;
+            builder.Add(glyph, new MewVGImageQuad(
+                clippedLeft,
+                clippedTop,
+                right - clippedLeft,
+                bottom - clippedTop,
+                glyph.X + ((clippedLeft - left) * sourceScaleX),
+                glyph.Y + ((clippedTop - top) * sourceScaleY),
+                (right - clippedLeft) * sourceScaleX,
+                (bottom - clippedTop) * sourceScaleY));
+        }
     }
 
     #endregion
