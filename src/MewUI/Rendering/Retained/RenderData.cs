@@ -1,5 +1,7 @@
+using System.Buffers;
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using Aprillz.MewUI.Text;
 
 namespace Aprillz.MewUI.Rendering.Retained;
@@ -10,6 +12,11 @@ namespace Aprillz.MewUI.Rendering.Retained;
 /// </summary>
 internal sealed class RenderData : IDisposable
 {
+    // A recording whose command table reaches this many bytes takes its tables from the shared pools and gives
+    // them back when it is disposed. A visual redrawn with many calls every frame would otherwise leave tables
+    // on the large object heap each frame, which only a full collection frees.
+    private const long POOLED_COMMAND_BYTES = 32 * 1024;
+
     private readonly RenderCommand[] _commands;
     private readonly double[] _values;
     private readonly object?[] _resources;
@@ -17,6 +24,13 @@ internal sealed class RenderData : IDisposable
 
     // Where each command reaches in the owning visual's local space, under the transform and clip it was recorded in.
     private readonly Rect[] _extents;
+
+    // The tables can be longer than what they hold when they came from the pools.
+    private readonly int _commandCount;
+    private readonly int _valueCount;
+    private readonly int _resourceCount;
+    private readonly int _leaseCount;
+    private readonly bool _pooled;
     private bool _disposed;
 
     internal static RenderData Empty { get; } = new([], [], [], [], [], default);
@@ -28,12 +42,34 @@ internal sealed class RenderData : IDisposable
         IDisposable[] leases,
         Rect[] extents,
         Rect localBounds)
+        : this(commands, commands.Length, values, values.Length, resources, resources.Length, leases, leases.Length, extents,
+            localBounds, pooled: false)
+    {
+    }
+
+    private RenderData(
+        RenderCommand[] commands,
+        int commandCount,
+        double[] values,
+        int valueCount,
+        object?[] resources,
+        int resourceCount,
+        IDisposable[] leases,
+        int leaseCount,
+        Rect[] extents,
+        Rect localBounds,
+        bool pooled)
     {
         _extents = extents;
         _commands = commands;
         _values = values;
         _resources = resources;
         _leases = leases;
+        _commandCount = commandCount;
+        _valueCount = valueCount;
+        _resourceCount = resourceCount;
+        _leaseCount = leaseCount;
+        _pooled = pooled;
         LocalBounds = localBounds;
     }
 
@@ -64,16 +100,16 @@ internal sealed class RenderData : IDisposable
     /// <summary>True when the commands reset the clip they are replayed under, so they can ink outside it.</summary>
     internal bool EscapesAmbientClip { get; set; }
 
-    internal int CommandCount => _commands.Length;
+    internal int CommandCount => _commandCount;
 
-    internal bool IsEmpty => _commands.Length == 0;
+    internal bool IsEmpty => _commandCount == 0;
 
     /// <summary>Bytes the command records, their arguments and their resource table take.</summary>
     internal long EstimatedBytes
-        => ((long)_commands.Length * Unsafe.SizeOf<RenderCommand>()) +
-            ((long)_values.Length * sizeof(double)) +
-            ((long)_extents.Length * Unsafe.SizeOf<Rect>()) +
-            ((long)_resources.Length * IntPtr.Size);
+        => ((long)_commandCount * Unsafe.SizeOf<RenderCommand>()) +
+            ((long)_valueCount * sizeof(double)) +
+            ((long)_commandCount * Unsafe.SizeOf<Rect>()) +
+            ((long)_resourceCount * IntPtr.Size);
 
     /// <summary>
     /// Whether this draws exactly what <paramref name="other"/> draws: the same commands with the same
@@ -87,23 +123,23 @@ internal sealed class RenderData : IDisposable
             return true;
         }
 
-        if (_commands.Length != other._commands.Length ||
-            _values.Length != other._values.Length ||
-            _resources.Length != other._resources.Length ||
+        if (_commandCount != other._commandCount ||
+            _valueCount != other._valueCount ||
+            _resourceCount != other._resourceCount ||
             RecordedBounds != other.RecordedBounds ||
             CanBePlaced != other.CanBePlaced)
         {
             return false;
         }
 
-        if (!System.Runtime.InteropServices.MemoryMarshal.AsBytes(_commands.AsSpan())
-                .SequenceEqual(System.Runtime.InteropServices.MemoryMarshal.AsBytes(other._commands.AsSpan())) ||
-            !_values.AsSpan().SequenceEqual(other._values))
+        if (!MemoryMarshal.AsBytes(_commands.AsSpan(0, _commandCount))
+                .SequenceEqual(MemoryMarshal.AsBytes(other._commands.AsSpan(0, other._commandCount))) ||
+            !_values.AsSpan(0, _valueCount).SequenceEqual(other._values.AsSpan(0, other._valueCount)))
         {
             return false;
         }
 
-        for (int resourceIndex = 0; resourceIndex < _resources.Length; resourceIndex++)
+        for (int resourceIndex = 0; resourceIndex < _resourceCount; resourceIndex++)
         {
             if (!IsSameResource(_resources[resourceIndex], other._resources[resourceIndex]))
             {
@@ -127,7 +163,7 @@ internal sealed class RenderData : IDisposable
             return false;
         }
 
-        int commonLength = Math.Min(_commands.Length, previous._commands.Length);
+        int commonLength = Math.Min(_commandCount, previous._commandCount);
         int leading = 0;
         while (leading < commonLength && IsSameCommand(leading, previous, leading))
         {
@@ -136,14 +172,14 @@ internal sealed class RenderData : IDisposable
 
         int trailing = 0;
         while (trailing < commonLength - leading &&
-            IsSameCommand(_commands.Length - 1 - trailing, previous, previous._commands.Length - 1 - trailing))
+            IsSameCommand(_commandCount - 1 - trailing, previous, previous._commandCount - 1 - trailing))
         {
             trailing++;
         }
 
         var accumulator = default(BoundsAccumulator);
-        if (!TryAddDrawnExtents(leading, _commands.Length - trailing, ref accumulator) ||
-            !previous.TryAddDrawnExtents(leading, previous._commands.Length - trailing, ref accumulator))
+        if (!TryAddDrawnExtents(leading, _commandCount - trailing, ref accumulator) ||
+            !previous.TryAddDrawnExtents(leading, previous._commandCount - trailing, ref accumulator))
         {
             return false;
         }
@@ -255,7 +291,7 @@ internal sealed class RenderData : IDisposable
         ArgumentNullException.ThrowIfNull(context);
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        for (int commandIndex = 0; commandIndex < _commands.Length; commandIndex++)
+        for (int commandIndex = 0; commandIndex < _commandCount; commandIndex++)
         {
             RenderDataReplayer.Replay(context, in _commands[commandIndex], _values, _resources);
         }
@@ -267,7 +303,7 @@ internal sealed class RenderData : IDisposable
         ArgumentNullException.ThrowIfNull(context);
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        for (int commandIndex = 0; commandIndex < _commands.Length; commandIndex++)
+        for (int commandIndex = 0; commandIndex < _commandCount; commandIndex++)
         {
             RenderDataReplayer.Replay(context, in _commands[commandIndex], _values, _resources, offsetX, offsetY);
         }
@@ -277,18 +313,18 @@ internal sealed class RenderData : IDisposable
     {
         // Data without commands owns nothing, and the empty instance is shared by every visual that
         // draws nothing, so disposing it must not make it unusable.
-        if (_disposed || _commands.Length == 0)
+        if (_disposed || _commandCount == 0)
         {
             return;
         }
 
         _disposed = true;
-        for (int leaseIndex = 0; leaseIndex < _leases.Length; leaseIndex++)
+        for (int leaseIndex = 0; leaseIndex < _leaseCount; leaseIndex++)
         {
             _leases[leaseIndex].Dispose();
         }
 
-        for (int resourceIndex = 0; resourceIndex < _resources.Length; resourceIndex++)
+        for (int resourceIndex = 0; resourceIndex < _resourceCount; resourceIndex++)
         {
             // An unfrozen path is a copy this recording took; a frozen one is the visual's own or a copy the
             // replay froze, which a backend may have cached and so cannot be refilled for another recording.
@@ -298,18 +334,69 @@ internal sealed class RenderData : IDisposable
                 RenderResourceSnapshot.ReturnPath(copy);
             }
         }
+
+        if (_pooled)
+        {
+            // Disposed data is never replayed again, so its tables can serve the next recording.
+            Return(_commands, clearArray: false);
+            Return(_values, clearArray: false);
+            Return(_extents, clearArray: false);
+            Return(_resources, clearArray: true);
+            Return(_leases, clearArray: true);
+        }
     }
 
-    internal static RenderData Create(
-        RenderCommand[] commands,
-        double[] values,
-        object?[] resources,
-        IDisposable[] leases,
-        Rect[] extents,
+    /// <summary>
+    /// Builds data from the staged tables, copying them into tables of its own: pooled ones for a large recording,
+    /// tables of the exact size otherwise.
+    /// </summary>
+    internal static RenderData Build(
+        ReadOnlySpan<RenderCommand> commands,
+        ReadOnlySpan<double> values,
+        ReadOnlySpan<object?> resources,
+        ReadOnlySpan<IDisposable> leases,
+        ReadOnlySpan<Rect> extents,
         Rect localBounds)
-        => commands.Length == 0
-            ? new RenderData([], [], [], [], [], default)
-            : new RenderData(commands, values, resources, leases, extents, localBounds);
+    {
+        if (commands.IsEmpty)
+        {
+            return new RenderData([], [], [], [], [], default);
+        }
+
+        bool pooled = (long)commands.Length * Unsafe.SizeOf<RenderCommand>() >= POOLED_COMMAND_BYTES;
+        return new RenderData(
+            Copy(commands, pooled),
+            commands.Length,
+            Copy(values, pooled),
+            values.Length,
+            Copy(resources, pooled),
+            resources.Length,
+            Copy(leases, pooled),
+            leases.Length,
+            Copy(extents, pooled),
+            localBounds,
+            pooled);
+    }
+
+    private static T[] Copy<T>(ReadOnlySpan<T> source, bool pooled)
+    {
+        if (source.IsEmpty)
+        {
+            return [];
+        }
+
+        var table = pooled ? ArrayPool<T>.Shared.Rent(source.Length) : new T[source.Length];
+        source.CopyTo(table);
+        return table;
+    }
+
+    private static void Return<T>(T[] table, bool clearArray)
+    {
+        if (table.Length > 0)
+        {
+            ArrayPool<T>.Shared.Return(table, clearArray);
+        }
+    }
 }
 
 /// <summary>
@@ -476,7 +563,13 @@ internal sealed class RenderDataBuilder
             return false;
         }
 
-        data = RenderData.Create([.. _commands], [.. _values], [.. _resources], [.. _leases], [.. _extents], _localBounds);
+        data = RenderData.Build(
+            CollectionsMarshal.AsSpan(_commands),
+            CollectionsMarshal.AsSpan(_values),
+            CollectionsMarshal.AsSpan(_resources),
+            CollectionsMarshal.AsSpan(_leases),
+            CollectionsMarshal.AsSpan(_extents),
+            _localBounds);
         data.CanBePlaced = !_replacesTransform;
         data.EscapesAmbientClip = _escapesAmbientClip;
 
