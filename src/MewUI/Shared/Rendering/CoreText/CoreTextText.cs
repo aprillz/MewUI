@@ -272,130 +272,429 @@ internal static unsafe partial class CoreTextText
                 // Fill with requested color.
                 CGContextSetRGBFillColor(ctx, color.R / 255.0, color.G / 255.0, color.B / 255.0, color.A / 255.0);
 
-                // Layout.
-                var metrics = GetLineMetrics(ctFont);
-                // The run box sits inset inside a bitmap grown for glyph ink overhang.
-                int innerHeightPx = heightPx - inset.Top - inset.Bottom;
-                if (wrapping == TextWrapping.Wrap && wrapWidthPx > 0 && alignWidthPx > wrapWidthPx)
-                {
-                    alignWidthPx = wrapWidthPx;
-                }
-
-                int lineWidthPx = wrapping == TextWrapping.Wrap && wrapWidthPx > 0 ? wrapWidthPx : alignWidthPx;
-
-                // Build lines: untrimmed for comparison, trimmed for rendering.
-                var linesNoTrim = BuildLines(ctFont, text, lineWidthPx, wrapping);
-                var lines = trimming == TextTrimming.CharacterEllipsis
-                    ? BuildLines(ctFont, text, lineWidthPx, wrapping, trimming)
-                    : linesNoTrim;
-
-                // Wrap + Ellipsis: if lines exceed available height, trim last visible line.
-                bool wrapOverflowTrimmed = false;
-                if (trimming == TextTrimming.CharacterEllipsis && wrapping != TextWrapping.NoWrap)
-                {
-                    int maxVisibleLines = Math.Max(1, (int)(innerHeightPx / metrics.LineHeight));
-                    if (lines.Count > maxVisibleLines)
-                    {
-                        lines.Lines.RemoveRange(maxVisibleLines, lines.Count - maxVisibleLines);
-
-                        int lastIdx = lines.Count - 1;
-                        var lastLine = lines[lastIdx];
-                        if (lastLine.Length > 0)
-                        {
-                            var lineText = text.Slice(lastLine.Start, lastLine.Length);
-                            double ellipsisW = MeasureRunWidth(ctFont, "...");
-                            double maxTextW = Math.Max(0, lineWidthPx - ellipsisW);
-
-                            // Trim text directly to fit within (lineWidthPx - ellipsisW).
-                            // Don't use TrimLineWithEllipsis here because its "text fits" fast path
-                            // omits the ellipsis width, which we always need for wrap overflow.
-                            int trimLen = lastLine.Length;
-                            double textW = MeasureRunWidth(ctFont, lineText);
-                            if (textW > maxTextW)
-                            {
-                                // Estimation-based approach: avgCharWidth → estimatedLen
-                                double avgChar = textW / trimLen;
-                                trimLen = Math.Clamp((int)(maxTextW / avgChar), 0, lastLine.Length);
-                                textW = trimLen > 0 ? MeasureRunWidth(ctFont, lineText.Slice(0, trimLen)) : 0;
-
-                                if (textW > maxTextW)
-                                {
-                                    while (trimLen > 0 && textW > maxTextW)
-                                    {
-                                        trimLen--;
-                                        textW = trimLen > 0 ? MeasureRunWidth(ctFont, lineText.Slice(0, trimLen)) : 0;
-                                    }
-                                }
-                                else
-                                {
-                                    while (trimLen < lastLine.Length)
-                                    {
-                                        double next = MeasureRunWidth(ctFont, lineText.Slice(0, trimLen + 1));
-                                        if (next > maxTextW) break;
-                                        trimLen++;
-                                        textW = next;
-                                    }
-                                }
-                            }
-
-                            lines.Lines[lastIdx] = new LineEntry(lastLine.Start, trimLen, textW + ellipsisW);
-                        }
-                        wrapOverflowTrimmed = true;
-                    }
-                }
-
-                // CoreGraphics uses bottom-left origin. We'll compute baselines from top.
-                double totalHeight = lines.Count * metrics.LineHeight;
-                double topY = verticalAlignment switch
-                {
-                    TextAlignment.Center => (innerHeightPx - totalHeight) / 2.0,
-                    TextAlignment.Bottom => innerHeightPx - totalHeight,
-                    _ => 0.0
-                } + inset.Top;
-
-                for (int i = 0; i < lines.Count; i++)
-                {
-                    var line = lines[i];
-                    // Align text to the original content width (alignWidthPx), not the expanded
-                    // bitmap width (widthPx). The extra bitmap pixels (aaExtra) provide room for
-                    // anti-aliasing and glyph overhang on the trailing edge.
-                    double x = horizontalAlignment switch
-                    {
-                        TextAlignment.Center => (alignWidthPx - line.Width) / 2.0,
-                        TextAlignment.Right => Math.Max(0, alignWidthPx - line.Width - 1.0),
-                        _ => 0.0
-                    } + inset.Left;
-
-                    // Baseline in "top-left" coordinates.
-                    // Leading trim is handled centrally by GraphicsContextBase.
-                    double baselineTop = topY + metrics.Ascent + i * metrics.LineHeight;
-                    // Convert to CoreGraphics user space (bottom-left origin).
-                    double baselineY = heightPx - baselineTop;
-
-                    if (line.Length > 0)
-                    {
-                        DrawLineGlyphs(ctx, ctFont, text.Slice(line.Start, line.Length), x, baselineY);
-                    }
-
-                    // Detect if this line needs an ellipsis.
-                    bool wasTrimmed;
-                    if (wrapOverflowTrimmed && i == lines.Count - 1)
-                        wasTrimmed = true;
-                    else
-                        wasTrimmed = i < linesNoTrim.Count && line.Length < linesNoTrim[i].Length;
-
-                    if (wasTrimmed)
-                    {
-                        double textWidth = line.Length > 0 ? MeasureRunWidth(ctFont, text.Slice(line.Start, line.Length)) : 0;
-                        DrawLineGlyphs(ctx, ctFont, "...", x + textWidth, baselineY);
-                    }
-                }
-
+                LayoutLines(ctFont, text, heightPx, alignWidthPx, horizontalAlignment, verticalAlignment,
+                    wrapping, wrapWidthPx, trimming, inset, new BitmapLineTarget(ctx, heightPx));
                 return true;
             }
             finally
             {
                 CGContextRelease(ctx);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Breaks text into lines, trims and aligns them in a raster of <paramref name="heightPx"/> rows, and hands each
+    /// line to <paramref name="target"/> with its pen origin measured from the raster's top-left.
+    /// </summary>
+    private static void LayoutLines(
+        nint ctFont,
+        ReadOnlySpan<char> text,
+        int heightPx,
+        int alignWidthPx,
+        TextAlignment horizontalAlignment,
+        TextAlignment verticalAlignment,
+        TextWrapping wrapping,
+        int wrapWidthPx,
+        TextTrimming trimming,
+        TextInkInsetPx inset,
+        ICoreTextLineTarget target)
+    {
+        var metrics = GetLineMetrics(ctFont);
+        // The run box sits inset inside a bitmap grown for glyph ink overhang.
+        int innerHeightPx = heightPx - inset.Top - inset.Bottom;
+        if (wrapping == TextWrapping.Wrap && wrapWidthPx > 0 && alignWidthPx > wrapWidthPx)
+        {
+            alignWidthPx = wrapWidthPx;
+        }
+
+        int lineWidthPx = wrapping == TextWrapping.Wrap && wrapWidthPx > 0 ? wrapWidthPx : alignWidthPx;
+
+        // Build lines: untrimmed for comparison, trimmed for rendering.
+        var linesNoTrim = BuildLines(ctFont, text, lineWidthPx, wrapping);
+        var lines = trimming == TextTrimming.CharacterEllipsis
+            ? BuildLines(ctFont, text, lineWidthPx, wrapping, trimming)
+            : linesNoTrim;
+
+        // Wrap + Ellipsis: if lines exceed available height, trim last visible line.
+        bool wrapOverflowTrimmed = false;
+        if (trimming == TextTrimming.CharacterEllipsis && wrapping != TextWrapping.NoWrap)
+        {
+            int maxVisibleLines = Math.Max(1, (int)(innerHeightPx / metrics.LineHeight));
+            if (lines.Count > maxVisibleLines)
+            {
+                lines.Lines.RemoveRange(maxVisibleLines, lines.Count - maxVisibleLines);
+
+                int lastIdx = lines.Count - 1;
+                var lastLine = lines[lastIdx];
+                if (lastLine.Length > 0)
+                {
+                    var lineText = text.Slice(lastLine.Start, lastLine.Length);
+                    double ellipsisW = MeasureRunWidth(ctFont, "...");
+                    double maxTextW = Math.Max(0, lineWidthPx - ellipsisW);
+
+                    // Trim text directly to fit within (lineWidthPx - ellipsisW).
+                    // Don't use TrimLineWithEllipsis here because its "text fits" fast path
+                    // omits the ellipsis width, which we always need for wrap overflow.
+                    int trimLen = lastLine.Length;
+                    double textW = MeasureRunWidth(ctFont, lineText);
+                    if (textW > maxTextW)
+                    {
+                        // Estimation-based approach: avgCharWidth → estimatedLen
+                        double avgChar = textW / trimLen;
+                        trimLen = Math.Clamp((int)(maxTextW / avgChar), 0, lastLine.Length);
+                        textW = trimLen > 0 ? MeasureRunWidth(ctFont, lineText.Slice(0, trimLen)) : 0;
+
+                        if (textW > maxTextW)
+                        {
+                            while (trimLen > 0 && textW > maxTextW)
+                            {
+                                trimLen--;
+                                textW = trimLen > 0 ? MeasureRunWidth(ctFont, lineText.Slice(0, trimLen)) : 0;
+                            }
+                        }
+                        else
+                        {
+                            while (trimLen < lastLine.Length)
+                            {
+                                double next = MeasureRunWidth(ctFont, lineText.Slice(0, trimLen + 1));
+                                if (next > maxTextW) break;
+                                trimLen++;
+                                textW = next;
+                            }
+                        }
+                    }
+
+                    lines.Lines[lastIdx] = new LineEntry(lastLine.Start, trimLen, textW + ellipsisW);
+                }
+                wrapOverflowTrimmed = true;
+            }
+        }
+
+        // CoreGraphics uses bottom-left origin. We'll compute baselines from top.
+        double totalHeight = lines.Count * metrics.LineHeight;
+        double topY = verticalAlignment switch
+        {
+            TextAlignment.Center => (innerHeightPx - totalHeight) / 2.0,
+            TextAlignment.Bottom => innerHeightPx - totalHeight,
+            _ => 0.0
+        } + inset.Top;
+
+        for (int i = 0; i < lines.Count; i++)
+        {
+            var line = lines[i];
+            // Align text to the original content width (alignWidthPx), not the expanded
+            // bitmap width (widthPx). The extra bitmap pixels (aaExtra) provide room for
+            // anti-aliasing and glyph overhang on the trailing edge.
+            double x = horizontalAlignment switch
+            {
+                TextAlignment.Center => (alignWidthPx - line.Width) / 2.0,
+                TextAlignment.Right => Math.Max(0, alignWidthPx - line.Width - 1.0),
+                _ => 0.0
+            } + inset.Left;
+
+            // Baseline in "top-left" coordinates.
+            // Leading trim is handled centrally by GraphicsContextBase.
+            double baselineTop = topY + metrics.Ascent + i * metrics.LineHeight;
+
+            if (line.Length > 0)
+            {
+                target.Line(ctFont, text.Slice(line.Start, line.Length), x, baselineTop);
+            }
+
+            // Detect if this line needs an ellipsis.
+            bool wasTrimmed;
+            if (wrapOverflowTrimmed && i == lines.Count - 1)
+                wasTrimmed = true;
+            else
+                wasTrimmed = i < linesNoTrim.Count && line.Length < linesNoTrim[i].Length;
+
+            if (wasTrimmed)
+            {
+                double textWidth = line.Length > 0 ? MeasureRunWidth(ctFont, text.Slice(line.Start, line.Length)) : 0;
+                target.Line(ctFont, "...", x + textWidth, baselineTop);
+            }
+        }
+    }
+
+    /// <summary>Draws each line through CoreText into a bitmap context, whose origin is its bottom-left.</summary>
+    private sealed class BitmapLineTarget(nint context, int heightPx) : ICoreTextLineTarget
+    {
+        public void Line(nint ctFont, ReadOnlySpan<char> text, double x, double baselineTop)
+            => DrawLineGlyphs(context, ctFont, text, x, heightPx - baselineTop);
+    }
+
+    /// <summary>
+    /// Lays text out as <see cref="Rasterize"/> does in a raster of the size it reports, handing each line to
+    /// <paramref name="target"/>; false when the font cannot lay it out.
+    /// </summary>
+    public static bool Layout(
+        CoreTextFont font,
+        ReadOnlySpan<char> text,
+        int widthPx,
+        int heightPx,
+        uint dpi,
+        TextAlignment horizontalAlignment,
+        TextAlignment verticalAlignment,
+        TextWrapping wrapping,
+        int wrapWidthPx,
+        TextTrimming trimming,
+        TextInkInsetPx inset,
+        double letterSpacingPx,
+        ICoreTextLineTarget target,
+        out int rasterWidthPx,
+        out int rasterHeightPx)
+    {
+        widthPx = Math.Max(1, widthPx);
+        heightPx = Math.Max(1, heightPx);
+        (rasterWidthPx, rasterHeightPx) = GetBitmapSizePx(widthPx, heightPx, dpi, inset);
+        var ctFont = font.GetFontRef(dpi);
+        if (text.IsEmpty || ctFont == 0)
+        {
+            return false;
+        }
+
+        double outerSpacingPx = _letterSpacingPx;
+        _letterSpacingPx = letterSpacingPx;
+        try
+        {
+            LayoutLines(ctFont, text, rasterHeightPx, widthPx, horizontalAlignment, verticalAlignment,
+                wrapping, wrapWidthPx, trimming, inset, target);
+        }
+        finally
+        {
+            _letterSpacingPx = outerSpacingPx;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Shapes one line as drawing does and hands each glyph to <paramref name="sink"/> with the font of its run and
+    /// its pen position relative to the line's origin, y growing down. Letter spacing is the calling entry point's.
+    /// </summary>
+    public static void ForEachLineGlyph(nint baseFont, ReadOnlySpan<char> text, ICoreTextGlyphSink sink)
+    {
+        if (text.IsEmpty)
+        {
+            return;
+        }
+
+        nint cfString = CreateCFString(text);
+        if (cfString == 0) return;
+
+        nint attrStr = CreateFontAttrString(cfString, baseFont);
+        CFRelease(cfString);
+        if (attrStr == 0) return;
+
+        nint line = CTLineCreateWithAttributedString(attrStr);
+        CFRelease(attrStr);
+        if (line == 0) return;
+
+        const int STACK_LIMIT = 128;
+        Span<ushort> stackGlyphs = stackalloc ushort[STACK_LIMIT];
+        Span<CGPoint> stackPositions = stackalloc CGPoint[STACK_LIMIT];
+        try
+        {
+            nint runs = CTLineGetGlyphRuns(line);
+            nint runCount = runs == 0 ? 0 : CFArrayGetCount(runs);
+            for (nint runIndex = 0; runIndex < runCount; runIndex++)
+            {
+                nint run = CFArrayGetValueAtIndex(runs, runIndex);
+                nint glyphCount = CTRunGetGlyphCount(run);
+                if (glyphCount <= 0)
+                {
+                    continue;
+                }
+
+                nint runFont = CFDictionaryGetValue(CTRunGetAttributes(run), _kCTFontAttributeName);
+                if (runFont == 0)
+                {
+                    runFont = baseFont;
+                }
+
+                Span<ushort> glyphs = glyphCount <= STACK_LIMIT ? stackGlyphs[..(int)glyphCount] : new ushort[glyphCount];
+                Span<CGPoint> positions = glyphCount <= STACK_LIMIT ? stackPositions[..(int)glyphCount] : new CGPoint[glyphCount];
+                fixed (ushort* glyphPointer = glyphs)
+                fixed (CGPoint* positionPointer = positions)
+                {
+                    CTRunGetGlyphs(run, new CFRange(0, 0), glyphPointer);
+                    CTRunGetPositions(run, new CFRange(0, 0), positionPointer);
+                }
+
+                for (int index = 0; index < glyphs.Length; index++)
+                {
+                    sink.Glyph(runFont, glyphs[index], positions[index].x, -positions[index].y);
+                }
+            }
+        }
+        finally
+        {
+            CFRelease(line);
+        }
+    }
+
+    /// <summary>A glyph's ink box in glyph space, y up from the baseline; empty for a glyph without ink.</summary>
+    public static CoreTextGlyphBounds GetGlyphBounds(nint font, ushort glyph)
+    {
+        CGRect bounds;
+        CTFontGetBoundingRectsForGlyphs(font, CTFontOrientationHorizontal, &glyph, &bounds, 1);
+        return new CoreTextGlyphBounds(bounds.origin.x, bounds.origin.y, bounds.size.width, bounds.size.height);
+    }
+
+    /// <summary>
+    /// Draws single glyphs through one reused bitmap context per pixel format. The pixels of a drawn glyph stay valid
+    /// until the next glyph is drawn.
+    /// </summary>
+    internal sealed class GlyphRasterizer : IDisposable
+    {
+        // An empty texel ring keeps the glyph's antialiased edge inside its own bitmap.
+        private const int PADDING = 1;
+        private const uint COLOR_GLYPHS_TRAIT = 1u << 13;
+
+        private readonly Surface _coverage = new(color: false);
+        private readonly Surface _color = new(color: true);
+        private byte[] _pixels = [];
+
+        /// <summary>
+        /// Draws a glyph whose ink box is <paramref name="bounds"/> with its pen at the given fraction of a pixel; a
+        /// glyph without ink gives an empty bitmap.
+        /// </summary>
+        public bool TryRasterize(nint font, ushort glyph, CoreTextGlyphBounds bounds, double offsetX, double offsetY,
+            out CoreTextGlyphBitmap bitmap)
+        {
+            bitmap = default;
+            if (bounds.Width <= 0 || bounds.Height <= 0)
+            {
+                return true;
+            }
+
+            // The pen sits offsetY below the baseline the bounds are measured from.
+            int left = (int)Math.Floor(bounds.X + offsetX) - PADDING;
+            int right = (int)Math.Ceiling(bounds.X + bounds.Width + offsetX) + PADDING;
+            int bottomUp = (int)Math.Floor(bounds.Y - offsetY) - PADDING;
+            int topUp = (int)Math.Ceiling(bounds.Y + bounds.Height - offsetY) + PADDING;
+            int width = right - left;
+            int height = topUp - bottomUp;
+            bool color = (CTFontGetSymbolicTraits(font) & COLOR_GLYPHS_TRAIT) != 0;
+            var surface = color ? _color : _coverage;
+            if (!surface.Ensure(width, height))
+            {
+                return false;
+            }
+
+            surface.Clear(width, height);
+            var position = new CGPoint(offsetX - left, -offsetY - bottomUp);
+            CTFontDrawGlyphs(font, &glyph, &position, 1, surface.Context);
+
+            int byteCount = width * height * surface.BytesPerPixel;
+            if (_pixels.Length < byteCount)
+            {
+                _pixels = new byte[Math.Max(byteCount, _pixels.Length * 2)];
+            }
+
+            surface.CopyTo(width, height, _pixels);
+            bitmap = new CoreTextGlyphBitmap(_pixels, width, height, left, -topUp, color);
+            return true;
+        }
+
+        public void Dispose()
+        {
+            _coverage.Dispose();
+            _color.Dispose();
+        }
+
+        /// <summary>
+        /// A bitmap context over native memory, grown to the largest glyph drawn so far. A glyph is drawn in its
+        /// lower left corner, which is the end of the memory since the context's first row is its top.
+        /// </summary>
+        private sealed class Surface(bool color) : IDisposable
+        {
+            private const uint IMAGE_ALPHA_ONLY = 7;
+            private const int MIN_SIZE = 64;
+
+            private byte* _data;
+            private int _width;
+            private int _height;
+
+            public nint Context { get; private set; }
+
+            public int BytesPerPixel { get; } = color ? 4 : 1;
+
+            public bool Ensure(int width, int height)
+            {
+                if (Context != 0 && width <= _width && height <= _height)
+                {
+                    return true;
+                }
+
+                int newWidth = Math.Max(MIN_SIZE, Math.Max(width, _width));
+                int newHeight = Math.Max(MIN_SIZE, Math.Max(height, _height));
+                Dispose();
+                _data = (byte*)NativeMemory.AllocZeroed((nuint)(newWidth * newHeight * BytesPerPixel));
+                nint colorSpace = color ? CGColorSpaceCreateDeviceRGB() : 0;
+                Context = CGBitmapContextCreate(_data, (nuint)newWidth, (nuint)newHeight, 8, (nuint)(newWidth * BytesPerPixel),
+                    colorSpace, color ? kCGBitmapInfo : IMAGE_ALPHA_ONLY);
+                if (colorSpace != 0)
+                {
+                    CGColorSpaceRelease(colorSpace);
+                }
+
+                if (Context == 0)
+                {
+                    Dispose();
+                    return false;
+                }
+
+                _width = newWidth;
+                _height = newHeight;
+                CGContextSetShouldAntialias(Context, true);
+                CGContextSetAllowsAntialiasing(Context, true);
+                CGContextSetAllowsFontSmoothing(Context, false);
+                CGContextSetShouldSmoothFonts(Context, false);
+                CGContextSetShouldSubpixelPositionFonts(Context, true);
+                CGContextSetShouldSubpixelQuantizeFonts(Context, false);
+                CGContextSetRGBFillColor(Context, 1, 1, 1, 1);
+                return true;
+            }
+
+            public void Clear(int width, int height)
+            {
+                int rowBytes = _width * BytesPerPixel;
+                for (int row = _height - height; row < _height; row++)
+                {
+                    new Span<byte>(_data + (row * rowBytes), width * BytesPerPixel).Clear();
+                }
+            }
+
+            /// <summary>Copies the glyph drawn last, top row first and rows tightly packed.</summary>
+            public void CopyTo(int width, int height, byte[] target)
+            {
+                int rowBytes = _width * BytesPerPixel;
+                int glyphRowBytes = width * BytesPerPixel;
+                for (int row = 0; row < height; row++)
+                {
+                    new ReadOnlySpan<byte>(_data + ((_height - height + row) * rowBytes), glyphRowBytes)
+                        .CopyTo(target.AsSpan(row * glyphRowBytes, glyphRowBytes));
+                }
+            }
+
+            public void Dispose()
+            {
+                if (Context != 0)
+                {
+                    CGContextRelease(Context);
+                    Context = 0;
+                }
+
+                if (_data != null)
+                {
+                    NativeMemory.Free(_data);
+                    _data = null;
+                }
+
+                _width = 0;
+                _height = 0;
             }
         }
     }
@@ -990,6 +1289,33 @@ internal static unsafe partial class CoreTextText
     [LibraryImport("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")]
     private static partial void CFRelease(nint cf);
 
+    [LibraryImport("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")]
+    private static partial nint CFArrayGetCount(nint array);
+
+    [LibraryImport("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")]
+    private static partial nint CFArrayGetValueAtIndex(nint array, nint index);
+
+    [LibraryImport("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")]
+    private static partial nint CFDictionaryGetValue(nint dictionary, nint key);
+
+    [LibraryImport("/System/Library/Frameworks/CoreText.framework/CoreText")]
+    private static partial nint CTLineGetGlyphRuns(nint line);
+
+    [LibraryImport("/System/Library/Frameworks/CoreText.framework/CoreText")]
+    private static partial nint CTRunGetGlyphCount(nint run);
+
+    [LibraryImport("/System/Library/Frameworks/CoreText.framework/CoreText")]
+    private static partial nint CTRunGetAttributes(nint run);
+
+    [LibraryImport("/System/Library/Frameworks/CoreText.framework/CoreText")]
+    private static partial void CTRunGetGlyphs(nint run, CFRange range, ushort* buffer);
+
+    [LibraryImport("/System/Library/Frameworks/CoreText.framework/CoreText")]
+    private static partial void CTRunGetPositions(nint run, CFRange range, CGPoint* buffer);
+
+    [LibraryImport("/System/Library/Frameworks/CoreText.framework/CoreText")]
+    private static partial uint CTFontGetSymbolicTraits(nint font);
+
     [LibraryImport("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics")]
     private static partial void CGContextSetTextPosition(nint context, double x, double y);
 
@@ -1056,3 +1382,24 @@ internal static unsafe partial class CoreTextText
 
     #endregion
 }
+
+/// <summary>Receives the lines a CoreText layout places, each with its pen origin from the raster's top-left.</summary>
+internal interface ICoreTextLineTarget
+{
+    void Line(nint ctFont, ReadOnlySpan<char> text, double x, double baselineTop);
+}
+
+/// <summary>Receives the glyphs of a shaped line, each with the font of its run and its pen position.</summary>
+internal interface ICoreTextGlyphSink
+{
+    void Glyph(nint font, ushort glyph, double x, double y);
+}
+
+/// <summary>A glyph's ink box in glyph space, y up from the baseline.</summary>
+internal readonly record struct CoreTextGlyphBounds(double X, double Y, double Width, double Height);
+
+/// <summary>
+/// One glyph drawn into a bitmap: 8-bit coverage, or premultiplied BGRA when <see cref="IsColor"/>. Its rows are the first
+/// <see cref="Width"/> times <see cref="Height"/> pixels of <see cref="Pixels"/>, tightly packed.
+/// </summary>
+internal readonly record struct CoreTextGlyphBitmap(byte[] Pixels, int Width, int Height, int Left, int Top, bool IsColor);
