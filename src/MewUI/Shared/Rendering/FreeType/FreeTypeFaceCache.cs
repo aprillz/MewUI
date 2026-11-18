@@ -269,6 +269,25 @@ internal sealed unsafe class FreeTypeFaceCache
 
         public void Touch() => LastUsedTicks = DateTime.UtcNow.Ticks;
 
+        /// <summary>The coverage FreeType rendered for a glyph, kept so drawing the glyph again needs no FreeType call.</summary>
+        internal readonly record struct CoverageGlyph(byte[] Coverage, int Width, int Rows, int Left, int Top);
+
+        // Glyphs whose coverage is kept per face: enough for the characters of a few scripts in one size.
+        private const int COVERAGE_GLYPH_LIMIT = 2048;
+        private readonly ConcurrentDictionary<uint, CoverageGlyph> _coverageCache = new();
+
+        internal bool TryGetCoverage(uint glyphId, out CoverageGlyph glyph)
+            => _coverageCache.TryGetValue(glyphId, out glyph);
+
+        internal void CacheCoverage(uint glyphId, CoverageGlyph glyph)
+        {
+            // Past the limit a glyph is rendered every time it is drawn, as all were before the cache.
+            if (_coverageCache.Count < COVERAGE_GLYPH_LIMIT)
+            {
+                _coverageCache.TryAdd(glyphId, glyph);
+            }
+        }
+
         internal ScaledBitmap? GetScaledBitmap(uint glyphId)
             => _scaledBitmapCache.TryGetValue(glyphId, out var bmp) ? bmp : null;
 

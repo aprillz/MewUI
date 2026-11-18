@@ -69,11 +69,41 @@ internal static unsafe class FreeTypeText
 
         widthPx = Math.Max(1, widthPx);
         heightPx = Math.Max(1, heightPx);
+        var buffer = new byte[widthPx * heightPx * 4];
+        Layout(text, font, widthPx, heightPx, hAlign, vAlign, wrapping, trimming, insetLeftPx, insetTopPx, letterSpacingPx,
+            new BitmapGlyphTarget(buffer, widthPx, heightPx, color));
+        return new TextBitmap(widthPx, heightPx, buffer);
+    }
+
+    /// <summary>
+    /// Places the glyphs of <paramref name="text"/> in a raster of <paramref name="widthPx"/> by
+    /// <paramref name="heightPx"/> pixels as <see cref="Rasterize"/> draws them, and hands each to
+    /// <paramref name="target"/>.
+    /// </summary>
+    public static void Layout(
+        ReadOnlySpan<char> text,
+        FreeTypeFont font,
+        int widthPx,
+        int heightPx,
+        TextAlignment hAlign,
+        TextAlignment vAlign,
+        TextWrapping wrapping,
+        TextTrimming trimming,
+        int insetLeftPx,
+        int insetTopPx,
+        int letterSpacingPx,
+        IFreeTypeGlyphTarget target)
+    {
+        if (text.IsEmpty)
+        {
+            return;
+        }
+
+        widthPx = Math.Max(1, widthPx);
+        heightPx = Math.Max(1, heightPx);
 
         // Use cached face for performance.
         var face = FreeTypeFaceCache.Instance.Get(font.FontPath, font.PixelHeight, font.Weight, font.IsItalic);
-
-        var buffer = new byte[widthPx * heightPx * 4];
 
         int lineHeightPx = GetLineHeightPx(font);
 
@@ -242,25 +272,23 @@ internal static unsafe class FreeTypeText
                     // Shaped right to left, the glyphs come in visual order with their clusters falling.
                     bool rightToLeft = shaped.Length > 1 && shaped[0].Cluster > shaped[^1].Cluster;
                     var shapedSpacing = LetterSpacingOffsets.Create(shapeInput, letterSpacingPx, rightToLeft);
-                    RenderShapedGlyphs(shaped, face, font, penX, penY, buffer, widthPx, heightPx, color, shapeInput, in shapedSpacing);
+                    RenderShapedGlyphs(shaped, face, font, penX, penY, target, shapeInput, in shapedSpacing);
                     continue;
                 }
             }
 
             // Fallback: character-by-character rendering.
             var spacing = LetterSpacingOffsets.Create(lineText, letterSpacingPx);
-            RenderLineFallback(text, line, face, font, penX, penY, buffer, widthPx, heightPx, color, in spacing);
+            RenderLineFallback(text, line, face, font, penX, penY, target, in spacing);
 
             if (trimmed)
             {
                 // Advance penX to end of line for ellipsis placement.
                 int lineEndX = penX + MeasureRunWidthPxFallback(lineText, face, font) + spacing.TotalPx;
                 var ellipsisSpacing = LetterSpacingOffsets.Create("...", letterSpacingPx);
-                RenderEllipsisFallback(face, font, lineEndX, penY, buffer, widthPx, heightPx, color, in ellipsisSpacing);
+                RenderEllipsisFallback(face, font, lineEndX, penY, target, in ellipsisSpacing);
             }
         }
-
-        return new TextBitmap(widthPx, heightPx, buffer);
     }
 
     private static int MeasureRunWidthPx(ReadOnlySpan<char> text, FreeTypeFaceCache.FaceEntry face, FreeTypeFont font,
@@ -738,10 +766,7 @@ internal static unsafe class FreeTypeText
         FreeTypeFont font,
         int startPenX,
         int penY,
-        byte[] buffer,
-        int widthPx,
-        int heightPx,
-        Color color,
+        IFreeTypeGlyphTarget target,
         ReadOnlySpan<char> sourceText = default,
         in LetterSpacingOffsets spacing = default)
     {
@@ -774,7 +799,7 @@ internal static unsafe class FreeTypeText
                         {
                             penX26_6 += RenderShapedGlyphsDirect(
                                 run.Glyphs, run.Face, font, penX26_6, baseY,
-                                buffer, widthPx, heightPx, color, in spacing, run.TextStart);
+                                target, in spacing, run.TextStart);
                         }
                     }
 
@@ -795,8 +820,7 @@ internal static unsafe class FreeTypeText
                             if (fbGlyph != 0)
                             {
                                 int drawX = (int)(penX26_6 >> 6) + spacing.OffsetPx((int)gg.Cluster);
-                                RenderFallbackCodepoint(fb, codepoint, fbGlyph, drawX, baseY,
-                                    buffer, widthPx, heightPx, color, out int advancePx);
+                                RenderFallbackCodepoint(fb, codepoint, fbGlyph, drawX, baseY, target, out int advancePx);
                                 penX26_6 += (long)advancePx << 6;
                                 continue;
                             }
@@ -811,7 +835,7 @@ internal static unsafe class FreeTypeText
             // keeps its colours when it is the font asked for.
             penX26_6 += RenderShapedGlyphsDirect(
                 glyphs.AsSpan(i, 1), face, font, penX26_6, baseY,
-                buffer, widthPx, heightPx, color, in spacing);
+                target, in spacing);
         }
     }
 
@@ -829,10 +853,7 @@ internal static unsafe class FreeTypeText
         FreeTypeFont font,
         long startPenX26_6,
         int baseY,
-        byte[] buffer,
-        int widthPx,
-        int heightPx,
-        Color color,
+        IFreeTypeGlyphTarget target,
         in LetterSpacingOffsets spacing = default,
         int clusterBase = 0)
     {
@@ -852,48 +873,106 @@ internal static unsafe class FreeTypeText
 
             if (isColorFont)
             {
-                // Cached path: area-average downscale once, blit from cache thereafter.
-                BlitCachedColorGlyph(face, g.GlyphId,
-                    glyphDrawX, baseY - drawYOffset, buffer, widthPx, heightPx);
+                PlaceColorGlyph(face, g.GlyphId, glyphDrawX, baseY - drawYOffset, target);
             }
-            else
+            else if (face.TryGetCoverage(g.GlyphId, out var cached) || TryRenderCoverage(face, g.GlyphId, out cached))
             {
-                int flags = FreeTypeLoad.FT_LOAD_DEFAULT | FreeTypeLoad.FT_LOAD_TARGET_LIGHT;
-                lock (face.SyncRoot)
-                {
-                    if (FT.FT_Load_Glyph(face.Face, g.GlyphId, flags) != 0)
-                        goto Advance;
-
-                    var slotPtr = face.GetGlyphSlotPointer();
-                    if (slotPtr != 0 && FT.FT_Get_Glyph(slotPtr, out var glyphPtr) == 0 && glyphPtr != 0)
-                    {
-                        nint bmpGlyphPtr = glyphPtr;
-                        try
-                        {
-                            if (FT.FT_Glyph_To_Bitmap(ref bmpGlyphPtr, FreeTypeRenderMode.FT_RENDER_MODE_NORMAL, origin: 0, destroy: false) == 0 && bmpGlyphPtr != 0)
-                            {
-                                var bmpGlyph = Marshal.PtrToStructure<FT_BitmapGlyphRec>(bmpGlyphPtr);
-                                int left = (int)(bmpGlyph.left * scale);
-                                int top = (int)(bmpGlyph.top * scale);
-                                BlitGlyph(bmpGlyph.bitmap, (int)bmpGlyph.bitmap.width, (int)bmpGlyph.bitmap.rows,
-                                    glyphDrawX + left, baseY - top - drawYOffset, buffer, widthPx, heightPx, color, scale);
-                            }
-                        }
-                        finally
-                        {
-                            if (bmpGlyphPtr != 0 && bmpGlyphPtr != glyphPtr)
-                                FT.FT_Done_Glyph(bmpGlyphPtr);
-                            FT.FT_Done_Glyph(glyphPtr);
-                        }
-                    }
-                }
+                // The glyph is rendered at a whole-pixel origin, so its coverage is the same wherever it is drawn.
+                PlaceCoverage(face, g.GlyphId, cached, glyphDrawX, baseY - drawYOffset, scale, target);
             }
 
-            Advance:
             penX26_6 += scaledAdvance;
         }
 
         return penX26_6 - startPenX26_6;
+    }
+
+    /// <summary>Renders a glyph through FreeType and keeps its coverage on the face; false when FreeType cannot load or render it.</summary>
+    private static bool TryRenderCoverage(FreeTypeFaceCache.FaceEntry face, uint glyphId, out FreeTypeFaceCache.FaceEntry.CoverageGlyph glyph)
+    {
+        glyph = default;
+        int flags = FreeTypeLoad.FT_LOAD_DEFAULT | FreeTypeLoad.FT_LOAD_TARGET_LIGHT;
+        lock (face.SyncRoot)
+        {
+            if (FT.FT_Load_Glyph(face.Face, glyphId, flags) != 0)
+            {
+                return false;
+            }
+
+            var slotPtr = face.GetGlyphSlotPointer();
+            if (slotPtr == 0 || FT.FT_Get_Glyph(slotPtr, out var glyphPtr) != 0 || glyphPtr == 0)
+            {
+                return false;
+            }
+
+            nint bmpGlyphPtr = glyphPtr;
+            try
+            {
+                if (FT.FT_Glyph_To_Bitmap(ref bmpGlyphPtr, FreeTypeRenderMode.FT_RENDER_MODE_NORMAL, origin: 0, destroy: false) != 0 || bmpGlyphPtr == 0)
+                {
+                    return false;
+                }
+
+                var bmpGlyph = Marshal.PtrToStructure<FT_BitmapGlyphRec>(bmpGlyphPtr);
+                var bitmap = bmpGlyph.bitmap;
+                int width = (int)bitmap.width;
+                int rows = (int)bitmap.rows;
+
+                // Only grey coverage is drawn; any other bitmap draws nothing, as before, and is kept as empty.
+                if (bitmap.pixel_mode != 2 || bitmap.pitch == 0 || bitmap.buffer == null || width <= 0 || rows <= 0)
+                {
+                    glyph = new FreeTypeFaceCache.FaceEntry.CoverageGlyph([], 0, 0, 0, 0);
+                    face.CacheCoverage(glyphId, glyph);
+                    return true;
+                }
+
+                var coverage = new byte[width * rows];
+                for (int row = 0; row < rows; row++)
+                {
+                    new ReadOnlySpan<byte>(bitmap.buffer + (row * bitmap.pitch), width).CopyTo(coverage.AsSpan(row * width, width));
+                }
+
+                glyph = new FreeTypeFaceCache.FaceEntry.CoverageGlyph(coverage, width, rows, bmpGlyph.left, bmpGlyph.top);
+                face.CacheCoverage(glyphId, glyph);
+                return true;
+            }
+            finally
+            {
+                if (bmpGlyphPtr != 0 && bmpGlyphPtr != glyphPtr)
+                {
+                    FT.FT_Done_Glyph(bmpGlyphPtr);
+                }
+
+                FT.FT_Done_Glyph(glyphPtr);
+            }
+        }
+    }
+
+    /// <summary>Hands kept glyph coverage to the target with its pen origin at <paramref name="drawX"/> and its baseline at <paramref name="baseY"/>.</summary>
+    private static void PlaceCoverage(
+        FreeTypeFaceCache.FaceEntry face,
+        uint glyphId,
+        in FreeTypeFaceCache.FaceEntry.CoverageGlyph glyph,
+        int drawX,
+        int baseY,
+        double scale,
+        IFreeTypeGlyphTarget target)
+    {
+        if (glyph.Width <= 0)
+        {
+            return;
+        }
+
+        target.Coverage(face, glyphId, glyph, drawX + (int)(glyph.Left * scale), baseY - (int)(glyph.Top * scale), scale);
+    }
+
+    /// <summary>Hands a colour glyph to the target with its pen origin at <paramref name="drawX"/> and its baseline at <paramref name="baseY"/>.</summary>
+    private static void PlaceColorGlyph(FreeTypeFaceCache.FaceEntry face, uint glyphId, int drawX, int baseY, IFreeTypeGlyphTarget target)
+    {
+        if (TryGetColorGlyph(face, glyphId, out var bitmap))
+        {
+            target.Color(face, glyphId, bitmap, drawX + bitmap.Left, baseY - bitmap.Top);
+        }
     }
 
     private static uint GetCodepointFromCluster(ReadOnlySpan<char> text, uint cluster)
@@ -916,54 +995,18 @@ internal static unsafe class FreeTypeText
         uint glyphId,
         int penX,
         int baseY,
-        byte[] buffer,
-        int widthPx,
-        int heightPx,
-        Color color,
+        IFreeTypeGlyphTarget target,
         out int advancePx)
     {
         advancePx = fallbackFace.GetAdvancePx(codepoint);
 
-        bool isColorFont = FT.FT_HAS_COLOR(fallbackFace.Face);
-
-        if (isColorFont)
+        if (FT.FT_HAS_COLOR(fallbackFace.Face))
         {
-            // Cached path: area-average downscale once, blit from cache thereafter.
-            BlitCachedColorGlyph(fallbackFace, glyphId,
-                penX, baseY, buffer, widthPx, heightPx);
-            return;
+            PlaceColorGlyph(fallbackFace, glyphId, penX, baseY, target);
         }
-
-        int flags = FreeTypeLoad.FT_LOAD_DEFAULT | FreeTypeLoad.FT_LOAD_TARGET_LIGHT;
-
-        lock (fallbackFace.SyncRoot)
+        else if (fallbackFace.TryGetCoverage(glyphId, out var cached) || TryRenderCoverage(fallbackFace, glyphId, out cached))
         {
-            if (FT.FT_Load_Glyph(fallbackFace.Face, glyphId, flags) != 0) return;
-
-            var slotPtr = fallbackFace.GetGlyphSlotPointer();
-            if (slotPtr == 0) return;
-
-            if (FT.FT_Get_Glyph(slotPtr, out var glyphPtr) != 0 || glyphPtr == 0) return;
-
-            nint bmpGlyphPtr = glyphPtr;
-            try
-            {
-                if (FT.FT_Glyph_To_Bitmap(ref bmpGlyphPtr, FreeTypeRenderMode.FT_RENDER_MODE_NORMAL, origin: 0, destroy: false) == 0 && bmpGlyphPtr != 0)
-                {
-                    var bmpGlyph = Marshal.PtrToStructure<FT_BitmapGlyphRec>(bmpGlyphPtr);
-                    double scale = fallbackFace.BitmapScale;
-                    int left = (int)(bmpGlyph.left * scale);
-                    int top = (int)(bmpGlyph.top * scale);
-                    BlitGlyph(bmpGlyph.bitmap, (int)bmpGlyph.bitmap.width, (int)bmpGlyph.bitmap.rows,
-                        penX + left, baseY - top, buffer, widthPx, heightPx, color, scale);
-                }
-            }
-            finally
-            {
-                if (bmpGlyphPtr != 0 && bmpGlyphPtr != glyphPtr)
-                    FT.FT_Done_Glyph(bmpGlyphPtr);
-                FT.FT_Done_Glyph(glyphPtr);
-            }
+            PlaceCoverage(fallbackFace, glyphId, cached, penX, baseY, fallbackFace.BitmapScale, target);
         }
     }
 
@@ -974,15 +1017,11 @@ internal static unsafe class FreeTypeText
         FreeTypeFont font,
         int penX,
         int penY,
-        byte[] buffer,
-        int widthPx,
-        int heightPx,
-        Color color,
+        IFreeTypeGlyphTarget target,
         in LetterSpacingOffsets spacing = default)
     {
         uint prevGlyph = 0;
         FreeTypeFaceCache.FaceEntry prevFace = face;
-        int flags = FreeTypeLoad.FT_LOAD_DEFAULT | FreeTypeLoad.FT_LOAD_TARGET_LIGHT;
         int baseY = penY + GetBaselinePx(font);
 
         for (int i = 0; i < line.Length; i++)
@@ -1032,48 +1071,14 @@ internal static unsafe class FreeTypeText
 
             if (isColorFont && glyph != 0)
             {
-                // Cached path: area-average downscale once, blit from cache thereafter.
-                BlitCachedColorGlyph(activeFace, glyph,
-                    penX + spacingOffsetPx, baseY, buffer, widthPx, heightPx);
+                PlaceColorGlyph(activeFace, glyph, penX + spacingOffsetPx, baseY, target);
             }
-            else
+            else if (glyph != 0 &&
+                (activeFace.TryGetCoverage(glyph, out var cached) || TryRenderCoverage(activeFace, glyph, out cached)))
             {
-                lock (activeFace.SyncRoot)
-                {
-                    if (FT.FT_Load_Char(activeFace.Face, code, flags) != 0)
-                    {
-                        goto Advance;
-                    }
-
-                    var slotPtr = activeFace.GetGlyphSlotPointer();
-                    if (slotPtr != 0 && FT.FT_Get_Glyph(slotPtr, out var glyphPtr) == 0 && glyphPtr != 0)
-                    {
-                        nint bmpGlyphPtr = glyphPtr;
-                        try
-                        {
-                            int err = FT.FT_Glyph_To_Bitmap(ref bmpGlyphPtr, FreeTypeRenderMode.FT_RENDER_MODE_NORMAL, origin: 0, destroy: false);
-                            if (err == 0 && bmpGlyphPtr != 0)
-                            {
-                                var bmpGlyph = Marshal.PtrToStructure<FT_BitmapGlyphRec>(bmpGlyphPtr);
-                                double scale = activeFace.BitmapScale;
-                                BlitGlyph(bmpGlyph.bitmap, (int)bmpGlyph.bitmap.width, (int)bmpGlyph.bitmap.rows,
-                                    penX + spacingOffsetPx + (int)(bmpGlyph.left * scale), baseY - (int)(bmpGlyph.top * scale), buffer, widthPx, heightPx, color, scale);
-                            }
-                        }
-                        finally
-                        {
-                            if (bmpGlyphPtr != 0 && bmpGlyphPtr != glyphPtr)
-                            {
-                                FT.FT_Done_Glyph(bmpGlyphPtr);
-                            }
-
-                            FT.FT_Done_Glyph(glyphPtr);
-                        }
-                    }
-                }
+                PlaceCoverage(activeFace, glyph, cached, penX + spacingOffsetPx, baseY, activeFace.BitmapScale, target);
             }
 
-            Advance:
             penX += activeFace.GetAdvancePx(code);
         }
     }
@@ -1083,41 +1088,29 @@ internal static unsafe class FreeTypeText
         FreeTypeFont font,
         int penX,
         int penY,
-        byte[] buffer,
-        int widthPx,
-        int heightPx,
-        Color color,
+        IFreeTypeGlyphTarget target,
         in LetterSpacingOffsets spacing = default)
     {
         // Render "..." as three period glyphs.
         const string dots = "...";
         var seg = new LineSegment(0, dots.Length, 0);
-        RenderLineFallback(dots, seg, face, font, penX, penY, buffer, widthPx, heightPx, color, in spacing);
+        RenderLineFallback(dots, seg, face, font, penX, penY, target, in spacing);
     }
 
     /// <summary>
-    /// Loads, scales (with area averaging), caches, and blits a color emoji glyph.
-    /// The scaled bitmap is cached per (face, glyphId) so subsequent renders are a plain blit.
+    /// Returns a colour glyph as premultiplied BGRA scaled to the face's size, loading, area-averaging and keeping it
+    /// on the face the first time; false when FreeType cannot render it.
     /// </summary>
-    private static void BlitCachedColorGlyph(
-        FreeTypeFaceCache.FaceEntry face,
-        uint glyphId,
-        int dstX0,
-        int dstY0,
-        byte[] dstBgra,
-        int dstW,
-        int dstH)
+    private static bool TryGetColorGlyph(FreeTypeFaceCache.FaceEntry face, uint glyphId, out FreeTypeFaceCache.FaceEntry.ScaledBitmap bitmap)
     {
         var cached = face.GetScaledBitmap(glyphId);
         if (cached != null)
         {
-            var c = cached.Value;
-            BlitPreScaledBgra(c.Bgra, c.Width, c.Height,
-                dstX0 + c.Left, dstY0 - c.Top, dstBgra, dstW, dstH);
-            return;
+            bitmap = cached.Value;
+            return true;
         }
 
-        // Cache miss - load, scale, cache.
+        bitmap = default;
         int flags = FreeTypeLoad.FT_LOAD_DEFAULT | FreeTypeLoad.FT_LOAD_TARGET_LIGHT | FreeTypeLoad.FT_LOAD_COLOR;
         lock (face.SyncRoot)
         {
@@ -1125,23 +1118,21 @@ internal static unsafe class FreeTypeText
             cached = face.GetScaledBitmap(glyphId);
             if (cached != null)
             {
-                var c2 = cached.Value;
-                BlitPreScaledBgra(c2.Bgra, c2.Width, c2.Height,
-                    dstX0 + c2.Left, dstY0 - c2.Top, dstBgra, dstW, dstH);
-                return;
+                bitmap = cached.Value;
+                return true;
             }
 
-            if (FT.FT_Load_Glyph(face.Face, glyphId, flags) != 0) return;
+            if (FT.FT_Load_Glyph(face.Face, glyphId, flags) != 0) return false;
 
             var slotPtr = face.GetGlyphSlotPointer();
-            if (slotPtr == 0) return;
-            if (FT.FT_Get_Glyph(slotPtr, out var glyphPtr) != 0 || glyphPtr == 0) return;
+            if (slotPtr == 0) return false;
+            if (FT.FT_Get_Glyph(slotPtr, out var glyphPtr) != 0 || glyphPtr == 0) return false;
 
             nint bmpGlyphPtr = glyphPtr;
             try
             {
                 if (FT.FT_Glyph_To_Bitmap(ref bmpGlyphPtr, FreeTypeRenderMode.FT_RENDER_MODE_NORMAL, origin: 0, destroy: false) != 0 || bmpGlyphPtr == 0)
-                    return;
+                    return false;
 
                 var bmpGlyph = Marshal.PtrToStructure<FT_BitmapGlyphRec>(bmpGlyphPtr);
                 double scale = face.BitmapScale;
@@ -1151,17 +1142,15 @@ internal static unsafe class FreeTypeText
                 int top = (int)(bmpGlyph.top * scale);
 
                 if (srcW <= 0 || srcH <= 0 || bmpGlyph.bitmap.buffer == null)
-                    return;
+                    return false;
 
                 int outW = Math.Max(1, (int)(srcW * scale));
                 int outH = Math.Max(1, (int)(srcH * scale));
                 byte[] scaled = ScaleColorBitmap(bmpGlyph.bitmap, srcW, srcH, outW, outH);
 
-                var entry = new FreeTypeFaceCache.FaceEntry.ScaledBitmap(scaled, outW, outH, left, top);
-                face.CacheScaledBitmap(glyphId, entry);
-
-                BlitPreScaledBgra(scaled, outW, outH,
-                    dstX0 + left, dstY0 - top, dstBgra, dstW, dstH);
+                bitmap = new FreeTypeFaceCache.FaceEntry.ScaledBitmap(scaled, outW, outH, left, top);
+                face.CacheScaledBitmap(glyphId, bitmap);
+                return true;
             }
             finally
             {
@@ -1308,13 +1297,14 @@ internal static unsafe class FreeTypeText
         int outW = (int)(glyphW * scale);
         int outH = (int)(glyphH * scale);
         double invScale = 1.0 / scale;
+        bool unscaled = scale == 1.0;
 
         for (int y = 0; y < outH; y++)
         {
             int dy = dstY0 + y;
             if ((uint)dy >= (uint)dstH) continue;
 
-            int srcY = Math.Min((int)(y * invScale), glyphH - 1);
+            int srcY = unscaled ? y : Math.Min((int)(y * invScale), glyphH - 1);
             byte* srcRow = bitmap.buffer + srcY * pitch;
 
             for (int x = 0; x < outW; x++)
@@ -1322,7 +1312,7 @@ internal static unsafe class FreeTypeText
                 int dx = dstX0 + x;
                 if ((uint)dx >= (uint)dstW) continue;
 
-                int srcX = Math.Min((int)(x * invScale), glyphW - 1);
+                int srcX = unscaled ? x : Math.Min((int)(x * invScale), glyphW - 1);
                 byte cov = srcRow[srcX];
                 if (cov == 0) continue;
 
@@ -1331,6 +1321,20 @@ internal static unsafe class FreeTypeText
 
                 // Alpha blend over existing.
                 byte dstA = dstBgra[di + 3];
+                if (dstA == 0)
+                {
+                    // Over an empty pixel the blend below gives the colour itself at the glyph's alpha.
+                    if (a != 0)
+                    {
+                        dstBgra[di + 0] = b;
+                        dstBgra[di + 1] = g;
+                        dstBgra[di + 2] = r;
+                        dstBgra[di + 3] = (byte)a;
+                    }
+
+                    continue;
+                }
+
                 byte dstB = dstBgra[di + 0];
                 byte dstG = dstBgra[di + 1];
                 byte dstR = dstBgra[di + 2];
@@ -1493,6 +1497,29 @@ internal static unsafe class FreeTypeText
         }
     }
 
+    /// <summary>Draws placed glyphs into a straight-alpha BGRA raster, clipped to it.</summary>
+    private sealed class BitmapGlyphTarget(byte[] buffer, int widthPx, int heightPx, Color color) : IFreeTypeGlyphTarget
+    {
+        public void Coverage(FreeTypeFaceCache.FaceEntry face, uint glyphId, in FreeTypeFaceCache.FaceEntry.CoverageGlyph glyph, int left, int top, double scale)
+        {
+            fixed (byte* coverage = glyph.Coverage)
+            {
+                var bitmap = new FT_Bitmap
+                {
+                    rows = (uint)glyph.Rows,
+                    width = (uint)glyph.Width,
+                    pitch = glyph.Width,
+                    buffer = coverage,
+                    pixel_mode = 2,
+                };
+                BlitGlyph(bitmap, glyph.Width, glyph.Rows, left, top, buffer, widthPx, heightPx, color, scale);
+            }
+        }
+
+        public void Color(FreeTypeFaceCache.FaceEntry face, uint glyphId, in FreeTypeFaceCache.FaceEntry.ScaledBitmap bitmap, int left, int top)
+            => BlitPreScaledBgra(bitmap.Bgra, bitmap.Width, bitmap.Height, left, top, buffer, widthPx, heightPx);
+    }
+
     /// <summary>
     /// Extracts the pixel height from a FaceEntry by reading the FT_Size metrics.
     /// Used when we only have a FaceEntry and need the pixel height for fallback resolution.
@@ -1503,4 +1530,14 @@ internal static unsafe class FreeTypeText
         return metrics.y_ppem;
     }
 
+}
+
+/// <summary>Receives the glyphs a FreeType text layout places, each with its top-left in raster pixels.</summary>
+internal interface IFreeTypeGlyphTarget
+{
+    /// <summary>A grey coverage glyph, drawn in the text colour at <paramref name="scale"/> times its size.</summary>
+    void Coverage(FreeTypeFaceCache.FaceEntry face, uint glyphId, in FreeTypeFaceCache.FaceEntry.CoverageGlyph glyph, int left, int top, double scale);
+
+    /// <summary>A colour glyph of premultiplied BGRA pixels, drawn at its size.</summary>
+    void Color(FreeTypeFaceCache.FaceEntry face, uint glyphId, in FreeTypeFaceCache.FaceEntry.ScaledBitmap bitmap, int left, int top);
 }
