@@ -156,6 +156,7 @@ internal sealed partial class MewVGMacOSGraphicsContext
             if (_encoder != 0 && _commandBuffer != 0 && _beganFrame &&
                 (_frameSession.IsOffscreen || _drawable != 0))
             {
+                _textCache.FlushGlyphUploads();
                 _vg.EndFrame();
                 didRender = true;
 
@@ -590,68 +591,18 @@ internal sealed partial class MewVGMacOSGraphicsContext
         drawX -= inkLeft;
         drawY -= inkTop;
 
-        int imageId;
-        int bitmapWidthPx;
-        int bitmapHeightPx;
-        bool ok = ReferenceEquals(owner, Aprillz.MewUI.Text.TransientText.Owner)
-            ? _textCache.TryGetOrCreateTransient(
-                ct,
-                text,
-                widthPx,
-                heightPx,
-                (uint)Math.Round(DpiScale * 96.0),
-                color,
-                format.HorizontalAlignment,
-                TextAlignment.Top,
-                format.Wrapping,
-                format.Trimming,
-                inkInset,
-                format.LetterSpacing * DpiScale,
-                out imageId,
-                out bitmapWidthPx,
-                out bitmapHeightPx)
-            : owner != null
-            ? _textCache.TryGetOrCreateOwned(
-                owner,
-                ct,
-                text,
-                widthPx,
-                heightPx,
-                (uint)Math.Round(DpiScale * 96.0),
-                color,
-                format.HorizontalAlignment,
-                TextAlignment.Top,
-                format.Wrapping,
-                format.Trimming,
-                inkInset,
-                format.LetterSpacing * DpiScale,
-                out imageId,
-                out bitmapWidthPx,
-                out bitmapHeightPx)
-            : _textCache.TryGetOrCreate(
-                ct,
-                text,
-                widthPx,
-                heightPx,
-                (uint)Math.Round(DpiScale * 96.0),
-                color,
-                format.HorizontalAlignment,
-                TextAlignment.Top,
-                format.Wrapping,
-                format.Trimming,
-                inkInset,
-                format.LetterSpacing * DpiScale,
-                out imageId,
-                out bitmapWidthPx,
-                out bitmapHeightPx);
-        if (!ok)
+        uint dpi = (uint)Math.Round(DpiScale * 96.0);
+        // Text that changes every frame is laid out and drawn without being kept.
+        bool transient = ReferenceEquals(owner, Aprillz.MewUI.Text.TransientText.Owner);
+        var run = _textCache.GetOrLayout(ct, text, widthPx, heightPx, dpi, format.HorizontalAlignment, format.Wrapping,
+            format.Trimming, inkInset, format.LetterSpacing * DpiScale, keep: !transient);
+        if (run == null)
         {
             return;
         }
 
+        var (bitmapWidthPx, _) = CoreTextText.GetBitmapSizePx(widthPx, heightPx, dpi, inkInset);
         double bitmapWidthDip = bitmapWidthPx / DpiScale;
-        double bitmapHeightDip = bitmapHeightPx / DpiScale;
-        var paint = _vg.ImagePattern((float)drawX, (float)drawY, (float)bitmapWidthDip, (float)bitmapHeightDip, 0, imageId, 1.0f);
 
         double rectX = drawX;
         double rectY = drawY;
@@ -678,10 +629,7 @@ internal sealed partial class MewVGMacOSGraphicsContext
                 rectH = maxBottom - rectY;
         }
 
-        _vg.BeginPath();
-        _vg.Rect((float)rectX, (float)rectY, (float)rectW, (float)rectH);
-        _vg.FillPaint(paint);
-        _vg.Fill();
+        DrawGlyphQuads(run.Quads, run.Segments, drawX, drawY, color, new Rect(rectX, rectY, rectW, rectH));
     }
 
     #endregion
