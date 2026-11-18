@@ -30,6 +30,8 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
     private readonly List<(IExternalRasterSource source, IExternalRasterLease lease)> _acquiredExternalsThisFrame = new();
     private float _globalAlpha = 1f;
     private bool _textPixelSnap = true;
+    // Glyph quads moved to where one text is drawn; reused by every text draw.
+    private MewVGImageQuad[] _glyphQuadScratch = [];
     private Matrix3x2 _transform = Matrix3x2.Identity;
 
     // Maps world DIPs to the target: identity, or a vertical flip for a target whose first row is its top line,
@@ -553,6 +555,7 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
         BindFrameTarget();
         Native.GL.Viewport(0, 0, _viewportWidthPx, _viewportHeightPx);
         ApplyPendingFrameClear();
+        FlushGlyphUploads();
         _vg.EndFrame();
     }
 
@@ -576,6 +579,9 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
 
     /// <summary>Performs the clear a platform defers from the start of a frame to its first write, if one is pending.</summary>
     partial void ApplyPendingFrameClear();
+
+    /// <summary>Uploads glyphs added to the glyph atlas since the last flush; runs before every flush of draws.</summary>
+    partial void FlushGlyphUploads();
 
     /// <summary>
     /// Runs before a surface is copied onto the target, so a platform can first restore what its target lacks or copy
@@ -1190,6 +1196,91 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
         _vg.FillPaint(paint);
         _vg.Fill();
         if (isAxisAligned) _vg.ShapeAntiAlias(true);
+    }
+
+    /// <summary>
+    /// Draws glyph quads laid out in raster pixels with the raster's top-left at (<paramref name="originX"/>,
+    /// <paramref name="originY"/>), one draw per run of quads that sample the same atlas image.
+    /// </summary>
+    private void DrawGlyphQuads(ReadOnlySpan<MewVGImageQuad> quads, ReadOnlySpan<MewVGGlyphRunSegment> segments,
+        double originX, double originY, Color color, Rect? clip = null)
+    {
+        if (quads.IsEmpty)
+        {
+            return;
+        }
+
+        if (_glyphQuadScratch.Length < quads.Length)
+        {
+            _glyphQuadScratch = new MewVGImageQuad[Math.Max(quads.Length, _glyphQuadScratch.Length * 2)];
+        }
+
+        float left = (float)originX;
+        float top = (float)originY;
+        float inverseScale = (float)(1.0 / DpiScale);
+        for (int index = 0; index < quads.Length; index++)
+        {
+            var quad = quads[index];
+            _glyphQuadScratch[index] = quad with
+            {
+                X = left + (quad.X * inverseScale),
+                Y = top + (quad.Y * inverseScale),
+                Width = quad.Width * inverseScale,
+                Height = quad.Height * inverseScale,
+            };
+        }
+
+        if (clip.HasValue)
+        {
+            ClipGlyphQuads(_glyphQuadScratch.AsSpan(0, quads.Length), clip.Value);
+        }
+
+        // Coverage takes the text colour; a colour glyph keeps its own colours and takes only the text's opacity.
+        var tint = ToNvgColor(color);
+        var colorGlyphTint = MewVGColor.RGBA(255, 255, 255, color.A);
+
+        // As for an image fill: an axis-aligned quad covers whole pixels and needs no edge antialiasing.
+        bool isAxisAligned = _transform.M12 == 0f && _transform.M21 == 0f;
+        if (isAxisAligned) _vg.ShapeAntiAlias(false);
+        foreach (var segment in segments)
+        {
+            _vg.FillImageQuads(segment.ImageId, _glyphQuadScratch.AsSpan(segment.Start, segment.Count),
+                segment.IsColor ? colorGlyphTint : tint);
+        }
+        if (isAxisAligned) _vg.ShapeAntiAlias(true);
+    }
+
+    /// <summary>Cuts each quad to <paramref name="clip"/>, moving its source edges by the same share; a quad wholly outside keeps no area.</summary>
+    private static void ClipGlyphQuads(Span<MewVGImageQuad> quads, Rect clip)
+    {
+        float clipLeft = (float)clip.X;
+        float clipTop = (float)clip.Y;
+        float clipRight = (float)clip.Right;
+        float clipBottom = (float)clip.Bottom;
+        foreach (ref var quad in quads)
+        {
+            float quadLeft = Math.Max(quad.X, clipLeft);
+            float quadTop = Math.Max(quad.Y, clipTop);
+            float quadRight = Math.Min(quad.X + quad.Width, clipRight);
+            float quadBottom = Math.Min(quad.Y + quad.Height, clipBottom);
+            if (quadRight <= quadLeft || quadBottom <= quadTop)
+            {
+                quad = quad with { Width = 0, Height = 0, SourceWidth = 0, SourceHeight = 0 };
+                continue;
+            }
+
+            float scaleX = quad.SourceWidth / quad.Width;
+            float scaleY = quad.SourceHeight / quad.Height;
+            quad = new MewVGImageQuad(
+                quadLeft,
+                quadTop,
+                quadRight - quadLeft,
+                quadBottom - quadTop,
+                quad.SourceX + ((quadLeft - quad.X) * scaleX),
+                quad.SourceY + ((quadTop - quad.Y) * scaleY),
+                (quadRight - quadLeft) * scaleX,
+                (quadBottom - quadTop) * scaleY);
+        }
     }
 
     private MewVGImageFlags GetImageFlags()
