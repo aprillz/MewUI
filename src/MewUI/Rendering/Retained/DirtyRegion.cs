@@ -6,11 +6,13 @@ namespace Aprillz.MewUI.Rendering.Retained;
 /// The limits come from the measurements in agent/retained-redesign/dirty-region-cost.md: joining pays while
 /// the joined box stays within 1.7 times the area of the two and adds little area of its own; on the
 /// backend that paints per pixel, joining eight scattered boxes cost up to sixteen times more.
+/// Each area is one walk over the scene, which is what the cap on their number bounds: forty cells changed
+/// across a grid of four thousand cost less as forty walks than as eight areas that take in the cells between.
 /// </summary>
 internal sealed class DirtyRegion
 {
     /// <summary>More areas than this are joined, cheapest pair first; each one is a separate replay.</summary>
-    internal const int MAX_AREAS = 8;
+    internal const int MAX_AREAS = 32;
 
     private const double JOIN_AREA_RATIO = 1.7;
 
