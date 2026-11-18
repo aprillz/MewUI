@@ -244,7 +244,7 @@ public sealed partial class MewVGX11GraphicsFactory : IPersistentFrameGraphicsFa
         CaptureFirstWindowGLInfo(glx.Display, glx.VisualInfo);
         EnsureWorkerContext();
 
-        return MewVGX11WindowResources.Create(glx.Display, glx.Window, glx.VisualInfo, _worker?.NativeContext ?? 0);
+        return MewVGX11WindowResources.Create(glx.Display, glx.Window, glx.VisualInfo, _worker?.NativeContext ?? 0, _frameHandoff);
     }
 
     private partial IGraphicsContext CreateContextCore(WindowRenderTarget target, IDisposable resources)
@@ -335,6 +335,9 @@ public sealed partial class MewVGX11GraphicsFactory : IPersistentFrameGraphicsFa
     }
 
     private partial IDisposable AcquireBackgroundRenderScopeCore()
+        => AcquireWorkerScope(handsOverToWindowContext: false);
+
+    private IDisposable AcquireWorkerScope(bool handsOverToWindowContext)
     {
         // Safety: if a context is already current on this thread (UI thread
         // re-entering during render, or re-entrant Task.Run), don't disturb it.
@@ -386,17 +389,17 @@ public sealed partial class MewVGX11GraphicsFactory : IPersistentFrameGraphicsFa
             Monitor.Exit(_workerActivationLock);
             return MewVGNoOpRenderScope.Instance;
         }
-        return new X11WorkerContextScope(_workerActivationLock, this);
+        return new X11WorkerContextScope(_workerActivationLock, this, handsOverToWindowContext);
     }
 
     bool IPersistentFrameGraphicsFactory.IsPersistentFrameRenderingVerified => true;
 
     IDisposable IPersistentFrameGraphicsFactory.AcquirePersistentFrameRenderScope()
     {
-        // The window's own context draws the frame surface: it is already current and its FBO is
-        // what the following blit samples. Only the first frame of a window, which runs before any
-        // MakeCurrent, has no context, and there the shared worker context takes the thread.
-        return AcquireBackgroundRenderScopeCore();
+        // No context is current between frames, so the shared worker context draws the frame surface.
+        // The window context that copies it to the screen comes next on this same thread, so the two
+        // are ordered by a fence on the GPU instead of by this thread waiting for the GPU to finish.
+        return AcquireWorkerScope(handsOverToWindowContext: true);
     }
 
     private bool MakeWorkerCurrent()
@@ -412,12 +415,14 @@ public sealed partial class MewVGX11GraphicsFactory : IPersistentFrameGraphicsFa
     {
         private readonly object _activationLock;
         private readonly MewVGX11GraphicsFactory _factory;
+        private readonly bool _handsOverToWindowContext;
         private bool _disposed;
 
-        public X11WorkerContextScope(object activationLock, MewVGX11GraphicsFactory factory)
+        public X11WorkerContextScope(object activationLock, MewVGX11GraphicsFactory factory, bool handsOverToWindowContext)
         {
             _activationLock = activationLock;
             _factory = factory;
+            _handsOverToWindowContext = handsOverToWindowContext;
         }
 
         public void Dispose()
@@ -426,10 +431,14 @@ public sealed partial class MewVGX11GraphicsFactory : IPersistentFrameGraphicsFa
             _disposed = true;
             try
             {
-                // Block until all pending GPU work on the worker context completes
-                // so FBO texture content is fully committed before any UI window
-                // context (shared with us) samples it.
-                LibGL.glFinish();
+                if (!_handsOverToWindowContext || !_factory._frameHandoff.TrySignal())
+                {
+                    // Block until all pending GPU work on the worker context completes
+                    // so FBO texture content is fully committed before any UI window
+                    // context (shared with us) samples it.
+                    LibGL.glFinish();
+                }
+
                 _factory.ReleaseWorkerCurrentInternal();
             }
             finally
@@ -438,6 +447,8 @@ public sealed partial class MewVGX11GraphicsFactory : IPersistentFrameGraphicsFa
             }
         }
     }
+
+    private readonly GLContextHandoff _frameHandoff = new();
 
     private readonly PboFenceUploaderPool _pboPool = new(GetCurrentGLContextStatic);
 

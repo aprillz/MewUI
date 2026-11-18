@@ -26,6 +26,7 @@ internal static unsafe class OpenGLPboExt
     public const uint GL_CONDITION_SATISFIED         = 0x911C;
     public const uint GL_ALREADY_SIGNALED            = 0x911A;
     public const uint GL_WAIT_FAILED                 = 0x911D;
+    public const ulong GL_TIMEOUT_IGNORED            = 0xFFFFFFFFFFFFFFFF;
 
     public const uint GL_TEXTURE_2D                  = 0x0DE1;
     public const uint GL_RGBA                        = 0x1908;
@@ -52,6 +53,8 @@ internal static unsafe class OpenGLPboExt
     private static delegate* unmanaged[Stdcall]<uint, uint, nint> _glFenceSync;
     private static delegate* unmanaged[Stdcall]<nint, uint, ulong, uint> _glClientWaitSync;
     private static delegate* unmanaged[Stdcall]<nint, void> _glDeleteSync;
+    // Optional: a driver without it leaves HasServerWait false.
+    private static delegate* unmanaged[Stdcall]<nint, uint, ulong, void> _glWaitSync;
 
     // GL 1.1 functions (texture management) are NOT loaded here - wglGetProcAddress
     // on Win32 explicitly returns 0 for the GL 1.1 ABI. They're routed through the
@@ -83,6 +86,7 @@ internal static unsafe class OpenGLPboExt
             _glFenceSync       = (delegate* unmanaged[Stdcall]<uint, uint, nint>)Resolve("glFenceSync");
             _glClientWaitSync  = (delegate* unmanaged[Stdcall]<nint, uint, ulong, uint>)Resolve("glClientWaitSync");
             _glDeleteSync      = (delegate* unmanaged[Stdcall]<nint, void>)Resolve("glDeleteSync");
+            _glWaitSync        = (delegate* unmanaged[Stdcall]<nint, uint, ulong, void>)Resolve("glWaitSync");
 
             return _glGenBuffers != null && _glDeleteBuffers != null
                 && _glBindBuffer != null && _glBufferData != null
@@ -133,6 +137,12 @@ internal static unsafe class OpenGLPboExt
     public static nint FenceSync() => _glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
     public static uint ClientWaitSync(nint sync, uint flags, ulong timeoutNs) => _glClientWaitSync(sync, flags, timeoutNs);
     public static void DeleteSync(nint sync) => _glDeleteSync(sync);
+
+    /// <summary>True when the GL server can be told to wait for a fence without blocking the calling thread.</summary>
+    public static bool HasServerWait => IsAvailable && _glWaitSync != null;
+
+    /// <summary>Makes the commands that follow on the current context run after <paramref name="sync"/> is signaled.</summary>
+    public static void WaitSync(nint sync) => _glWaitSync(sync, 0, GL_TIMEOUT_IGNORED);
 
     // GL 1.1 functions go through the platform's existing DllImport wrappers - these
     // are exported directly from opengl32.dll / libGL.so.1 and never returned by

@@ -81,6 +81,7 @@ internal sealed partial class MewVGX11GraphicsContext
         public void BeginFrame()
         {
             _resources.MakeCurrent(_display);
+            _resources.FrameHandoff?.Await();
             _offscreenProvider.EnterSession();
         }
 
