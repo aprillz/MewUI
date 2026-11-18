@@ -408,6 +408,13 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
 #if !MEWUI_MEWVG_MACOS
         ClearTargetPixels(rect, color);
 #else
+        FillReplacing(rect, color);
+#endif
+    }
+
+    /// <summary>Queues a fill that replaces the pixels of <paramref name="rect"/> with <paramref name="color"/> instead of blending over them.</summary>
+    private void FillReplacing(Rect rect, MewVGColor color)
+    {
         _vg.Save();
         ApplyDeviceTransform();
         _vg.ResetScissor();
@@ -420,10 +427,12 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
         _vg.FillColor(color);
         _vg.Fill();
         _vg.Restore();
-#endif
     }
 
 #if !MEWUI_MEWVG_MACOS
+    // Largest area, in pixels, erased by a queued fill instead of a clear.
+    private const long QUEUED_ERASE_PIXEL_LIMIT = 128 * 128;
+
     /// <summary>Overwrites the pixels of <paramref name="rect"/> (target coordinates) with <paramref name="color"/>.</summary>
     private void ClearTargetPixels(Rect rect, MewVGColor color)
     {
@@ -437,6 +446,13 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
         if (CoversTarget(left, top, right, bottom))
         {
             DiscardPendingFrameClear();
+        }
+        else if ((long)(right - left) * (bottom - top) <= QUEUED_ERASE_PIXEL_LIMIT)
+        {
+            // A clear has to send everything queued so far to the GPU first. For a small area that costs
+            // more than shading its pixels, and a frame that repaints many small areas would pay it for each.
+            FillReplacing(rect, color);
+            return;
         }
 
         FlushQueuedDraws();
