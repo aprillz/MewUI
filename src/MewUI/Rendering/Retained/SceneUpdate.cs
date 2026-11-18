@@ -241,6 +241,9 @@ internal sealed class SceneUpdate
         return false;
     }
 
+    // The slots staged so far, by node and index, while a validation looks for one staged twice.
+    private readonly HashSet<(VisualNode Node, int SlotIndex)> _stagedSlotKeys = [];
+
     /// <summary>
     /// Checks that the staged result is drawable on its own: every child it names has a node, and no
     /// slot was staged twice.
@@ -262,20 +265,18 @@ internal sealed class SceneUpdate
             }
         }
 
+        _stagedSlotKeys.Clear();
         for (int slotIndex = 0; slotIndex < _slots.Count; slotIndex++)
         {
             var slot = _slots[slotIndex];
-            for (int otherIndex = slotIndex + 1; otherIndex < _slots.Count; otherIndex++)
+            if (!_stagedSlotKeys.Add((slot.Node, slot.SlotIndex)))
             {
-                var other = _slots[otherIndex];
-                if (ReferenceEquals(slot.Node, other.Node) && slot.SlotIndex == other.SlotIndex)
-                {
-                    failure = $"{slot.Node.Element.GetType().Name} staged slot {slot.SlotIndex} twice";
-                    return false;
-                }
+                failure = $"{slot.Node.Element.GetType().Name} staged slot {slot.SlotIndex} twice";
+                return false;
             }
         }
 
+        _stagedSlotKeys.Clear();
         failure = null;
         return true;
     }
