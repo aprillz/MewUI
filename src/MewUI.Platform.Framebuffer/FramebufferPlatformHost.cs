@@ -432,7 +432,18 @@ internal sealed class FramebufferPlatformHost : IPlatformHost, IFramebufferInput
         // Flips pace only the frames that are presented; a frame that changed nothing presents nothing, so without
         // this cap an animation that repaints nothing would spin the loop.
         int cap = settings.EffectiveFrameCap(output.RefreshHz);
-        _nextFrameTimestamp = cap > 0 ? now + Stopwatch.Frequency / cap : 0;
+        if (cap > 0)
+        {
+            // Advance the deadline instead of restarting from now: the loop wakes up to a millisecond past each
+            // deadline, and adding that to every frame held a 60 Hz screen to 58. A deadline further behind than
+            // one frame is abandoned rather than chased, which would burst frames after a stall.
+            long frameTicks = Stopwatch.Frequency / cap;
+            _nextFrameTimestamp = now - _nextFrameTimestamp > frameTicks ? now + frameTicks : _nextFrameTimestamp + frameTicks;
+        }
+        else
+        {
+            _nextFrameTimestamp = 0;
+        }
     }
 
     private static void RenderFrame(FramebufferWindowBackend window, IFramebufferOutput output)

@@ -66,8 +66,10 @@ internal sealed class X11WindowBackend : IWindowBackend
     private XSizeHintsFlags _startupPositionFlags;
     private (int x, int y) _startupPositionPx;
     private bool _allowDrop;
-    private long _lastRenderTick;
+    // Stopwatch timestamp before which a repaint asked for by an invalidation waits.
+    private long _nextRenderTimestamp;
     private bool _resizeRenderPending;
+    private const int MIN_RENDER_INTERVAL_MS = 16;
     // Pending configure size is kept in pixels: DpiScale can change between event arrival and
     // ApplyPendingConfigure (compositor resizes windows on scale change), so DIP conversion is
     // only valid at apply time.
@@ -1831,14 +1833,18 @@ internal sealed class X11WindowBackend : IWindowBackend
         // Simple throttle to reduce CPU/GPU pressure on software-rendered VMs.
         // Resize invalidations are already coalesced by the platform loop, so let the
         // next pass render immediately without rendering every ConfigureNotify event.
-        long now = Environment.TickCount64;
+        long now = System.Diagnostics.Stopwatch.GetTimestamp();
         bool forceResizeRender = _resizeRenderPending;
-        if (!forceResizeRender && now - _lastRenderTick < 16)
+        if (!forceResizeRender && now < _nextRenderTimestamp)
         {
             return;
         }
 
-        _lastRenderTick = now;
+        // Advance the deadline instead of restarting from now: the loop wakes up to a millisecond past each
+        // deadline, and adding that to every frame holds a 60 Hz screen below 60. A deadline further behind
+        // than one interval is abandoned rather than chased, which would burst frames after a stall.
+        long interval = MIN_RENDER_INTERVAL_MS * System.Diagnostics.Stopwatch.Frequency / 1000;
+        _nextRenderTimestamp = now - _nextRenderTimestamp > interval ? now + interval : _nextRenderTimestamp + interval;
 
         NeedsRender = false;
         _resizeRenderPending = false;
@@ -1857,14 +1863,15 @@ internal sealed class X11WindowBackend : IWindowBackend
             return 0;
         }
 
-        long now = Environment.TickCount64;
-        long elapsed = now - _lastRenderTick;
-        if (elapsed >= 16)
+        long remaining = _nextRenderTimestamp - System.Diagnostics.Stopwatch.GetTimestamp();
+        if (remaining <= 0)
         {
             return 0;
         }
 
-        return (int)Math.Clamp(16 - elapsed, 0, 16);
+        // Rounded up, so the wait does not return before the deadline and spin until it.
+        long milliseconds = ((remaining * 1000) + System.Diagnostics.Stopwatch.Frequency - 1) / System.Diagnostics.Stopwatch.Frequency;
+        return (int)Math.Clamp(milliseconds, 1, MIN_RENDER_INTERVAL_MS);
     }
 
     internal void RenderNow()
