@@ -480,15 +480,7 @@ internal static unsafe partial class CoreTextText
             return;
         }
 
-        nint cfString = CreateCFString(text);
-        if (cfString == 0) return;
-
-        nint attrStr = CreateFontAttrString(cfString, baseFont);
-        CFRelease(cfString);
-        if (attrStr == 0) return;
-
-        nint line = CTLineCreateWithAttributedString(attrStr);
-        CFRelease(attrStr);
+        nint line = AcquireLine(baseFont, text);
         if (line == 0) return;
 
         const int STACK_LIMIT = 128;
@@ -1009,26 +1001,18 @@ internal static unsafe partial class CoreTextText
             return false;
         }
 
-        nint cfString = CreateCFString(text);
-        if (cfString == 0) return false;
-
         double outerSpacingPx = _letterSpacingPx;
         _letterSpacingPx = letterSpacingPx;
-        nint attrStr;
+        nint line;
         try
         {
-            attrStr = CreateFontAttrString(cfString, ctFont);
+            line = AcquireLine(ctFont, text);
         }
         finally
         {
             _letterSpacingPx = outerSpacingPx;
         }
 
-        CFRelease(cfString);
-        if (attrStr == 0) return false;
-
-        nint line = CTLineCreateWithAttributedString(attrStr);
-        CFRelease(attrStr);
         if (line == 0) return false;
 
         for (int index = 0; index < text.Length; index++)
@@ -1041,15 +1025,7 @@ internal static unsafe partial class CoreTextText
 
     private static double MeasureRunWidthWithFallback(nint baseFont, ReadOnlySpan<char> text)
     {
-        nint cfString = CreateCFString(text);
-        if (cfString == 0) return 0;
-
-        nint attrStr = CreateFontAttrString(cfString, baseFont);
-        CFRelease(cfString);
-        if (attrStr == 0) return 0;
-
-        nint line = CTLineCreateWithAttributedString(attrStr);
-        CFRelease(attrStr);
+        nint line = AcquireLine(baseFont, text);
         if (line == 0) return 0;
 
         double w = CTLineGetTypographicBounds(line, null, null, null);
@@ -1063,6 +1039,64 @@ internal static unsafe partial class CoreTextText
 
     // Kern, in pixels, of the text the calling entry point measures or draws. It is set for the length of that
     // call, so every line built inside it carries the same spacing whichever helper builds the line.
+    // Short texts shaped by the same font and spacing reuse one line: measuring, the advances and drawing all
+    // shape a text, often in one frame, and a label shapes the same text frame after frame.
+    private const int LINE_CACHE_SIZE = 256;
+    private const int MAX_CACHED_LINE_LENGTH = 64;
+
+    [ThreadStatic]
+    private static LineCacheEntry[]? _lineCache;
+
+    /// <summary>
+    /// The line CoreText shapes for a text in a font with the current letter spacing, retained for the caller,
+    /// who releases it: from the cache for a short text shaped before, shaped now otherwise.
+    /// </summary>
+    private static nint AcquireLine(nint font, ReadOnlySpan<char> text)
+    {
+        bool cacheable = text.Length <= MAX_CACHED_LINE_LENGTH;
+        int slot = 0;
+        if (cacheable)
+        {
+            _lineCache ??= new LineCacheEntry[LINE_CACHE_SIZE];
+            slot = (HashCode.Combine(font, _letterSpacingPx, string.GetHashCode(text)) & int.MaxValue) % LINE_CACHE_SIZE;
+            var entry = _lineCache[slot];
+            if (entry.Line != 0 && entry.Font == font && entry.LetterSpacingPx == _letterSpacingPx && text.SequenceEqual(entry.Text))
+            {
+                return CFRetain(entry.Line);
+            }
+        }
+
+        nint cfString = CreateCFString(text);
+        if (cfString == 0) return 0;
+
+        nint attrStr = CreateFontAttrString(cfString, font);
+        CFRelease(cfString);
+        if (attrStr == 0) return 0;
+
+        nint line = CTLineCreateWithAttributedString(attrStr);
+        CFRelease(attrStr);
+        if (line == 0 || !cacheable)
+        {
+            return line;
+        }
+
+        var replaced = _lineCache![slot];
+        if (replaced.Line != 0)
+        {
+            CFRelease(replaced.Line);
+            CFRelease(replaced.Font);
+        }
+
+        // The entry holds the font too, so no other font can take its address while the entry names it.
+        _lineCache[slot] = new LineCacheEntry(CFRetain(font), _letterSpacingPx, text.ToString(), CFRetain(line));
+        return line;
+    }
+
+    private readonly record struct LineCacheEntry(nint Font, double LetterSpacingPx, string Text, nint Line);
+
+    [LibraryImport("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")]
+    private static partial nint CFRetain(nint cf);
+
     [ThreadStatic]
     private static double _letterSpacingPx;
 
