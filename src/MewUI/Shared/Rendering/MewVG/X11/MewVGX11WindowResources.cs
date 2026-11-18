@@ -18,6 +18,9 @@ internal sealed class MewVGX11WindowResources : IDisposable, IMewVGWindowCacheMa
 
     public nint OpenGLShareGroup { get; }
 
+    /// <summary>Orders this window's drawing after the frame surface another context drew.</summary>
+    internal GLContextHandoff? FrameHandoff { get; }
+
     private MewVGX11GraphicsContext? _cachedContext;
 
     internal MewVGX11GraphicsContext GetOrCreateContext(
@@ -33,8 +36,10 @@ internal sealed class MewVGX11WindowResources : IDisposable, IMewVGWindowCacheMa
         }
     }
 
-    private MewVGX11WindowResources(nint display, IOpenGLWindowResources gl, MewVGGL vg, nint shareContext)
+    private MewVGX11WindowResources(nint display, IOpenGLWindowResources gl, MewVGGL vg, nint shareContext, GLContextHandoff? frameHandoff)
     {
+        // A fence is visible only to contexts that share objects with the one that made it.
+        FrameHandoff = shareContext != 0 ? frameHandoff : null;
         _display = display;
         _gl = gl;
         Vg = vg;
@@ -42,7 +47,7 @@ internal sealed class MewVGX11WindowResources : IDisposable, IMewVGWindowCacheMa
         OpenGLShareGroup = shareContext != 0 ? shareContext : gl.NativeContext;
     }
 
-    public static MewVGX11WindowResources Create(nint display, nint window, X11GLVisualInfo visualInfo, nint shareContext = 0)
+    public static MewVGX11WindowResources Create(nint display, nint window, X11GLVisualInfo visualInfo, nint shareContext = 0, GLContextHandoff? frameHandoff = null)
     {
         DiagLog.Write($"MewVG X11 create: display=0x{display.ToInt64():X} window=0x{window.ToInt64():X} share=0x{shareContext.ToInt64():X} backend={X11GLBackendRegistry.Current?.GetType().Name}");
 
@@ -56,7 +61,7 @@ internal sealed class MewVGX11WindowResources : IDisposable, IMewVGWindowCacheMa
         {
             MewVGGLBootstrapX11.EnsureInitialized();
             var vg = new MewVGGL();
-            return new MewVGX11WindowResources(display, gl, vg, shareContext);
+            return new MewVGX11WindowResources(display, gl, vg, shareContext, frameHandoff);
         }
         finally
         {

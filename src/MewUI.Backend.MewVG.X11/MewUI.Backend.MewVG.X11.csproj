@@ -53,6 +53,7 @@
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\EglOpenGLWindowResources.cs" LinkBase="Rendering\OpenGL" />
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\PboFenceUploader.cs" LinkBase="Rendering\OpenGL" />
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\PboFenceUploaderPool.cs" LinkBase="Rendering\OpenGL" />
+    <Compile Include="..\MewUI\Shared\Rendering\OpenGL\GLContextHandoff.cs" LinkBase="Rendering\OpenGL" />
 
     <Compile Include="..\MewUI\Shared\Rendering\FreeType\**\*.cs" LinkBase="Rendering\FreeType" />
 
