@@ -107,13 +107,7 @@ internal static class PlanChange
         return false;
     }
 
+    // A scope that gained or lost entries is still the same scope; what it encloses is walked on its own.
     private static bool IsSame(in CompositionEntry first, in CompositionEntry second)
-        => first.Kind == second.Kind &&
-           first.SlotIndex == second.SlotIndex &&
-           ReferenceEquals(first.Child, second.Child) &&
-           first.Rect == second.Rect &&
-           first.RadiusX == second.RadiusX &&
-           first.RadiusY == second.RadiusY &&
-           first.Matrix == second.Matrix &&
-           first.Alpha == second.Alpha;
+        => first.SameApartFromLength(in second);
 }
