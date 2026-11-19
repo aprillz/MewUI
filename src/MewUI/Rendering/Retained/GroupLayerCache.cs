@@ -257,22 +257,47 @@ internal sealed class GroupSignature
 {
     private readonly List<object?> _references = [];
     private readonly List<double> _values = [];
+    private readonly List<CompositionEntry> _entries = [];
+    private readonly List<CompositionState> _states = [];
 
     internal void Clear()
     {
         _references.Clear();
         _values.Clear();
+        _entries.Clear();
+        _states.Clear();
     }
 
     internal void Add(object? reference) => _references.Add(reference);
 
     internal void Add(double value) => _values.Add(value);
 
+    internal void Add(in CompositionEntry entry) => _entries.Add(entry);
+
+    internal void Add(CompositionState state) => _states.Add(state);
+
     internal bool SameAs(GroupSignature other)
     {
-        if (_references.Count != other._references.Count || _values.Count != other._values.Count)
+        if (_references.Count != other._references.Count || _values.Count != other._values.Count ||
+            _entries.Count != other._entries.Count || _states.Count != other._states.Count)
         {
             return false;
+        }
+
+        for (int index = 0; index < _entries.Count; index++)
+        {
+            if (_entries[index] != other._entries[index])
+            {
+                return false;
+            }
+        }
+
+        for (int index = 0; index < _states.Count; index++)
+        {
+            if (_states[index] != other._states[index])
+            {
+                return false;
+            }
         }
 
         for (int index = 0; index < _references.Count; index++)

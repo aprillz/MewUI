@@ -22,9 +22,9 @@ internal enum CompositionEntryKind : byte
 
 /// <summary>
 /// One step of a visual's composition: its own content, a child, or a scope that applies to the
-/// entries it encloses.
+/// entries it encloses. Two entries are equal when every member is, children by identity.
 /// </summary>
-internal readonly struct CompositionEntry
+internal readonly record struct CompositionEntry
 {
     internal CompositionEntryKind Kind { get; init; }
     internal int SlotIndex { get; init; }
@@ -42,6 +42,10 @@ internal readonly struct CompositionEntry
 
     /// <summary>Number of entries this scope encloses; 0 for non-scope entries.</summary>
     internal int ScopeLength { get; init; }
+
+    /// <summary>True when the two entries are equal apart from how many entries they enclose.</summary>
+    internal bool SameApartFromLength(in CompositionEntry other)
+        => this with { ScopeLength = 0 } == other with { ScopeLength = 0 };
 }
 
 /// <summary>

@@ -190,10 +190,8 @@ internal static class FrameRenderer
         signature.Clear();
         if (!TryCollectGroup(scene, node, anchor, localShift, signature, isRoot: true, out var scopeMove))
         {
-
             return false;
         }
-
 
         double scale = context.DpiScale;
         var transform = context.GetTransform();
@@ -300,11 +298,16 @@ internal static class FrameRenderer
         bool isRoot, out Vector scopeMove)
     {
         scopeMove = default;
-        if (!isRoot)
+        if (isRoot)
         {
+            // The group's own opacity applies when the surface is blended, not when it is drawn.
+            signature.Add(node.State with { Opacity = 1 });
+        }
+        else
+        {
+            signature.Add(node.State);
             if (!node.State.IsVisible)
             {
-                signature.Add(0);
                 return true;
             }
 
@@ -315,9 +318,7 @@ internal static class FrameRenderer
             }
 
             signature.Add(2);
-            signature.Add(node.State.Opacity);
         }
-
 
         var anchor = node.PlacedOrigin + node.LocalShift;
         var planShift = node.PlanLocalShift;
@@ -435,47 +436,22 @@ internal static class FrameRenderer
             }
         }
 
-        var linear = Matrix3x2.Identity;
-        bool snapsText = false;
+        // The scope reads without its translation and its length, and an absent scope reads as an identity one.
+        var scopeEntry = new CompositionEntry { Kind = CompositionEntryKind.Transform, Matrix = Matrix3x2.Identity };
         if (scopeIndex >= 0)
         {
             var scope = RetainedGeometry.Shifted(entries[scopeIndex].Matrix, planShift);
             scopeMove = new Vector(scope.M31, scope.M32);
-            linear = scope with { M31 = 0, M32 = 0 };
-            snapsText = entries[scopeIndex].DisablesTextPixelSnap;
+            scopeEntry = entries[scopeIndex] with { Matrix = scope with { M31 = 0, M32 = 0 }, ScopeLength = 0 };
         }
 
-        signature.Add(linear.M11);
-        signature.Add(linear.M12);
-        signature.Add(linear.M21);
-        signature.Add(linear.M22);
-        signature.Add(snapsText ? 1 : 0);
+        signature.Add(in scopeEntry);
         for (int index = 0; index < entries.Length; index++)
         {
-            if (index == scopeIndex)
+            if (index != scopeIndex)
             {
-                continue;
+                signature.Add(in entries[index]);
             }
-
-            ref readonly var entry = ref entries[index];
-            signature.Add((int)entry.Kind);
-            signature.Add(entry.SlotIndex);
-            signature.Add(entry.Child);
-            signature.Add(entry.ScopeLength);
-            signature.Add(entry.Rect.X);
-            signature.Add(entry.Rect.Y);
-            signature.Add(entry.Rect.Width);
-            signature.Add(entry.Rect.Height);
-            signature.Add(entry.RadiusX);
-            signature.Add(entry.RadiusY);
-            signature.Add(entry.Matrix.M11);
-            signature.Add(entry.Matrix.M12);
-            signature.Add(entry.Matrix.M21);
-            signature.Add(entry.Matrix.M22);
-            signature.Add(entry.Matrix.M31);
-            signature.Add(entry.Matrix.M32);
-            signature.Add(entry.DisablesTextPixelSnap ? 1 : 0);
-            signature.Add(entry.Alpha);
         }
 
         return true;
