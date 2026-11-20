@@ -14,19 +14,31 @@ namespace Aprillz.MewUI.Preview;
 internal sealed class PreviewChannel : IDisposable
 {
     private const int RECONNECT_DELAY_MS = 1000;
+    // The IDE listens for the whole session, so a listener that stays unreachable this long means the
+    // IDE (or the session in it) is gone and the app must not outlive it.
+    private const int UNREACHABLE_SHUTDOWN_MS = 15_000;
+
+    private enum HandshakeResult
+    {
+        Accepted,
+        Rejected,
+        Dropped,
+    }
 
     private readonly object _writeGate = new();
     private readonly CancellationTokenSource _stop = new();
     private readonly Action<int, JsonDocument> _onMessage;
     private readonly Action _onConnected;
+    private readonly Action _onSessionLost;
     private TcpClient? _client;
     private NetworkStream? _stream;
     private Thread? _thread;
 
-    public PreviewChannel(Action<int, JsonDocument> onMessage, Action onConnected)
+    public PreviewChannel(Action<int, JsonDocument> onMessage, Action onConnected, Action onSessionLost)
     {
         _onMessage = onMessage;
         _onConnected = onConnected;
+        _onSessionLost = onSessionLost;
     }
 
     public bool IsConnected => _stream != null;
@@ -39,31 +51,43 @@ internal sealed class PreviewChannel : IDisposable
 
     public void Dispose()
     {
+        // The token source is not disposed: the connection thread may still be waiting on its handle.
         _stop.Cancel();
         CloseConnection();
-        _stop.Dispose();
     }
 
     private void ConnectionLoop()
     {
+        var stopHandle = _stop.Token.WaitHandle;
+        long lastContact = Environment.TickCount64;
         while (!_stop.IsCancellationRequested)
         {
             try
             {
                 var client = new TcpClient { NoDelay = true };
                 client.Connect(PreviewEnvironment.Endpoint!);
+                lastContact = Environment.TickCount64;
                 var stream = client.GetStream();
 
-                if (!PerformHandshake(stream))
+                var handshake = PerformHandshake(stream);
+                if (handshake == HandshakeResult.Rejected)
                 {
                     client.Dispose();
+                    _onSessionLost();
                     return;
                 }
-
-                _client = client;
-                _stream = stream;
-                _onConnected();
-                ReadLoop(stream);
+                if (handshake == HandshakeResult.Dropped)
+                {
+                    client.Dispose();
+                }
+                else
+                {
+                    _client = client;
+                    _stream = stream;
+                    _onConnected();
+                    ReadLoop(stream);
+                    lastContact = Environment.TickCount64;
+                }
             }
             catch
             {
@@ -74,22 +98,34 @@ internal sealed class PreviewChannel : IDisposable
                 CloseConnection();
             }
 
-            if (_stop.Token.WaitHandle.WaitOne(RECONNECT_DELAY_MS))
+            if (Environment.TickCount64 - lastContact >= UNREACHABLE_SHUTDOWN_MS)
+            {
+                _onSessionLost();
+                return;
+            }
+
+            if (stopHandle.WaitOne(RECONNECT_DELAY_MS))
             {
                 return;
             }
         }
     }
 
-    private bool PerformHandshake(NetworkStream stream)
+    private HandshakeResult PerformHandshake(NetworkStream stream)
     {
-        if (!TryReadMessage(stream, out int typeId, out var json, out _) || typeId != PreviewProtocol.HELLO)
+        if (!TryReadMessage(stream, out int typeId, out var json, out _))
         {
-            return false;
+            return HandshakeResult.Dropped;
         }
 
         using (json)
         {
+            if (typeId != PreviewProtocol.HELLO)
+            {
+                // A client that wrote before its Hello raced itself; a fresh connection starts clean.
+                return HandshakeResult.Dropped;
+            }
+
             var hello = json.Deserialize(PreviewJsonContext.Default.HelloMessage);
             if (hello == null || hello.ProtocolMajor != PreviewProtocol.PROTOCOL_MAJOR || !TokenMatches(hello.Token))
             {
@@ -98,7 +134,7 @@ internal sealed class PreviewChannel : IDisposable
                     : "invalid token";
                 WriteMessage(stream, PreviewProtocol.SESSION_REJECTED,
                     new SessionRejectedMessage { Reason = reason }, PreviewJsonContext.Default.SessionRejectedMessage);
-                return false;
+                return HandshakeResult.Rejected;
             }
         }
 
@@ -109,7 +145,7 @@ internal sealed class PreviewChannel : IDisposable
             ProtocolMajor = PreviewProtocol.PROTOCOL_MAJOR,
             ProtocolMinor = PreviewProtocol.PROTOCOL_MINOR,
         }, PreviewJsonContext.Default.SessionStartedMessage);
-        return true;
+        return HandshakeResult.Accepted;
     }
 
     private static bool TokenMatches(string presented)
