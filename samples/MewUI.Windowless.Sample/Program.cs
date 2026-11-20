@@ -33,8 +33,7 @@ Application.Create()
         var hideOnClose = new ObservableValue<bool>(false);
         palette = new PaletteController(Exit, IconSource.FromStream(new MemoryStream(iconFile)), hideOnClose);
 
-        // The tray menu is an ordinary MewUI ContextMenu; each platform shows it as its own native menu. Clicks and
-        // commands run on the next dispatcher turn, after the native menu has returned, because Exit removes the tray.
+        // The tray menu is an ordinary MewUI ContextMenu; MewUI presents it the way each platform's tray menus appear.
         var togglePalette = new Command("windowless.togglePalette", "_Show or hide palette");
         var toggleHideOnClose = new Command("windowless.hideOnClose", "_Hide instead of close");
         var exit = new Command("windowless.exit", "E_xit");
@@ -55,12 +54,15 @@ Application.Create()
         commands.Register(toggleHideOnClose, () => hideOnClose.Value = !hideOnClose.Value);
         commands.Register(exit, Exit);
 
-        tray = new TrayIcon(action => dispatcher.BeginInvoke(action))
-            .Icon(iconFile)
-            .ToolTip("MewUI Windowless Sample")
+        tray = new TrayIcon()
+            .Icon(IconSource.FromBytes(iconFile))
+            .ToolTipText("MewUI Windowless Sample")
             .ContextMenu(trayMenu)
-            .OnClick(palette.Toggle);
-        tray = ShowTray(tray);
+            .Command(togglePalette)
+            .IsVisible();
+        Console.Error.WriteLine(TrayIcon.IsSupported
+            ? "[windowless] tray icon requested"
+            : "[windowless] no tray icon on this platform");
         try
         {
             hotkey = HotkeyProviderFactory.Create();
@@ -100,29 +102,6 @@ Application.Create()
     .Run();
 
 hotkey?.Dispose();
-tray?.Dispose();
-
-static TrayIcon? ShowTray(TrayIcon tray)
-{
-    // The tray is a convenience next to the hotkey: where it is missing or fails, the sample still runs.
-    try
-    {
-        if (tray.Show())
-        {
-            Console.Error.WriteLine($"[windowless] {tray.BackendName} added");
-            return tray;
-        }
-
-        Console.Error.WriteLine("[windowless] no tray icon on this platform");
-    }
-    catch (Exception ex)
-    {
-        Console.Error.WriteLine($"[windowless] tray icon failed: {ex}");
-    }
-
-    tray.Dispose();
-    return null;
-}
 
 static byte[] LoadAppIcon()
 {

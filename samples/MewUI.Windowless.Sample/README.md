@@ -4,7 +4,7 @@ This sample starts MewUI without a main window, registers a global `Ctrl+Alt+Spa
 
 Enable **Hide instead of close** to retain and reuse the palette's native window. The hotkey and the title-bar close button then hide it, and the next hotkey shows the same instance again. A hidden window remains in `Application.Current.AllWindows`, so leave the option disabled when validating the zero-window lifecycle.
 
-On Windows and macOS the sample also adds the app icon to the notification area (Windows) or the menu bar (macOS). The menu is an ordinary MewUI `ContextMenu`, set on the sample's `TrayIcon` with `.ContextMenu(...)` the way an element's context menu is set, and each platform shows it as its own native menu: a Win32 popup menu or an `NSMenu`, rebuilt from the model each time it opens. Text with `_` access keys, separators, submenus, disabled items and checked items carry over; MewUI theming, fonts and item layout do not. A macOS menu follows AppKit and shows the check column only while an item is checked, so unlike the MewUI context menu it does not keep a slot for a checkable item that is off. On Windows a click on the icon toggles the palette; on macOS a click opens the menu. MewUI has no tray API yet, so `Win32TrayIcon` calls `Shell_NotifyIconW` and `MacOSTrayIcon` creates an `NSStatusItem` directly. The menu's commands are registered in `Application.Current.Commands` and run through `Application.Current.CommandRouter`, which works while no window is open. Linux has no tray icon in this sample.
+On Windows and macOS the sample also adds the app icon to the notification area (Windows) or the menu bar (macOS) with MewUI's `TrayIcon`. Its menu is an ordinary MewUI `ContextMenu`, set with `.ContextMenu(...)` the way an element's context menu is set. On Windows MewUI draws that menu with the app's theme; on macOS it becomes a native menu read from the model each time it opens. A click on the icon runs the icon's command, which toggles the palette, on Windows; on macOS a click opens the menu. The commands are registered in `Application.Current.Commands` and run through `Application.Current.CommandRouter`, which works while no window is open. Linux has no tray icon in this sample. See [Tray Icon](../../docs/TrayIcon.md).
 
 The sample selects `ShutdownMode.OnExplicitShutdown` through `WithShutdownMode`; windowless `Run` does not change the application's shutdown policy automatically.
 
@@ -21,7 +21,7 @@ Run the sample, confirm the startup log reports `user windows=0`, toggle and clo
 
 | Tray | Provider | Validation |
 |---|---|---|
-| Windows | `Shell_NotifyIconW` with a hidden window on the UI thread, served by MewUI's message loop | Icon placement, click toggle, the checked item and Exit verified on 2026-10-20 with injected tray messages and access keys; a physical click remains manual |
-| macOS | `NSStatusItem` on the main thread | Item placed in the menu bar on 2026-10-20; opening and choosing from the menu remains manual |
+| Windows | `TrayIcon` (notification area, MewUI-drawn menu) | Covered by `TrayIconTests` in the window automation suite: placement, Explorer restart, real left and right clicks on the icon, and the menu navigated and closed from the keyboard and by an outside click |
+| macOS | `TrayIcon` (menu bar status item, native menu) | Covered by `TrayIconTests` in the window automation suite: placement, the menu read from the model, and a chosen item running its command; opening the menu with a physical click remains manual |
 
 Use `--smoke` to automate the window lifecycle after native provider registration: show, close to zero windows, show again, close, dispose the provider, and quit.
