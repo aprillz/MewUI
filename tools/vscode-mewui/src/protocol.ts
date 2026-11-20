@@ -82,36 +82,60 @@ export function sendMessage(socket: Socket, typeId: number, body: unknown): void
     socket.write(Buffer.concat([header, json]));
 }
 
+const HEADER_BYTES = 12;
+
 /** Incremental frame decoder: feed socket chunks, emits complete messages via the callback. */
 export class MessageDecoder {
-    private buffer: Buffer = Buffer.alloc(0);
+    private readonly header = Buffer.alloc(HEADER_BYTES);
+    private headerFilled = 0;
+    // Exact-size payload (JSON + binary) of the message in progress, so a frame is copied once.
+    private payload: Buffer | undefined;
+    private payloadFilled = 0;
+    private typeId = 0;
+    private jsonLength = 0;
 
     constructor(private readonly onMessage: (message: DecodedMessage) => void) {}
 
     public push(chunk: Buffer): void {
-        this.buffer = this.buffer.length === 0 ? chunk : Buffer.concat([this.buffer, chunk]);
+        let offset = 0;
+        for (;;) {
+            if (this.payload === undefined) {
+                const copied = chunk.copy(this.header, this.headerFilled, offset, offset + HEADER_BYTES - this.headerFilled);
+                this.headerFilled += copied;
+                offset += copied;
+                if (this.headerFilled < HEADER_BYTES) {
+                    return;
+                }
+                this.headerFilled = 0;
 
-        while (this.buffer.length >= 12) {
-            const totalLength = this.buffer.readInt32LE(0);
-            if (totalLength < 8 || totalLength > MAX_MESSAGE_BYTES) {
-                throw new Error(`invalid message length ${totalLength}`);
+                const totalLength = this.header.readInt32LE(0);
+                if (totalLength < 8 || totalLength > MAX_MESSAGE_BYTES) {
+                    throw new Error(`invalid message length ${totalLength}`);
+                }
+                const payloadLength = totalLength - 8;
+                const jsonLength = this.header.readInt32LE(8);
+                if (jsonLength < 0 || jsonLength > payloadLength) {
+                    throw new Error(`invalid json length ${jsonLength}`);
+                }
+
+                this.typeId = this.header.readInt32LE(4);
+                this.jsonLength = jsonLength;
+                this.payload = Buffer.allocUnsafe(payloadLength);
+                this.payloadFilled = 0;
             }
-            if (this.buffer.length < 4 + totalLength) {
+
+            const payload = this.payload;
+            const copied = chunk.copy(payload, this.payloadFilled, offset);
+            this.payloadFilled += copied;
+            offset += copied;
+            if (this.payloadFilled < payload.length) {
                 return;
             }
+            this.payload = undefined;
 
-            const typeId = this.buffer.readInt32LE(4);
-            const jsonLength = this.buffer.readInt32LE(8);
-            const payloadLength = totalLength - 8;
-            if (jsonLength < 0 || jsonLength > payloadLength) {
-                throw new Error(`invalid json length ${jsonLength}`);
-            }
-
-            const jsonText = this.buffer.subarray(12, 12 + jsonLength).toString("utf8");
-            const binary = Buffer.from(this.buffer.subarray(12 + jsonLength, 4 + totalLength));
-            this.buffer = this.buffer.subarray(4 + totalLength);
-
-            this.onMessage({ typeId, json: JSON.parse(jsonText), binary });
+            const jsonText = payload.toString("utf8", 0, this.jsonLength);
+            const binary = payload.subarray(this.jsonLength);
+            this.onMessage({ typeId: this.typeId, json: JSON.parse(jsonText), binary });
         }
     }
 }

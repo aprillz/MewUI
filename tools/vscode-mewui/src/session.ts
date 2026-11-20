@@ -44,7 +44,13 @@ export interface SessionOptions {
     sessionStartTimeoutMs?: number;
 }
 
+export type ThemeMode = "light" | "dark" | "system";
+
 const REBUILD_DEBOUNCE_MS = 500;
+const KILL_ESCALATION_MS = 2000;
+// Canonical MSBuild diagnostic ("origin: error CS1002: text"); the category keyword is never localized.
+const COMPILE_ERROR_PATTERN = /:\s*error\s+[A-Za-z]+\d+\s*:/;
+const BUILD_FAILED_DETAIL = "build failed; fix the errors and save to retry";
 
 export class PreviewSession {
     private readonly token = crypto.randomBytes(24).toString("base64url");
@@ -56,12 +62,21 @@ export class PreviewSession {
     private usingShim = false;
     private everConnected = false;
     private skipRestore = true;
+    private rejected = false;
+    private buildFailed = false;
+    // dotnet watch rebuilds by itself after a save; its next output marks the new attempt.
+    private rebuildRequested = false;
     private server: net.Server | undefined;
     private socket: net.Socket | undefined;
     private childProcess: ChildProcess | undefined;
     private startTimer: NodeJS.Timeout | undefined;
     private rebuildTimer: NodeJS.Timeout | undefined;
     private stopped = false;
+    // Client state replayed to every new app process, which starts on its main window at its default metrics.
+    private viewport: { width: number; height: number; dpi: number } | undefined;
+    private themeMode: ThemeMode | undefined;
+    private activeTargetId = "";
+    private restoreTargetPending = false;
     // Last-known state, replayed when a recreated panel rebinds to a kept-alive session.
     private lastState: { state: SessionState; detail?: string } | undefined;
     private lastTargets: { targets: PreviewTargetInfo[]; activeId: string } | undefined;
@@ -148,6 +163,21 @@ export class PreviewSession {
         this.emitState("stopped");
     }
 
+    /**
+     * User-requested restart: reruns the real app (leaving any shim fallback) as a fresh start,
+     * with the start timeout armed again.
+     */
+    public restart(): void {
+        if (this.stopped || !this.server) {
+            return;
+        }
+        this.usingShim = false;
+        this.effectiveProjectPath = this.projectPath;
+        this.everConnected = false;
+        this.restartProcess();
+        this.armStartTimeout();
+    }
+
     /** Restarts the driver process (full state reset); the server keeps listening for the reconnect. */
     public restartProcess(detail = "restarting"): void {
         if (this.stopped || !this.server) {
@@ -160,11 +190,20 @@ export class PreviewSession {
     }
 
     /**
-     * Feeds an IDE save event to the buildRestart driver (debounced restart). A no-op under the
-     * watch driver, so callers can forward every save unconditionally.
+     * Feeds an IDE save event to the session: the buildRestart driver restarts (debounced); under
+     * the watch driver it only marks the retry after a failed build. Callers can forward every save.
      */
     public notifySourceChanged(fsPath: string): void {
-        if (this.stopped || this.driver !== "buildRestart" || !fsPath.toLowerCase().endsWith(".cs")) {
+        if (this.stopped) {
+            return;
+        }
+        if (this.driver !== "buildRestart") {
+            if (this.buildFailed) {
+                this.rebuildRequested = true;
+            }
+            return;
+        }
+        if (!fsPath.toLowerCase().endsWith(".cs")) {
             return;
         }
         if (this.rebuildTimer !== undefined) {
@@ -173,10 +212,12 @@ export class PreviewSession {
         this.rebuildTimer = setTimeout(() => {
             this.rebuildTimer = undefined;
             this.restartProcess("rebuilding (buildRestart driver)");
+            this.armStartTimeout();
         }, REBUILD_DEBOUNCE_MS);
     }
 
     public selectTarget(id: string): void {
+        this.activeTargetId = id;
         this.send(MessageType.SelectTarget, { id });
     }
 
@@ -189,10 +230,12 @@ export class PreviewSession {
     }
 
     public setViewport(width: number, height: number, dpi: number): void {
+        this.viewport = { width, height, dpi };
         this.send(MessageType.ViewportChanged, { width, height, dpi });
     }
 
-    public setTheme(mode: "light" | "dark" | "system"): void {
+    public setTheme(mode: ThemeMode): void {
+        this.themeMode = mode;
         this.send(MessageType.SetTheme, { mode });
     }
 
@@ -229,29 +272,11 @@ export class PreviewSession {
         socket.setNoDelay(true);
 
         const decoder = new MessageDecoder((message) => {
-            switch (message.typeId) {
-                case MessageType.SessionStarted:
-                    this.everConnected = true;
-                    this.clearStartTimer();
-                    this.emitState("connected", this.usingShim ? "shim session (low fidelity: app Main not executed)" : undefined);
-                    break;
-                case MessageType.SessionRejected:
-                    this.emitState("failed", JSON.stringify(message.json));
-                    break;
-                case MessageType.PreviewTargets: {
-                    const body = message.json as { targets: PreviewTargetInfo[]; activeId: string };
-                    this.emitTargets(body.targets, body.activeId);
-                    break;
-                }
-                case MessageType.Frame:
-                    this.emitFrame(message.json as FrameHeader, message.binary);
-                    break;
-                case MessageType.Status:
-                    this.emitStatus(message.json as StatusInfo);
-                    break;
-                default:
-                    // Unknown message ids are ignored for forward compatibility.
-                    break;
+            // A failing UI callback must not be mistaken for a protocol error and drop the connection.
+            try {
+                this.handleMessage(message.typeId, message.json, message.binary);
+            } catch (error) {
+                this.callbacks.onLog(`message ${message.typeId} handling failed: ${error}`);
             }
         });
 
@@ -266,7 +291,7 @@ export class PreviewSession {
         socket.on("close", () => {
             if (this.socket === socket) {
                 this.socket = undefined;
-                if (!this.stopped) {
+                if (!this.stopped && !this.rejected) {
                     this.emitState("disconnected");
                 }
             }
@@ -281,6 +306,62 @@ export class PreviewSession {
         });
     }
 
+    private handleMessage(typeId: number, json: unknown, binary: Buffer): void {
+        switch (typeId) {
+            case MessageType.SessionStarted:
+                this.everConnected = true;
+                this.rejected = false;
+                this.buildFailed = false;
+                this.clearStartTimer();
+                this.restoreTargetPending = true;
+                if (this.viewport !== undefined) {
+                    this.send(MessageType.ClientInfo, {
+                        dpi: this.viewport.dpi,
+                        viewportWidth: this.viewport.width,
+                        viewportHeight: this.viewport.height,
+                    });
+                }
+                if (this.themeMode !== undefined) {
+                    this.send(MessageType.SetTheme, { mode: this.themeMode });
+                }
+                this.emitState("connected", this.usingShim ? "shim session (low fidelity: app Main not executed)" : undefined);
+                break;
+            case MessageType.SessionRejected: {
+                const body = json as { reason?: string };
+                this.rejected = true;
+                this.clearStartTimer();
+                this.emitState("failed", `session rejected: ${body.reason || "no reason given"}`);
+                break;
+            }
+            case MessageType.PreviewTargets: {
+                const body = json as { targets: PreviewTargetInfo[]; activeId: string };
+                let activeId = body.activeId;
+                if (this.restoreTargetPending) {
+                    this.restoreTargetPending = false;
+                    const previous = this.activeTargetId;
+                    if (previous !== "" && previous !== activeId
+                        && body.targets.some((target) => target.id === previous && target.available !== false)) {
+                        this.callbacks.onLog(`restoring preview target ${previous}`);
+                        this.send(MessageType.SelectTarget, { id: previous });
+                        activeId = previous;
+                    }
+                }
+                this.activeTargetId = activeId;
+                this.emitTargets(body.targets, activeId);
+                break;
+            }
+            case MessageType.Frame:
+                this.emitFrame(json as FrameHeader, binary);
+                break;
+            case MessageType.Status:
+                this.emitStatus(json as StatusInfo);
+                break;
+            default:
+                // Unknown message ids are ignored for forward compatibility.
+                break;
+        }
+    }
+
     private spawnProcess(port: number): void {
         // Skipping the restore evaluation saves 2-3s per start; only safe once assets exist,
         // and a pre-connect failure retries with restore (e.g. after a PackageReference change).
@@ -292,7 +373,7 @@ export class PreviewSession {
         // one of its own: sharing bin would fail every build made while the preview is up. Under obj, which
         // keeps the intermediate outputs shared, so this costs a copy and not a compile. Spelled --property
         // because dotnet watch reads -p as the abbreviation of --project.
-        const output = `--property:BaseOutputPath=${path.join(path.dirname(this.effectiveProjectPath), "obj", "mewui-preview") + path.sep}`;
+        const output = `--property:BaseOutputPath=${escapeMsBuild(path.join(path.dirname(this.effectiveProjectPath), "obj", "mewui-preview") + path.sep)}`;
         const args = this.driver === "watch"
             ? ["watch", "--non-interactive", "--project", this.effectiveProjectPath, "run", ...noRestore, output]
             : ["run", "--project", this.effectiveProjectPath, ...noRestore, output];
@@ -313,10 +394,19 @@ export class PreviewSession {
             detached: process.platform !== "win32",
         });
         this.childProcess = child;
+        this.rejected = false;
+        this.buildFailed = false;
+        this.rebuildRequested = false;
 
-        child.stdout?.on("data", (data: Buffer) => this.forwardLog(data));
-        child.stderr?.on("data", (data: Buffer) => this.forwardLog(data));
-        child.on("error", (error) => this.emitState("failed", `dotnet failed to start: ${error.message}`));
+        child.stdout?.on("data", (data: Buffer) => this.forwardLog(child, data));
+        child.stderr?.on("data", (data: Buffer) => this.forwardLog(child, data));
+        child.on("error", (error) => {
+            if (this.stopped || this.childProcess !== child) {
+                return;
+            }
+            this.clearStartTimer();
+            this.emitState("failed", `dotnet failed to start: ${error.message}`);
+        });
         child.on("exit", (code) => {
             if (this.childProcess !== child) {
                 return;
@@ -326,13 +416,13 @@ export class PreviewSession {
                 return;
             }
 
-            // A pre-connect failure with --no-restore may just be a stale restore (new package
-            // reference); retry once with the restore enabled before any driver fallback.
-            if (!this.everConnected && code !== 0 && this.skipRestore && this.server) {
-                this.skipRestore = false;
-                this.callbacks.onLog("build failed before connecting; retrying with restore enabled");
-                const address = this.server.address() as net.AddressInfo;
-                this.spawnProcess(address.port);
+            // The app quits after a rejected handshake; the rejection reason stays the reported failure.
+            if (this.rejected) {
+                this.clearStartTimer();
+                return;
+            }
+
+            if (code !== 0 && this.retryWithRestore()) {
                 return;
             }
 
@@ -343,24 +433,64 @@ export class PreviewSession {
                 this.callbacks.onLog(`dotnet watch exited with code ${code} before connecting; falling back to the buildRestart driver`);
                 const address = this.server.address() as net.AddressInfo;
                 this.spawnProcess(address.port);
+                this.armStartTimeout();
                 this.emitState("starting", "buildRestart driver fallback");
                 return;
             }
 
-            this.emitState("failed", `dotnet ${this.driver === "watch" ? "watch " : ""}exited with code ${code}`);
+            // A Main that returns before Application.Run is the shim's case, and with the process gone
+            // there is no output silence left to wait out.
+            if (!this.everConnected && code === 0 && !this.buildFailed && !this.usingShim && this.startTimer !== undefined) {
+                this.startShimFallback("dotnet exited before the preview handshake");
+                return;
+            }
+
+            this.clearStartTimer();
+            this.emitState("failed", this.buildFailed
+                ? BUILD_FAILED_DETAIL
+                : `dotnet ${this.driver === "watch" ? "watch " : ""}exited with code ${code}`);
         });
+    }
+
+    /**
+     * A pre-connect failure with --no-restore may just be a stale restore (new package reference);
+     * retries once with the restore enabled before any driver fallback.
+     */
+    private retryWithRestore(): boolean {
+        if (this.everConnected || !this.skipRestore || !this.server) {
+            return false;
+        }
+        this.skipRestore = false;
+        this.callbacks.onLog("build failed before connecting; retrying with restore enabled");
+        this.killProcess();
+        const address = this.server.address() as net.AddressInfo;
+        this.spawnProcess(address.port);
+        this.armStartTimeout();
+        return true;
+    }
+
+    private onBuildFailed(): void {
+        // dotnet watch keeps waiting for a file change after a failed build instead of exiting.
+        if (this.retryWithRestore()) {
+            return;
+        }
+        this.buildFailed = true;
+        this.rebuildRequested = false;
+        this.clearStartTimer();
+        this.emitState("failed", BUILD_FAILED_DETAIL);
     }
 
     private armStartTimeout(): void {
         this.clearStartTimer();
-        if (this.sessionStartTimeoutMs <= 0) {
+        if (this.sessionStartTimeoutMs <= 0 || this.everConnected || this.rejected || this.stopped) {
             return;
         }
         this.startTimer = setTimeout(() => this.onStartTimeout(), this.sessionStartTimeoutMs);
     }
 
     private onStartTimeout(): void {
-        if (this.everConnected || this.stopped) {
+        this.startTimer = undefined;
+        if (this.everConnected || this.stopped || this.rejected) {
             return;
         }
 
@@ -370,12 +500,17 @@ export class PreviewSession {
             return;
         }
 
+        this.startShimFallback(`no SessionStarted within ${this.sessionStartTimeoutMs}ms`);
+    }
+
+    private startShimFallback(reason: string): void {
         // The app's Main likely never reached Application.Run (plan.md 4.5): restart with a shim
         // project that skips the entry point entirely.
-        this.callbacks.onLog(`no SessionStarted within ${this.sessionStartTimeoutMs}ms; retrying with the shim fallback session`);
+        this.callbacks.onLog(`${reason}; retrying with the shim fallback session`);
         try {
             this.effectiveProjectPath = this.generateShimProject();
         } catch (error) {
+            this.clearStartTimer();
             this.emitState("failed", `session start timed out and shim generation failed: ${error}`);
             return;
         }
@@ -401,7 +536,7 @@ export class PreviewSession {
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="${referencePath}" />
+    <ProjectReference Include="${escapeXml(escapeMsBuild(referencePath))}" />
   </ItemGroup>
 
 </Project>
@@ -432,18 +567,35 @@ export class PreviewSession {
         }
     }
 
-    private forwardLog(data: Buffer): void {
-        // Process output counts as startup progress: a slow cold build must not trigger the
-        // shim fallback, which exists for a Main that never reaches Application.Run. The
-        // timeout now measures silence, so it only fires after the output has gone quiet
-        // (an app that logs forever while blocking Main defeats it - acceptable trade-off).
-        if (!this.everConnected && this.startTimer !== undefined) {
-            this.armStartTimeout();
-        }
+    private forwardLog(child: ChildProcess, data: Buffer): void {
+        let compileError = false;
         for (const line of data.toString("utf8").split(/\r?\n/)) {
             if (line.length > 0) {
                 this.callbacks.onLog(line);
+                compileError ||= COMPILE_ERROR_PATTERN.test(line);
             }
+        }
+        if (this.childProcess !== child || this.stopped) {
+            return;
+        }
+
+        if (this.buildFailed && this.rebuildRequested) {
+            this.buildFailed = false;
+            this.rebuildRequested = false;
+            this.armStartTimeout();
+            this.emitState("starting", "rebuilding after the build failure");
+        }
+
+        // Hot reload compile errors arrive while the app is still connected and keep it running;
+        // only a build that has no app to connect is a failed start.
+        if (compileError && this.socket === undefined && !this.buildFailed) {
+            this.onBuildFailed();
+        } else if (!this.everConnected && this.startTimer !== undefined) {
+            // Process output counts as startup progress: a slow cold build must not trigger the
+            // shim fallback, which exists for a Main that never reaches Application.Run. The
+            // timeout measures silence, so it only fires after the output has gone quiet
+            // (an app that logs forever while blocking Main defeats it - acceptable trade-off).
+            this.armStartTimeout();
         }
     }
 
@@ -473,14 +625,30 @@ export class PreviewSession {
             // Kill the whole tree: watch's child app process must not outlive the session.
             spawnSync("taskkill", ["/T", "/F", "/PID", String(child.pid)], { stdio: "ignore" });
         } else {
-            // Negative pid signals the detached process group (watch + app together).
-            try {
-                process.kill(-child.pid, "SIGTERM");
-            } catch {
-                child.kill("SIGTERM");
-            }
+            const pid = child.pid;
+            signalProcessGroup(child, pid, "SIGTERM");
+            // A hung app ignores SIGTERM, and one that outlived its watch parent still sits in the group.
+            setTimeout(() => signalProcessGroup(child, pid, "SIGKILL"), KILL_ESCALATION_MS).unref();
         }
     }
+}
+
+function signalProcessGroup(child: ChildProcess, pid: number, signal: NodeJS.Signals): void {
+    try {
+        // Negative pid signals the detached process group (watch + app together).
+        process.kill(-pid, signal);
+    } catch {
+        child.kill(signal);
+    }
+}
+
+/** Escapes MSBuild special characters, plus the "," and ";" that split command-line property lists, as %XX. */
+function escapeMsBuild(value: string): string {
+    return value.replace(/[%$@';?*,]/g, (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`);
+}
+
+function escapeXml(value: string): string {
+    return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
 // The generated shim entry point: loads every managed assembly in the output folder (forcing
