@@ -26,15 +26,6 @@
     }
   },
   "contributes": {
-    "menus": {
-      "editor/context": [
-        {
-          "command": "mewui.preview.start",
-          "when": "resourceLangId == csharp",
-          "group": "navigation@9"
-        }
-      ]
-    },
     "commands": [
       {
         "command": "mewui.preview.start",
@@ -56,6 +47,13 @@
       }
     ],
     "menus": {
+      "editor/context": [
+        {
+          "command": "mewui.preview.start",
+          "when": "resourceLangId == csharp",
+          "group": "navigation@9"
+        }
+      ],
       "editor/title": [
         {
           "command": "mewui.preview.start",

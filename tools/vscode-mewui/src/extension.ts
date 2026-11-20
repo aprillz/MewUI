@@ -2,8 +2,8 @@ import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
 import { PreviewPanel } from "./panel";
-import { PreviewSession, SessionOptions } from "./session";
-import { FrameHeader, PreviewTargetInfo, StatusInfo } from "./protocol";
+import { PreviewSession, SessionCallbacks, SessionOptions, ThemeMode } from "./session";
+import { PreviewTargetInfo } from "./protocol";
 
 let session: PreviewSession | undefined;
 let panel: PreviewPanel | undefined;
@@ -13,6 +13,8 @@ let lastTargets: PreviewTargetInfo[] = [];
 let activeTargetId = "";
 // A manual dropdown pick wins over auto-match until the user moves to another editor file.
 let manualOverride = false;
+// Focus leaving for the webview and coming back re-reports the same editor, which is not a move to another file.
+let lastEditorDocument: string | undefined;
 // Sessions kept warm after their panel closed, so reopening the preview reattaches instantly
 // instead of paying the full build-and-launch cost again.
 const keptSessions = new Map<string, { session: PreviewSession; timer: NodeJS.Timeout }>();
@@ -24,7 +26,7 @@ export function activate(context: vscode.ExtensionContext): void {
         vscode.commands.registerCommand("mewui.preview.start", startPreview),
         vscode.commands.registerCommand("mewui.preview.stop", stopPreview),
         vscode.commands.registerCommand("mewui.preview.refreshTarget", () => session?.refreshTarget()),
-        vscode.commands.registerCommand("mewui.preview.restart", () => session?.restartProcess()),
+        vscode.commands.registerCommand("mewui.preview.restart", () => session?.restart()),
     );
 }
 
@@ -52,6 +54,11 @@ async function startPreview(): Promise<void> {
     };
     const autoSelectTarget = configuration.get<boolean>("autoSelectTarget", true);
 
+    let activeSession: PreviewSession | undefined;
+    // Kept-alive sessions outlive their panel; only the session shown in the live panel may reach
+    // that panel or the shared target state.
+    const isAttached = (): boolean => panel === newPanel && session !== undefined && session === activeSession;
+
     const newPanel = new PreviewPanel(
         `MewUI Preview: ${path.basename(projectPath, ".csproj")}`,
         configuration.get<boolean>("openSourceOnSelect", true),
@@ -59,7 +66,7 @@ async function startPreview(): Promise<void> {
         onSelectTarget: (id) => {
             activeTargetId = id;
             manualOverride = true;
-            session?.selectTarget(id);
+            activeSession?.selectTarget(id);
             // Reverse sync (opt-in): picking a target jumps the editor to its declaration.
             if (vscode.workspace.getConfiguration("mewui.preview").get<boolean>("openSourceOnSelect", true)) {
                 const target = lastTargets.find((candidate) => candidate.id === id);
@@ -68,32 +75,41 @@ async function startPreview(): Promise<void> {
                 }
             }
         },
-        onRefresh: () => session?.refreshTarget(),
-        onRestart: () => session?.restartProcess(),
-        onRendered: (seq) => session?.ackFrame(seq),
+        onRefresh: () => activeSession?.refreshTarget(),
+        onRestart: () => activeSession?.restart(),
+        onRendered: (seq) => activeSession?.ackFrame(seq),
         onViewport: debounce((width: number, height: number, dpi: number) => {
-            session?.setViewport(width, height, dpi);
+            if (isAttached()) {
+                activeSession?.setViewport(width, height, dpi);
+            }
         }, 250),
-        onSetTheme: (mode) => session?.setTheme(mode as "light" | "dark" | "system"),
-        onInput: (kind, body) => session?.sendInput(kind, body),
+        onSetTheme: (mode) => activeSession?.setTheme(mode as ThemeMode),
+        onInput: (kind, body) => activeSession?.sendInput(kind, body),
         onSetNavigate: (value) => {
             void vscode.workspace.getConfiguration("mewui.preview")
                 .update("openSourceOnSelect", value, vscode.ConfigurationTarget.Global);
         },
         onDisposed: () => {
-            panel = undefined;
-            detachPanel();
+            // Programmatic disposal (detach/stop) clears the panel slot first and has already cleaned up.
+            if (panel === newPanel) {
+                detachPanel();
+            }
         },
     });
     panel = newPanel;
 
-    const callbacks = {
-        onLog: (line: string) => outputChannel.appendLine(`${timestamp()} ${line}`),
-        onState: (state: string, detail?: string) => {
+    const callbacks: SessionCallbacks = {
+        onLog: (line) => outputChannel.appendLine(`${timestamp()} ${line}`),
+        onState: (state, detail) => {
             outputChannel.appendLine(`${timestamp()} [session] ${state}${detail ? `: ${detail}` : ""}`);
-            newPanel.showSessionState(state, detail);
+            if (isAttached()) {
+                newPanel.showSessionState(state, detail);
+            }
         },
-        onTargets: (targets: PreviewTargetInfo[], activeId: string) => {
+        onTargets: (targets, activeId) => {
+            if (!isAttached()) {
+                return;
+            }
             lastTargets = targets;
             activeTargetId = activeId;
             newPanel.showTargets(targets, activeId);
@@ -101,43 +117,73 @@ async function startPreview(): Promise<void> {
                 autoMatchTarget(vscode.window.activeTextEditor);
             }
         },
-        onFrame: (header: FrameHeader, pixels: Buffer) => newPanel.showFrame(header, pixels),
-        onStatus: (status: StatusInfo) => newPanel.showStatus(status),
+        onFrame: (header, pixels) => {
+            if (isAttached()) {
+                newPanel.showFrame(header, pixels);
+            } else {
+                // Without a panel to ack, the app would re-render on every ack timeout.
+                activeSession?.ackFrame(header.seq);
+            }
+        },
+        onStatus: (status) => {
+            if (isAttached()) {
+                newPanel.showStatus(status);
+            }
+        },
     };
 
+    lastTargets = [];
+    activeTargetId = "";
     const kept = keptSessions.get(projectPath);
-    let activeSession: PreviewSession;
-    if (kept !== undefined && !kept.session.isStopped) {
+    const reattach = kept !== undefined && !kept.session.isStopped;
+    let startedSession: PreviewSession;
+    if (reattach) {
         clearTimeout(kept.timer);
         keptSessions.delete(projectPath);
-        activeSession = kept.session;
-        session = activeSession;
+        startedSession = kept.session;
+        activeSession = startedSession;
+        session = startedSession;
         outputChannel.appendLine(`${timestamp()} [session] reattached to the kept-alive session`);
-        activeSession.rebind(callbacks);
+        startedSession.rebind(callbacks);
     } else {
-        activeSession = new PreviewSession(projectPath, callbacks, options);
-        session = activeSession;
+        manualOverride = false;
+        startedSession = new PreviewSession(projectPath, callbacks, options);
+        activeSession = startedSession;
+        session = startedSession;
     }
 
-    // The buildRestart driver relies on IDE save events (watch owns detection otherwise, and
-    // notifySourceChanged is a no-op there). Auto-match follows the active editor (plan.md 4.5).
+    // The buildRestart driver relies on IDE save events (watch owns detection otherwise and only
+    // uses them to retry after a failed build). Auto-match follows the active editor (plan.md 4.5).
     sessionSubscriptions.push(
-        vscode.workspace.onDidSaveTextDocument((document) => activeSession.notifySourceChanged(document.uri.fsPath)),
+        vscode.workspace.onDidSaveTextDocument((document) => startedSession.notifySourceChanged(document.uri.fsPath)),
     );
     if (autoSelectTarget) {
+        lastEditorDocument = editorDocumentKey(vscode.window.activeTextEditor);
         sessionSubscriptions.push(
-            vscode.window.onDidChangeActiveTextEditor((editor) => autoMatchTarget(editor, true)),
+            vscode.window.onDidChangeActiveTextEditor((editor) => {
+                const documentKey = editorDocumentKey(editor);
+                if (documentKey === undefined || documentKey === lastEditorDocument) {
+                    return;
+                }
+                lastEditorDocument = documentKey;
+                autoMatchTarget(editor, true);
+            }),
         );
     }
 
-    if (kept === undefined || kept.session.isStopped) {
+    if (!reattach) {
         try {
-            await activeSession.start();
+            await startedSession.start();
         } catch (error) {
             void vscode.window.showErrorMessage(`MewUI Preview failed to start: ${error}`);
             stopPreview();
         }
     }
+}
+
+function editorDocumentKey(editor: vscode.TextEditor | undefined): string | undefined {
+    const uri = editor?.document.uri;
+    return uri?.scheme === "file" ? uri.toString() : undefined;
 }
 
 /**
@@ -155,15 +201,18 @@ function autoMatchTarget(editor: vscode.TextEditor | undefined, fromEditor = fal
         return;
     }
 
-    const match = lastTargets.find(
+    const candidates = lastTargets.filter(
         (target) => target.available !== false && target.sourcePath && samePath(target.sourcePath, fsPath),
     );
-    if (match && match.id !== activeTargetId) {
-        outputChannel.appendLine(`${timestamp()} [session] auto-selecting ${match.id} for ${path.basename(fsPath)}`);
-        activeTargetId = match.id;
-        manualOverride = false;
-        session.selectTarget(match.id);
+    // A file declaring several targets keeps the active one, such as a pick that revealed this file.
+    if (candidates.length === 0 || candidates.some((target) => target.id === activeTargetId)) {
+        return;
     }
+    const match = candidates[0];
+    outputChannel.appendLine(`${timestamp()} [session] auto-selecting ${match.id} for ${path.basename(fsPath)}`);
+    activeTargetId = match.id;
+    manualOverride = false;
+    session.selectTarget(match.id);
 }
 
 /** Opens the target's declaring source in the editor (reverse of auto-match). */
@@ -203,16 +252,19 @@ function detachPanel(): void {
         const keepMinutes = vscode.workspace.getConfiguration("mewui.preview").get<number>("keepSessionMinutes", 10);
         if (keepMinutes > 0) {
             outputChannel.appendLine(`${timestamp()} [session] keeping the session warm for ${keepMinutes} minute(s)`);
-            keptSessions.set(currentSession.projectPath, {
+            const entry = {
                 session: currentSession,
                 timer: setTimeout(() => {
-                    keptSessions.delete(currentSession.projectPath);
-                    currentSession.stop();
+                    if (keptSessions.get(currentSession.projectPath) === entry) {
+                        keptSessions.delete(currentSession.projectPath);
+                    }
+                    stopSession(currentSession);
                     outputChannel.appendLine(`${timestamp()} [session] kept-alive session expired`);
                 }, keepMinutes * 60_000),
-            });
+            };
+            keptSessions.set(currentSession.projectPath, entry);
         } else {
-            currentSession.stop();
+            stopSession(currentSession);
         }
     }
 
@@ -230,16 +282,31 @@ function stopPreview(): void {
     lastTargets = [];
     activeTargetId = "";
     manualOverride = false;
+    const sessions: PreviewSession[] = [];
     for (const kept of keptSessions.values()) {
         clearTimeout(kept.timer);
-        kept.session.stop();
+        sessions.push(kept.session);
     }
     keptSessions.clear();
-    session?.stop();
+    if (session !== undefined) {
+        sessions.push(session);
+    }
     session = undefined;
+    for (const stopping of sessions) {
+        stopSession(stopping);
+    }
     const currentPanel = panel;
     panel = undefined;
     currentPanel?.dispose();
+}
+
+/** Stops one session; a failure is logged so the remaining sessions still get stopped. */
+function stopSession(target: PreviewSession): void {
+    try {
+        target.stop();
+    } catch (error) {
+        outputChannel.appendLine(`${timestamp()} [session] stopping ${target.projectPath} failed: ${error}`);
+    }
 }
 
 /** Resolves the executable project for the active document (plan.md 4.5.1/4.7). */

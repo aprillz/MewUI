@@ -26,6 +26,8 @@ export class PreviewPanel {
     private pendingTargets: { targets: PreviewTargetInfo[]; activeId: string } | undefined;
     private pendingStatus: StatusInfo | undefined;
     private pendingState: { state: string; detail?: string } | undefined;
+    // Posting to a disposed webview throws, so every show* call checks this first.
+    private disposed = false;
 
     constructor(title: string, navigateOnSelect: boolean, private readonly callbacks: PanelCallbacks) {
         this.panel = vscode.window.createWebviewPanel(
@@ -36,18 +38,28 @@ export class PreviewPanel {
         );
         this.panel.webview.html = createHtml(navigateOnSelect);
         this.panel.webview.onDidReceiveMessage((message) => this.onMessage(message));
-        this.panel.onDidDispose(() => callbacks.onDisposed());
+        this.panel.onDidDispose(() => {
+            this.disposed = true;
+            callbacks.onDisposed();
+        });
     }
 
     public reveal(): void {
-        this.panel.reveal(vscode.ViewColumn.Beside, true);
+        if (!this.disposed) {
+            this.panel.reveal(vscode.ViewColumn.Beside, true);
+        }
     }
 
     public dispose(): void {
-        this.panel.dispose();
+        if (!this.disposed) {
+            this.panel.dispose();
+        }
     }
 
     public showFrame(header: FrameHeader, pixels: Buffer): void {
+        if (this.disposed) {
+            return;
+        }
         if (!this.webviewReady) {
             this.pendingFrame = { header, pixels };
             return;
@@ -64,6 +76,9 @@ export class PreviewPanel {
     }
 
     public showTargets(targets: PreviewTargetInfo[], activeId: string): void {
+        if (this.disposed) {
+            return;
+        }
         if (!this.webviewReady) {
             this.pendingTargets = { targets, activeId };
             return;
@@ -72,6 +87,9 @@ export class PreviewPanel {
     }
 
     public showStatus(status: StatusInfo): void {
+        if (this.disposed) {
+            return;
+        }
         if (!this.webviewReady) {
             this.pendingStatus = status;
             return;
@@ -80,6 +98,9 @@ export class PreviewPanel {
     }
 
     public showSessionState(state: string, detail?: string): void {
+        if (this.disposed) {
+            return;
+        }
         if (!this.webviewReady) {
             this.pendingState = { state, detail };
             return;
@@ -175,10 +196,10 @@ function createHtml(navigateOnSelect: boolean): string {
   #state { margin-left: auto; max-width: 55%; overflow: hidden; text-overflow: ellipsis;
            white-space: nowrap; opacity: .8; }
   #state.error { color: var(--vscode-errorForeground); opacity: 1; }
-  #surface { flex: 1; display: flex; align-items: center; justify-content: center;
-             overflow: auto; padding: 8px; }
-  canvas { border: 1px solid var(--vscode-panel-border); flex: none; }
-  canvas.fit { max-width: 100%; max-height: 100%; }
+  #surface { flex: 1; display: flex; overflow: auto; padding: 8px; }
+  #surface.fit { overflow: hidden; }
+  /* Auto margins center without clipping the scroll origin; the ring takes no layout space, so the canvas box is its content. */
+  canvas { margin: auto; flex: none; box-shadow: 0 0 0 1px var(--vscode-panel-border); }
   canvas:focus { outline: 1px solid var(--vscode-focusBorder); }
   #detail { flex: none; max-height: 30%; overflow: auto; display: none; margin: 0; padding: 6px 8px;
             border-top: 1px solid var(--vscode-panel-border);
@@ -209,6 +230,7 @@ function createHtml(navigateOnSelect: boolean): string {
   const vscode = acquireVsCodeApi();
   const canvas = document.getElementById("canvas");
   const context = canvas.getContext("2d");
+  const surface = document.getElementById("surface");
   const targetsSelect = document.getElementById("targets");
   const zoomSelect = document.getElementById("zoom");
   const themeButton = document.getElementById("theme");
@@ -218,23 +240,31 @@ function createHtml(navigateOnSelect: boolean): string {
   let themeMode = "";
   let lastDpiScale = 1;
 
-  // Zoom rides the requested DPI: the session re-renders the vectors at the zoomed scale and
-  // the canvas shows the frame at one frame pixel per device pixel, so zoom stays crisp.
-  // Fit remains a display-side downscale of the natural-scale render.
+  // Zoom rides the requested DPI: the session re-renders the vectors at the zoomed scale and the
+  // canvas shows one app DIP as zoom CSS pixels, which is one frame pixel per device pixel, so
+  // zoom stays crisp. Fit shows the natural-scale render and only ever shrinks it.
   function zoomFactor() {
     return zoomSelect.value === "fit" ? 1 : parseInt(zoomSelect.value, 10) / 100;
   }
 
+  function surfaceContentSize() {
+    return { width: surface.clientWidth - 16, height: surface.clientHeight - 16 };
+  }
+
   function applyZoom() {
-    if (zoomSelect.value === "fit") {
-      canvas.classList.add("fit");
-      canvas.style.width = "";
-      canvas.style.height = "";
-    } else {
-      canvas.classList.remove("fit");
-      canvas.style.width = (canvas.width / window.devicePixelRatio) + "px";
-      canvas.style.height = (canvas.height / window.devicePixelRatio) + "px";
+    const fit = zoomSelect.value === "fit";
+    surface.classList.toggle("fit", fit);
+    const width = canvas.width / lastDpiScale * zoomFactor();
+    const height = canvas.height / lastDpiScale * zoomFactor();
+    let shrink = 1;
+    if (fit) {
+      const available = surfaceContentSize();
+      if (available.width > 0 && available.height > 0) {
+        shrink = Math.min(1, available.width / width, available.height / height);
+      }
     }
+    canvas.style.width = (width * shrink) + "px";
+    canvas.style.height = (height * shrink) + "px";
   }
 
   window.addEventListener("message", (event) => {
@@ -285,8 +315,8 @@ function createHtml(navigateOnSelect: boolean): string {
       canvas.width = width;
       canvas.height = height;
       imageData = context.createImageData(width, height);
-      applyZoom();
     }
+    applyZoom();
     if (imageData === null) {
       imageData = context.createImageData(width, height);
     }
@@ -328,16 +358,23 @@ function createHtml(navigateOnSelect: boolean): string {
   });
 
   function postViewport() {
-    const surface = document.getElementById("surface");
+    // A hidden panel has no layout yet; a 1px viewport would collapse auto-sized components.
+    if (surface.clientWidth === 0 || surface.clientHeight === 0) {
+      return;
+    }
+    const available = surfaceContentSize();
     vscode.postMessage({
       type: "viewport",
-      width: Math.max(1, surface.clientWidth - 16),
-      height: Math.max(1, surface.clientHeight - 16),
+      width: Math.max(1, available.width),
+      height: Math.max(1, available.height),
       dpi: 96 * window.devicePixelRatio * zoomFactor(),
     });
   }
 
-  new ResizeObserver(() => postViewport()).observe(document.getElementById("surface"));
+  new ResizeObserver(() => {
+    applyZoom();
+    postViewport();
+  }).observe(surface);
 
   // Interactive preview: canvas events are forwarded to the running app. Coordinates convert
   // from CSS pixels to window DIPs via the canvas backing size and the frame's DPI scale.
@@ -347,10 +384,11 @@ function createHtml(navigateOnSelect: boolean): string {
 
   function toDip(event) {
     const rect = canvas.getBoundingClientRect();
-    const scale = rect.width > 0 ? canvas.width / rect.width : 1;
+    const scaleX = rect.width > 0 ? canvas.width / rect.width : 1;
+    const scaleY = rect.height > 0 ? canvas.height / rect.height : 1;
     return {
-      x: (event.clientX - rect.left) * scale / lastDpiScale,
-      y: (event.clientY - rect.top) * scale / lastDpiScale,
+      x: (event.clientX - rect.left) * scaleX / lastDpiScale,
+      y: (event.clientY - rect.top) * scaleY / lastDpiScale,
     };
   }
 
@@ -358,28 +396,46 @@ function createHtml(navigateOnSelect: boolean): string {
     vscode.postMessage({ type: "input", kind, body });
   }
 
-  function postPointer(kind, event) {
+  function postPointer(kind, event, clickCount) {
     const point = toDip(event);
     postInput(kind, {
       x: point.x,
       y: point.y,
       button: event.button,
       buttons: event.buttons,
-      clickCount: event.detail > 0 ? event.detail : 1,
+      clickCount,
       modifiers: inputModifiers(event),
     });
+  }
+
+  // pointerdown carries no click count (detail is 0), so presses are counted per button the way the
+  // native backends do; a release reports the count of its press.
+  const DOUBLE_CLICK_TIME_MS = 500;
+  const DOUBLE_CLICK_DISTANCE = 4;
+  const lastPresses = new Map();
+
+  function countPress(event) {
+    const previous = lastPresses.get(event.button);
+    const repeated = previous !== undefined
+      && event.timeStamp - previous.time <= DOUBLE_CLICK_TIME_MS
+      && Math.abs(event.clientX - previous.x) <= DOUBLE_CLICK_DISTANCE
+      && Math.abs(event.clientY - previous.y) <= DOUBLE_CLICK_DISTANCE;
+    const count = repeated ? previous.count + 1 : 1;
+    lastPresses.set(event.button, { time: event.timeStamp, x: event.clientX, y: event.clientY, count });
+    return count;
   }
 
   canvas.addEventListener("pointerdown", (event) => {
     canvas.focus();
     canvas.setPointerCapture(event.pointerId);
-    postPointer("pointerPressed", event);
+    postPointer("pointerPressed", event, countPress(event));
     event.preventDefault();
   });
-  canvas.addEventListener("pointermove", (event) => postPointer("pointerMoved", event));
+  canvas.addEventListener("pointermove", (event) => postPointer("pointerMoved", event, 1));
   canvas.addEventListener("pointerup", (event) => {
     canvas.releasePointerCapture(event.pointerId);
-    postPointer("pointerReleased", event);
+    const press = lastPresses.get(event.button);
+    postPointer("pointerReleased", event, press !== undefined ? press.count : 1);
   });
   canvas.addEventListener("contextmenu", (event) => event.preventDefault());
   canvas.addEventListener("wheel", (event) => {
@@ -430,6 +486,8 @@ function createHtml(navigateOnSelect: boolean): string {
   watchDevicePixelRatio();
 
   vscode.postMessage({ type: "ready" });
+  applyZoom();
+  postViewport();
 </script>
 </body>
 </html>`;
