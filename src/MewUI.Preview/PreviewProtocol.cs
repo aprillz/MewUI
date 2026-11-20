@@ -13,7 +13,7 @@ internal static class PreviewProtocol
     internal const int PROTOCOL_MAJOR = 1;
     internal const int PROTOCOL_MINOR = 2;
 
-    // Sanity cap for inbound messages; Frame (outbound) is bounded by the negotiated viewport.
+    // Cap both ends enforce on a message; the session lowers the render DPI to keep frames under it.
     internal const int MAX_MESSAGE_BYTES = 64 * 1024 * 1024;
 
     internal const int HELLO = 1;

@@ -19,6 +19,9 @@ internal sealed class PreviewSession : IDisposable
     private const double DEFAULT_VIEWPORT_WIDTH = 800;
     private const double DEFAULT_VIEWPORT_HEIGHT = 600;
     private const int ACK_TIMEOUT_MS = 5000;
+    // Room for the envelope and the JSON header under the protocol's message limit.
+    private const double MAX_FRAME_BYTES = PreviewProtocol.MAX_MESSAGE_BYTES - 64 * 1024;
+    private const double MIN_LIMITED_DPI = 48;
 
     private readonly HashSet<Window> _dirtyWindows = new();
     // The IDE sends a key message and then the text it typed as separate messages, like WM_CHAR.
@@ -56,8 +59,16 @@ internal sealed class PreviewSession : IDisposable
         }
         _requestWake = requestWake;
         MewUiHotReload.DeltaApplied += OnDeltaApplied;
-        _channel = new PreviewChannel(OnChannelMessage, OnChannelConnected);
+        _channel = new PreviewChannel(OnChannelMessage, OnChannelConnected, OnSessionLost);
         _channel.Start();
+    }
+
+    private static void OnSessionLost()
+    {
+        // A preview process the IDE no longer drives would otherwise hold its output folder locked
+        // and retry the connection for as long as it lives.
+        PreviewTrace.Log("IDE session lost; shutting down");
+        Application.Shutdown();
     }
 
     public void Stop()
@@ -145,6 +156,7 @@ internal sealed class PreviewSession : IDisposable
         // rendering, and pixel readback; CPU backends return a no-op scope.
         using var renderScope = window.GraphicsFactory.AcquireBackgroundRenderScope();
 
+        LimitDpiToFrameSize(window);
         double dpiScale = window.DpiScale > 0 ? window.DpiScale : 1.0;
         var clientSize = window.ClientSize;
         int widthPx = Math.Max(1, (int)Math.Round(clientSize.Width * dpiScale));
@@ -195,6 +207,30 @@ internal sealed class PreviewSession : IDisposable
         PreviewTrace.Log($"frame seq={seq} {widthPx}x{heightPx} render={renderMs}ms send={sendMs}ms");
     }
 
+    /// <summary>
+    /// Lowers the window DPI when the requested zoom would produce a frame larger than the protocol
+    /// message limit; clients drop such a message and the stream would reconnect forever.
+    /// </summary>
+    private void LimitDpiToFrameSize(Window window)
+    {
+        double dpiScale = window.DpiScale > 0 ? window.DpiScale : 1.0;
+        var clientSize = window.ClientSize;
+        double frameBytes = Math.Round(clientSize.Width * dpiScale) * Math.Round(clientSize.Height * dpiScale) * 4;
+        if (frameBytes <= MAX_FRAME_BYTES)
+        {
+            return;
+        }
+
+        uint limitedDpi = (uint)Math.Max(MIN_LIMITED_DPI, Math.Floor(window.Dpi * Math.Sqrt(MAX_FRAME_BYTES / frameBytes)));
+        if (limitedDpi >= window.Dpi)
+        {
+            return;
+        }
+
+        window.SetDpi(limitedDpi);
+        SendStatus($"Previewing {_activeTargetId} at {limitedDpi} DPI: the requested zoom exceeds the frame size limit");
+    }
+
     private void OnChannelConnected()
     {
         RunOnUiThread(() =>
@@ -215,7 +251,16 @@ internal sealed class PreviewSession : IDisposable
         {
             using (json)
             {
-                HandleMessage(typeId, json);
+                try
+                {
+                    HandleMessage(typeId, json);
+                }
+                catch (Exception ex)
+                {
+                    // Messages run app code (input handlers, layout at a new DPI); a throw must reach
+                    // the IDE as a status instead of ending the preview loop.
+                    SendStatus($"Preview message {typeId} failed: {ex.Message}", hasError: true, exceptionDetail: ex.ToString());
+                }
             }
         });
     }
@@ -326,25 +371,18 @@ internal sealed class PreviewSession : IDisposable
         bool middleDown = (pointer.Buttons & 4) != 0;
         var modifiers = PreviewInputMapper.MapModifiers(pointer.Modifiers);
 
-        try
+        if (typeId == PreviewProtocol.POINTER_MOVED)
         {
-            if (typeId == PreviewProtocol.POINTER_MOVED)
-            {
-                WindowInputRouter.MouseMove(window, position, position, leftDown, rightDown, middleDown, modifiers);
-            }
-            else
-            {
-                WindowInputRouter.MouseButton(window, position, position,
-                    PreviewInputMapper.MapButton(pointer.Button),
-                    isDown: typeId == PreviewProtocol.POINTER_PRESSED,
-                    leftDown, rightDown, middleDown,
-                    Math.Max(1, pointer.ClickCount),
-                    modifiers);
-            }
+            WindowInputRouter.MouseMove(window, position, position, leftDown, rightDown, middleDown, modifiers);
         }
-        catch (Exception ex)
+        else
         {
-            SendStatus($"Input dispatch failed: {ex.Message}", hasError: true, exceptionDetail: ex.ToString());
+            WindowInputRouter.MouseButton(window, position, position,
+                PreviewInputMapper.MapButton(pointer.Button),
+                isDown: typeId == PreviewProtocol.POINTER_PRESSED,
+                leftDown, rightDown, middleDown,
+                Math.Max(1, pointer.ClickCount),
+                modifiers);
         }
     }
 
