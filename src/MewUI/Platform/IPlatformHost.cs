@@ -158,4 +158,15 @@ internal interface IPlatformHost : IDisposable
     /// per-OS layout - it only consumes <see cref="IPlacesProvider"/>.
     /// </summary>
     IPlacesProvider PlacesProvider => EmptyPlacesProvider.Instance;
+
+    /// <summary>
+    /// Whether the platform has somewhere to show tray icons right now.
+    /// </summary>
+    bool IsTrayIconSupported => false;
+
+    /// <summary>
+    /// Shows the icon on the platform and returns its platform side, or null where the platform shows no tray icons.
+    /// Called on the UI thread.
+    /// </summary>
+    ITrayIconBackend? CreateTrayIconBackend(Controls.TrayIcon trayIcon) => null;
 }

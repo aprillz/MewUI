@@ -110,7 +110,7 @@ public sealed class Application
             }
 
             _styleSheet = value;
-            var windows = _runtime?.SnapshotWindows() ?? Array.Empty<Window>();
+            var windows = _runtime?.SnapshotAllWindows() ?? Array.Empty<Window>();
             for (int i = 0; i < windows.Length; i++)
             {
                 windows[i].RefreshStyles(scope: null, animate: true);
@@ -284,6 +284,8 @@ public sealed class Application
     internal static InputMap? CurrentInputMapOrNull => _current != null ? _current.InputMap : null;
 
     internal Window[] SnapshotWindows() => _runtime?.SnapshotWindows() ?? Array.Empty<Window>();
+
+    internal Window[] SnapshotAllWindows() => _runtime?.SnapshotAllWindows() ?? Array.Empty<Window>();
 
     private static InputMap CreateDefaultInputMap()
     {
@@ -693,7 +695,7 @@ public sealed class Application
     {
         _styleSheet.InvalidateLazyCache();
 
-        var windows = _runtime?.SnapshotWindows() ?? Array.Empty<Window>();
+        var windows = _runtime?.SnapshotAllWindows() ?? Array.Empty<Window>();
         for (int i = 0; i < windows.Length; i++)
         {
             windows[i].InvalidateStyleSheetLazyCaches();
@@ -702,7 +704,7 @@ public sealed class Application
 
     internal void RefreshStylesAfterHotReload()
     {
-        var windows = _runtime?.SnapshotWindows() ?? Array.Empty<Window>();
+        var windows = _runtime?.SnapshotAllWindows() ?? Array.Empty<Window>();
         for (int i = 0; i < windows.Length; i++)
         {
             windows[i].RefreshStyles(scope: null, animate: false);
@@ -711,7 +713,7 @@ public sealed class Application
 
     private void ApplyThemeChange(Theme oldTheme, Theme newTheme)
     {
-        var windows = _runtime?.SnapshotWindows() ?? Array.Empty<Window>();
+        var windows = _runtime?.SnapshotAllWindows() ?? Array.Empty<Window>();
         foreach (var window in windows)
         {
             window.BroadcastThemeChanged(oldTheme, newTheme);
@@ -721,6 +723,10 @@ public sealed class Application
     }
 
     internal void RegisterWindow(Window window) => _runtime?.Register(window);
+
+    internal void RegisterTrayIcon(Controls.TrayIcon trayIcon) => _runtime?.RegisterTrayIcon(trayIcon);
+
+    internal void UnregisterTrayIcon(Controls.TrayIcon trayIcon) => _runtime?.UnregisterTrayIcon(trayIcon);
 
     // The shutdown decision is owned by ApplicationRuntime (policy-driven, one place) rather than each
     // platform host; hosts only maintain their own hwnd registry for routing.

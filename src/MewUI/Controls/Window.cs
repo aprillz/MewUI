@@ -865,7 +865,13 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     /// affordance - the framework draws everything. Backends consult this where OS chrome machinery
     /// would otherwise engage (style mask selection, close path that requires a close affordance).
     /// </summary>
-    internal bool UsesBorderlessSurfaceChrome => _kind is WindowKind.Popup or WindowKind.Overlay;
+    internal bool UsesBorderlessSurfaceChrome => _kind is WindowKind.Popup or WindowKind.Overlay or WindowKind.MenuHost;
+
+    /// <summary>
+    /// Whether the framework owns this window for its own use (a menu host, or a popup it owns): such a window is
+    /// not one of the application's windows and never counts toward ending the run.
+    /// </summary>
+    internal bool IsFrameworkInternal => _kind == WindowKind.MenuHost || Owner?.IsFrameworkInternal == true;
 
     /// <summary>
     /// The opaque color a non-transparent window clears to: the user-set <see cref="Control.Background"/> when it

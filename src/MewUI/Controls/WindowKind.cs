@@ -11,4 +11,7 @@ internal enum WindowKind
     Tool,
     Popup,
     Overlay,
+
+    // Owns popups for a surface with no window of its own (a tray menu); draws nothing, can take activation.
+    MenuHost,
 }

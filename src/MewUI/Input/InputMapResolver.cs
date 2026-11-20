@@ -171,6 +171,34 @@ internal static class InputMapResolver
     }
 
     /// <summary>
+    /// Finds the single gesture the command mapped with <paramref name="data"/> answers to in the application input
+    /// map alone, for a menu outside every window (a tray or dock menu).
+    /// </summary>
+    internal static bool TryGetApplicationGesture(Command command, object? data, out KeyGesture gesture)
+    {
+        var applicationMap = Application.CurrentInputMapOrNull;
+        var sequences = applicationMap?.GetSequences(command);
+        if (applicationMap != null && sequences != null)
+        {
+            foreach (var candidate in sequences)
+            {
+                var resolved = candidate.Resolve();
+                if (resolved.IsSingle &&
+                    applicationMap.Match(resolved, out var entry) == InputMapMatch.Exact &&
+                    ReferenceEquals(entry.Command, command) &&
+                    Equals(entry.Data, data))
+                {
+                    gesture = resolved[0];
+                    return true;
+                }
+            }
+        }
+
+        gesture = default;
+        return false;
+    }
+
+    /// <summary>
     /// The mapping that pressing the whole sequence reaches: every stroke before the last has to be taken as the start
     /// of a longer sequence, which a nearer map mapping those strokes to something else prevents.
     /// </summary>

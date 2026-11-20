@@ -49,6 +49,14 @@ internal sealed class TracingPlatformHost : IPlatformHost
 
     public bool SupportsTransparentOverlay => _inner.SupportsTransparentOverlay;
 
+    public bool IsTrayIconSupported => _inner.IsTrayIconSupported;
+
+    public ITrayIconBackend? CreateTrayIconBackend(Controls.TrayIcon trayIcon)
+    {
+        DiagLog.Write($"[PlatformHost#{_id}] CreateTrayIconBackend");
+        return _inner.CreateTrayIconBackend(trayIcon);
+    }
+
     public void Run(Application app, Window? mainWindow)
     {
         DiagLog.Write(mainWindow != null
