@@ -116,7 +116,7 @@ internal struct OpacityGroup
             try
             {
                 _outer.SetTransform(Matrix3x2.Identity);
-                _outer.GlobalAlpha *= (float)Math.Clamp(_opacity, 0.0, 1.0);
+                CompositionAlpha.Multiply(_outer, Math.Clamp(_opacity, 0.0, 1.0));
                 _outer.DrawImage(image, _placement, new Rect(0, 0, _pixelWidth, _pixelHeight));
             }
             finally

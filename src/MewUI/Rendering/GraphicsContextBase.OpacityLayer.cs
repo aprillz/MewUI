@@ -45,8 +45,7 @@ internal abstract partial class GraphicsContextBase
             return;
         }
 
-        Save();
-        GlobalAlpha *= (float)Math.Clamp(opacity, 0.0, 1.0);
+        BeginAlphaScope(opacity);
         (_opacityScopes ??= new Stack<OpacityGroup?>()).Push(null);
     }
 
@@ -149,7 +148,7 @@ internal abstract partial class GraphicsContextBase
 
     float IGraphicsContext.GlobalAlpha
     {
-        get => _layerTarget?.GlobalAlpha ?? GlobalAlpha;
+        get => _layerTarget?.GlobalAlpha ?? _drawingAlpha;
         set
         {
             var layer = _layerTarget;
@@ -159,7 +158,8 @@ internal abstract partial class GraphicsContextBase
             }
             else
             {
-                GlobalAlpha = value;
+                _drawingAlpha = value;
+                GlobalAlpha = _compositionAlpha * value;
             }
         }
     }

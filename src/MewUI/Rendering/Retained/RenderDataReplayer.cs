@@ -108,6 +108,9 @@ internal static class RenderDataReplayer
             case RenderCommandKind.SetGlobalAlpha:
                 context.GlobalAlpha = (float)arguments[0];
                 break;
+            case RenderCommandKind.MultiplyCompositionAlpha:
+                CompositionAlpha.Multiply(context, arguments[0]);
+                break;
             case RenderCommandKind.SetTextPixelSnap:
                 context.TextPixelSnap = command.BooleanValue;
                 break;
