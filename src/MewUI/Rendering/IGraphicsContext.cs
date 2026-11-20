@@ -118,9 +118,10 @@ namespace Aprillz.MewUI.Rendering
         void ResetTransform();
 
         /// <summary>
-        /// Gets or sets the global opacity multiplier applied to all subsequent drawing operations.
-        /// Must be in the range [0, 1]. Defaults to <c>1f</c> (fully opaque).
-        /// The value is saved and restored by <see cref="Save"/> / <see cref="Restore"/>.
+        /// Gets or sets the opacity multiplier applied to the drawing calls that follow, in the range [0, 1].
+        /// It multiplies onto the opacity the caller is drawn under, such as an ancestor's fade or an open
+        /// <see cref="BeginOpacity"/> scope, which it cannot replace. It starts at <c>1f</c> and is saved and
+        /// restored by <see cref="Save"/> / <see cref="Restore"/>.
         /// </summary>
         float GlobalAlpha { get; set; }
 

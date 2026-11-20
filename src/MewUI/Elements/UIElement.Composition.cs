@@ -267,7 +267,7 @@ public abstract partial class UIElement
 
             if (alpha < 1)
             {
-                context.GlobalAlpha *= (float)alpha;
+                CompositionAlpha.Multiply(context, alpha);
             }
         }
 

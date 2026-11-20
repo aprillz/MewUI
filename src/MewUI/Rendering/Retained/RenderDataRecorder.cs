@@ -66,6 +66,13 @@ internal sealed class RenderDataRecorder : IGraphicsContext
         }
     }
 
+    /// <summary>Records and applies an alpha the framework puts around the drawing that follows.</summary>
+    internal void MultiplyCompositionAlpha(float alpha)
+    {
+        Record(RenderCommandKind.MultiplyCompositionAlpha, values: [alpha]);
+        CompositionAlpha.Multiply(_inner, alpha);
+    }
+
     public bool TextPixelSnap
     {
         get => _inner.TextPixelSnap;
@@ -141,6 +148,11 @@ internal sealed class RenderDataRecorder : IGraphicsContext
         {
             _inner.BeginOpacity(opacity);
         }
+        else
+        {
+            // No layer, but the alpha a visual reads inside the scope must start over as it will on replay.
+            CompositionAlpha.BeginScope(_inner, opacity);
+        }
     }
 
     public void EndOpacity()
@@ -149,6 +161,10 @@ internal sealed class RenderDataRecorder : IGraphicsContext
         if (Draws)
         {
             _inner.EndOpacity();
+        }
+        else
+        {
+            CompositionAlpha.EndScope(_inner);
         }
     }
 

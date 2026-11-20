@@ -906,7 +906,7 @@ internal sealed class SceneCapture
 
                 break;
             case CompositionEntryKind.Alpha:
-                context.GlobalAlpha *= (float)entry.Alpha;
+                CompositionAlpha.Multiply(context, entry.Alpha);
                 break;
             default:
                 throw new InvalidOperationException($"The composition entry {entry.Kind} is not a drawing scope.");

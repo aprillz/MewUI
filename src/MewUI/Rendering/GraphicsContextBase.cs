@@ -23,6 +23,11 @@ internal abstract class GraphicsContextBase : IGraphicsContext, ITextBackendRend
     private Rect _cullRect = InfiniteCullRect;
     private readonly Stack<Rect> _cullStack = CollectionPool<Stack<Rect>>.Rent();
 
+    // The framework's alpha around the drawing code (an ancestor's fade, an open opacity scope); the backend's GlobalAlpha holds it times _drawingAlpha.
+    private float _compositionAlpha = 1f;
+    private float _drawingAlpha = 1f;
+    private readonly Stack<(float Composition, float Drawing)> _alphaStack = CollectionPool<Stack<(float Composition, float Drawing)>>.Rent();
+
     private int _drawCalls;
     private int _cullCount;
     private int _saveCount;
@@ -90,6 +95,9 @@ internal abstract class GraphicsContextBase : IGraphicsContext, ITextBackendRend
         _rootTransform = Matrix3x2.Identity;
         _cullRect = InfiniteCullRect;
         _cullStack.Clear();
+        _compositionAlpha = 1f;
+        _drawingAlpha = 1f;
+        _alphaStack.Clear();
         _drawCalls = 0;
         _cullCount = 0;
         _saveCount = 0;
@@ -148,11 +156,7 @@ internal abstract class GraphicsContextBase : IGraphicsContext, ITextBackendRend
     /// Multiplies the opacity of the scope. The default folds it into <see cref="GlobalAlpha"/>,
     /// which every backend honours; override to composite the scope as one group instead.
     /// </summary>
-    public virtual void BeginOpacity(double opacity)
-    {
-        Save();
-        GlobalAlpha *= (float)Math.Clamp(opacity, 0.0, 1.0);
-    }
+    public virtual void BeginOpacity(double opacity) => BeginAlphaScope(opacity);
 
     /// <summary>
     /// Ends the innermost <see cref="BeginOpacity"/> scope.
@@ -165,6 +169,7 @@ internal abstract class GraphicsContextBase : IGraphicsContext, ITextBackendRend
     {
         _saveCount++;
         _cullStack.Push(_cullRect);
+        _alphaStack.Push((_compositionAlpha, _drawingAlpha));
         SaveCore();
     }
 
@@ -178,6 +183,7 @@ internal abstract class GraphicsContextBase : IGraphicsContext, ITextBackendRend
         if (_cullStack.Count > 0)
         {
             _cullRect = _cullStack.Pop();
+            (_compositionAlpha, _drawingAlpha) = _alphaStack.Pop();
             RestoreCore();
         }
         else
@@ -587,6 +593,7 @@ internal abstract class GraphicsContextBase : IGraphicsContext, ITextBackendRend
         {
             IsActive = false;
             _cullStack.Clear();
+            _alphaStack.Clear();
             ReleaseFrameResources();
             TextServices.FrameEnded(this);
         }
@@ -642,6 +649,7 @@ internal abstract class GraphicsContextBase : IGraphicsContext, ITextBackendRend
         OnDispose();
         _boxShadowStopsCache.Clear();
         CollectionPool.Return(_cullStack);
+        CollectionPool.Return(_alphaStack);
     }
 
     /// <summary>
@@ -655,6 +663,39 @@ internal abstract class GraphicsContextBase : IGraphicsContext, ITextBackendRend
     #region Optional capabilities
 
     public virtual float GlobalAlpha { get => 1f; set { } }
+
+    float IGraphicsContext.GlobalAlpha
+    {
+        get => _drawingAlpha;
+        set
+        {
+            _drawingAlpha = value;
+            GlobalAlpha = _compositionAlpha * value;
+        }
+    }
+
+    /// <summary>
+    /// Multiplies an alpha the framework applies around the drawing that follows, which that drawing's own
+    /// <see cref="IGraphicsContext.GlobalAlpha"/> multiplies onto and cannot replace. The enclosing
+    /// <see cref="Restore"/> undoes it.
+    /// </summary>
+    internal void MultiplyCompositionAlpha(float alpha)
+    {
+        _compositionAlpha *= alpha;
+        GlobalAlpha = _compositionAlpha * _drawingAlpha;
+    }
+
+    /// <summary>
+    /// Saves the state and starts the drawing alpha over at one, with the alpha drawn so far and
+    /// <paramref name="opacity"/> moved into the composition alpha, as a layer of its own would start.
+    /// </summary>
+    internal void BeginAlphaScope(double opacity)
+    {
+        Save();
+        _compositionAlpha *= _drawingAlpha * (float)Math.Clamp(opacity, 0.0, 1.0);
+        _drawingAlpha = 1f;
+        GlobalAlpha = _compositionAlpha;
+    }
 
     public virtual bool TextPixelSnap { get => true; set { } }
 

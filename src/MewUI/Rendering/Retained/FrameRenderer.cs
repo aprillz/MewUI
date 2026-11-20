@@ -117,7 +117,7 @@ internal static class FrameRenderer
         if (alphaScope)
         {
             context.Save();
-            context.GlobalAlpha *= (float)node.State.Opacity;
+            CompositionAlpha.Multiply(context, node.State.Opacity);
         }
 
         if (opacityScope && TryReplayKeptGroup(scene, node, context, subtreeBounds, localShift, planShift))
@@ -464,7 +464,7 @@ internal static class FrameRenderer
         try
         {
             context.SetTransform(Matrix3x2.Identity);
-            context.GlobalAlpha *= (float)Math.Clamp(opacity, 0.0, 1.0);
+            CompositionAlpha.Multiply(context, Math.Clamp(opacity, 0.0, 1.0));
             context.DrawImage(image, placement, new Rect(0, 0, layer.PixelWidth, layer.PixelHeight));
         }
         finally
@@ -565,7 +565,7 @@ internal static class FrameRenderer
 
                 break;
             case CompositionEntryKind.Alpha:
-                context.GlobalAlpha *= (float)entry.Alpha;
+                CompositionAlpha.Multiply(context, entry.Alpha);
                 break;
             default:
                 throw new InvalidOperationException($"The composition entry {entry.Kind} is not a scope.");

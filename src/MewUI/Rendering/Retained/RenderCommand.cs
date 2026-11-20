@@ -32,6 +32,7 @@ internal enum RenderCommandKind : byte
     BeginOpacity,
     EndOpacity,
     SetGlobalAlpha,
+    MultiplyCompositionAlpha,
     SetTextPixelSnap,
     SetImageScaleQuality,
     SetAlphaTextHint,
