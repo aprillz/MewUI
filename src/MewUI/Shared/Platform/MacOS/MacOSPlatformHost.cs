@@ -77,6 +77,10 @@ public sealed class MacOSPlatformHost : IPlatformHost
         return new MacOSWindowBackend(this, window);
     }
 
+    bool IPlatformHost.IsTrayIconSupported => true;
+
+    ITrayIconBackend? IPlatformHost.CreateTrayIconBackend(Controls.TrayIcon trayIcon) => new MacOSTrayIconBackend(trayIcon);
+
     public IDispatcher CreateDispatcher(nint windowHandle)
         => _dispatcher ??= new MacOSDispatcher();
 
