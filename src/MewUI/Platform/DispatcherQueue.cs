@@ -200,7 +200,7 @@ internal sealed class DispatcherQueue
 
         try
         {
-            var windows = Application.Current.SnapshotWindows();
+            var windows = Application.Current.SnapshotAllWindows();
             for (int i = 0; i < windows.Length; i++)
             {
                 windows[i].EvaluateCommandStates();
