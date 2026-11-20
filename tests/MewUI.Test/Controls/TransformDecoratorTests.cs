@@ -250,6 +250,34 @@ public sealed class TransformDecoratorTests
         Assert.AreEqual(firstPassRecords - 1, scene.Statistics.ContentReplayCount);
     }
 
+    [TestMethod]
+    [DataRow(true, 1.5f, 1)]
+    [DataRow(true, 2.0f, 0)]
+    [DataRow(false, 1.5f, 0)]
+    public void RetainedScene_NewScale_RecordsAgainOnlyAChildThatReadsTheTransform(bool readsTransform, float scale, int expectedRecords)
+    {
+        if (!OperatingSystem.IsWindows()) { Assert.Inconclusive("GDI backend is Windows-only."); return; }
+
+        using var factory = new GdiGraphicsFactory();
+        using var factoryScope = new DefaultGraphicsFactoryScope(factory);
+        var leaf = new ScaleReadingElement { ReadsTransform = readsTransform };
+        var root = new TransformDecorator { Child = leaf, Transform = Matrix3x2.CreateScale(2f) };
+        root.Measure(new Size(SURFACE_SIZE, SURFACE_SIZE));
+        root.Arrange(new Rect(0, 0, SURFACE_SIZE, SURFACE_SIZE));
+
+        var capture = new SceneCapture();
+        using var scene = new RenderScene();
+        RenderSurface(factory, context => capture.Capture(scene, root, context));
+        int rendersBefore = leaf.Renders;
+
+        // The same scale with a new offset only moves the child, which a recording replays without drawing again.
+        root.Transform = Matrix3x2.CreateScale(scale) * Matrix3x2.CreateTranslation(7, 5);
+        var dirty = new HashSet<UIElement>(ReferenceEqualityComparer.Instance) { root };
+        RenderSurface(factory, context => capture.Capture(scene, root, context, dirty));
+
+        Assert.AreEqual(expectedRecords, leaf.Renders - rendersBefore, $"reads the transform: {readsTransform}, new scale {scale}");
+    }
+
     private static (TransformDecorator Root, PaintedElement Leaf) BuildScene()
     {
         var leaf = new PaintedElement();
@@ -309,6 +337,27 @@ public sealed class TransformDecoratorTests
         {
             context.FillRectangle(Bounds, Color.FromArgb(255, 200, 60, 60));
             context.FillEllipse(Bounds.Deflate(new Thickness(6)), Color.FromArgb(255, 20, 20, 90));
+        }
+    }
+
+    /// <summary>Counts its renders and, like a vector image picking its raster size, may read the transform it is drawn under.</summary>
+    private sealed class ScaleReadingElement : FrameworkElement
+    {
+        public bool ReadsTransform { get; init; }
+
+        public int Renders { get; private set; }
+
+        protected override Size MeasureContent(Size availableSize) => new(40, 30);
+
+        protected override void OnRender(IGraphicsContext context)
+        {
+            Renders++;
+            if (ReadsTransform)
+            {
+                _ = context.GetTransform();
+            }
+
+            context.FillRectangle(Bounds, Color.FromArgb(255, 30, 120, 200));
         }
     }
 

@@ -379,6 +379,7 @@ internal sealed class SceneUpdate
                 // Taken again and found identical: the surface already shows it, so nothing is dirty
                 // and the recording the node holds stays.
                 previous.SurfaceTransform = slot.Data.SurfaceTransform;
+                previous.ReadsTransform = slot.Data.ReadsTransform;
                 slot.Data.Dispose();
                 slot.Node.RecordedContentVersion = slot.ContentVersion;
                 slot.Node.RecordedSubtreeVersion = slot.SubtreeVersion;

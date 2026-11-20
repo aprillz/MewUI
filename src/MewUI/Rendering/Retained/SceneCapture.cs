@@ -938,10 +938,16 @@ internal sealed class SceneCapture
 
     /// <summary>
     /// Whether a recording replays as it was drawn under <paramref name="transform"/>. A transform set outright
-    /// carries the one the slot stood under when it was recorded.
+    /// carries the one the slot stood under when it was recorded, and a visual that read the transform may have
+    /// drawn for its scale, so a new scale or rotation records it again while a move alone does not.
     /// </summary>
     private static bool IsDrawnUnderTheSameTransform(RenderData data, Matrix3x2 transform)
-        => data.CanBePlaced || data.SurfaceTransform == transform;
+    {
+        var recorded = data.SurfaceTransform;
+        bool sameLinearPart = recorded.M11 == transform.M11 && recorded.M12 == transform.M12 &&
+            recorded.M21 == transform.M21 && recorded.M22 == transform.M22;
+        return (data.CanBePlaced || recorded == transform) && (!data.ReadsTransform || sameLinearPart);
+    }
 
     /// <summary>
     /// A compatibility subtree owns its descendants' drawing, so any repaint under it invalidates it.
