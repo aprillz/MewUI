@@ -100,6 +100,9 @@ internal sealed class RenderData : IDisposable
     /// <summary>False when the commands replace, rotate or scale the transform, which a moved replay cannot carry.</summary>
     internal bool CanBePlaced { get; set; } = true;
 
+    /// <summary>True when the visual read the transform while recording, so what it drew may depend on the scale it stood under.</summary>
+    internal bool ReadsTransform { get; set; }
+
     /// <summary>True when the commands reset the clip they are replayed under, so they can ink outside it.</summary>
     internal bool EscapesAmbientClip { get; set; }
 
@@ -484,6 +487,8 @@ internal sealed class RenderDataBuilder
     // A transform set outright ignores what the replay put around it, and text inside a rotation or a
     // scale cannot take a move added to its origin, so neither kind of content can be moved.
     private bool _replacesTransform;
+    // A visual that reads the transform can pick what it draws by the scale, such as the resolution of a raster.
+    private bool _readsTransform;
     // A clip reset outside any Save of the slot's own drops the clip the replay draws it under.
     private bool _escapesAmbientClip;
     private string? _rejectionReason;
@@ -589,6 +594,9 @@ internal sealed class RenderDataBuilder
     // A block of many lines is as tall as its text, but its glyphs overhang by what one line allows.
     private const double TEXT_INK_LINE_HEIGHT_LIMIT = 40;
 
+    /// <summary>Notes that the visual read the transform it is drawn under while this slot was recorded.</summary>
+    internal void NoteTransformRead() => _readsTransform = true;
+
     /// <summary>Marks the slot unrecordable; the reason is kept for diagnostics.</summary>
     internal void Reject(string? reason)
     {
@@ -624,6 +632,7 @@ internal sealed class RenderDataBuilder
             CollectionsMarshal.AsSpan(_extents),
             _localBounds);
         data.CanBePlaced = !_replacesTransform;
+        data.ReadsTransform = _readsTransform;
         data.EscapesAmbientClip = _escapesAmbientClip;
 
         // The built data owns the leases from here on, so they must be dropped without releasing.
@@ -652,6 +661,7 @@ internal sealed class RenderDataBuilder
         _localBounds = default;
         _hasBounds = false;
         _replacesTransform = false;
+        _readsTransform = false;
         _escapesAmbientClip = false;
     }
 

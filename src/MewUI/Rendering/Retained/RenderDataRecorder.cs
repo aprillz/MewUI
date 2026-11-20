@@ -217,7 +217,12 @@ internal sealed class RenderDataRecorder : IGraphicsContext
         _inner.SetTransform(matrix);
     }
 
-    public Matrix3x2 GetTransform() => _inner.GetTransform();
+    public Matrix3x2 GetTransform()
+    {
+        // What a visual reads here can decide what it draws, so its recording holds only under this scale.
+        Slot?.NoteTransformRead();
+        return _inner.GetTransform();
+    }
 
     public void ResetTransform()
     {
