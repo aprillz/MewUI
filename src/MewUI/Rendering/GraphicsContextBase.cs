@@ -12,7 +12,10 @@ namespace Aprillz.MewUI.Rendering;
 internal abstract class GraphicsContextBase : IGraphicsContext, ITextBackendRenderContext
 {
     /// <summary>Frame-bound text drawing surface; one shared implementation, not a backend specialization point.</summary>
-    public ITextRenderContext Text => TextServices.GetRenderContext(this);
+    public ITextRenderContext Text => _textRenderContext ??= TextServices.GetRenderContext(this);
+
+    // Looking the text context up takes a table lookup and a lock, and a frame asks once per text it draws.
+    private ITextRenderContext? _textRenderContext;
 
     private static readonly EnvDebugLogger _stateLogger = new("MEWUI_GRAPHICS_DEBUG", "[GraphicsContextBase]");
     
@@ -645,6 +648,7 @@ internal abstract class GraphicsContextBase : IGraphicsContext, ITextBackendRend
         if (_disposed) return;
         _disposed = true;
         if (IsActive) EndFrame();
+        _textRenderContext = null;
         TextServices.ReleaseRenderContext(this);
         OnDispose();
         _boxShadowStopsCache.Clear();
