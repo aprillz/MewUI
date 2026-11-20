@@ -58,6 +58,8 @@ public sealed class ZoomPanCanvas : FrameworkElement, IVisualTreeHost
     private Tween<double>? _zoomTween;
     private Action<double>? _scrollOnZoomTick;
     private ImageScaleQuality? _savedImageQuality;
+    // The scroll viewer whose scrolling changes which part of the child is on screen.
+    private ScrollViewer? _observedScrollViewer;
 
     public ZoomPanCanvas()
     {
@@ -428,6 +430,35 @@ public sealed class ZoomPanCanvas : FrameworkElement, IVisualTreeHost
         double sy = Math.Max(0, worldCenterY * newZoom + newCy - vpH * 0.5);
         sv.SetScrollOffsets(sx, sy);
         Application.Current.Dispatcher?.BeginInvoke(DispatcherPriority.Render, () => sv.SetScrollOffsets(sx, sy));
+    }
+
+    protected override void OnVisualRootChanged(Element? oldRoot, Element? newRoot)
+    {
+        base.OnVisualRootChanged(oldRoot, newRoot);
+
+        var scrollViewer = newRoot == null ? null : FindParentScrollViewer();
+        if (ReferenceEquals(scrollViewer, _observedScrollViewer))
+        {
+            return;
+        }
+
+        if (_observedScrollViewer != null)
+        {
+            _observedScrollViewer.ScrollChanged -= OnScrollChanged;
+        }
+
+        _observedScrollViewer = scrollViewer;
+        if (scrollViewer != null)
+        {
+            scrollViewer.ScrollChanged += OnScrollChanged;
+        }
+    }
+
+    private void OnScrollChanged()
+    {
+        // Scrolling moves the recorded child without drawing it again, so a child that caches only its
+        // visible part (SvgView) is asked to draw again to cover what scrolled into view.
+        Child?.InvalidateVisual();
     }
 
     private ScrollViewer? FindParentScrollViewer()
