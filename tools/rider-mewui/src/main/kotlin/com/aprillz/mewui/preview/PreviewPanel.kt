@@ -1,9 +1,13 @@
 // Preview tool window surface, the Swing counterpart of tools/vscode-mewui/src/panel.ts:
 // toolbar (project/target pickers, zoom, theme, refresh, restart, status), frame canvas, and
-// input forwarding. Frames arrive as BGRA buffers and convert to an ARGB BufferedImage; after
-// each blit the session gets a FrameAck (flow control, plan.md 4.3.1).
+// input forwarding. Frames arrive as BGRA buffers and are copied into an ARGB BufferedImage on
+// the socket reader thread; the EDT only swaps the image in, then the session gets a FrameAck
+// (flow control, plan.md 4.3.1).
 package com.aprillz.mewui.preview
 
+import com.intellij.openapi.actionSystem.CustomShortcutSet
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.project.DumbAwareAction
 import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Dimension
@@ -11,7 +15,6 @@ import java.awt.FlowLayout
 import java.awt.Graphics
 import java.awt.Graphics2D
 import java.awt.RenderingHints
-import java.awt.image.BufferedImage
 import java.awt.event.ComponentAdapter
 import java.awt.event.ComponentEvent
 import java.awt.event.KeyAdapter
@@ -19,11 +22,12 @@ import java.awt.event.KeyEvent
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import java.awt.event.MouseWheelEvent
+import java.awt.image.BufferedImage
+import java.awt.image.DataBufferInt
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import kotlin.math.abs
-import kotlin.math.round
+import java.util.concurrent.atomic.AtomicReference
 import javax.swing.JButton
 import javax.swing.JCheckBox
 import javax.swing.JComboBox
@@ -31,14 +35,23 @@ import javax.swing.JLabel
 import javax.swing.JPanel
 import javax.swing.JScrollPane
 import javax.swing.JTextArea
+import javax.swing.KeyStroke
 import javax.swing.SwingUtilities
 import javax.swing.Timer
+import kotlin.math.abs
+import kotlin.math.round
+
+private const val UNTRUSTED_MESSAGE =
+    "Not started: this project is not trusted. The preview builds and runs the app (dotnet watch run); trust the project, then press Start."
+private const val MAX_BUILD_ERRORS = 50
 
 class PreviewPanel(
-    private val logSink: (String) -> Unit,
+    private val logSink: (line: String, verbose: Boolean) -> Unit,
     private val activeDocumentPathProvider: () -> String?,
     private val solutionDirectoryProvider: () -> String?,
     private val navigateToSource: (path: String, line: Int?) -> Unit,
+    private val isProjectTrusted: () -> Boolean,
+    private val dotnetHostProvider: () -> DotnetHost,
     loadNavigatePreference: () -> Boolean = { true },
     private val saveNavigatePreference: (Boolean) -> Unit = {},
 ) : JPanel(BorderLayout()) {
@@ -54,16 +67,24 @@ class PreviewPanel(
     private val stateLabel = JLabel("Not running. Pick a project and press Start.")
     private val canvas = FrameCanvas()
     private val scrollPane = JScrollPane(canvas)
-    private val detailArea = JTextArea().apply { isEditable = false; foreground = Color(205, 92, 92); isVisible = false; rows = 6 }
+    private val detailArea = JTextArea().apply { isEditable = false; foreground = Color(205, 92, 92); rows = 6 }
+    private val detailPane = JScrollPane(detailArea).apply { isVisible = false }
     private val viewportTimer = Timer(250) { postViewport() }.apply { isRepeats = false }
+    // The image the canvas no longer shows, handed back by the EDT for the reader thread to refill.
+    private val spareImage = AtomicReference<BufferedImage?>(null)
 
     private var session: PreviewSession? = null
+    private var sessionState: SessionState? = null
     private var targets: List<PreviewTargetInfo> = emptyList()
     private var activeTargetId = ""
     private var themeMode = ""
     private var updatingCombos = false
     // A manual dropdown pick wins over auto-match until the user moves to another editor file.
     private var manualOverride = false
+    private var scanningProjects = false
+    // A start requested before the project scan finished runs when the scan completes.
+    private var startPending = false
+    private val buildErrors = LinkedHashSet<String>()
 
     init {
         val toolbar = JPanel(FlowLayout(FlowLayout.LEFT, 6, 4))
@@ -80,11 +101,11 @@ class PreviewPanel(
 
         add(toolbar, BorderLayout.NORTH)
         add(scrollPane, BorderLayout.CENTER)
-        add(JScrollPane(detailArea).apply { isVisible = false }, BorderLayout.SOUTH)
+        add(detailPane, BorderLayout.SOUTH)
 
         startButton.addActionListener { toggleSession() }
         refreshButton.addActionListener { session?.refreshTarget() }
-        restartButton.addActionListener { session?.restartProcess() }
+        restartButton.addActionListener { restartSession() }
         themeButton.addActionListener { session?.setTheme(if (themeMode == "dark") "light" else "dark") }
         zoomCombo.addActionListener {
             canvas.zoom = zoomCombo.selectedItem as String
@@ -112,11 +133,15 @@ class PreviewPanel(
                 viewportTimer.restart()
             }
         })
+        // Moving the IDE window to a monitor with another scale changes the configuration, not the size.
+        addPropertyChangeListener("graphicsConfiguration") {
+            canvas.revalidate()
+            canvas.repaint()
+            postViewport()
+        }
         hookInput()
-        populateProjects()
+        refreshProjects()
     }
-
-    // ---- session lifecycle ---------------------------------------------------------------
 
     /**
      * Selects the target declared in the given file. Editor-driven calls (the user moved to
@@ -131,17 +156,17 @@ class PreviewPanel(
         if (!fromEditor && manualOverride) {
             return
         }
-        val match = targets.firstOrNull {
-            it.available && it.sourcePath != null
-                && File(it.sourcePath).absolutePath.equals(File(fsPath).absolutePath, ignoreCase = true)
-        } ?: return
-        if (match.id != activeTargetId) {
-            logSink("[session] auto-selecting ${match.id} for ${File(fsPath).name}")
-            activeTargetId = match.id
-            manualOverride = false
-            current.selectTarget(match.id)
-            syncTargetCombo()
+        val file = File(fsPath).absolutePath
+        // A file that declares the active target keeps it, so jumping to a picked target's file never re-picks.
+        if (targets.any { it.id == activeTargetId && isSameFile(it.sourcePath, file) }) {
+            return
         }
+        val match = targets.firstOrNull { it.available && isSameFile(it.sourcePath, file) } ?: return
+        logSink("[session] auto-selecting ${match.id} for ${File(fsPath).name}", false)
+        activeTargetId = match.id
+        manualOverride = false
+        current.selectTarget(match.id)
+        syncTargetCombo()
     }
 
     fun notifySourceChanged(fsPath: String) {
@@ -150,51 +175,159 @@ class PreviewPanel(
 
     /** Starts the session for the auto-selected project; a no-op when one is already running. */
     fun autoStart() {
-        if (session == null && projectCombo.selectedItem != null) {
-            toggleSession()
+        if (session == null) {
+            requestStart()
         }
     }
 
+    /**
+     * Previews the given file's project: starts a session when none runs, and replaces a failed
+     * session or one running another project. The project lookup reads the disk off the EDT.
+     */
+    fun openFor(fsPath: String?) {
+        if (fsPath == null) {
+            autoStart()
+            return
+        }
+        val solutionDirectory = solutionDirectoryProvider()
+        runInBackground {
+            val nearest = ProjectLocator.findNearestProject(fsPath, solutionDirectory)
+                ?.takeIf(ProjectLocator::isExecutableProject)
+            onEdt { applyOpenFor(fsPath, nearest) }
+        }
+    }
+
+    /** Stops the session without blocking the caller; the process tree is terminated in the background. */
     fun stopSession() {
         val current = session
         session = null
+        sessionState = null
+        startPending = false
         current?.stop()
         setSessionUiEnabled(false)
+    }
+
+    private fun applyOpenFor(fsPath: String, projectPath: String?) {
+        if (projectPath != null) {
+            selectProject(projectPath)
+        }
+        val current = session
+        val wanted = (projectCombo.selectedItem as? ProjectEntry)?.path
+        if (current != null) {
+            val otherProject = wanted != null && !current.projectPath.equals(wanted, ignoreCase = true)
+            if (sessionState == SessionState.FAILED || otherProject) {
+                stopSession()
+            }
+        }
+        if (session == null) {
+            requestStart()
+        } else {
+            autoMatchTarget(fsPath, fromEditor = true)
+        }
     }
 
     private fun toggleSession() {
         if (session != null) {
             stopSession()
-            return
-        }
-        val projectPath = (projectCombo.selectedItem as? ProjectEntry)?.path ?: run {
-            populateProjects()
-            (projectCombo.selectedItem as? ProjectEntry)?.path
-        }
-        if (projectPath == null) {
-            showState("No executable (.csproj with OutputType Exe/WinExe) project found.", isError = true)
-            return
-        }
-
-        val callbacks = object : SessionCallbacks {
-            override fun onLog(line: String) = onEdt { logSink(line) }
-            override fun onState(state: SessionState, detail: String?) = onEdt { handleSessionState(state, detail) }
-            override fun onTargets(targets: List<PreviewTargetInfo>, activeId: String) = onEdt { handleTargets(targets, activeId) }
-            override fun onFrame(header: FrameHeader, pixels: ByteArray) = onEdt { handleFrame(header, pixels) }
-            override fun onStatus(status: StatusInfo) = onEdt { handleStatus(status) }
-        }
-        val newSession = PreviewSession(projectPath, callbacks)
-        session = newSession
-        setSessionUiEnabled(true)
-        try {
-            newSession.start()
-        } catch (error: Exception) {
-            showState("failed to start: ${error.message}", isError = true)
-            stopSession()
+        } else {
+            requestStart()
         }
     }
 
+    private fun requestStart() {
+        val projectPath = (projectCombo.selectedItem as? ProjectEntry)?.path
+        if (projectPath != null) {
+            startSession(projectPath)
+            return
+        }
+        startPending = true
+        showState("Looking for executable projects...", isError = false)
+        if (!scanningProjects) {
+            refreshProjects()
+        }
+    }
+
+    private fun startSession(projectPath: String) {
+        startPending = false
+        // The session runs MSBuild targets and the app's Main: never for a project the user has not trusted.
+        if (!isProjectTrusted()) {
+            showState(UNTRUSTED_MESSAGE, isError = true)
+            return
+        }
+
+        val callbacks = PanelCallbacks()
+        val newSession = PreviewSession(projectPath, callbacks, SessionOptions(dotnetHost = dotnetHostProvider))
+        callbacks.owner = newSession
+        session = newSession
+        sessionState = null
+        clearBuildErrors()
+        setSessionUiEnabled(true)
+        postViewport()
+        try {
+            newSession.start()
+        } catch (error: Exception) {
+            stopSession()
+            showState("failed to start: ${error.message}", isError = true)
+        }
+    }
+
+    private fun restartSession() {
+        val current = session ?: return
+        if (!isProjectTrusted()) {
+            showState(UNTRUSTED_MESSAGE, isError = true)
+            return
+        }
+        clearBuildErrors()
+        current.restartProcess()
+    }
+
+    /** Session events, dropped once their session is no longer the panel's (a stopped session's queued events). */
+    private inner class PanelCallbacks : SessionCallbacks {
+        lateinit var owner: PreviewSession
+
+        private fun ifCurrent(action: () -> Unit) = onEdt {
+            if (session === owner) {
+                action()
+            }
+        }
+
+        override fun onLog(line: String) = logSink(line, false)
+
+        override fun onOutput(line: String) {
+            // Per-frame and timing trace lines from the preview runtime stay out of the default log level.
+            logSink(line, line.startsWith("[mewui-preview "))
+            if (BUILD_ERROR_PATTERN.containsMatchIn(line)) {
+                ifCurrent { addBuildError(line.trim()) }
+            }
+        }
+
+        override fun onState(state: SessionState, detail: String?) = ifCurrent { handleSessionState(state, detail) }
+
+        override fun onTargets(targets: List<PreviewTargetInfo>, activeId: String) = ifCurrent { handleTargets(targets, activeId) }
+
+        override fun onFrame(header: FrameHeader, pixels: ByteArray) {
+            val image = decodeFrame(header, pixels)
+            if (image == null) {
+                logSink("[session] dropped malformed frame ${header.seq} (${header.width}x${header.height}, stride ${header.stride})", false)
+                owner.ackFrame(header.seq)
+                return
+            }
+            onEdt {
+                if (session === owner) {
+                    canvas.setFrame(image, header.dpiScale)
+                    owner.ackFrame(header.seq)
+                }
+            }
+        }
+
+        override fun onStatus(status: StatusInfo) = ifCurrent { handleStatus(status) }
+    }
+
     private fun onEdt(action: () -> Unit) = SwingUtilities.invokeLater(action)
+
+    private fun runInBackground(action: () -> Unit) {
+        ApplicationManager.getApplication().executeOnPooledThread(Runnable { action() })
+    }
 
     private fun setSessionUiEnabled(running: Boolean) {
         startButton.text = if (running) "Stop" else "Start"
@@ -208,32 +341,59 @@ class PreviewPanel(
         }
     }
 
-    private fun populateProjects() {
-        val previous = (projectCombo.selectedItem as? ProjectEntry)?.path
+    /** Rescans the solution for executable projects off the EDT, then applies the list on the EDT. */
+    private fun refreshProjects() {
+        scanningProjects = true
         val solutionDirectory = solutionDirectoryProvider()
-        val executables = ProjectLocator.findExecutableProjects(solutionDirectory).toMutableList()
         val activePath = activeDocumentPathProvider()
-        val nearest = activePath?.let { ProjectLocator.findNearestProject(it, solutionDirectory) }
-        if (nearest != null && ProjectLocator.isExecutableProject(nearest)
-            && executables.none { it.equals(nearest, ignoreCase = true) }
-        ) {
-            executables.add(0, nearest)
+        runInBackground {
+            val nearest = runCatching {
+                activePath?.let { path -> ProjectLocator.findNearestProject(path, solutionDirectory) }
+                    ?.takeIf(ProjectLocator::isExecutableProject)
+            }.getOrNull()
+            val found = runCatching { ProjectLocator.findExecutableProjects(solutionDirectory) }.getOrDefault(emptyList())
+            val executables = if (nearest != null && found.none { it.equals(nearest, ignoreCase = true) }) {
+                listOf(nearest) + found
+            } else {
+                found
+            }
+            onEdt { applyProjects(executables, nearest) }
         }
+    }
 
+    private fun applyProjects(executables: List<String>, nearest: String?) {
+        scanningProjects = false
+        val previous = (projectCombo.selectedItem as? ProjectEntry)?.path
         updatingCombos = true
         projectCombo.removeAllItems()
         executables.forEach { projectCombo.addItem(ProjectEntry(it)) }
         updatingCombos = false
+        (previous ?: nearest)?.let(::selectProject)
 
-        val preferred = previous ?: nearest?.takeIf(ProjectLocator::isExecutableProject)
-        if (preferred != null) {
-            for (index in 0 until projectCombo.itemCount) {
-                if (projectCombo.getItemAt(index).path.equals(preferred, ignoreCase = true)) {
-                    projectCombo.selectedIndex = index
-                    break
-                }
+        if (startPending) {
+            startPending = false
+            val selected = (projectCombo.selectedItem as? ProjectEntry)?.path
+            if (session != null) {
+                return
+            }
+            if (selected != null) {
+                startSession(selected)
+            } else {
+                showState("No executable (.csproj with OutputType Exe/WinExe) project found.", isError = true)
             }
         }
+    }
+
+    private fun selectProject(projectPath: String) {
+        for (index in 0 until projectCombo.itemCount) {
+            if (projectCombo.getItemAt(index).path.equals(projectPath, ignoreCase = true)) {
+                projectCombo.selectedIndex = index
+                return
+            }
+        }
+        val entry = ProjectEntry(projectPath)
+        projectCombo.insertItemAt(entry, 0)
+        projectCombo.selectedItem = entry
     }
 
     private class ProjectEntry(val path: String) {
@@ -247,15 +407,16 @@ class PreviewPanel(
         }
     }
 
-    // ---- session events ------------------------------------------------------------------
-
     private fun handleSessionState(state: SessionState, detail: String?) {
-        logSink("[session] $state${if (detail != null) ": $detail" else ""}")
+        sessionState = state
+        logSink("[session] $state${if (detail != null) ": $detail" else ""}", false)
         when (state) {
             SessionState.FAILED, SessionState.DISCONNECTED ->
                 showState("$state${if (detail != null) ": $detail" else ""}", isError = true)
-            SessionState.STARTING ->
+            SessionState.STARTING -> {
+                clearBuildErrors()
                 showState(if (detail != null) "Restarting..." else "Starting...", isError = false)
+            }
             else -> {}
         }
     }
@@ -285,11 +446,11 @@ class PreviewPanel(
     }
 
     private fun handleStatus(status: StatusInfo) {
+        if (!status.hasError) {
+            buildErrors.clear()
+        }
         showState(status.message, status.hasError)
-        detailArea.text = status.exceptionDetail ?: ""
-        detailArea.parent?.parent?.isVisible = !status.exceptionDetail.isNullOrEmpty()
-        detailArea.isVisible = !status.exceptionDetail.isNullOrEmpty()
-        revalidate()
+        showDetail(status.exceptionDetail)
         if (!status.themeMode.isNullOrEmpty()) {
             themeMode = status.themeMode
             themeButton.text = when (themeMode) {
@@ -300,9 +461,26 @@ class PreviewPanel(
         }
     }
 
-    private fun handleFrame(header: FrameHeader, pixels: ByteArray) {
-        canvas.setFrame(header, pixels)
-        session?.ackFrame(header.seq)
+    /** Surfaces compiler/MSBuild errors from the driver output, which otherwise only reach the IDE log. */
+    private fun addBuildError(line: String) {
+        if (buildErrors.size >= MAX_BUILD_ERRORS || !buildErrors.add(line)) {
+            return
+        }
+        showState("Build error: ${buildErrors.first()}", isError = true)
+        showDetail(buildErrors.joinToString("\n"))
+    }
+
+    private fun clearBuildErrors() {
+        if (buildErrors.isNotEmpty()) {
+            buildErrors.clear()
+            showDetail(null)
+        }
+    }
+
+    private fun showDetail(text: String?) {
+        detailArea.text = text ?: ""
+        detailPane.isVisible = !text.isNullOrEmpty()
+        revalidate()
     }
 
     private fun showState(message: String, isError: Boolean) {
@@ -336,7 +514,34 @@ class PreviewPanel(
     private fun deviceScale(): Double =
         graphicsConfiguration?.defaultTransform?.scaleX ?: 1.0
 
-    // ---- frame canvas / input ------------------------------------------------------------
+    /** Copies a BGRA frame into a reusable ARGB image; runs on the socket reader thread, never the EDT. */
+    private fun decodeFrame(header: FrameHeader, pixels: ByteArray): BufferedImage? {
+        val width = header.width
+        val height = header.height
+        val rowBytes = width.toLong() * 4
+        if (width <= 0 || height <= 0 || header.stride < rowBytes
+            || pixels.size < header.stride.toLong() * (height - 1) + rowBytes
+        ) {
+            return null
+        }
+
+        var image = spareImage.getAndSet(null)
+        if (image == null || image.width != width || image.height != height) {
+            image = BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
+        }
+        val target = (image.raster.dataBuffer as DataBufferInt).data
+        // BGRA little-endian bytes read as ints are exactly ARGB values.
+        if (header.stride.toLong() == rowBytes) {
+            ByteBuffer.wrap(pixels, 0, width * 4 * height).order(ByteOrder.LITTLE_ENDIAN).asIntBuffer()
+                .get(target, 0, width * height)
+        } else {
+            for (row in 0 until height) {
+                ByteBuffer.wrap(pixels, row * header.stride, width * 4).order(ByteOrder.LITTLE_ENDIAN).asIntBuffer()
+                    .get(target, row * width, width)
+            }
+        }
+        return image
+    }
 
     private inner class FrameCanvas : JPanel() {
         var zoom: String = "Fit"
@@ -345,48 +550,43 @@ class PreviewPanel(
 
         init {
             isFocusable = true
+            // Tab must reach the app instead of moving IDE focus.
+            focusTraversalKeysEnabled = false
         }
 
-        fun setFrame(header: FrameHeader, pixels: ByteArray) {
-            dpiScale = if (header.dpiScale > 0) header.dpiScale else 1.0
-            var current = image
-            if (current == null || current.width != header.width || current.height != header.height) {
-                current = BufferedImage(header.width, header.height, BufferedImage.TYPE_INT_ARGB)
-                image = current
+        fun setFrame(next: BufferedImage, frameDpiScale: Double) {
+            dpiScale = if (frameDpiScale > 0) frameDpiScale else 1.0
+            val previous = image
+            image = next
+            if (previous == null || previous.width != next.width || previous.height != next.height) {
                 revalidate()
             }
-            // BGRA little-endian bytes read as ints are exactly ARGB values.
-            val ints = IntArray(header.width)
-            val byteView = ByteBuffer.wrap(pixels).order(ByteOrder.LITTLE_ENDIAN)
-            for (row in 0 until header.height) {
-                byteView.position(row * header.stride)
-                byteView.asIntBuffer().get(ints, 0, header.width)
-                current.setRGB(0, row, header.width, 1, ints, 0, header.width)
+            if (previous != null && previous !== next) {
+                spareImage.set(previous)
             }
             repaint()
         }
 
         /**
-         * Displayed size in swing units. Numeric zooms ride the requested DPI (the session
-         * re-renders at the zoomed scale), so the frame always shows one frame pixel per
-         * device pixel; Fit remains a display-side downscale of the natural-scale render.
+         * Displayed size in swing units. Frames are rendered at the device scale (times the
+         * zoom), so frame pixels / device scale shows one frame pixel per device pixel; Fit
+         * only ever shrinks that natural size to the viewport.
          */
         private fun displaySize(): Dimension {
             val current = image ?: return Dimension(1, 1)
             val scale = deviceScale()
+            val naturalWidth = current.width / scale
+            val naturalHeight = current.height / scale
             if (zoom == "Fit") {
                 val viewport = scrollPane.viewport.size
                 val fit = minOf(
                     1.0,
-                    (viewport.width - 16).toDouble() / current.width,
-                    (viewport.height - 16).toDouble() / current.height,
+                    (viewport.width - 16) / naturalWidth,
+                    (viewport.height - 16) / naturalHeight,
                 )
-                return Dimension((current.width * fit).toInt().coerceAtLeast(1), (current.height * fit).toInt().coerceAtLeast(1))
+                return Dimension((naturalWidth * fit).toInt().coerceAtLeast(1), (naturalHeight * fit).toInt().coerceAtLeast(1))
             }
-            return Dimension(
-                (current.width / scale).toInt().coerceAtLeast(1),
-                (current.height / scale).toInt().coerceAtLeast(1),
-            )
+            return Dimension(naturalWidth.toInt().coerceAtLeast(1), naturalHeight.toInt().coerceAtLeast(1))
         }
 
         override fun getPreferredSize(): Dimension = displaySize()
@@ -463,6 +663,12 @@ class PreviewPanel(
                 }
             }
         })
+
+        // The keymap binds Escape to "focus editor", which the IDE runs before component key
+        // listeners; a shortcut scoped to the canvas wins, so the press reaches the app instead.
+        DumbAwareAction.create {
+            session?.sendInput(PreviewProtocol.KEY, mapOf("code" to "Escape", "isDown" to true, "modifiers" to 0))
+        }.registerCustomShortcutSet(CustomShortcutSet(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0)), canvas)
     }
 
     private fun sendPointer(typeId: Int, event: MouseEvent) {
@@ -480,10 +686,10 @@ class PreviewPanel(
     }
 
     private fun sendKey(event: KeyEvent, isDown: Boolean) {
-        val code = W3cInput.keyCode(event.keyCode) ?: return
+        // Every key goes out (unmapped ones as "Unidentified") so the app resets its per-keystroke text suppression.
         session?.sendInput(
             PreviewProtocol.KEY,
-            mapOf("code" to code, "isDown" to isDown, "modifiers" to W3cInput.modifiers(event)),
+            mapOf("code" to W3cInput.keyCode(event), "isDown" to isDown, "modifiers" to W3cInput.modifiers(event)),
         )
         // Mirror the native key-then-character sequence for keys keyTyped skips.
         if (isDown && W3cInput.modifiers(event) and 13 == 0) {
@@ -495,5 +701,12 @@ class PreviewPanel(
         if (event.keyCode in intArrayOf(KeyEvent.VK_TAB, KeyEvent.VK_LEFT, KeyEvent.VK_RIGHT, KeyEvent.VK_UP, KeyEvent.VK_DOWN, KeyEvent.VK_SPACE)) {
             event.consume()
         }
+    }
+
+    private companion object {
+        val BUILD_ERROR_PATTERN = Regex("""\berror\s+[A-Z]{2,}\d+\s*:""")
+
+        fun isSameFile(sourcePath: String?, absolutePath: String): Boolean =
+            sourcePath != null && File(sourcePath).absolutePath.equals(absolutePath, ignoreCase = true)
     }
 }

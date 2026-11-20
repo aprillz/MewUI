@@ -5,7 +5,9 @@ package com.aprillz.mewui.preview
 
 import com.google.gson.Gson
 import com.google.gson.JsonObject
-import java.io.ByteArrayOutputStream
+import java.io.BufferedInputStream
+import java.io.EOFException
+import java.io.InputStream
 
 object PreviewProtocol {
     const val PROTOCOL_MAJOR = 1
@@ -53,41 +55,42 @@ object PreviewProtocol {
 
 class DecodedMessage(val typeId: Int, val json: JsonObject, val binary: ByteArray)
 
-/** Incremental frame decoder: feed socket chunks, emits complete messages via the callback. */
-class MessageDecoder(private val onMessage: (DecodedMessage) -> Unit) {
-    private val buffer = ByteArrayOutputStream()
-    private var consumed = 0
+/** Blocking message reader: reads each header, then fills exact-size JSON and payload arrays. */
+class MessageReader(stream: InputStream) {
+    private val input = BufferedInputStream(stream, 64 * 1024)
+    private val header = ByteArray(12)
 
-    fun push(chunk: ByteArray, count: Int) {
-        buffer.write(chunk, 0, count)
-        val data = buffer.toByteArray()
-        var offset = consumed
-
-        while (data.size - offset >= 12) {
-            val totalLength = readInt(data, offset)
-            require(totalLength in 8..PreviewProtocol.MAX_MESSAGE_BYTES) { "invalid message length $totalLength" }
-            if (data.size - offset < 4 + totalLength) {
-                break
-            }
-
-            val typeId = readInt(data, offset + 4)
-            val jsonLength = readInt(data, offset + 8)
-            val payloadLength = totalLength - 8
-            require(jsonLength in 0..payloadLength) { "invalid json length $jsonLength" }
-
-            val jsonText = String(data, offset + 12, jsonLength, Charsets.UTF_8)
-            val binary = data.copyOfRange(offset + 12 + jsonLength, offset + 4 + totalLength)
-            offset += 4 + totalLength
-
-            onMessage(DecodedMessage(typeId, PreviewProtocol.gson.fromJson(jsonText, JsonObject::class.java), binary))
+    /** Returns the next message, or null when the stream ends on a message boundary. */
+    fun read(): DecodedMessage? {
+        val headerStart = input.readNBytes(header, 0, 4)
+        if (headerStart == 0) {
+            return null
         }
-
-        if (offset > 0) {
-            val remaining = data.copyOfRange(offset, data.size)
-            buffer.reset()
-            buffer.write(remaining)
+        if (headerStart < 4) {
+            throw EOFException("truncated message header")
         }
-        consumed = 0
+        val totalLength = readInt(header, 0)
+        require(totalLength in 8..PreviewProtocol.MAX_MESSAGE_BYTES) { "invalid message length $totalLength" }
+        readExactly(header, 4, 8)
+
+        val typeId = readInt(header, 4)
+        val jsonLength = readInt(header, 8)
+        val payloadLength = totalLength - 8
+        require(jsonLength in 0..payloadLength) { "invalid json length $jsonLength" }
+
+        val json = ByteArray(jsonLength)
+        readExactly(json, 0, jsonLength)
+        val binary = ByteArray(payloadLength - jsonLength)
+        readExactly(binary, 0, binary.size)
+
+        val body = PreviewProtocol.gson.fromJson(String(json, Charsets.UTF_8), JsonObject::class.java) ?: JsonObject()
+        return DecodedMessage(typeId, body, binary)
+    }
+
+    private fun readExactly(target: ByteArray, offset: Int, length: Int) {
+        if (input.readNBytes(target, offset, length) < length) {
+            throw EOFException("truncated message")
+        }
     }
 
     private fun readInt(data: ByteArray, offset: Int): Int =
