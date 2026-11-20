@@ -62,6 +62,23 @@ Receiver: `StyleSheet`.
 | `With(string name, Func<Style> factory)` |  | Defines a named style through a factory invoked on first lookup (Define) and returns the sheet for chaining. |
 | `WithName(string styleName)` |  | Defines a type-based style rule by style name (Define) and returns the sheet for chaining. |
 
+### TrayIcon
+
+Receiver: `TrayIcon`.
+
+| Method | Sets | Summary |
+|---|---|---|
+| `Command(Command value)` | `Command` | Sets Command. The command the icon runs when activated. |
+| `CommandData(object value)` | `CommandData` | Sets CommandData. The value passed to Command as its invocation argument. |
+| `ContextMenu(ContextMenu value)` | `ContextMenu` | Sets ContextMenu. The menu the icon opens; null for an icon without a menu. |
+| `Icon(IconSource value)` | `Icon` | Sets Icon. The icon image; null shows the application's own icon. |
+| `IsMonochromeIcon(bool value = true)` | `IsMonochromeIcon` | Sets IsMonochromeIcon. Whether the icon is a single-color glyph that the platform may tint to match its status bar. |
+| `IsVisible(bool value = true)` | `IsVisible` | Sets IsVisible. Whether the icon is shown; false by default. |
+| `OnClick(Action<TrayIconEventArgs> handler)` | `event Click` | Subscribes handler to Click. Occurs when the platform reports a primary activation of the icon apart from opening its menu. |
+| `OnDoubleClick(Action<TrayIconEventArgs> handler)` | `event DoubleClick` | Subscribes handler to DoubleClick. Occurs on a double click where the platform reports one; its clicks raise Click as well. |
+| `OnMenuOpening(Action handler)` | `event MenuOpening` | Subscribes handler to MenuOpening. Occurs just before the menu opens; a handler may replace or fill ContextMenu. |
+| `ToolTipText(string value)` | `ToolTipText` | Sets ToolTipText. The text shown when the pointer rests on the icon. |
+
 ### FrameworkElement
 
 Receiver: `FrameworkElement` and derived types (`where T : FrameworkElement`).

@@ -21,6 +21,7 @@ const guides = [
   'theme',
   'layout',
   'draganddrop',
+  'trayicon',
   'focusandtabnavigation',
   'localization',
   'textviewextensions',
