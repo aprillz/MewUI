@@ -112,7 +112,12 @@ internal sealed class PopupManager
         }
 
         _toolTipOwner = null;
-        _toolTip = null;
+        if (_toolTip != null)
+        {
+            // The drain above detaches without the close path, so the borrowed content is returned here.
+            _toolTip.Content = null;
+            _toolTip = null;
+        }
     }
 
     internal void CloseAllPopups()
@@ -159,6 +164,12 @@ internal sealed class PopupManager
     {
         ArgumentNullException.ThrowIfNull(owner);
         ArgumentNullException.ThrowIfNull(popup);
+
+        // A closed window has released its popup hosts; a surface opened now would outlive it.
+        if (_window.IsClosed)
+        {
+            return default;
+        }
 
         // Opening an interactive popup is a user interaction with this window, but not every platform
         // activates an inactive window on the triggering click (e.g. right-click), so anchor activation
@@ -634,6 +645,8 @@ internal sealed class PopupManager
         if (ReferenceEquals(entry.Element, _toolTip))
         {
             _toolTipOwner = null;
+            // The content is the owner's ToolTip element, only borrowed while shown; returning it lets any tooltip show it again.
+            _toolTip!.Content = null;
         }
     }
 
@@ -743,6 +756,12 @@ internal sealed class PopupManager
         ArgumentNullException.ThrowIfNull(owner);
         ArgumentNullException.ThrowIfNull(content);
         ArgumentNullException.ThrowIfNull(place);
+
+        // A tooltip answers the pointer resting on the window, which a closed or hidden window cannot have.
+        if (_window.IsClosed || _window.IsHidden)
+        {
+            return;
+        }
 
         // While an interactive popup (menu, drop-down) is open, only elements inside the most recent one show
         // tooltips: hover elsewhere is not the user's focus, and a tooltip surface appearing/disappearing
