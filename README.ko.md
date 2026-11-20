@@ -347,6 +347,7 @@ Windows, Linux/X11, macOS에서는 다른 앱의 드롭도 앱 안의 드래그�
 - [C# 마크업](docs/CSharpMarkup.ko.md)
 - [명령 시스템](docs/CommandSystem.ko.md)
 - [드래그 앤 드롭](docs/DragAndDrop.ko.md)
+- [트레이 아이콘](docs/TrayIcon.ko.md)
 - [바인딩](docs/Binding.ko.md)
 - [아이템과 템플릿](docs/ItemsAndTemplates.ko.md)
 - [테마](docs/Theme.ko.md)
