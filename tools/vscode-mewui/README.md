@@ -1,6 +1,6 @@
 # MewUI Preview
 
-Live preview for [Aprillz.MewUI](https://github.com/aprillz/MewUI) windows and user controls, rendered inside VS Code while you edit plain C#.
+Live preview for [MewUI](https://mewui.aprillz.net) windows and user controls, rendered inside VS Code while you edit plain C#.
 
 ## How it works
 
@@ -39,4 +39,5 @@ Run **MewUI: Start Preview** from a C# file. The extension launches your app as 
 | `mewui.preview.reloadDriver` | `auto` | `watch` (hot reload), `buildRestart` (restart on save), or `auto` fallback |
 | `mewui.preview.sessionStartTimeoutSeconds` | `60` | Wait before retrying with a shim session that skips the app entry point; `0` disables |
 | `mewui.preview.autoSelectTarget` | `true` | Follow the active editor file |
+| `mewui.preview.openSourceOnSelect` | `true` | Jump to the declaration when the target changes (the Go to code checkbox) |
 | `mewui.preview.keepSessionMinutes` | `10` | Keep the session running after the panel closes; `0` stops it immediately |

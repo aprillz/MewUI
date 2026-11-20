@@ -19,3 +19,7 @@ VS 확장성 워크로드 없이 NuGet `Microsoft.VSSDK.BuildTools`만으로 빌
 ```
 
 사용: 보기 > 다른 창 > MewUI Preview. 툴윈도우 안에서 프로젝트 선택 후 Start. 창을 닫아도 세션은 유지되고(재열기 시 즉시 재부착) Stop 버튼이 세션을 종료한다.
+
+## 게시
+
+마켓플레이스 게시는 `tools/release/Publish-Extensions.ps1`이 수행한다. 게시자 계정 준비와 점검 목록은 `agent/preview-tooling/publishing.md`에 있다.

@@ -1,11 +1,49 @@
 <idea-plugin>
   <id>com.aprillz.mewui.preview</id>
   <name>MewUI Preview</name>
-  <vendor>Aprillz</vendor>
+  <vendor url="https://www.aprillz.net" email="al6uiz@aprillz.net">Aprillz</vendor>
   <description><![CDATA[
-    Live editor preview for MewUI windows and user controls: build once, then every save
-    updates the preview through .NET Hot Reload.
+    <p>Live preview for <a href="https://mewui.aprillz.net">MewUI</a> windows and user controls,
+    rendered in a Rider tool window while you edit plain C#.</p>
+
+    <h3>How it works</h3>
+    <p>Open <b>MewUI Preview</b> from the tool window bar, or right-click a C# file and choose
+    <b>Open MewUI Preview</b>. The plugin launches your app as a preview session: the real entry
+    point, themes, and fonts run headless, and frames stream into the tool window. From then on
+    every save updates the preview through .NET Hot Reload, typically in under a second, without
+    restarting the process.</p>
+
+    <h3>Features</h3>
+    <ul>
+      <li>Previews any <code>Window</code> or <code>UserControl</code> with a parameterless
+      constructor (<code>internal</code> types included), plus the app's main window as-is.</li>
+      <li>Opening a file previews the component declared in it; picking a target jumps to its
+      declaration.</li>
+      <li><code>.DesignSize(w, h)</code>, <code>.DesignWidth(w)</code> and
+      <code>.DesignHeight(h)</code> control the preview size, and <code>Design.IsPreviewMode</code>
+      guards side effects.</li>
+      <li>Interactive: mouse, wheel, keyboard, and typed text reach the running app.</li>
+      <li>Target picker, light/dark toggle, zoom (Fit to 200%), refresh, and session restart.</li>
+      <li>Renders at the monitor's DPI, so the image stays crisp at any scale.</li>
+      <li>No preview code ships in your app: the preview assembly is referenced only during
+      sessions.</li>
+    </ul>
+
+    <h3>Requirements</h3>
+    <ul>
+      <li>.NET SDK 8.0 or later (10.0 recommended) on PATH.</li>
+      <li>A project referencing Aprillz.MewUI 0.20.0 or later.</li>
+    </ul>
   ]]></description>
+  <change-notes><![CDATA[
+    <h3>0.1.0</h3>
+    <ul>
+      <li>First release: preview MewUI windows and user controls in a Rider tool window, updated on
+      every save through .NET Hot Reload.</li>
+      <li>Interactive preview: mouse, wheel, keyboard, and typed text reach the running app.</li>
+      <li>Target picker, light/dark toggle, zoom, refresh, and session restart.</li>
+    </ul>
+  ]]></change-notes>
   <depends>com.intellij.modules.platform</depends>
   <depends>com.intellij.modules.rider</depends>
   <extensions defaultExtensionNs="com.intellij">

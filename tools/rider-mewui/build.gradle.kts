@@ -40,6 +40,9 @@ intellijPlatform {
             // Matches the compile target (Rider 2026.2); older IDEs cannot load the
             // Kotlin 2.4 metadata this build produces anyway.
             sinceBuild = "262"
+            // No upper bound: the plugin is a pure JVM frontend with no ReSharper backend
+            // component, so a new Rider release does not require a rebuild.
+            untilBuild = provider { null }
         }
     }
     // The plugin contributes no settings UI; skip the headless-IDE indexing pass.
