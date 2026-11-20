@@ -1453,7 +1453,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
         User32.SendMessage(Handle, WindowMessages.WM_SETICON, (nint)ICON_BIG, _hIconBig);
     }
 
-    private static nint TryCreateIcon(IconSource icon, int desiredSizePx)
+    internal static nint TryCreateIcon(IconSource icon, int desiredSizePx)
     {
         if (!icon.TryGetPixels(desiredSizePx, out var bmp))
         {
@@ -1637,6 +1637,13 @@ internal sealed class Win32WindowBackend : IWindowBackend
             // WS_EX_LAYERED is required for the click-through hit-test pass-through to work.
             case Controls.WindowKind.Overlay:
                 exStyle |= WindowStylesEx.WS_EX_TRANSPARENT | WindowStylesEx.WS_EX_LAYERED | WindowStylesEx.WS_EX_NOACTIVATE;
+                break;
+
+            // Menu host: out of the taskbar and Alt-Tab, fully transparent (EffectiveOpacity) and click-through, but
+            // activatable, because a notification-area menu must hold the foreground to close on an outside click.
+            case Controls.WindowKind.MenuHost:
+                exStyle |= WindowStylesEx.WS_EX_TOOLWINDOW | WindowStylesEx.WS_EX_TRANSPARENT | WindowStylesEx.WS_EX_LAYERED;
+                exStyle &= ~WindowStylesEx.WS_EX_APPWINDOW;
                 break;
         }
 
@@ -1930,7 +1937,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
             return;
         }
 
-        bool needsLayered = _allowsTransparency || _opacity < 0.999;
+        bool needsLayered = _allowsTransparency || EffectiveOpacity < 0.999;
         bool hasLayered = (exStyle & WindowStylesEx.WS_EX_LAYERED) != 0;
 
         if (needsLayered == hasLayered)
@@ -1960,9 +1967,12 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
         // Global opacity for non-layered rendering.
         const uint LWA_ALPHA = 0x00000002;
-        byte alpha = (byte)Math.Round(_opacity * 255.0);
+        byte alpha = (byte)Math.Round(EffectiveOpacity * 255.0);
         _ = User32.SetLayeredWindowAttributes(Handle, 0, alpha, LWA_ALPHA);
     }
+
+    // A menu host is never seen, whatever opacity the window carries.
+    private double EffectiveOpacity => Window.Kind == Controls.WindowKind.MenuHost ? 0 : _opacity;
 
     private void ValidateTransparencySupport()
     {
