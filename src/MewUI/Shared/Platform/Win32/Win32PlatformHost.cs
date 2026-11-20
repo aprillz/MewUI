@@ -132,6 +132,10 @@ public sealed class Win32PlatformHost : IPlatformHost
     /// <summary>Creates a window backend for <paramref name="window"/>.</summary>
     public IWindowBackend CreateWindowBackend(Window window) => new Win32WindowBackend(this, window);
 
+    bool IPlatformHost.IsTrayIconSupported => true;
+
+    ITrayIconBackend? IPlatformHost.CreateTrayIconBackend(Controls.TrayIcon trayIcon) => new Win32TrayIconBackend(trayIcon);
+
     /// <summary>Creates a UI dispatcher associated with <paramref name="windowHandle"/>.</summary>
     public IDispatcher CreateDispatcher(nint windowHandle) => new Win32Dispatcher(windowHandle);
 
