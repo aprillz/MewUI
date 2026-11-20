@@ -808,6 +808,18 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITra
                 }
                 finally { ComHelpers.Release(gradBrush); }
             }
+            else if (pen.Brush is ImageBrush imageBrush)
+            {
+                nint bmpBrush = CreateImageBrushHandle(imageBrush);
+                try
+                {
+                    if (bmpBrush != 0)
+                    {
+                        D2D1VTable.DrawGeometry((ID2D1RenderTarget*)_renderTarget, geometry, bmpBrush, stroke, ssHandle);
+                    }
+                }
+                finally { ComHelpers.Release(bmpBrush); }
+            }
             else
             {
                 Color color = pen.Brush is SolidColorBrush solid ? solid.Color : Color.Black;
@@ -862,6 +874,18 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITra
             }
             finally { ComHelpers.Release(gradBrush); }
         }
+        else if (pen.Brush is ImageBrush imageBrush)
+        {
+            nint bmpBrush = CreateImageBrushHandle(imageBrush);
+            try
+            {
+                if (bmpBrush != 0)
+                {
+                    D2D1VTable.DrawLine((ID2D1RenderTarget*)_renderTarget, p0, p1, bmpBrush, stroke, ssHandle);
+                }
+            }
+            finally { ComHelpers.Release(bmpBrush); }
+        }
         else
         {
             Color color = pen.Brush is SolidColorBrush solid ? solid.Color : Color.Black;
@@ -897,6 +921,18 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITra
             }
             finally { ComHelpers.Release(gradBrush); }
         }
+        else if (pen.Brush is ImageBrush imageBrush)
+        {
+            nint bmpBrush = CreateImageBrushHandle(imageBrush);
+            try
+            {
+                if (bmpBrush != 0)
+                {
+                    D2D1VTable.DrawRectangle((ID2D1RenderTarget*)_renderTarget, rf, bmpBrush, stroke, ssHandle);
+                }
+            }
+            finally { ComHelpers.Release(bmpBrush); }
+        }
         else
         {
             Color color = pen.Brush is SolidColorBrush solid ? solid.Color : Color.Black;
@@ -931,6 +967,18 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITra
                 }
             }
             finally { ComHelpers.Release(gradBrush); }
+        }
+        else if (pen.Brush is ImageBrush imageBrush)
+        {
+            nint bmpBrush = CreateImageBrushHandle(imageBrush);
+            try
+            {
+                if (bmpBrush != 0)
+                {
+                    D2D1VTable.DrawRoundedRectangle((ID2D1RenderTarget*)_renderTarget, rr, bmpBrush, stroke, ssHandle);
+                }
+            }
+            finally { ComHelpers.Release(bmpBrush); }
         }
         else
         {
@@ -970,6 +1018,18 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITra
                 }
             }
             finally { ComHelpers.Release(gradBrush); }
+        }
+        else if (pen.Brush is ImageBrush imageBrush)
+        {
+            nint bmpBrush = CreateImageBrushHandle(imageBrush);
+            try
+            {
+                if (bmpBrush != 0)
+                {
+                    D2D1VTable.DrawEllipse((ID2D1RenderTarget*)_renderTarget, ellipse, bmpBrush, stroke, ssHandle);
+                }
+            }
+            finally { ComHelpers.Release(bmpBrush); }
         }
         else
         {

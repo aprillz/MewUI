@@ -6,8 +6,8 @@ using MewUI.Test.Infrastructure;
 namespace MewUI.Test.Rendering;
 
 /// <summary>
-/// A fill with an image brush whose tile is a view of an offscreen surface, as an SVG pattern paints, comes out in the
-/// tile's colour on every backend, drawn straight or replayed from the retained scene.
+/// A fill or a stroke with an image brush whose tile is a view of an offscreen surface, as an SVG pattern paints, comes
+/// out in the tile's colour on every backend, drawn straight or replayed from the retained scene.
 /// </summary>
 [TestClass]
 [DoNotParallelize]
@@ -24,6 +24,16 @@ public sealed class ImageBrushFillTests
     [DataRow(TestBackend.Direct2D)]
     [DataRow(TestBackend.MewVG)]
     public void ARectFilledWithASurfaceTileShowsTheTile(TestBackend backend)
+        => Check(backend, strokes: false, "fill");
+
+    [TestMethod]
+    [DataRow(TestBackend.Gdi)]
+    [DataRow(TestBackend.Direct2D)]
+    [DataRow(TestBackend.MewVG)]
+    public void APathStrokedWithASurfaceTileShowsTheTile(TestBackend backend)
+        => Check(backend, strokes: true, "stroke");
+
+    private static void Check(TestBackend backend, bool strokes, string what)
     {
         if (!OperatingSystem.IsWindows())
         {
@@ -32,7 +42,7 @@ public sealed class ImageBrushFillTests
         }
 
         using var session = TestBackendSession.Open(backend);
-        var fill = new TileFill();
+        var fill = new TileFill { Strokes = strokes };
         var window = HeadlessWindow.Create(WIDTH, HEIGHT);
         window.Content = new Border { Background = _background, Child = fill };
         window.PerformLayout();
@@ -43,8 +53,8 @@ public sealed class ImageBrushFillTests
         using var direct = session.Factory.CreateSurface(RenderSurfaceDescriptor.Offscreen(WIDTH, HEIGHT, 1.0, hasAlpha: false));
         window.RenderReferenceFrameToSurface(direct);
 
-        Assert.AreEqual(_tileColor, CenterOf(direct), "drawn straight, the fill did not show the tile");
-        Assert.AreEqual(_tileColor, CenterOf(retained), "replayed from the retained scene, the fill did not show the tile");
+        Assert.AreEqual(_tileColor, CenterOf(direct), $"drawn straight, the {what} did not show the tile");
+        Assert.AreEqual(_tileColor, CenterOf(retained), $"replayed from the retained scene, the {what} did not show the tile");
         fill.Release();
     }
 
@@ -59,6 +69,9 @@ public sealed class ImageBrushFillTests
     {
         private IRenderSurface? _tileSurface;
         private IImage? _tile;
+
+        /// <summary>Strokes a thick line across the middle with the tile instead of filling the bounds.</summary>
+        public bool Strokes { get; init; }
 
         public void Release()
         {
@@ -83,7 +96,18 @@ public sealed class ImageBrushFillTests
                 _tile = factory.CreateImageView(_tileSurface);
             }
 
-            context.FillRectangle(Bounds, new ImageBrush(_tile, new Rect(0, 0, TILE, TILE), new Rect(0, 0, TILE, TILE)));
+            var brush = new ImageBrush(_tile, new Rect(0, 0, TILE, TILE), new Rect(0, 0, TILE, TILE));
+            if (Strokes)
+            {
+                var line = new PathGeometry();
+                line.MoveTo(Bounds.X + 10, Bounds.Y + Bounds.Height / 2);
+                line.LineTo(Bounds.Right - 10, Bounds.Y + Bounds.Height / 2);
+                context.DrawPath(line, new Pen(brush, 20));
+            }
+            else
+            {
+                context.FillRectangle(Bounds, brush);
+            }
         }
     }
 }

@@ -789,7 +789,7 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
 
     public override void DrawLine(Point start, Point end, Pen pen)
     {
-        if (pen.Thickness <= 0) return;
+        if (pen.Thickness <= 0 || !TryApplyImageStrokePaint(pen)) return;
         var bounds = new Rect(
             Math.Min(start.X, end.X), Math.Min(start.Y, end.Y),
             Math.Abs(end.X - start.X), Math.Abs(end.Y - start.Y));
@@ -811,7 +811,7 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
 
     public override void DrawRectangle(Rect rect, Pen pen)
     {
-        if (pen.Thickness <= 0) return;
+        if (pen.Thickness <= 0 || !TryApplyImageStrokePaint(pen)) return;
 
         if (pen.StrokeStyle.IsDashed)
         {
@@ -831,7 +831,7 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
 
     public override void DrawRoundedRectangle(Rect rect, double radiusX, double radiusY, Pen pen)
     {
-        if (pen.Thickness <= 0) return;
+        if (pen.Thickness <= 0 || !TryApplyImageStrokePaint(pen)) return;
         float radius = (float)Math.Max(0, Math.Min(radiusX, radiusY));
 
         if (pen.StrokeStyle.IsDashed)
@@ -850,7 +850,7 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
 
     public override void DrawEllipse(Rect bounds, Pen pen)
     {
-        if (pen.Thickness <= 0) return;
+        if (pen.Thickness <= 0 || !TryApplyImageStrokePaint(pen)) return;
         float cx = (float)(bounds.X + bounds.Width * 0.5);
         float cy = (float)(bounds.Y + bounds.Height * 0.5);
         float rx = (float)(bounds.Width * 0.5);
@@ -873,7 +873,7 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
     public override void DrawPath(PathGeometry path, Pen pen)
     {
         RecordDrawPath();
-        if (path == null || pen.Thickness <= 0) return;
+        if (path == null || pen.Thickness <= 0 || !TryApplyImageStrokePaint(pen)) return;
 
         if (pen.StrokeStyle.IsDashed)
         {
@@ -1013,6 +1013,39 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
     /// </summary>
     private bool ApplyImageBrushPaint(ImageBrush imageBrush)
     {
+        if (!TryCreateImageBrushPaint(imageBrush, out var paint))
+        {
+            return false;
+        }
+
+        _vg.FillPaint(paint);
+        return true;
+    }
+
+    /// <summary>
+    /// Sets the stroke paint of a pen whose brush is an <see cref="ImageBrush"/>, which the stroke helper
+    /// leaves as it is; false when this backend cannot draw that image, so the stroke is skipped.
+    /// </summary>
+    private bool TryApplyImageStrokePaint(Pen pen)
+    {
+        if (pen.Brush is not ImageBrush imageBrush)
+        {
+            return true;
+        }
+
+        if (!TryCreateImageBrushPaint(imageBrush, out var paint))
+        {
+            return false;
+        }
+
+        _vg.StrokePaint(paint);
+        return true;
+    }
+
+    /// <summary>The NanoVG paint that tiles an <see cref="ImageBrush"/>; false when the image is not a <see cref="MewVGImage"/>.</summary>
+    private bool TryCreateImageBrushPaint(ImageBrush imageBrush, out MewVGPaint paint)
+    {
+        paint = default;
         if (ImageResource.ResolveBackendImage(imageBrush.Image) is not MewVGImage mewImage)
         {
             return false;
@@ -1056,8 +1089,7 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
         }
 
         float opacity = (float)imageBrush.Opacity;
-        var paint = _vg.ImagePattern(patternX, patternY, patternW, patternH, angle, imageId, opacity);
-        _vg.FillPaint(paint);
+        paint = _vg.ImagePattern(patternX, patternY, patternW, patternH, angle, imageId, opacity);
         return true;
     }
 

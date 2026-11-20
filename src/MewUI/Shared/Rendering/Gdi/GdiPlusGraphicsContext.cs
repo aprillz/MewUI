@@ -1186,6 +1186,17 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
             if (hr != 0 || gdipPen == 0)
                 return false;
         }
+        else if (pen.Brush is ImageBrush imageBrush)
+        {
+            // The pen copies the texture brush, tile placement included, so the brush is released at once.
+            nint textureBrush = CreateGdipTextureBrush(imageBrush);
+            if (textureBrush == 0)
+                return false;
+            int hr = GdiPlusInterop.GdipCreatePen2(textureBrush, widthPx, GdiPlusInterop.Unit.Pixel, out gdipPen);
+            GdiPlusInterop.GdipDeleteBrush(textureBrush);
+            if (hr != 0 || gdipPen == 0)
+                return false;
+        }
         else
         {
             uint argb = pen.Brush is SolidColorBrush solid ? ToArgb(BlendGlobalAlpha(solid.Color)) : 0xFF000000;
