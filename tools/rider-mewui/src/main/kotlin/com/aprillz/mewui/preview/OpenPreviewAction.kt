@@ -1,5 +1,5 @@
-// Editor context-menu entry: activates the preview tool window for the right-clicked C# file.
-// The tool window auto-starts its session and target auto-match follows the active editor.
+// Editor context-menu entry: opens the preview tool window for the right-clicked C# file and
+// previews that file's project, starting a stopped session or replacing a failed one.
 package com.aprillz.mewui.preview
 
 import com.intellij.openapi.actionSystem.ActionUpdateThread
@@ -19,6 +19,13 @@ class OpenPreviewAction : AnAction() {
 
     override fun actionPerformed(event: AnActionEvent) {
         val project = event.project ?: return
-        ToolWindowManager.getInstance(project).getToolWindow("MewUI Preview")?.activate(null)
+        val filePath = event.getData(CommonDataKeys.VIRTUAL_FILE)?.path
+        val toolWindow = ToolWindowManager.getInstance(project).getToolWindow(PREVIEW_TOOL_WINDOW_ID) ?: return
+        toolWindow.activate {
+            // Activation creates the content on first use, so the panel is looked up afterwards.
+            toolWindow.contentManager.contents
+                .firstNotNullOfOrNull { content -> content.component as? PreviewPanel }
+                ?.openFor(filePath)
+        }
     }
 }

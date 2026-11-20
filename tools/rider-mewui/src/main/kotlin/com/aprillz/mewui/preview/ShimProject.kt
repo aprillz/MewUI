@@ -4,14 +4,21 @@ package com.aprillz.mewui.preview
 
 import com.google.gson.JsonObject
 import java.io.File
+import java.io.InputStream
+import java.util.concurrent.Callable
+import java.util.concurrent.FutureTask
 import java.util.concurrent.TimeUnit
+import kotlin.concurrent.thread
+
+private const val QUERY_TIMEOUT_SECONDS = 30L
+private const val DRAIN_TIMEOUT_SECONDS = 5L
 
 object ShimProject {
-    fun generate(projectPath: String): String {
+    fun generate(projectPath: String, host: DotnetHost, log: (String) -> Unit): String {
         val shimDir = File(File(projectPath).parentFile, "obj/mewui-preview/shim")
         shimDir.mkdirs()
 
-        val targetFramework = queryTargetFramework(projectPath) ?: "net8.0"
+        val targetFramework = queryTargetFramework(projectPath, host, log) ?: "net8.0"
         val referencePath = File(projectPath).absolutePath.replace('\\', '/')
         File(shimDir, "MewUIPreviewShim.csproj").writeText(
             """
@@ -35,18 +42,33 @@ object ShimProject {
         return File(shimDir, "MewUIPreviewShim.csproj").absolutePath
     }
 
-    private fun queryTargetFramework(projectPath: String): String? {
+    private fun queryTargetFramework(projectPath: String, host: DotnetHost, log: (String) -> Unit): String? {
         return try {
-            val process = ProcessBuilder(
-                "dotnet", "msbuild", projectPath,
+            val builder = ProcessBuilder(
+                host.executable, "msbuild", projectPath,
                 "-getProperty:TargetFramework", "-getProperty:TargetFrameworks",
-            ).redirectErrorStream(false).start()
-            val output = process.inputStream.bufferedReader().readText()
-            if (!process.waitFor(30, TimeUnit.SECONDS) || process.exitValue() != 0) {
+            ).redirectErrorStream(false)
+            builder.environment().apply {
+                clear()
+                putAll(host.environment)
+            }
+            val process = builder.start()
+            // Both pipes drain concurrently: a full stderr pipe would otherwise stall the query past the timeout.
+            val output = drain(process.inputStream)
+            val errors = drain(process.errorStream)
+            if (!process.waitFor(QUERY_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                process.toHandle().descendants().forEach { handle -> handle.destroyForcibly() }
+                process.destroyForcibly()
+                log("target framework query timed out after ${QUERY_TIMEOUT_SECONDS}s; assuming net8.0")
                 return null
             }
-            val properties = PreviewProtocol.gson.fromJson(output, JsonObject::class.java)
-                .getAsJsonObject("Properties") ?: return null
+            if (process.exitValue() != 0) {
+                val detail = runCatching { errors.get(DRAIN_TIMEOUT_SECONDS, TimeUnit.SECONDS) }.getOrDefault("").trim()
+                log("target framework query exited with code ${process.exitValue()}; assuming net8.0. $detail".trim())
+                return null
+            }
+            val properties = PreviewProtocol.gson.fromJson(output.get(DRAIN_TIMEOUT_SECONDS, TimeUnit.SECONDS), JsonObject::class.java)
+                ?.getAsJsonObject("Properties") ?: return null
             val single = properties.get("TargetFramework")?.asString?.trim()
             if (!single.isNullOrEmpty()) {
                 return single
@@ -55,9 +77,16 @@ object ShimProject {
                 ?.split(';')
                 ?.map { it.trim() }
                 ?.firstOrNull { it.isNotEmpty() }
-        } catch (_: Exception) {
+        } catch (error: Exception) {
+            log("target framework query failed: ${error.message}; assuming net8.0")
             null
         }
+    }
+
+    private fun drain(stream: InputStream): FutureTask<String> {
+        val task = FutureTask(Callable { stream.bufferedReader().use { reader -> reader.readText() } })
+        thread(name = "mewui-preview-shim-query", isDaemon = true) { task.run() }
+        return task
     }
 
     // The generated shim entry point: loads every managed assembly in the output folder (forcing
