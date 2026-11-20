@@ -432,6 +432,12 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         }
     }
 
+    /// <summary>True once the window has closed; input, hover and popups no longer apply to it.</summary>
+    internal bool IsClosed => _lifetimeState == WindowLifetimeState.Closed;
+
+    /// <summary>True while the window is hidden; it can be shown again, but nothing in it is hovered meanwhile.</summary>
+    internal bool IsHidden => _lifetimeState == WindowLifetimeState.Hidden;
+
     internal void ReevaluateMouseOver()
     {
         ApplicationDispatcher?.BeginInvoke(DispatcherPriority.Layout, () =>
@@ -1595,6 +1601,12 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
         _backend.Hide();
         _lifetimeState = WindowLifetimeState.Hidden;
+
+        // The platform does not take these down when the window is hidden while inactive; a hidden window has
+        // no pointer over it and nothing to anchor a popup to.
+        CloseAllPopups();
+        ReleaseMouseCapture();
+        ClearMouseOverState();
     }
 
     // Async close state: result observed by CloseAsync, plus the deferral round flags.

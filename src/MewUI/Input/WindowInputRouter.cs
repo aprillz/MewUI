@@ -24,6 +24,12 @@ internal static class WindowInputRouter
     /// </summary>
     public static void UpdateMouseOver(Window window, UIElement? newLeaf)
     {
+        // A handler can close or hide the window while its input is still being routed; nothing in it may become hovered then.
+        if (window.IsClosed || window.IsHidden)
+        {
+            newLeaf = null;
+        }
+
         if (ReferenceEquals(window.MouseOverElement, newLeaf))
         {
             return;
@@ -311,6 +317,12 @@ internal static class WindowInputRouter
                 current.RaiseMouseDown(args);
             }
 
+            // A handler that ran a modal loop may have closed this window; the rest of the press belongs to a live window.
+            if (window.IsClosed)
+            {
+                return;
+            }
+
             if (clickCount == 2)
             {
                 args = new MouseEventArgs(positionInWindow, screenPosition, button, leftDown, rightDown, middleDown, clickCount: 2, modifiers: modifiers)
@@ -322,6 +334,11 @@ internal static class WindowInputRouter
                 {
                     args.Source = current;
                     current.RaiseMouseDoubleClick(args);
+                }
+
+                if (window.IsClosed)
+                {
+                    return;
                 }
             }
 
@@ -337,6 +354,12 @@ internal static class WindowInputRouter
             {
                 args.Source = current;
                 current.RaiseMouseUp(args);
+            }
+
+            // A click handler that ran a modal loop may have closed this window; its capture and hover are already torn down.
+            if (window.IsClosed)
+            {
+                return;
             }
 
             // A capture taken while this button's press was routed ends with its release, even when the holder kept it.
@@ -430,6 +453,12 @@ internal static class WindowInputRouter
         for (var current = ResolveKeyRoutingStart(window); current != null && !args.Handled; current = GetInputBubbleParent(window, current))
         {
             current.RaiseKeyDown(args);
+        }
+
+        // A key handler can close the window from inside a modal loop; its input map no longer applies.
+        if (window.IsClosed)
+        {
+            return;
         }
 
         // Input-map dispatch runs after bubbling so a focused control's non-command key handling
