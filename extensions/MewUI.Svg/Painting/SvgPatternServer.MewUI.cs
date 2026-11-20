@@ -108,8 +108,9 @@ public partial class SvgPatternServer
             // brush back down introduces sub-pixel tile boundaries, which appear as visible
             // seams with LINEAR wrap sampling whenever the tile's first/last pixel colors
             // differ (e.g. anti-aliased edges of the pattern content's background rect).
-            int pixelWidth = Math.Max(1, (int)Math.Ceiling(width));
-            int pixelHeight = Math.Max(1, (int)Math.Ceiling(height));
+            // Rounded, not raised: a tile of 60.0001 units on 61 pixels leaves its last column empty, a seam on every repeat.
+            int pixelWidth = Math.Max(1, (int)Math.Round(width));
+            int pixelHeight = Math.Max(1, (int)Math.Round(height));
 
             // Clamp tile resolution. Pattern dimensions can blow up at large
             // window sizes (a percentage-based pattern in a fullscreen view
@@ -174,6 +175,9 @@ public partial class SvgPatternServer
                         {
                             using var tileRenderer = new MewSvgRenderer(factory, tileContext);
                             tileRenderer.SetBoundable(renderingElement);
+
+                            // The content fills the whole bitmap, whose size the pattern size was rounded or clamped to.
+                            tileContext.Scale(pixelWidth / width, pixelHeight / height);
 
                             if (viewBox != SvgViewBox.Empty)
                             {
