@@ -41,6 +41,12 @@ void mewui_webgl_make_current(void)
 void mewui_sig_viiiiiiiii(int arg0, int arg1, int arg2, int arg3, int arg4, int arg5, int arg6, int arg7, int arg8) {}
 void mewui_sig_vif(int arg0, float arg1) {}
 void mewui_sig_vffff(float arg0, float arg1, float arg2, float arg3) {}
+void mewui_sig_viiiii(int arg0, int arg1, int arg2, int arg3, int arg4) {}
+void mewui_sig_viffff(int arg0, float arg1, float arg2, float arg3, float arg4) {}
+void mewui_sig_vf(float arg0) {}
+void mewui_sig_viff(int arg0, float arg1, float arg2) {}
+void mewui_sig_viiiiiii(int arg0, int arg1, int arg2, int arg3, int arg4, int arg5, int arg6) {}
+void mewui_sig_viiiiiiiiii(int arg0, int arg1, int arg2, int arg3, int arg4, int arg5, int arg6, int arg7, int arg8, int arg9) {}
 
 // Canvas2D text path for First Boot: the browser rasterizes glyphs into an offscreen canvas and
 // MewVG uploads the result as a texture. Replaced by the FreeType/HarfBuzz path in a later phase.

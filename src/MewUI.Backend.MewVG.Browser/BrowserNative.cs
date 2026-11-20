@@ -52,6 +52,30 @@ internal static partial class BrowserNative
     [LibraryImport(LibraryName)]
     internal static partial void mewui_sig_vffff(float arg0, float arg1, float arg2, float arg3);
 
+    // glDrawElementsInstanced's shape.
+    [LibraryImport(LibraryName)]
+    internal static partial void mewui_sig_viiiii(int arg0, int arg1, int arg2, int arg3, int arg4);
+
+    // glVertexAttrib4f's shape.
+    [LibraryImport(LibraryName)]
+    internal static partial void mewui_sig_viffff(int arg0, float arg1, float arg2, float arg3, float arg4);
+
+    // glLineWidth's shape.
+    [LibraryImport(LibraryName)]
+    internal static partial void mewui_sig_vf(float arg0);
+
+    // glUniform2f's shape.
+    [LibraryImport(LibraryName)]
+    internal static partial void mewui_sig_viff(int arg0, float arg1, float arg2);
+
+    // glReadPixels' shape.
+    [LibraryImport(LibraryName)]
+    internal static partial void mewui_sig_viiiiiii(int arg0, int arg1, int arg2, int arg3, int arg4, int arg5, int arg6);
+
+    // glBlitFramebuffer's shape.
+    [LibraryImport(LibraryName)]
+    internal static partial void mewui_sig_viiiiiiiiii(int arg0, int arg1, int arg2, int arg3, int arg4, int arg5, int arg6, int arg7, int arg8, int arg9);
+
     internal static void PreserveFunctionPointerSignatures()
     {
         if (Environment.GetEnvironmentVariable("MEWUI_PIN_SIGNATURES") == "force")
@@ -59,6 +83,12 @@ internal static partial class BrowserNative
             mewui_sig_viiiiiiiii(0, 0, 0, 0, 0, 0, 0, 0, 0);
             mewui_sig_vif(0, 0);
             mewui_sig_vffff(0, 0, 0, 0);
+            mewui_sig_viiiii(0, 0, 0, 0, 0);
+            mewui_sig_viffff(0, 0, 0, 0, 0);
+            mewui_sig_vf(0);
+            mewui_sig_viff(0, 0, 0);
+            mewui_sig_viiiiiii(0, 0, 0, 0, 0, 0, 0);
+            mewui_sig_viiiiiiiiii(0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         }
     }
 }
