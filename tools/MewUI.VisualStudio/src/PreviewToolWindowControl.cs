@@ -5,8 +5,8 @@
 
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -14,6 +14,9 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Aprillz.MewUI.VisualStudio.Session;
+using Microsoft.VisualStudio.Shell;
+using Microsoft.VisualStudio.Threading;
+using Task = System.Threading.Tasks.Task;
 
 namespace Aprillz.MewUI.VisualStudio
 {
@@ -30,7 +33,7 @@ namespace Aprillz.MewUI.VisualStudio
         private readonly Button _restartButton = new Button { Content = "Restart", Padding = new Thickness(8, 2, 8, 2), IsEnabled = false, ToolTip = "Restart the preview session (full state reset)" };
         private readonly CheckBox _navigateCheck = new CheckBox { Content = "Go to code", IsChecked = true, VerticalAlignment = VerticalAlignment.Center, ToolTip = "Jump to the target's declaration when the preview target changes" };
         private readonly TextBlock _stateText = new TextBlock { VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(8, 0, 0, 0) };
-        private readonly Image _image = new Image { Stretch = Stretch.Uniform, Focusable = true, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, SnapsToDevicePixels = true };
+        private readonly Image _image = new Image { Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly, Focusable = true, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, SnapsToDevicePixels = true };
         private readonly ScrollViewer _surface = new ScrollViewer { HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Padding = new Thickness(8) };
         private readonly TextBox _detailText = new TextBox { IsReadOnly = true, TextWrapping = TextWrapping.Wrap, MaxHeight = 160, Visibility = Visibility.Collapsed, Foreground = Brushes.IndianRed, FontFamily = new FontFamily("Consolas"), BorderThickness = new Thickness(0, 1, 0, 0) };
 
@@ -44,6 +47,10 @@ namespace Aprillz.MewUI.VisualStudio
         private bool _updatingCombos;
         // A manual dropdown pick wins over auto-match until the user moves to another editor file.
         private bool _manualOverride;
+        // The editor file auto-match last followed; reactivating it (or our own navigation to it) is not a move.
+        private string _lastEditorDocumentPath;
+        // Only the latest project scan may fill the picker; an older one finishing late is dropped.
+        private int _populateVersion;
 
         /// <summary>Session log sink (the package routes it to an output window pane).</summary>
         public Action<string> LogSink { get; set; }
@@ -51,8 +58,14 @@ namespace Aprillz.MewUI.VisualStudio
         /// <summary>Returns the active document's full path, or null (wired to DTE by the package).</summary>
         public Func<string> ActiveDocumentPathProvider { get; set; }
 
+        /// <summary>Returns the project file containing the active document, or null (wired to DTE by the package).</summary>
+        public Func<string> ActiveDocumentProjectProvider { get; set; }
+
         /// <summary>Returns the solution root directory, or null (wired to DTE by the package).</summary>
         public Func<string> SolutionDirectoryProvider { get; set; }
+
+        /// <summary>Returns the project files loaded in the solution; empty when unknown (wired by the package).</summary>
+        public Func<IReadOnlyList<string>> SolutionProjectsProvider { get; set; }
 
         /// <summary>Opens a source file at a 1-based line in the editor (wired to DTE by the package).</summary>
         public Action<string, int?> NavigateToSource { get; set; }
@@ -108,7 +121,7 @@ namespace Aprillz.MewUI.VisualStudio
             root.Children.Add(_surface);
             Content = root;
 
-            _startButton.Click += (_, __) => ToggleSession();
+            _startButton.Click += (_, __) => RunOnUi(ToggleSessionAsync, "mewui/preview/toggle");
             _refreshButton.Click += (_, __) => _session?.RefreshTarget();
             _restartButton.Click += (_, __) => _session?.RestartProcess();
             _themeButton.Click += (_, __) => _session?.SetTheme(_themeMode == "dark" ? "light" : "dark");
@@ -118,7 +131,7 @@ namespace Aprillz.MewUI.VisualStudio
                 PostViewport();
             };
             _targetCombo.SelectionChanged += OnTargetSelected;
-            _projectCombo.DropDownOpened += (_, __) => PopulateProjects();
+            _projectCombo.DropDownOpened += (_, __) => RunOnUi(PopulateProjectsAsync, "mewui/preview/projects");
             _surface.SizeChanged += (_, __) =>
             {
                 ApplyZoom();
@@ -127,7 +140,7 @@ namespace Aprillz.MewUI.VisualStudio
             };
 
             HookInput();
-            Loaded += (_, __) => PopulateProjects();
+            Loaded += (_, __) => RunOnUi(PopulateProjectsAsync, "mewui/preview/projects");
             ShowState("Not running. Pick a project and press Start.", isError: false);
         }
 
@@ -137,39 +150,46 @@ namespace Aprillz.MewUI.VisualStudio
             return element;
         }
 
+        private static void RunOnUi(Func<Task> work, string faultEventName)
+        {
+            ThreadHelper.JoinableTaskFactory.RunAsync(async () =>
+            {
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                await work();
+            }).FileAndForget(faultEventName);
+        }
+
+        private static void PostToUi(Action action)
+        {
+            ThreadHelper.JoinableTaskFactory.RunAsync(async () =>
+            {
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                action();
+            }).FileAndForget("mewui/preview/sessionevent");
+        }
+
         // ---- session lifecycle -------------------------------------------------------------
 
         /// <summary>
-        /// Selects the target declared in the given file. Editor-driven calls (the user moved to
-        /// another file) override a manual dropdown pick; refresh-driven calls must not, or a
-        /// targets rebroadcast would silently revert the pick while its file is open.
+        /// Follows the editor when the user moves to a different file: selects the target declared
+        /// there, overriding a manual dropdown pick. Reactivating the file already followed (for
+        /// example after "Go to code" opened it) changes nothing.
         /// </summary>
-        public void AutoMatchTarget(string fsPath, bool fromEditor = false)
+        public void OnEditorDocumentActivated(string fsPath)
         {
-            if (_session == null || fsPath == null || !fsPath.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+            if (fsPath == null
+                || (_lastEditorDocumentPath != null && ProjectLocator.PathsEqual(_lastEditorDocumentPath, fsPath)))
             {
                 return;
             }
-            if (!fromEditor && _manualOverride)
-            {
-                return;
-            }
-            PreviewTargetInfo match = _targets.FirstOrDefault(target =>
-                target.Available && target.SourcePath != null
-                && string.Equals(Path.GetFullPath(target.SourcePath), Path.GetFullPath(fsPath), StringComparison.OrdinalIgnoreCase));
-            if (match != null && match.Id != _activeTargetId)
-            {
-                LogSink?.Invoke($"[session] auto-selecting {match.Id} for {Path.GetFileName(fsPath)}");
-                _activeTargetId = match.Id;
-                _manualOverride = false;
-                _session.SelectTarget(match.Id);
-                SyncTargetCombo();
-            }
+            _lastEditorDocumentPath = fsPath;
+            AutoMatchTarget(fsPath, fromEditor: true);
         }
 
         /// <summary>Feeds document saves to the buildRestart driver (no-op under watch).</summary>
         public void NotifySourceChanged(string fsPath) => _session?.NotifySourceChanged(fsPath);
 
+        /// <summary>Stops the running session, if any, without waiting for its processes to exit.</summary>
         public void StopSession()
         {
             var session = _session;
@@ -178,21 +198,38 @@ namespace Aprillz.MewUI.VisualStudio
             SetSessionUiEnabled(false);
         }
 
-        /// <summary>Starts the session for the auto-selected project; a no-op when one is already running.</summary>
-        public void AutoStart()
+        /// <summary>
+        /// Starts a session when the loaded solution names one project unambiguously (the active
+        /// document's executable project, or the only executable project); a no-op when one is running.
+        /// </summary>
+        public async Task AutoStartAsync()
         {
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
             if (_session != null)
             {
                 return;
             }
-            PopulateProjects();
-            if (_projectCombo.SelectedItem != null)
+            ProjectCandidates candidates = await PopulateProjectsAsync();
+            if (candidates == null || _session != null)
             {
-                ToggleSession();
+                return;
+            }
+            if (candidates.AutoStartProject != null)
+            {
+                SelectProject(candidates.AutoStartProject);
+                StartSession(candidates.AutoStartProject);
+            }
+            else if (candidates.SolutionExecutables.Count > 1)
+            {
+                ShowState("Several executable projects in the solution. Pick one and press Start.", isError: false);
+            }
+            else
+            {
+                ShowState("No executable project in the loaded solution. Pick a project and press Start.", isError: false);
             }
         }
 
-        private void ToggleSession()
+        private async Task ToggleSessionAsync()
         {
             if (_session != null)
             {
@@ -200,10 +237,14 @@ namespace Aprillz.MewUI.VisualStudio
                 return;
             }
 
-            string projectPath = _projectCombo.SelectedItem is ProjectItemEntry entry ? entry.Path : null;
+            string projectPath = (_projectCombo.SelectedItem as ProjectItemEntry)?.Path;
             if (projectPath == null)
             {
-                PopulateProjects();
+                await PopulateProjectsAsync();
+                if (_session != null)
+                {
+                    return;
+                }
                 projectPath = (_projectCombo.SelectedItem as ProjectItemEntry)?.Path;
             }
             if (projectPath == null)
@@ -211,15 +252,21 @@ namespace Aprillz.MewUI.VisualStudio
                 ShowState("No executable (.csproj with OutputType Exe/WinExe) project found.", isError: true);
                 return;
             }
+            StartSession(projectPath);
+        }
 
+        private void StartSession(string projectPath)
+        {
             var session = new PreviewSessionClient(projectPath, new SessionOptions());
-            session.Log += line => Dispatcher.BeginInvoke(new Action(() => LogSink?.Invoke(line)));
-            session.StateChanged += (state, detail) => Dispatcher.BeginInvoke(new Action(() => OnSessionState(state, detail)));
-            session.TargetsChanged += (targets, activeId) => Dispatcher.BeginInvoke(new Action(() => OnTargets(targets, activeId)));
-            session.FrameReceived += (header, pixels) => Dispatcher.BeginInvoke(new Action(() => OnFrame(header, pixels)));
-            session.StatusChanged += status => Dispatcher.BeginInvoke(new Action(() => OnStatus(status)));
+            session.Log += line => PostToUi(() => LogSink?.Invoke(line));
+            session.StateChanged += (state, detail) => PostToUi(() => OnSessionState(session, state, detail));
+            session.TargetsChanged += (targets, activeId) => PostToUi(() => OnTargets(session, targets, activeId));
+            session.FrameReceived += (header, pixels) => PostToUi(() => OnFrame(session, header, pixels));
+            session.StatusChanged += status => PostToUi(() => OnStatus(session, status));
             _session = session;
             SetSessionUiEnabled(true);
+            // Seeds the viewport the session replays to the app on every connect.
+            PostViewport();
 
             try
             {
@@ -227,8 +274,8 @@ namespace Aprillz.MewUI.VisualStudio
             }
             catch (Exception error)
             {
-                ShowState($"failed to start: {error.Message}", isError: true);
                 StopSession();
+                ShowState($"failed to start: {error.Message}", isError: true);
             }
         }
 
@@ -246,34 +293,57 @@ namespace Aprillz.MewUI.VisualStudio
             }
         }
 
-        private void PopulateProjects()
+        /// <summary>Rescans the projects off the UI thread and refills the picker; null when a newer scan superseded this one.</summary>
+        private async Task<ProjectCandidates> PopulateProjectsAsync()
         {
-            string previous = (_projectCombo.SelectedItem as ProjectItemEntry)?.Path;
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+            int version = ++_populateVersion;
+            IReadOnlyList<string> solutionProjects = SolutionProjectsProvider?.Invoke() ?? Array.Empty<string>();
             string solutionDirectory = SolutionDirectoryProvider?.Invoke();
-            List<string> executables = ProjectLocator.FindExecutableProjects(solutionDirectory);
-
             string activePath = ActiveDocumentPathProvider?.Invoke();
-            string nearest = activePath != null ? ProjectLocator.FindNearestProject(activePath, solutionDirectory) : null;
-            if (nearest != null && ProjectLocator.IsExecutableProject(nearest)
-                && !executables.Contains(nearest, StringComparer.OrdinalIgnoreCase))
+            string activeProject = ActiveDocumentProjectProvider?.Invoke();
+
+            await TaskScheduler.Default;
+            ProjectCandidates candidates = ProjectLocator.ResolveCandidates(
+                solutionProjects, solutionDirectory, activePath, activeProject);
+
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+            if (version != _populateVersion)
             {
-                executables.Insert(0, nearest);
+                return null;
             }
 
+            string previous = (_projectCombo.SelectedItem as ProjectItemEntry)?.Path;
             _updatingCombos = true;
             _projectCombo.Items.Clear();
-            foreach (string project in executables)
+            foreach (string project in candidates.Projects)
             {
                 _projectCombo.Items.Add(new ProjectItemEntry(project));
             }
             _updatingCombos = false;
 
-            string preferred = previous ?? (nearest != null && ProjectLocator.IsExecutableProject(nearest) ? nearest : null);
-            int index = preferred == null
-                ? (_projectCombo.Items.Count > 0 ? 0 : -1)
-                : Enumerable.Range(0, _projectCombo.Items.Count).FirstOrDefault(i =>
-                    string.Equals(((ProjectItemEntry)_projectCombo.Items[i]).Path, preferred, StringComparison.OrdinalIgnoreCase));
-            _projectCombo.SelectedIndex = index >= 0 && _projectCombo.Items.Count > 0 ? index : (_projectCombo.Items.Count > 0 ? 0 : -1);
+            if (!SelectProject(previous ?? candidates.Preferred) && _projectCombo.Items.Count > 0)
+            {
+                _projectCombo.SelectedIndex = 0;
+            }
+            return candidates;
+        }
+
+        private bool SelectProject(string projectPath)
+        {
+            if (projectPath == null)
+            {
+                return false;
+            }
+            for (int index = 0; index < _projectCombo.Items.Count; index++)
+            {
+                if (ProjectLocator.PathsEqual(((ProjectItemEntry)_projectCombo.Items[index]).Path, projectPath))
+                {
+                    _projectCombo.SelectedIndex = index;
+                    return true;
+                }
+            }
+            return false;
         }
 
         private sealed class ProjectItemEntry
@@ -285,9 +355,13 @@ namespace Aprillz.MewUI.VisualStudio
 
         // ---- session events ----------------------------------------------------------------
 
-        private void OnSessionState(SessionState state, string detail)
+        private void OnSessionState(PreviewSessionClient session, SessionState state, string detail)
         {
             LogSink?.Invoke($"[session] {state}{(detail != null ? $": {detail}" : "")}");
+            if (session != _session)
+            {
+                return;
+            }
             switch (state)
             {
                 case SessionState.Failed:
@@ -300,12 +374,48 @@ namespace Aprillz.MewUI.VisualStudio
             }
         }
 
-        private void OnTargets(PreviewTargetInfo[] targets, string activeId)
+        private void OnTargets(PreviewSessionClient session, PreviewTargetInfo[] targets, string activeId)
         {
+            if (session != _session)
+            {
+                return;
+            }
             _targets = targets.ToList();
             _activeTargetId = activeId;
             SyncTargetCombo();
-            AutoMatchTarget(ActiveDocumentPathProvider?.Invoke());
+            string activePath = ActiveDocumentPathProvider?.Invoke();
+            if (_lastEditorDocumentPath == null)
+            {
+                _lastEditorDocumentPath = activePath;
+            }
+            AutoMatchTarget(activePath);
+        }
+
+        /// <summary>
+        /// Selects the target declared in the given file. Editor-driven calls (the user moved to
+        /// another file) override a manual dropdown pick; refresh-driven calls must not, or a
+        /// targets rebroadcast would silently revert the pick while its file is open.
+        /// </summary>
+        private void AutoMatchTarget(string fsPath, bool fromEditor = false)
+        {
+            if (_session == null || fsPath == null || !fsPath.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+            if (!fromEditor && _manualOverride)
+            {
+                return;
+            }
+            PreviewTargetInfo match = _targets.FirstOrDefault(target =>
+                target.Available && target.SourcePath != null && ProjectLocator.PathsEqual(target.SourcePath, fsPath));
+            if (match != null && match.Id != _activeTargetId)
+            {
+                LogSink?.Invoke($"[session] auto-selecting {match.Id} for {System.IO.Path.GetFileName(fsPath)}");
+                _activeTargetId = match.Id;
+                _manualOverride = false;
+                _session.SelectTarget(match.Id);
+                SyncTargetCombo();
+            }
         }
 
         private void SyncTargetCombo()
@@ -347,13 +457,19 @@ namespace Aprillz.MewUI.VisualStudio
                 PreviewTargetInfo target = _targets.FirstOrDefault(candidate => candidate.Id == _activeTargetId);
                 if (target?.SourcePath != null)
                 {
+                    // The activation this navigation causes must not count as the user moving to that file.
+                    _lastEditorDocumentPath = target.SourcePath;
                     NavigateToSource?.Invoke(target.SourcePath, target.SourceLine);
                 }
             }
         }
 
-        private void OnStatus(StatusInfo status)
+        private void OnStatus(PreviewSessionClient session, StatusInfo status)
         {
+            if (session != _session)
+            {
+                return;
+            }
             ShowState(status.Message, status.HasError);
             _detailText.Text = status.ExceptionDetail ?? string.Empty;
             _detailText.Visibility = string.IsNullOrEmpty(status.ExceptionDetail) ? Visibility.Collapsed : Visibility.Visible;
@@ -364,17 +480,32 @@ namespace Aprillz.MewUI.VisualStudio
             }
         }
 
-        private void OnFrame(FrameHeader header, byte[] pixels)
+        private void OnFrame(PreviewSessionClient session, FrameHeader header, byte[] pixels)
         {
-            _lastFrameDpiScale = header.DpiScale > 0 ? header.DpiScale : 1;
-            if (_bitmap == null || _bitmap.PixelWidth != header.Width || _bitmap.PixelHeight != header.Height)
+            if (session != _session)
             {
-                _bitmap = new WriteableBitmap(header.Width, header.Height, 96, 96, PixelFormats.Bgra32, null);
-                _image.Source = _bitmap;
-                ApplyZoom();
+                return;
             }
-            _bitmap.WritePixels(new Int32Rect(0, 0, header.Width, header.Height), pixels, header.Stride, 0);
-            _session?.AckFrame(header.Seq);
+            try
+            {
+                double dpiScale = header.DpiScale > 0 ? header.DpiScale : 1;
+                bool recreate = _bitmap == null || _bitmap.PixelWidth != header.Width || _bitmap.PixelHeight != header.Height
+                    || dpiScale != _lastFrameDpiScale;
+                _lastFrameDpiScale = dpiScale;
+                if (recreate)
+                {
+                    // At 96 x dpiScale the bitmap's natural size is the app's size in DIPs, matching WPF DIPs at 100%.
+                    _bitmap = new WriteableBitmap(header.Width, header.Height, 96 * dpiScale, 96 * dpiScale, PixelFormats.Bgra32, null);
+                    _image.Source = _bitmap;
+                    ApplyZoom();
+                }
+                _bitmap.WritePixels(new Int32Rect(0, 0, header.Width, header.Height), pixels, header.Stride, 0);
+            }
+            finally
+            {
+                // Acknowledged even when the blit fails, or the server would hold every later frame.
+                session.AckFrame(header.Seq);
+            }
         }
 
         private void ShowState(string message, bool isError)
@@ -421,8 +552,8 @@ namespace Aprillz.MewUI.VisualStudio
 
         /// <summary>
         /// Zoom rides the requested DPI: the session re-renders the vectors at the zoomed scale
-        /// and the image shows one frame pixel per device pixel, so zoom stays crisp. Fit remains
-        /// a display-side downscale of the natural-scale render.
+        /// and the image shows one frame pixel per device pixel, so zoom stays crisp. Fit shows
+        /// the natural-scale render at its own size and only ever scales it down.
         /// </summary>
         private void ApplyZoom()
         {
@@ -437,6 +568,7 @@ namespace Aprillz.MewUI.VisualStudio
                 _image.Height = double.NaN;
                 _image.MaxWidth = Math.Max(1, _surface.ViewportWidth - VIEWPORT_PADDING);
                 _image.MaxHeight = Math.Max(1, _surface.ViewportHeight - VIEWPORT_PADDING);
+                _image.StretchDirection = StretchDirection.DownOnly;
                 RenderOptions.SetBitmapScalingMode(_image, BitmapScalingMode.HighQuality);
             }
             else
@@ -446,6 +578,8 @@ namespace Aprillz.MewUI.VisualStudio
                 _image.MaxHeight = double.PositiveInfinity;
                 _image.Width = _bitmap.PixelWidth / dpi.DpiScaleX;
                 _image.Height = _bitmap.PixelHeight / dpi.DpiScaleY;
+                // The explicit size can exceed the natural size (a zoomed frame is denser than one app DIP per WPF DIP).
+                _image.StretchDirection = StretchDirection.Both;
                 RenderOptions.SetBitmapScalingMode(_image, BitmapScalingMode.NearestNeighbor);
             }
         }
@@ -497,11 +631,8 @@ namespace Aprillz.MewUI.VisualStudio
         private void OnImageKey(KeyEventArgs args, bool isDown)
         {
             Key key = args.Key == Key.System ? args.SystemKey : args.Key;
-            string code = W3cInput.KeyCode(key);
-            if (code == null)
-            {
-                return;
-            }
+            // Unmapped keys are still sent: every key down resets the server's typed-text suppression.
+            string code = W3cInput.KeyCode(key) ?? W3cInput.UNIDENTIFIED_KEY_CODE;
             _session?.SendInput(PreviewProtocol.KEY, new
             {
                 code,

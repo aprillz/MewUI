@@ -32,6 +32,9 @@ namespace Aprillz.MewUI.VisualStudio.Session
             | (args.RightButton == MouseButtonState.Pressed ? 2 : 0)
             | (args.MiddleButton == MouseButtonState.Pressed ? 4 : 0);
 
+        /// <summary>W3C KeyboardEvent.code value for keys without a mapping.</summary>
+        internal const string UNIDENTIFIED_KEY_CODE = "Unidentified";
+
         /// <summary>
         /// W3C KeyboardEvent.code for a WPF key; null when unmapped. WPF reports virtual keys,
         /// which for the mapped set coincide with physical codes on standard layouts.
@@ -77,6 +80,19 @@ namespace Aprillz.MewUI.VisualStudio.Session
                 case Key.Multiply: return "NumpadMultiply";
                 case Key.Divide: return "NumpadDivide";
                 case Key.Decimal: return "NumpadDecimal";
+                case Key.OemMinus: return "Minus";
+                case Key.OemPlus: return "Equal";
+                case Key.OemComma: return "Comma";
+                case Key.OemPeriod: return "Period";
+                case Key.OemQuestion: return "Slash";
+                case Key.OemSemicolon: return "Semicolon";
+                case Key.OemQuotes: return "Quote";
+                case Key.OemOpenBrackets: return "BracketLeft";
+                case Key.OemCloseBrackets: return "BracketRight";
+                case Key.OemPipe: return "Backslash";
+                case Key.OemTilde: return "Backquote";
+                case Key.OemBackslash: return "IntlBackslash";
+                case Key.Apps: return "ContextMenu";
                 default: return null;
             }
         }

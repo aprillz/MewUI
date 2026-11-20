@@ -2,6 +2,8 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Text;
+using System.Threading;
 using Newtonsoft.Json.Linq;
 
 namespace Aprillz.MewUI.VisualStudio.Session
@@ -9,6 +11,8 @@ namespace Aprillz.MewUI.VisualStudio.Session
     /// <summary>Generates the shim fallback project (app reference, no app Main) under the app's obj folder.</summary>
     internal static class ShimProject
     {
+        private const int QUERY_TIMEOUT_MS = 30000;
+
         internal static string Generate(string projectPath)
         {
             string shimDir = Path.Combine(Path.GetDirectoryName(projectPath), "obj", "mewui-preview", "shim");
@@ -41,20 +45,60 @@ namespace Aprillz.MewUI.VisualStudio.Session
             {
                 var startInfo = new ProcessStartInfo(
                     "dotnet",
-                    $"msbuild \"{projectPath}\" -getProperty:TargetFramework -getProperty:TargetFrameworks")
+                    $"msbuild {CommandLine.Quote(projectPath)} -getProperty:TargetFramework -getProperty:TargetFrameworks")
                 {
                     UseShellExecute = false,
                     CreateNoWindow = true,
                     RedirectStandardOutput = true,
+                    RedirectStandardError = true,
                 };
-                using (var process = Process.Start(startInfo))
+                var output = new StringBuilder();
+                // Not disposed: a reader callback may still signal it after a timeout return.
+                var outputClosed = new ManualResetEventSlim();
+                using (var process = new Process { StartInfo = startInfo })
                 {
-                    string output = process.StandardOutput.ReadToEnd();
-                    if (!process.WaitForExit(30000) || process.ExitCode != 0)
+                    process.OutputDataReceived += (_, args) =>
+                    {
+                        if (args.Data == null)
+                        {
+                            outputClosed.Set();
+                        }
+                        else
+                        {
+                            lock (output)
+                            {
+                                output.AppendLine(args.Data);
+                            }
+                        }
+                    };
+                    process.ErrorDataReceived += (_, __) => { };
+                    process.Start();
+                    ChildProcessJob.TryAssign(process);
+                    process.BeginOutputReadLine();
+                    process.BeginErrorReadLine();
+
+                    if (!process.WaitForExit(QUERY_TIMEOUT_MS))
+                    {
+                        try
+                        {
+                            process.Kill();
+                        }
+                        catch (Exception)
+                        {
+                            // Exited between the timeout and the kill.
+                        }
+                        return null;
+                    }
+                    if (process.ExitCode != 0 || !outputClosed.Wait(QUERY_TIMEOUT_MS))
                     {
                         return null;
                     }
-                    JObject properties = (JObject)JObject.Parse(output)["Properties"];
+                    string text;
+                    lock (output)
+                    {
+                        text = output.ToString();
+                    }
+                    JObject properties = (JObject)JObject.Parse(text)["Properties"];
                     string single = ((string)properties?["TargetFramework"])?.Trim();
                     if (!string.IsNullOrEmpty(single))
                     {

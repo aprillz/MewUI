@@ -72,6 +72,11 @@ namespace Aprillz.MewUI.VisualStudio.Session
     /// <summary>Incremental frame decoder: feed socket chunks, emits complete messages via the callback.</summary>
     internal sealed class MessageDecoder
     {
+        // Room for one more socket read past the end of a pending message.
+        private const int READ_SLACK_BYTES = 64 * 1024;
+        // About one 4K BGRA frame; a buffer grown past this is released once it is no longer needed.
+        private const int RETAINED_BUFFER_BYTES = 32 * 1024 * 1024;
+
         private readonly Action<DecodedMessage> _onMessage;
         private readonly MemoryStream _buffer = new MemoryStream();
         private int _consumed;
@@ -86,6 +91,7 @@ namespace Aprillz.MewUI.VisualStudio.Session
             _buffer.Write(chunk, 0, count);
             byte[] data = _buffer.GetBuffer();
             int available = (int)_buffer.Length;
+            int pendingLength = 0;
 
             while (available - _consumed >= 12)
             {
@@ -96,6 +102,7 @@ namespace Aprillz.MewUI.VisualStudio.Session
                 }
                 if (available - _consumed < 4 + totalLength)
                 {
+                    pendingLength = 4 + totalLength;
                     break;
                 }
 
@@ -124,6 +131,17 @@ namespace Aprillz.MewUI.VisualStudio.Session
                 }
                 _buffer.SetLength(remaining);
                 _consumed = 0;
+            }
+
+            int required = pendingLength + READ_SLACK_BYTES;
+            if (pendingLength > 0 && _buffer.Capacity < required)
+            {
+                // Sized once for the pending message: doubling growth would overshoot to twice its size.
+                _buffer.Capacity = required;
+            }
+            else if (_buffer.Capacity > RETAINED_BUFFER_BYTES && _buffer.Capacity > required)
+            {
+                _buffer.Capacity = required;
             }
         }
 
