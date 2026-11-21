@@ -246,6 +246,7 @@ partial class GalleryView : UserControl
             Page("Shapes", ShapesPage, "shapes_regular"),
             Page("Media", MediaPage, "image_library_regular"),
             Page("Transform", TransformPage, "resize_regular"),
+            Page("Backdrop", BackdropPage, "glasses_regular"),
             Page("Transitions", TransitionsPage, "arrow_sync_circle_regular"),
             Page("Custom Rendering", CustomRenderingPage, "paint_brush_regular"),
 
