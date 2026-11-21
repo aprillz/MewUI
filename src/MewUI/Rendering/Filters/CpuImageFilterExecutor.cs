@@ -112,6 +112,13 @@ public sealed class CpuImageFilterExecutor : IImageFilterExecutor
             // MaterializeAt) would mis-align here - fine for plain feGaussianBlur but a
             // future fix when complex filter chains land for the CPU executor.
             int dsFactor = ChooseDownsampleFactor(ctx.LogicalToPixelScaleX, ctx.LogicalToPixelScaleY, w, h);
+            if (ctx is DefaultFilterContext { ReducesBlur: true })
+            {
+                // A backdrop's blur is drawn straight back stretched, never composited by pixel index, so it
+                // can run at the lowest resolution that still leaves a blur of two pixels.
+                dsFactor = Math.Max(dsFactor, ChooseBackdropDownsampleFactor(Math.Max(pxSigmaX, pxSigmaY), w, h));
+            }
+
             int blurW = w / dsFactor;
             int blurH = h / dsFactor;
             byte[] blurBuf = dsFactor > 1
@@ -379,6 +386,20 @@ public sealed class CpuImageFilterExecutor : IImageFilterExecutor
     /// stretch back, which is cheap relative to running the full Gaussian on the upscaled
     /// buffer. The minimum-side guard keeps very tiny filter regions from collapsing.
     /// </summary>
+    private static int ChooseBackdropDownsampleFactor(double pixelSigma, int width, int height)
+    {
+        const int MAX_FACTOR = 4;
+        const double MIN_SIGMA_AFTER = 2.0;
+        const int MIN_SIDE = 32;
+        int factor = Math.Clamp((int)Math.Floor(pixelSigma / MIN_SIGMA_AFTER), 1, MAX_FACTOR);
+        while (factor > 1 && (width / factor < MIN_SIDE || height / factor < MIN_SIDE))
+        {
+            factor--;
+        }
+
+        return factor;
+    }
+
     private static int ChooseDownsampleFactor(double logicalToPixelScaleX, double logicalToPixelScaleY, int width, int height)
     {
         double scale = Math.Max(logicalToPixelScaleX, logicalToPixelScaleY);

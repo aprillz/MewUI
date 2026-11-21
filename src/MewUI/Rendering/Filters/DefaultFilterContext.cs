@@ -57,6 +57,18 @@ public sealed class DefaultFilterContext : IImageFilterContext, IDisposable
     /// <inheritdoc/>
     public double LogicalToPixelScaleY { get; }
 
+    /// <summary>Whether a blur takes the pixels at the edge of the source for whatever lies beyond it, instead of nothing.</summary>
+    internal bool ExtendsSourceEdges { get; init; }
+
+    /// <summary>Whether the graph is one blur of the source whose result is drawn stretched, so it may run at a lower resolution.</summary>
+    internal bool ReducesBlur { get; init; }
+
+    /// <summary>
+    /// The source pixels whose result the caller uses, when it uses only some: a graph that is one blur of the source
+    /// then works out only those, still reading the source around them. Null asks for the whole result.
+    /// </summary>
+    internal Rect? OutputPixels { get; init; }
+
     /// <inheritdoc/>
     public ScratchFilterResult AcquireScratch(int pixelWidth, int pixelHeight, Rect bounds)
     {
