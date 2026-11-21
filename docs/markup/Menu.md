@@ -60,6 +60,7 @@ Receiver: `ContextMenu`.
 | `PlacementOffset(Point value)` | `PlacementOffset` | Sets a DIP offset applied to the placement, mirrored on the flipped side. |
 | `Separator()` |  | Adds a separator. |
 | `SubMenu(string text, ContextMenu subMenu, bool isEnabled = true)` |  | Adds a submenu. |
+| `SystemBackdrop(SystemBackdrop value)` | `SystemBackdrop` | Sets the material behind the menu; submenus opened from it follow. A menu in its own window gets the platform's material, and a menu drawn inside its owner's surface the same look from what that surface holds. Where neither can be shown, BackdropFallbackBrush is drawn under the background. |
 
 ### MenuBar
 

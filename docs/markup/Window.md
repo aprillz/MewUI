@@ -52,6 +52,7 @@ Receiver: `Window` and derived types (`where T : Window`).
 | `StartCenterScreen()` | `StartupLocation = CenterScreen` | Sets the window to open centered on the primary screen. Must be called before Show. |
 | `StartManualPosition(double leftDip, double topDip)` |  | Sets the window to open at the specified position in DIPs (primary monitor DPI basis). Must be called before Show. |
 | `StartupLocation(WindowStartupLocation value)` | `StartupLocation` | Sets the initial window placement behavior, which must be set before Show is called. |
+| `SystemBackdrop(SystemBackdrop value)` | `SystemBackdrop` | Sets the material the platform shows behind the transparent parts of the window. It applies only while AllowsTransparency is set; a platform that cannot show the material lowers it to the nearest one it can, and where it can show none BackdropFallbackBrush is drawn under the background. |
 | `Title(string value)` | `Title` | Sets the window title. |
 | `Topmost(bool value = true)` | `Topmost` | Sets whether the window stays on top of other windows. |
 | `UseLayoutRounding(bool value = true)` | `UseLayoutRounding` | Sets whether layout rounding is enabled. |

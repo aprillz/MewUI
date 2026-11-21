@@ -370,6 +370,7 @@ Windows, Linux/X11 and macOS deliver drops from other applications through the s
 - [Command System](docs/CommandSystem.md)
 - [Drag and Drop](docs/DragAndDrop.md)
 - [Tray Icon](docs/TrayIcon.md)
+- [Backdrop](docs/Backdrop.md)
 - [Binding](docs/Binding.md)
 - [Items and Templates](docs/ItemsAndTemplates.md)
 - [Theme](docs/Theme.md)
