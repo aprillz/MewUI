@@ -9,7 +9,7 @@ using NativeX11 = Aprillz.MewUI.Native.X11;
 
 namespace Aprillz.MewUI.Platform.Linux.X11;
 
-internal sealed class X11WindowBackend : IWindowBackend
+internal sealed class X11WindowBackend : IWindowBackend, IWindowSystemBackdropBackend
 {
     private static readonly EnvDebugLogger ImeLogger = new("MEWUI_IME_DEBUG", "[X11][IME]");
     private static readonly EnvDebugLogger XI2Logger = new("MEWUI_XI2_DEBUG", "[X11][XI2]");
@@ -3111,6 +3111,16 @@ internal sealed class X11WindowBackend : IWindowBackend
     // so report only that capability; NativeCustomWindow keeps the default title bar.
     public WindowChromeCapabilities ChromeCapabilities =>
         WindowChromeCapabilities.NativeWindowBorder;
+
+    public void SetSystemBackdrop(Controls.SystemBackdrop material, SystemBackdropArea? area)
+    {
+        if (Display == 0 || Handle == 0)
+        {
+            return;
+        }
+
+        Window.SetActualSystemBackdrop(X11WindowBackdrop.Apply(Display, Handle, material, area, Window.DpiScale));
+    }
 
     public void SetAllowsTransparency(bool allowsTransparency)
     {

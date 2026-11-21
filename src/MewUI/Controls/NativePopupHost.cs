@@ -1,4 +1,5 @@
 using Aprillz.MewUI.Controls;
+using Aprillz.MewUI.Platform;
 using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI;
@@ -62,7 +63,26 @@ internal sealed class NativePopupHost : IPopupHost
                 _ownerWindow.RequestClosePopups(PopupCloseRequest.PointerDown(null));
         }
 
+        PushSystemBackdrop(entry, popupWindow, initialChromeBounds, scale: 1);
         popupWindow.ShowSurface(_ownerWindow, ResolveScreenPosition(initialOrigin, entry.PinnedClientOrigin));
+    }
+
+    /// <summary>Gives the popup window the menu's material, on the menu's box and not on the shadow around it.</summary>
+    private static void PushSystemBackdrop(PopupEntry entry, PopupWindow popupWindow, Rect chromeBounds, double scale)
+    {
+        if (entry.Element is not ContextMenu menu)
+        {
+            return;
+        }
+
+        var padding = PopupChrome.ShadowPadding;
+        var box = new Rect(
+            padding.Left * scale,
+            padding.Top * scale,
+            Math.Max(0, chromeBounds.Width - padding.Left - padding.Right) * scale,
+            Math.Max(0, chromeBounds.Height - padding.Top - padding.Bottom) * scale);
+        popupWindow.SetSystemBackdropArea(new SystemBackdropArea(box, menu.CornerRadius * scale));
+        popupWindow.SystemBackdrop = menu.SystemBackdrop;
     }
 
     private (int X, int Y)? ResolveScreenPosition(Point origin, Point? pinnedClientOrigin)
@@ -150,6 +170,7 @@ internal sealed class NativePopupHost : IPopupHost
 
                 var screenPx = _ownerWindow.PopupClientToScreen(origin, entry.PinnedClientOrigin);
                 popupWindow.MoveToScreenPixels((int)Math.Round(screenPx.X), (int)Math.Round(screenPx.Y));
+                PushSystemBackdrop(entry, popupWindow, chromeBounds, scale);
                 if (!_layoutAgain) break;
             }
         }

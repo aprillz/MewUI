@@ -256,6 +256,7 @@ public static class DefaultStyles
             Setters =
             [
                 Setter.Create(Control.BackgroundProperty, t => t.Palette.ControlBackground),
+                Setter.Create<Rendering.Brush?>(UIElement.BackdropFallbackBrushProperty, t => t.Palette.ControlBackground),
                 Setter.Create(TextElement.ForegroundProperty, t => t.Palette.WindowText),
                 Setter.Create(TextElement.FontFamilyProperty, t => t.Metrics.FontFamily),
                 Setter.Create(TextElement.FontSizeProperty, t => t.Metrics.FontSize),
