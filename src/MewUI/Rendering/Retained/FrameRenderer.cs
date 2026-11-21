@@ -103,6 +103,12 @@ internal static class FrameRenderer
 
         if (node.StateBakedIntoContent)
         {
+            // Without a recording the visual's own render path draws, its backdrop included.
+            if (node.State.HasBackdrop && node.GetSlot(OWN_CONTENT_SLOT) != null)
+            {
+                DrawBakedBackdrop(scene, node, context, dirtyRect);
+            }
+
             ReplaySlot(scene, node, OWN_CONTENT_SLOT, context, isCompatibilitySubtree: true, localShift);
             return;
         }
@@ -114,6 +120,12 @@ internal static class FrameRenderer
         bool alphaScope = faded && node.DrawsOneShapeAtMost;
         bool opacityScope = faded && !alphaScope;
         var group = default(OpacityGroup);
+
+        // The backdrop is what stands behind the visual, so it is read before a group of the visual's own
+        // opens, and drawn inside it to fade with the visual.
+        var backdrop = node.State.HasBackdrop
+            ? BackdropPass.Prepare(context, scene.GroupFactory, node.State, node.Element.Bounds, node, dirtyRect, scene.Statistics)
+            : default;
         if (alphaScope)
         {
             context.Save();
@@ -128,7 +140,7 @@ internal static class FrameRenderer
         if (opacityScope)
         {
             var reach = dirtyRect is Rect dirty ? subtreeBounds.Intersect(dirty) : subtreeBounds;
-            group = OpacityGroup.Begin(context, scene.GroupFactory, node.State.Opacity, reach);
+            group = OpacityGroup.Begin(context, scene.GroupFactory, node.State.Opacity, reach, readable: node.HasBackdropBelow);
             context = group.Target;
             if (!ReferenceEquals(context, group.Outer))
             {
@@ -136,7 +148,9 @@ internal static class FrameRenderer
             }
         }
 
-        bool backdropScope = node.State.OpaqueBackdrop;
+        BackdropPass.Draw(context, backdrop, erase: !faded && context.GlobalAlpha >= 1);
+
+        bool backdropScope = node.State.FillsBoundsOpaquely;
         if (backdropScope)
         {
             OpaqueBackdropScope.Begin(context, node.Element.Bounds);
@@ -180,7 +194,9 @@ internal static class FrameRenderer
         var factory = scene.GroupFactory;
         var layers = scene.GroupLayers;
 
-        if (factory == null || context is IGroupOpacityContext || context is not GraphicsContextBase || layers.IsVolatile(node))
+        // A backdrop of the visual's own reads what stands behind the group, which a kept surface does not follow.
+        if (factory == null || context is IGroupOpacityContext || context is not GraphicsContextBase || layers.IsVolatile(node) ||
+            node.State.HasBackdrop)
         {
             return false;
         }
@@ -254,7 +270,7 @@ internal static class FrameRenderer
 
             inner.SetTransform(transform);
             inner.ImageScaleQuality = context.ImageScaleQuality;
-            bool backdropScope = node.State.OpaqueBackdrop;
+            bool backdropScope = node.State.FillsBoundsOpaquely;
             if (backdropScope)
             {
                 OpaqueBackdropScope.Begin(inner, node.Element.Bounds);
@@ -329,7 +345,7 @@ internal static class FrameRenderer
         signature.Add(planShift.Y - groupShift.Y);
 
         // A visual that fills its box opaquely tells the context so, over the box it stands in.
-        if (node.State.OpaqueBackdrop)
+        if (node.State.FillsBoundsOpaquely)
         {
             var box = node.Element.Bounds;
             signature.Add(box.X - groupAnchor.X);
@@ -573,6 +589,27 @@ internal static class FrameRenderer
     }
 
     private static bool HasExtent(Rect bounds) => bounds.Width > 0 && bounds.Height > 0;
+
+    /// <summary>Draws the backdrop of a visual whose recording carries its own opacity, faded by that opacity.</summary>
+    private static void DrawBakedBackdrop(RenderScene scene, VisualNode node, IGraphicsContext context, Rect? dirtyRect)
+    {
+        var backdrop = BackdropPass.Prepare(context, scene.GroupFactory, node.State, node.Element.Bounds, node, dirtyRect, scene.Statistics);
+        bool faded = node.State.Opacity < 1;
+        context.Save();
+        try
+        {
+            if (faded)
+            {
+                CompositionAlpha.Multiply(context, node.State.Opacity);
+            }
+
+            BackdropPass.Draw(context, backdrop, erase: !faded && context.GlobalAlpha >= 1);
+        }
+        finally
+        {
+            context.Restore();
+        }
+    }
 
     private static void ReplaySlot(
         RenderScene scene,

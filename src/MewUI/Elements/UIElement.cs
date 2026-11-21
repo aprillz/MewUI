@@ -72,6 +72,19 @@ public abstract partial class UIElement : Element
             MewPropertyOptions.AffectsRender);
 
     /// <summary>
+    /// The filter applied to what is drawn behind the element, inside its layout box and cut to its corners;
+    /// the filter's source input is those pixels. Null draws no backdrop.
+    /// </summary>
+    public static readonly MewProperty<Rendering.Filters.ImageFilter?> BackdropFilterProperty =
+        MewProperty<Rendering.Filters.ImageFilter?>.Register<UIElement>(nameof(BackdropFilter), null,
+            MewPropertyOptions.AffectsRender);
+
+    /// <summary>The brush that fills the backdrop's place where what is drawn behind the element cannot be read; null leaves it empty.</summary>
+    public static readonly MewProperty<Brush?> BackdropFallbackBrushProperty =
+        MewProperty<Brush?>.Register<UIElement>(nameof(BackdropFallbackBrush), null,
+            MewPropertyOptions.AffectsRender);
+
+    /// <summary>
     /// Whether the element participates in hit testing.
     /// </summary>
     public static readonly MewProperty<bool> IsHitTestVisibleProperty =
@@ -164,6 +177,9 @@ public abstract partial class UIElement : Element
             RaiseRenderDirty(Rendering.Retained.RenderDirtyKind.State);
         else if (property.AffectsRender)
             InvalidateVisual();
+
+        if (property == BackdropFilterProperty)
+            NoteBackdropChanged();
 
         if (property.AffectsVisualState)
             InvalidateVisualState();
@@ -326,6 +342,37 @@ public abstract partial class UIElement : Element
         get => GetValue(OpacityProperty);
         set => SetValue(OpacityProperty, value);
     }
+
+    /// <summary>
+    /// Gets or sets the filter applied to what is drawn behind the element, such as a blur for frosted glass.
+    /// The element's own background and content are drawn over the result.
+    /// </summary>
+    /// <remarks>
+    /// The backdrop reads only the element's layout box and takes the pixels at its edge for what lies beyond,
+    /// so nothing outside the box shows in it. Inside a faded group or a cached element it reads what that group
+    /// or cache has drawn, not the window. Where it cannot read at all, <see cref="BackdropFallbackBrush"/> is drawn.
+    /// </remarks>
+    public Rendering.Filters.ImageFilter? BackdropFilter
+    {
+        get => GetValue(BackdropFilterProperty);
+        set => SetValue(BackdropFilterProperty, value);
+    }
+
+    /// <summary>Gets or sets the brush drawn in place of the backdrop where what is behind the element cannot be read; null draws nothing there.</summary>
+    public Brush? BackdropFallbackBrush
+    {
+        get => GetValue(BackdropFallbackBrushProperty);
+        set => SetValue(BackdropFallbackBrushProperty, value);
+    }
+
+    /// <summary>The corners of the box the element fills, which cut its backdrop; zero for a square box.</summary>
+    internal virtual CornerRadius BackdropCornerRadius => default;
+
+    /// <summary>The filter the backdrop is drawn through now, which a control may derive from more than <see cref="BackdropFilter"/>.</summary>
+    internal virtual Rendering.Filters.ImageFilter? EffectiveBackdropFilter => BackdropFilter;
+
+    /// <summary>Whether this element can have a backdrop at all, whatever host it is in at the moment.</summary>
+    internal virtual bool MayDrawBackdrop => BackdropFilter != null;
 
     /// <summary>
     /// Gets or sets whether the element participates in hit testing.
@@ -527,6 +574,13 @@ public abstract partial class UIElement : Element
 
         using (DevToolsGate.IsSupported ? PerformanceProfiler.Instance.SampleElement(GetType(), ProfilerSampleCategory.Render, this) : default)
         {
+            // The backdrop is what stands behind the element: read before the element's own group opens,
+            // drawn inside it to fade with the element, and kept out of a cached bitmap. A recording pass
+            // reads no target; the scene draws the backdrop of what it records when it replays it.
+            var backdrop = EffectiveBackdropFilter != null && context is not Rendering.Retained.RenderDataRecorder
+                ? PrepareBackdrop(context)
+                : default;
+
             // Outside the cache branch: the cached bitmap is the element's own pixels, so fading it
             // here leaves the cache reusable while the opacity animates.
             if (opacity < 1)
@@ -534,6 +588,7 @@ public abstract partial class UIElement : Element
                 var group = BeginOpacityGroup(context, opacity);
                 try
                 {
+                    BackdropPass.Draw(group.Target, backdrop, erase: false);
                     RenderVisual(group.Target);
                 }
                 finally
@@ -543,6 +598,7 @@ public abstract partial class UIElement : Element
             }
             else
             {
+                BackdropPass.Draw(context, backdrop, erase: context.GlobalAlpha >= 1);
                 RenderVisual(context);
             }
         }
@@ -570,6 +626,19 @@ public abstract partial class UIElement : Element
         }
     }
 
+    private BackdropPass.Prepared PrepareBackdrop(IGraphicsContext context)
+    {
+        var state = new Rendering.Retained.CompositionState(
+            true,
+            Opacity,
+            false,
+            EffectiveBackdropFilter,
+            BackdropFallbackBrush,
+            BackdropCornerRadius);
+        var factory = (FindVisualRoot() as Window)?.GraphicsFactory ?? Application.DefaultGraphicsFactory;
+        return BackdropPass.Prepare(context, factory, state, Bounds, node: null, dirtyRect: null, statistics: null);
+    }
+
     private OpacityGroup BeginOpacityGroup(IGraphicsContext context, double opacity)
     {
         // What a faded visual can draw on is not known before it draws, so the group covers all of the
@@ -580,7 +649,41 @@ public abstract partial class UIElement : Element
         }
 
         var factory = (FindVisualRoot() as Window)?.GraphicsFactory ?? Application.DefaultGraphicsFactory;
-        return OpacityGroup.Begin(context, factory, opacity, Rendering.Retained.RetainedGeometry.TransformRect(viewport, context.GetTransform()));
+        return OpacityGroup.Begin(context, factory, opacity, Rendering.Retained.RetainedGeometry.TransformRect(viewport, context.GetTransform()),
+            readable: HasBackdropBelow());
+    }
+
+    // Elements with a backdrop filter; while there are none, a faded element does not look under itself for one.
+    private static int _backdropElementCount;
+    private bool _countedAsBackdrop;
+
+    private protected void NoteBackdropChanged()
+    {
+        bool hasBackdrop = MayDrawBackdrop;
+        if (hasBackdrop != _countedAsBackdrop)
+        {
+            _countedAsBackdrop = hasBackdrop;
+            _backdropElementCount += hasBackdrop ? 1 : -1;
+        }
+    }
+
+    /// <summary>Whether a visual under this one has a backdrop, which reads the group this one draws into.</summary>
+    private bool HasBackdropBelow() => _backdropElementCount > 0 && AnyBackdropUnder(this);
+
+    private static bool AnyBackdropUnder(Element element)
+    {
+        if (element is not IVisualTreeHost host)
+        {
+            return false;
+        }
+
+        bool found = false;
+        host.VisitChildren(child =>
+        {
+            found = child is UIElement { IsVisible: true } visual && (visual.EffectiveBackdropFilter != null || AnyBackdropUnder(visual));
+            return !found;
+        });
+        return found;
     }
 
     private void RenderVisual(IGraphicsContext context)

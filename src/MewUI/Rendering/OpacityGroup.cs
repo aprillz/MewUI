@@ -20,6 +20,7 @@ internal struct OpacityGroup
     private IGraphicsContext _outer;
     private IGraphicsFactory? _factory;
     private IRenderSurface? _surface;
+    private bool _ownsSurface;
     private IGraphicsContext? _inner;
     private Rect _placement;
     private int _pixelWidth;
@@ -35,11 +36,13 @@ internal struct OpacityGroup
     /// <summary>
     /// Opens a group. <paramref name="reach"/> is everything the group can draw on, in the coordinates
     /// of the surface <paramref name="context"/> draws to; what falls outside it is lost.
+    /// <paramref name="readable"/> asks for a group whose drawing so far can be read back while it is
+    /// open, as a backdrop inside it reads it: the group then gets a surface of its own on every context.
     /// </summary>
-    internal static OpacityGroup Begin(IGraphicsContext context, IGraphicsFactory? factory, double opacity, Rect reach)
+    internal static OpacityGroup Begin(IGraphicsContext context, IGraphicsFactory? factory, double opacity, Rect reach, bool readable = false)
     {
         var group = new OpacityGroup { _outer = context, Target = context, _opacity = opacity };
-        if (context is IGroupOpacityContext || factory == null || context is not GraphicsContextBase)
+        if ((context is IGroupOpacityContext && !readable) || factory == null || context is not GraphicsContextBase)
         {
             context.BeginOpacity(opacity);
             return group;
@@ -57,7 +60,10 @@ internal struct OpacityGroup
             return group;
         }
 
-        var surface = factory.AcquireScratchSurface(pixelWidth, pixelHeight, scale, hasAlpha: true, debugName: "OpacityGroup");
+        // A scratch surface may live in memory the GPU does not read back from; a readable group takes a surface that does.
+        var surface = readable
+            ? factory.CreateSurface(RenderSurfaceDescriptor.Offscreen(pixelWidth, pixelHeight, scale, hasAlpha: true))
+            : factory.AcquireScratchSurface(pixelWidth, pixelHeight, scale, hasAlpha: true, debugName: "OpacityGroup");
         IGraphicsContext? inner = null;
         try
         {
@@ -79,12 +85,13 @@ internal struct OpacityGroup
         catch
         {
             inner?.Dispose();
-            factory.ReleaseScratchSurface(surface);
+            Release(factory, surface, readable);
             throw;
         }
 
         group._factory = factory;
         group._surface = surface;
+        group._ownsSurface = readable;
         group._inner = inner;
         group._placement = new Rect(left, top, pixelWidth / scale, pixelHeight / scale);
         group._pixelWidth = pixelWidth;
@@ -131,11 +138,24 @@ internal struct OpacityGroup
 
             // The context may not have drawn the group yet, so the surface cannot go back for reuse before its frame ends.
             var drawnWith = image;
+            bool owned = _ownsSurface;
             ((GraphicsContextBase)_outer).ReleaseWhenFrameEnds(() =>
             {
                 drawnWith?.Dispose();
-                factory.ReleaseScratchSurface(surface);
+                Release(factory, surface, owned);
             });
+        }
+    }
+
+    private static void Release(IGraphicsFactory factory, IRenderSurface surface, bool owned)
+    {
+        if (owned)
+        {
+            surface.Dispose();
+        }
+        else
+        {
+            factory.ReleaseScratchSurface(surface);
         }
     }
 }

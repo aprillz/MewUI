@@ -276,7 +276,7 @@ internal sealed class SceneCapture
 
         double opacity = element.Opacity;
         bool isVisible = element.IsVisible && opacity > 0;
-        var state = new CompositionState(isVisible, opacity, element is Control control && control.FillsBoundsOpaquely);
+        var state = StateOf(element, isVisible, opacity);
 
         if (!isVisible)
         {
@@ -306,7 +306,7 @@ internal sealed class SceneCapture
             context.BeginOpacity(opacity);
         }
 
-        bool backdropScope = state.OpaqueBackdrop && recorder.Draws;
+        bool backdropScope = state.FillsBoundsOpaquely && recorder.Draws;
         if (backdropScope)
         {
             context.BeginOpaqueBackdrop();
@@ -346,6 +346,7 @@ internal sealed class SceneCapture
             }
         }
 
+        var backdropBounds = BackdropBox(element, state, transform, ref ownBounds, ref subtreeReach);
         subtreeBounds.Add(ownBounds.Result);
         update.StageBounds(
             node,
@@ -355,8 +356,39 @@ internal sealed class SceneCapture
             Origin(element),
             IsClippedAway(element, transform, subtreeBounds.Result),
             key,
-            frame);
+            frame,
+            backdropBounds: backdropBounds);
         return new SubtreeExtent(subtreeBounds.Result, subtreeReach.Result);
+    }
+
+    /// <summary>The composition state the visual answers with now.</summary>
+    private static CompositionState StateOf(UIElement element, bool isVisible, double opacity)
+    {
+        var filter = element.EffectiveBackdropFilter;
+        return new CompositionState(
+            isVisible,
+            opacity,
+            element is Control control && control.FillsBoundsOpaquely,
+            filter,
+            filter == null ? null : element.BackdropFallbackBrush,
+            filter == null ? default : element.BackdropCornerRadius);
+    }
+
+    /// <summary>
+    /// The surface-space layout box a backdrop fills, added to the visual's extent: it is drawn whatever the
+    /// visual itself draws. Empty for a visual without one.
+    /// </summary>
+    private Rect BackdropBox(UIElement element, CompositionState state, Matrix3x2 transform, ref BoundsAccumulator ownBounds, ref BoundsAccumulator subtreeReach)
+    {
+        if (!state.HasBackdrop)
+        {
+            return default;
+        }
+
+        var box = RetainedGeometry.TransformRect(element.Bounds, transform);
+        ownBounds.Add(Visible(box));
+        subtreeReach.Add(box);
+        return box;
     }
 
     /// <summary>
@@ -396,6 +428,14 @@ internal sealed class SceneCapture
             ref subtreeBounds,
             ref subtreeReach);
 
+        var backdropBounds = default(Rect);
+        if (node.State.HasBackdrop)
+        {
+            backdropBounds = VisualNode.Shifted(node.BackdropBounds, surfaceShift);
+            ownBounds.Add(Visible(backdropBounds));
+            subtreeReach.Add(backdropBounds);
+        }
+
         subtreeBounds.Add(ownBounds.Result);
         update.StageBounds(
             node,
@@ -406,7 +446,8 @@ internal sealed class SceneCapture
             IsClippedAway(node.Element, transform, subtreeBounds.Result),
             key,
             _frame,
-            planStaged: false);
+            planStaged: false,
+            backdropBounds: backdropBounds);
         return new SubtreeExtent(subtreeBounds.Result, subtreeReach.Result);
     }
 
@@ -701,7 +742,7 @@ internal sealed class SceneCapture
     {
         // The element's own render path applies its opacity and backdrop, so the data carries them.
         double opacity = element.Opacity;
-        var state = new CompositionState(true, opacity, element is Control control && control.FillsBoundsOpaquely);
+        var state = StateOf(element, isVisible: true, opacity);
         update.StageComposition(node, CompositionPlan.Empty, state, stateBakedIntoContent: true);
 
         // One recording carries the whole subtree, so it answers for every kind of change in it.
@@ -731,15 +772,19 @@ internal sealed class SceneCapture
         StageChangeWithinSlot(update, node, OWN_CONTENT_SLOT, transform);
         bounds.Add(subtreeExtent);
         var frameReach = FrameVisible(subtreeReach, update.TryGetStagedSlot(node, OWN_CONTENT_SLOT, out var staged) ? staged : node.GetSlot(OWN_CONTENT_SLOT));
+        var reach = default(BoundsAccumulator);
+        reach.Add(frameReach);
+        var backdropBounds = BackdropBox(element, state, transform, ref bounds, ref reach);
         update.StageBounds(
             node,
             bounds.Result,
             bounds.Result,
-            frameReach,
+            reach.Result,
             Origin(element),
             IsClippedAway(element, transform, bounds.Result),
             captured: default,
-            frame);
+            frame,
+            backdropBounds: backdropBounds);
         return new SubtreeExtent(bounds.Result, frameReach);
     }
 

@@ -1,15 +1,23 @@
 using Aprillz.MewUI.Controls;
+using Aprillz.MewUI.Rendering.Filters;
 
 namespace Aprillz.MewUI.Rendering.Retained;
 
 /// <summary>
 /// Composition state of one visual: what applies to the whole visual rather than to a single
-/// drawing command.
+/// drawing command. A backdrop filter fills the visual's layout box, cut to its corners, with what
+/// the surface holds behind it; the fallback brush stands in where that cannot be read.
 /// </summary>
 internal readonly record struct CompositionState(
     bool IsVisible,
     double Opacity,
-    bool OpaqueBackdrop);
+    bool FillsBoundsOpaquely,
+    ImageFilter? BackdropFilter = null,
+    Brush? BackdropFallback = null,
+    CornerRadius BackdropCornerRadius = default)
+{
+    internal bool HasBackdrop => BackdropFilter != null;
+}
 
 /// <summary>
 /// Scene node of one visual. Owns that visual's content slots and composition, and nothing of its
@@ -58,6 +66,21 @@ internal sealed class VisualNode : IDisposable
 
     /// <summary>Where the visual stands in the committed scene; a slot is replayed moved from where it was recorded to here.</summary>
     internal Point PlacedOrigin { get; set; }
+
+    /// <summary>Surface-space layout box of a visual with a backdrop, as the last pass that looked into it saw it.</summary>
+    internal Rect BackdropBounds { get; set; }
+
+    /// <summary>The backdrop's layout box now, the frame move included.</summary>
+    internal Rect ShiftedBackdropBounds => Shifted(BackdropBounds, SurfaceShift);
+
+    /// <summary>What stands behind the backdrop, kept between frames; null while the backdrop reads the target every time.</summary>
+    internal BackdropInputCache? BackdropCache { get; set; }
+
+    /// <summary>Whether this frame draws the backdrop from <see cref="BackdropCache"/>; decided when the dirty region is closed.</summary>
+    internal bool BackdropRetained { get; set; }
+
+    /// <summary>Whether a visual under this one has a backdrop, as of the last time the dirty region was closed.</summary>
+    internal bool HasBackdropBelow { get; set; }
 
     /// <summary>
     /// Surface-space extent of the visual and everything under it before the clips opened outside its frame
@@ -326,5 +349,12 @@ internal sealed class VisualNode : IDisposable
         _childNodes = null;
         ClearSlots();
         Plan = CompositionPlan.Empty;
+        ReleaseBackdropCache();
+    }
+
+    internal void ReleaseBackdropCache()
+    {
+        BackdropCache?.Dispose();
+        BackdropCache = null;
     }
 }
