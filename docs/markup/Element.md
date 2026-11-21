@@ -33,6 +33,8 @@ Receiver: `UIElement` and derived types (`where T : UIElement`).
 | Method | Sets | Summary |
 |---|---|---|
 | `AllowDrop(bool value = true)` | `AllowDrop` | Sets whether the element accepts drops, taking part in drop-target hit testing and receiving DragEnter, DragOver, DragLeave and Drop. |
+| `BackdropFallbackBrush(Brush value)` | `BackdropFallbackBrush` | Sets the brush drawn in place of the backdrop where what is behind the element cannot be read; null draws nothing there. |
+| `BackdropFilter(ImageFilter value)` | `BackdropFilter` | Sets the filter applied to what is drawn behind the element, such as a blur for frosted glass. The element's own background and content are drawn over the result. |
 | `BindIsEnabled(ObservableValue<TSource> source, Func<TSource, bool> convert)` | `bind IsEnabled` | Binds the enabled state to a converted observable value. |
 | `BindIsEnabled(ObservableValue<bool> source)` | `bind IsEnabled` | Binds the enabled state to an observable value. |
 | `BindIsVisible(ObservableValue<TSource> source, Func<TSource, bool> convert)` | `bind IsVisible` | Binds the visibility state to a converted observable value. |

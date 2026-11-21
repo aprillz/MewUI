@@ -22,6 +22,7 @@ const guides = [
   'layout',
   'draganddrop',
   'trayicon',
+  'backdrop',
   'focusandtabnavigation',
   'localization',
   'textviewextensions',
