@@ -25,6 +25,15 @@ internal sealed class RenderSceneStatistics
     /// <summary>Faded groups a replay blended from the surface kept for them, without replaying what is under them.</summary>
     internal int GroupLayerReuseCount { get; set; }
 
+    /// <summary>Backdrops a replay read from its target and drew filtered.</summary>
+    internal int BackdropPassCount { get; set; }
+
+    /// <summary>Backdrops a replay could not read or filter, drawn with their fallback brush or left out.</summary>
+    internal int BackdropFallbackCount { get; set; }
+
+    /// <summary>Pixels the backdrops of a replay read from their target.</summary>
+    internal long BackdropInputPixelCount { get; set; }
+
     /// <summary>Frames an update found moved by whole pixels, so their subtrees were shifted instead of visited.</summary>
     internal int FrameMoveCount { get; set; }
 
@@ -40,6 +49,9 @@ internal sealed class RenderSceneStatistics
         CapturedNodeCount = 0;
         GroupSurfaceCount = 0;
         GroupLayerReuseCount = 0;
+        BackdropPassCount = 0;
+        BackdropFallbackCount = 0;
+        BackdropInputPixelCount = 0;
         FrameMoveCount = 0;
         CarriedNodeCount = 0;
     }
@@ -105,6 +117,232 @@ internal sealed class RenderScene : IDisposable
     }
 
     internal void MarkFullyDirty() => IsFullyDirty = true;
+
+    // Whole pixels cut a filter's reach off, so it is taken this much wider.
+    private const double BACKDROP_REACH_MARGIN = 1;
+
+    private readonly List<VisualNode> _backdropsInPaintOrder = [];
+    private readonly List<List<Rect>> _backdropOutputs = [];
+    private readonly List<Rect> _changesBeforeBackdrops = [];
+
+    /// <summary>
+    /// Closes the dirty region over the backdrops it touches, and decides for each backdrop whether it keeps
+    /// what stands behind it. The kept frame holds a backdrop as it was drawn, not what stands behind it, so a
+    /// backdrop that reads its box whole is drawn again whole once anything in its box is repainted. One that
+    /// keeps its input takes as changed what changed under it, which is what the frame changed and what the
+    /// backdrops drawn before it draw differently; what it draws itself then changes no further than its filter
+    /// reaches from there, inside its box. Returns how many areas it added.
+    /// </summary>
+    internal int ExpandDirtyForBackdrops()
+    {
+        _backdropsInPaintOrder.Clear();
+        if (Root != null && FindNode(Root) is VisualNode root)
+        {
+            CollectBackdrops(root, insideGroup: false);
+        }
+
+        for (int index = 0; index < LayerRoots.Count; index++)
+        {
+            if (FindNode(LayerRoots[index]) is VisualNode layer)
+            {
+                CollectBackdrops(layer, insideGroup: false);
+            }
+        }
+
+        if (_backdropsInPaintOrder.Count == 0 || IsFullyDirty || DirtyBounds.Width <= 0 || DirtyBounds.Height <= 0)
+        {
+            return 0;
+        }
+
+        _changesBeforeBackdrops.Clear();
+        _changesBeforeBackdrops.AddRange(_dirtyRegion.Areas);
+        while (_backdropOutputs.Count < _backdropsInPaintOrder.Count)
+        {
+            _backdropOutputs.Add([]);
+        }
+
+        for (int index = 0; index < _backdropsInPaintOrder.Count; index++)
+        {
+            _backdropOutputs[index].Clear();
+        }
+
+        // A backdrop read whole answers to a change drawn after it too, so this runs until nothing more is added.
+        bool grew = true;
+        while (grew)
+        {
+            grew = false;
+            for (int index = 0; index < _backdropsInPaintOrder.Count; index++)
+            {
+                grew |= ExpandForBackdrop(index);
+            }
+        }
+
+        int added = 0;
+        for (int index = 0; index < _backdropsInPaintOrder.Count; index++)
+        {
+            var outputs = _backdropOutputs[index];
+            for (int outputIndex = 0; outputIndex < outputs.Count; outputIndex++)
+            {
+                AddDirtyRect(outputs[outputIndex]);
+                added++;
+            }
+        }
+
+        return added;
+    }
+
+    /// <summary>Adds to what the backdrop at <paramref name="order"/> draws differently; true when it grew.</summary>
+    private bool ExpandForBackdrop(int order)
+    {
+        var node = _backdropsInPaintOrder[order];
+        var box = node.ShiftedBackdropBounds;
+        var outputs = _backdropOutputs[order];
+        var cache = node.BackdropCache;
+        if (!node.BackdropRetained || cache == null || cache.NeedsWholeInput || cache.Bounds != box ||
+            ReachOf(node.State) is not double reach)
+        {
+            if (Covers(outputs, box) || !AnyChangeTouches(box, order))
+            {
+                return false;
+            }
+
+            outputs.Add(box);
+            return true;
+        }
+
+        bool grew = GrowKept(outputs, _changesBeforeBackdrops, box, reach);
+        for (int earlier = 0; earlier < order; earlier++)
+        {
+            grew |= GrowKept(outputs, _backdropOutputs[earlier], box, reach);
+        }
+
+        return grew;
+    }
+
+    /// <summary>Adds what a kept backdrop draws differently for each of <paramref name="changes"/> under its box.</summary>
+    private static bool GrowKept(List<Rect> outputs, List<Rect> changes, Rect box, double reach)
+    {
+        bool grew = false;
+        for (int index = 0; index < changes.Count; index++)
+        {
+            var changed = changes[index].Intersect(box);
+            if (changed.Width <= 0 || changed.Height <= 0)
+            {
+                continue;
+            }
+
+            var reached = changed.Inflate(reach, reach).Intersect(box);
+            if (!Covers(outputs, reached))
+            {
+                outputs.Add(reached);
+                grew = true;
+            }
+        }
+
+        return grew;
+    }
+
+    /// <summary>Whether anything the frame repaints, other than what the backdrop at <paramref name="order"/> adds itself, reaches <paramref name="box"/>.</summary>
+    private bool AnyChangeTouches(Rect box, int order)
+    {
+        for (int index = 0; index < _changesBeforeBackdrops.Count; index++)
+        {
+            if (_changesBeforeBackdrops[index].IntersectsWith(box))
+            {
+                return true;
+            }
+        }
+
+        for (int other = 0; other < _backdropsInPaintOrder.Count; other++)
+        {
+            if (other == order)
+            {
+                continue;
+            }
+
+            var outputs = _backdropOutputs[other];
+            for (int index = 0; index < outputs.Count; index++)
+            {
+                if (outputs[index].IntersectsWith(box))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static bool Covers(List<Rect> areas, Rect rect)
+    {
+        for (int index = 0; index < areas.Count; index++)
+        {
+            var area = areas[index];
+            if (area.X <= rect.X && area.Y <= rect.Y && area.Right >= rect.Right && area.Bottom >= rect.Bottom)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// How far a change under a backdrop reaches in what its filter draws, or null when the filter's reach
+    /// cannot be bounded and the backdrop reads its box whole.
+    /// </summary>
+    private static double? ReachOf(in CompositionState state)
+    {
+        var unit = new Rect(0, 0, 1, 1);
+        if (Filters.ImageFilterBounds.TryGetSourceRect(state.BackdropFilter, unit) is not Rect source || source.IsEmpty)
+        {
+            return null;
+        }
+
+        double reach = Math.Max(Math.Max(-source.X, -source.Y), Math.Max(source.Right - 1, source.Bottom - 1));
+        return Math.Max(0, reach) + BACKDROP_REACH_MARGIN;
+    }
+
+    /// <summary>Lists the backdrops under <paramref name="node"/> in paint order and returns whether it or anything under it has one.</summary>
+    private bool CollectBackdrops(VisualNode node, bool insideGroup)
+    {
+        node.HasBackdropBelow = false;
+        if (!node.State.IsVisible)
+        {
+            return false;
+        }
+
+        var box = node.ShiftedBackdropBounds;
+        if (node.State.HasBackdrop && box.Width > 0 && box.Height > 0)
+        {
+            // A visual inside a faded group reads the group's own target, which is made again every frame, and a
+            // visual drawn through its own render path reads its box whole there: neither keeps what it read.
+            node.BackdropRetained = !insideGroup && !node.StateBakedIntoContent;
+            _backdropsInPaintOrder.Add(node);
+        }
+
+        bool hasOwn = node.State.HasBackdrop;
+        if (node.StateBakedIntoContent)
+        {
+            // Its own render path draws everything under it, into a target of its own where a cache is.
+            return hasOwn;
+        }
+
+        bool childrenInsideGroup = insideGroup || node.State.Opacity < 1;
+        bool below = false;
+        var entries = node.Plan.Entries;
+        for (int index = 0; index < entries.Length; index++)
+        {
+            if (entries[index].Kind == CompositionEntryKind.Child && entries[index].Child is UIElement child &&
+                FindNode(child) is VisualNode childNode)
+            {
+                below |= CollectBackdrops(childNode, childrenInsideGroup);
+            }
+        }
+
+        node.HasBackdropBelow = below;
+        return hasOwn || below;
+    }
 
     internal void ResetDirtyRegion()
     {
@@ -193,6 +431,7 @@ internal sealed class RenderScene : IDisposable
             node.RecordedContentVersion = -1;
             node.RecordedSubtreeVersion = -1;
             node.Captured = default;
+            node.ReleaseBackdropCache();
         }
     }
 

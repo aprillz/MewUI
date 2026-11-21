@@ -92,6 +92,8 @@ public sealed partial class Border : Control, IVisualTreeHost, ILogicalTreeHost
         }
     }
 
+    internal override CornerRadius BackdropCornerRadius => EffectiveCornerRadius;
+
     private CornerRadius EffectiveCornerRadius
     {
         get

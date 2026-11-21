@@ -152,7 +152,8 @@ internal sealed class SceneUpdate
         bool clippedAway,
         CaptureKey captured,
         SceneFrame frame,
-        bool planStaged = true)
+        bool planStaged = true,
+        Rect backdropBounds = default)
     {
         ArgumentNullException.ThrowIfNull(node);
         ArgumentNullException.ThrowIfNull(frame);
@@ -167,7 +168,8 @@ internal sealed class SceneUpdate
             frame,
             frame.PendingLocalOrigin,
             frame.PendingSurfaceOrigin,
-            planStaged));
+            planStaged,
+            backdropBounds));
     }
 
     /// <summary>
@@ -460,6 +462,20 @@ internal sealed class SceneUpdate
                 _scene.AddDirtyRect(bounds.SurfaceBounds);
             }
 
+            // A backdrop fills its box whatever the visual draws, so no recording answers for where it was and is.
+            var backdropWas = bounds.Node.ShiftedBackdropBounds;
+            if (backdropWas != bounds.BackdropBounds)
+            {
+                _scene.AddDirtyRect(backdropWas);
+                _scene.AddDirtyRect(bounds.BackdropBounds);
+            }
+
+            bounds.Node.BackdropBounds = bounds.BackdropBounds;
+            if (bounds.BackdropBounds.IsEmpty)
+            {
+                bounds.Node.ReleaseBackdropCache();
+            }
+
             bounds.Node.SurfaceBounds = bounds.SurfaceBounds;
             bounds.Node.SurfaceSubtreeBounds = bounds.SurfaceSubtreeBounds;
             bounds.Node.SurfaceSubtreeReach = bounds.SurfaceSubtreeReach;
@@ -622,7 +638,8 @@ internal sealed class SceneUpdate
         SceneFrame Frame,
         Point FrameLocalOrigin,
         Point FrameSurfaceOrigin,
-        bool PlanStaged);
+        bool PlanStaged,
+        Rect BackdropBounds);
 
     private readonly record struct PendingSlot(
         VisualNode Node,

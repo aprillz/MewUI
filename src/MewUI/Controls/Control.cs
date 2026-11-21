@@ -113,6 +113,8 @@ public abstract partial class Control : TextElement
     /// </summary>
     internal virtual bool FillsBoundsOpaquely => Background.A == 255;
 
+    internal override CornerRadius BackdropCornerRadius => new(CornerRadius);
+
     /// <summary>
     /// Gets or sets the border color.
     /// </summary>
