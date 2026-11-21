@@ -37,7 +37,8 @@ TIMEOUT_SECONDS="${MEWUI_REMOTE_TIMEOUT:-$DEFAULT_TIMEOUT_SECONDS}"
 # UseVSTest=false selects the MSTest runner, which produces a plain executable: the remote machine then
 # needs no SDK, and self-contained means it needs no .NET at all.
 echo "== publishing the suite (self-contained)"
-dotnet publish "$PROJECT" -c Debug -f net8.0 -r win-x64 --self-contained \
+# MEWUI_REMOTE_CONFIGURATION=Release for measurements; tests run in Debug.
+dotnet publish "$PROJECT" -c "${MEWUI_REMOTE_CONFIGURATION:-Debug}" -f net8.0 -r win-x64 --self-contained \
   -p:UseVSTest=false -o "$PUBLISH_DIR" -v:q --nologo
 
 echo "== checking the broker"
