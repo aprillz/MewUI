@@ -17,6 +17,7 @@
 #   MEWUI_REMOTE_ROOT     remote directory under the home directory (default: mewui-window-automation)
 #   MEWUI_REMOTE_DISPLAY  X11 display for Linux targets (default: :0)
 #   MEWUI_REMOTE_ENV      NAME=value pairs, semicolon-separated, exported for the run
+#   MEWUI_REMOTE_CONFIGURATION  build configuration (default: Debug; Release for measurements)
 set -euo pipefail
 
 SSH_TARGET="${1:?usage: posix-remote-test.sh <ssh-target> [-- <extra runner args>]}"
@@ -50,7 +51,7 @@ PUBLISH_NAME="publish-$RID"
 # UseVSTest=false selects the MSTest runner, which produces a plain executable application.
 echo "== publishing the suite ($RID, framework-dependent)"
 rm -rf "$OUT/$PUBLISH_NAME"
-dotnet publish "$PROJECT" -c Debug -f "$FRAMEWORK" -r "$RID" --self-contained false \
+dotnet publish "$PROJECT" -c "${MEWUI_REMOTE_CONFIGURATION:-Debug}" -f "$FRAMEWORK" -r "$RID" --self-contained false \
   -p:UseVSTest=false -o "$OUT/$PUBLISH_NAME" -v:q --nologo
 
 echo "== shipping the payload"
