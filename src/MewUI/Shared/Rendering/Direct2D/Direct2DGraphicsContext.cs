@@ -12,7 +12,7 @@ using static Aprillz.MewUI.Rendering.GradientBrushHelper;
 
 namespace Aprillz.MewUI.Rendering.Direct2D;
 
-internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITransparentDirtyRectContext, IOpaqueDirtyRectContext, IGroupOpacityContext, IBoundedOpaqueBackdropContext
+internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITransparentDirtyRectContext, IOpaqueDirtyRectContext, IGroupOpacityContext, IBoundedOpaqueBackdropContext, ITargetSnapshotContext
 {
     private const int D2DERR_RECREATE_TARGET = unchecked((int)0x8899000C);
     private const int D2DERR_WRONG_RESOURCE_DOMAIN = unchecked((int)0x88990015);
@@ -103,6 +103,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITra
     // set as the device target via dc.SetTarget. Subsequent draws and any effect pass land
     // directly on GPU memory - full zero-copy parity with MewVG's FBO path.
     private nint _gpuPixelSurfaceBitmap; // ID2D1Bitmap1* currently set as target (0 = DIB/normal mode)
+    private Direct2DGpuPixelRenderSurface? _gpuPixelSurfaceTarget;
     private nint _previousDeviceTarget; // saved for SetTarget restore at EndFrame
     private float _previousDcDpiX; // saved DC dpi for restore at EndFrame (GPU pixel-surface path)
     private float _previousDcDpiY;
@@ -254,6 +255,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITra
         D2D1VTable.GetTarget((ID2D1DeviceContext*)dc, out _previousDeviceTarget);
         D2D1VTable.SetTarget((ID2D1DeviceContext*)dc, gpuTarget.Bitmap);
         _gpuPixelSurfaceBitmap = gpuTarget.Bitmap;
+        _gpuPixelSurfaceTarget = gpuTarget;
 
         // Sync the DC's DPI to the bound bitmap's DPI. SetTarget does NOT auto-adopt the
         // bitmap's DPI - the DC keeps whatever DPI was last set on it (default 96). If the
@@ -425,6 +427,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITra
                     _hasPreviousDcTransform = false;
                 }
                 _gpuPixelSurfaceBitmap = 0;
+                _gpuPixelSurfaceTarget = null;
             }
         }
         finally
@@ -505,6 +508,88 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITra
         }
 
         D2D1VTable.Clear((ID2D1RenderTarget*)_renderTarget, ToColorF(color));
+    }
+
+    bool ITargetSnapshotContext.TryGetSnapshotTarget(out int pixelWidth, out int pixelHeight, out bool hasAlpha)
+    {
+        var target = _gpuPixelSurfaceTarget;
+        if (target == null || _gpuPixelSurfaceBitmap == 0 || _renderTarget == 0 || HasOpenLayer())
+        {
+            pixelWidth = 0;
+            pixelHeight = 0;
+            hasAlpha = false;
+            return false;
+        }
+
+        pixelWidth = target.PixelWidth;
+        pixelHeight = target.PixelHeight;
+        hasAlpha = target.HasAlpha;
+        return true;
+    }
+
+    bool ITargetSnapshotContext.TryCopyTargetPixels(int left, int top, int width, int height, IRenderSurface destination, int destinationLeft, int destinationTop)
+    {
+        var target = _gpuPixelSurfaceTarget;
+        if (target == null || _gpuPixelSurfaceBitmap == 0 || _renderTarget == 0 || HasOpenLayer() ||
+            RenderSurfaceResource.ResolveBackendSurface(destination) is not Direct2DGpuPixelRenderSurface destinationSurface ||
+            destinationSurface.Bitmap == 0 ||
+            // A bitmap is only defined on the device context that made it.
+            destinationSurface.DeviceContext != _renderTarget ||
+            width <= 0 || height <= 0 || left < 0 || top < 0 || destinationLeft < 0 || destinationTop < 0 ||
+            left + width > target.PixelWidth || top + height > target.PixelHeight ||
+            destinationLeft + width > destinationSurface.PixelWidth || destinationTop + height > destinationSurface.PixelHeight)
+        {
+            return false;
+        }
+
+        // The draws batched so far have to reach the bitmap before it is read.
+        if (D2D1VTable.Flush((ID2D1RenderTarget*)_renderTarget) < 0)
+        {
+            return false;
+        }
+
+        int copied = D2D1VTable.CopyFromBitmap(
+            destinationSurface.Bitmap,
+            new D2D1_POINT_2U((uint)destinationLeft, (uint)destinationTop),
+            _gpuPixelSurfaceBitmap,
+            new D2D1_RECT_U((uint)left, (uint)top, (uint)(left + width), (uint)(top + height)));
+        if (copied < 0)
+        {
+            return false;
+        }
+
+        destinationSurface.IncrementVersion();
+        return true;
+    }
+
+    /// <summary>Whether drawing goes into a layer that reaches the target only when it is popped.</summary>
+    private bool HasOpenLayer()
+    {
+        foreach (var entry in _clipStack)
+        {
+            if (entry.Kind == ClipKind.Layer)
+            {
+                return true;
+            }
+        }
+
+        foreach (nint layer in _opacityLayers)
+        {
+            if (layer != 0)
+            {
+                return true;
+            }
+        }
+
+        foreach (nint layer in _opaqueBackdropLayers)
+        {
+            if (layer != 0)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     void ITransparentDirtyRectContext.ClearRectangleToTransparent(Rect rect)

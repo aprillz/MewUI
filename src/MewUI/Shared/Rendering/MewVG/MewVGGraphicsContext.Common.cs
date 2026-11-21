@@ -6,13 +6,13 @@ using Aprillz.MewVG;
 namespace Aprillz.MewUI.Rendering.MewVG;
 
 #if MEWUI_MEWVG_MACOS
-internal sealed partial class MewVGMacOSGraphicsContext : GraphicsContextBase, ITransparentDirtyRectContext, IOpaqueDirtyRectContext
+internal sealed partial class MewVGMacOSGraphicsContext : GraphicsContextBase, ITransparentDirtyRectContext, IOpaqueDirtyRectContext, ITargetSnapshotContext
 #elif MEWUI_MEWVG_X11
-internal sealed partial class MewVGX11GraphicsContext : GraphicsContextBase, ITransparentDirtyRectContext, IOpaqueDirtyRectContext, ISurfaceCopyContext
+internal sealed partial class MewVGX11GraphicsContext : GraphicsContextBase, ITransparentDirtyRectContext, IOpaqueDirtyRectContext, ISurfaceCopyContext, ITargetSnapshotContext
 #elif MEWUI_MEWVG_FRAMEBUFFER
-internal sealed partial class MewVGFramebufferGraphicsContext : GraphicsContextBase, ITransparentDirtyRectContext, IOpaqueDirtyRectContext, ISurfaceCopyContext
+internal sealed partial class MewVGFramebufferGraphicsContext : GraphicsContextBase, ITransparentDirtyRectContext, IOpaqueDirtyRectContext, ISurfaceCopyContext, ITargetSnapshotContext
 #else
-internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, ITransparentDirtyRectContext, IOpaqueDirtyRectContext, ISurfaceCopyContext
+internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, ITransparentDirtyRectContext, IOpaqueDirtyRectContext, ISurfaceCopyContext, ITargetSnapshotContext
 #endif
 {
 #if MEWUI_MEWVG_MACOS
@@ -549,14 +549,110 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
         return true;
     }
 
-    /// <summary>Sends the draws queued so far to the frame target, so direct target writes land after them.</summary>
-    private void FlushQueuedDraws()
+#if !MEWUI_MEWVG_MACOS
+    bool ITargetSnapshotContext.TryGetSnapshotTarget(out int pixelWidth, out int pixelHeight, out bool hasAlpha)
+    {
+        pixelWidth = _viewportWidthPx;
+        pixelHeight = _viewportHeightPx;
+        var pixelSurface = FramePixelSurface;
+        hasAlpha = pixelSurface == null || pixelSurface.HasAlpha;
+        return CanReadTarget();
+    }
+
+    bool ITargetSnapshotContext.TryCopyTargetPixels(int left, int top, int width, int height, IRenderSurface destination, int destinationLeft, int destinationTop)
+    {
+        if (!CanReadTarget() ||
+            RenderSurfaceResource.ResolveBackendSurface(destination) is not OpenGL.OpenGLPixelRenderSurface destinationSurface ||
+            width <= 0 || height <= 0 || left < 0 || top < 0 || destinationLeft < 0 || destinationTop < 0 ||
+            left + width > _viewportWidthPx || top + height > _viewportHeightPx ||
+            destinationLeft + width > destinationSurface.PixelWidth || destinationTop + height > destinationSurface.PixelHeight)
+        {
+            return false;
+        }
+
+        destinationSurface.InitializeFbo();
+        if (!destinationSurface.IsFboInitialized)
+        {
+            return false;
+        }
+
+        // A multisampled target only blits to the same rectangle, which a copy to another place is not.
+        BindFrameTarget();
+        if (Native.GL.GetInteger(Native.GL.GL_SAMPLES) > 0)
+        {
+            return false;
+        }
+
+        FlushQueuedDraws(keepClips: true);
+        uint target = (uint)Native.GL.GetInteger(Native.OpenGLExt.GL_FRAMEBUFFER_BINDING);
+
+        // Framebuffer objects belong to the context that made them, so a surface made under another
+        // context is written through a framebuffer made here around its (shared) texture.
+        uint drawFramebuffer = destinationSurface.Fbo;
+        uint temporaryFramebuffer = 0;
+        if (destinationSurface.CreationContext == 0 || destinationSurface.CreationContext != GetCurrentGLContext())
+        {
+            unsafe
+            {
+                Native.OpenGLExt.GenFramebuffers(1, &temporaryFramebuffer);
+            }
+
+            Native.OpenGLExt.BindFramebuffer(Native.OpenGLExt.GL_DRAW_FRAMEBUFFER, temporaryFramebuffer);
+            Native.OpenGLExt.FramebufferTexture2D(Native.OpenGLExt.GL_DRAW_FRAMEBUFFER, Native.OpenGLExt.GL_COLOR_ATTACHMENT0,
+                Native.GL.GL_TEXTURE_2D, destinationSurface.Texture, 0);
+            drawFramebuffer = temporaryFramebuffer;
+        }
+
+        // The destination is read as a whole surface from here on, not as the part written now.
+        destinationSurface.SetContentSize(destinationSurface.PixelWidth, destinationSurface.PixelHeight);
+        Native.OpenGLExt.BindFramebuffer(Native.OpenGLExt.GL_READ_FRAMEBUFFER, target);
+        Native.OpenGLExt.BindFramebuffer(Native.OpenGLExt.GL_DRAW_FRAMEBUFFER, drawFramebuffer);
+        Native.GL.Disable(Native.GL.GL_SCISSOR_TEST);
+        Native.GL.ColorMask(true, true, true, true);
+
+        // A surface keeps its rows bottom-up; a top-down target is read in the opposite order.
+        int destinationBottom = destinationSurface.PixelHeight - (destinationTop + height);
+        int sourceFirstRow = _targetTopDown ? top + height : _viewportHeightPx - (top + height);
+        int sourceLastRow = _targetTopDown ? top : _viewportHeightPx - top;
+        Native.OpenGLExt.BlitFramebuffer(
+            left, sourceFirstRow, left + width, sourceLastRow,
+            destinationLeft, destinationBottom, destinationLeft + width, destinationBottom + height,
+            Native.GL.GL_COLOR_BUFFER_BIT, Native.OpenGLExt.GL_NEAREST);
+        Native.OpenGLExt.BindFramebuffer(Native.OpenGLExt.GL_FRAMEBUFFER, target);
+
+        if (temporaryFramebuffer != 0)
+        {
+            unsafe
+            {
+                Native.OpenGLExt.DeleteFramebuffers(1, &temporaryFramebuffer);
+            }
+        }
+
+        destinationSurface.RequestDeferredReadback();
+        return true;
+    }
+
+    private bool CanReadTarget() => Native.OpenGLExt.IsBlitFramebufferSupported;
+#endif
+
+    /// <summary>
+    /// Sends the draws queued so far to the frame target, so direct target writes land after them.
+    /// <paramref name="keepClips"/> keeps the path clips in effect for the drawing that follows.
+    /// </summary>
+    private void FlushQueuedDraws(bool keepClips = false)
     {
         BindFrameTarget();
         Native.GL.Viewport(0, 0, _viewportWidthPx, _viewportHeightPx);
         ApplyPendingFrameClear();
         FlushGlyphUploads();
-        _vg.EndFrame();
+        if (keepClips)
+        {
+            _vg.Flush();
+        }
+        else
+        {
+            _vg.EndFrame();
+        }
     }
 
     /// <summary>

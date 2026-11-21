@@ -301,6 +301,9 @@ internal abstract partial class GraphicsContextBase : IGraphicsContext, ITextBac
     private Matrix3x2 _rootTransformInverse = Matrix3x2.Identity;
     private bool _hasRootTransform;
 
+    /// <summary>Where this target stands inside the surface its drawing is meant for; identity for a target that is that surface.</summary>
+    internal Matrix3x2 RootTransform => _rootTransform;
+
     /// <summary>Places this target inside a larger surface; every transform given afterwards is in that surface's coordinates.</summary>
     internal void SetRootTransform(Matrix3x2 rootTransform)
     {

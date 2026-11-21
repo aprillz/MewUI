@@ -17,6 +17,27 @@ internal interface ITransparentDirtyRectContext
 }
 
 /// <summary>
+/// A context that can copy what its target holds partway through a frame. A backdrop needs this: it
+/// filters the pixels drawn under it so far.
+/// </summary>
+internal interface ITargetSnapshotContext
+{
+    /// <summary>
+    /// Gives the target's size in pixels and whether it carries alpha, or returns false when the target
+    /// cannot be read at this point of the frame, such as while drawing is held back from it.
+    /// </summary>
+    bool TryGetSnapshotTarget(out int pixelWidth, out int pixelHeight, out bool hasAlpha);
+
+    /// <summary>
+    /// Copies the given pixels of the target, with everything drawn so far, to
+    /// <paramref name="destination"/> at the given pixel of it, and returns true; returns false, leaving
+    /// the destination as it was, when it cannot. Both rectangles are in pixels with the top row first,
+    /// and the destination is a surface made by the same factory.
+    /// </summary>
+    bool TryCopyTargetPixels(int left, int top, int width, int height, IRenderSurface destination, int destinationLeft, int destinationTop);
+}
+
+/// <summary>
 /// A context that can overwrite a rectangle of its target with one colour, alpha included.
 /// Repainting part of an opaque window needs this so the dirty box starts from the window
 /// background instead of the pixels the previous frame left behind.
