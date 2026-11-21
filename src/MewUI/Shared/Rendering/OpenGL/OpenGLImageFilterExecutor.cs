@@ -266,7 +266,10 @@ public sealed class OpenGLImageFilterExecutor : IImageFilterExecutor
             glDest.InitializeFbo();
             if (!glDest.IsFboInitialized || glDest.Fbo == 0 || glDest.Texture == 0) return null;
 
-            if (!OpenGLGaussianBlur.TryApply(glSource, glDest, pxSigmaX, pxSigmaY)) return null;
+            var defaultContext = ctx as DefaultFilterContext;
+            Rect? outputPixels = defaultContext?.OutputPixels;
+            bool reduce = defaultContext != null && defaultContext.ReducesBlur;
+            if (!OpenGLGaussianBlur.TryApply(glSource, glDest, pxSigmaX, pxSigmaY, outputPixels, reduce)) return null;
 
             ownsResult = true;
             return scratch;

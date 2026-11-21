@@ -37,10 +37,19 @@ internal static unsafe class OpenGLGaussianBlur
     private sealed class ContextState
     {
         public uint Vao;
-        public uint ScratchFbo;
-        public uint ScratchTex;
-        public int ScratchW;
-        public int ScratchH;
+        public readonly RenderTarget Scratch = new();
+        // The two targets a reduced blur bounces between at its lower resolution.
+        public readonly RenderTarget ReducedFirst = new();
+        public readonly RenderTarget ReducedSecond = new();
+    }
+
+    /// <summary>A texture with the framebuffer that draws into it.</summary>
+    private sealed class RenderTarget
+    {
+        public uint Fbo;
+        public uint Tex;
+        public int Width;
+        public int Height;
     }
 
     // GLSL 1.40 (OpenGL 3.1): the lowest version that has in/out, texture() and user-defined fragment
@@ -230,29 +239,31 @@ void main() {{
 #endif
     }
 
-    private static bool EnsureScratch(ContextState state, int width, int height)
+    private static bool EnsureScratch(ContextState state, int width, int height) => EnsureTarget(state.Scratch, width, height);
+
+    private static bool EnsureTarget(RenderTarget target, int width, int height)
     {
         // Exact match required - the blur shader uses v_uv ∈ [0,1] to sample the entire
         // scratch texture in pass 2. If we reused an oversized scratch (e.g. previous frame
         // was zoomed in) the stale border outside the current write region would alias into
         // pass 2's samples, producing visible "ghost" copies of older zoom levels.
-        if (state.ScratchTex != 0 && state.ScratchFbo != 0 && state.ScratchW == width && state.ScratchH == height)
+        if (target.Tex != 0 && target.Fbo != 0 && target.Width == width && target.Height == height)
         {
             return true;
         }
 
         // (Re)allocate to fit the requested extent.
-        if (state.ScratchTex != 0)
+        if (target.Tex != 0)
         {
-            uint t = state.ScratchTex;
+            uint t = target.Tex;
             GL.DeleteTextures(1, ref t);
-            state.ScratchTex = 0;
+            target.Tex = 0;
         }
-        if (state.ScratchFbo != 0)
+        if (target.Fbo != 0)
         {
-            uint f = state.ScratchFbo;
+            uint f = target.Fbo;
             OpenGLExt.DeleteFramebuffers(1, &f);
-            state.ScratchFbo = 0;
+            target.Fbo = 0;
         }
 
         GL.GenTextures(1, out uint tex);
@@ -286,11 +297,110 @@ void main() {{
             return false;
         }
 
-        state.ScratchTex = tex;
-        state.ScratchFbo = fbo;
-        state.ScratchW = width;
-        state.ScratchH = height;
+        target.Tex = tex;
+        target.Fbo = fbo;
+        target.Width = width;
+        target.Height = height;
         return true;
+    }
+
+    // A reduced blur keeps this much sigma in its own pixels, as the Metal path does.
+    private const double REDUCED_SIGMA = 2.0;
+    private const int MIN_REDUCED_SIDE = 8;
+
+    /// <summary>How many times smaller to blur: none below a sigma of 2.5 pixels, else down to a sigma of about two.</summary>
+    private static int ReductionFactor(double sigma, int width, int height)
+    {
+        if (sigma < 2.5)
+        {
+            return 1;
+        }
+
+        int factor = (int)Math.Floor(sigma / REDUCED_SIGMA);
+        while (factor > 1 && (width / factor < MIN_REDUCED_SIDE || height / factor < MIN_REDUCED_SIDE))
+        {
+            factor--;
+        }
+
+        return factor;
+    }
+
+    /// <summary>
+    /// Shrinks the source by <paramref name="factor"/>, blurs it there at the sigma scaled down to match, and
+    /// stretches the result back into the destination; with an output region, only what reaches it is worked out.
+    /// </summary>
+    private static bool TryApplyReduced(ContextState state, OpenGLPixelRenderSurface source, OpenGLPixelRenderSurface dest,
+        int w, int h, double sigmaX, double sigmaY, Rect? outputPixels, int factor)
+    {
+        int reducedWidth = Math.Max(1, w / factor);
+        int reducedHeight = Math.Max(1, h / factor);
+        if (!EnsureTarget(state.ReducedFirst, reducedWidth, reducedHeight) || !EnsureTarget(state.ReducedSecond, reducedWidth, reducedHeight))
+        {
+            return false;
+        }
+
+        var (wxArr, rx) = BuildKernel(sigmaX / factor);
+        var (wyArr, ry) = BuildKernel(sigmaY / factor);
+        var output = outputPixels is Rect asked ? PixelSpan.Within(asked, w, h) : new PixelSpan(0, 0, w, h);
+        bool scissored = outputPixels != null;
+        // The reduced pixels under the output, with one more for the stretch back to sample between.
+        double scaleX = (double)reducedWidth / w;
+        double scaleY = (double)reducedHeight / h;
+        var reducedOutput = PixelSpan.Within(
+            new Rect(output.Left * scaleX, output.Top * scaleY, (output.Right - output.Left) * scaleX, (output.Bottom - output.Top) * scaleY),
+            reducedWidth, reducedHeight).Grown(1, 1, reducedWidth, reducedHeight);
+        var verticalInput = reducedOutput.Grown(0, ry, reducedWidth, reducedHeight);
+        var shrunk = verticalInput.Grown(rx, 0, reducedWidth, reducedHeight);
+
+        int prevFbo = GL.GetInteger(OpenGLExt.GL_FRAMEBUFFER_BINDING);
+        OpenGLExt.UseProgram(_program);
+        OpenGLExt.BindVertexArray(state.Vao);
+        OpenGLExt.ActiveTexture(OpenGLExt.GL_TEXTURE0);
+        OpenGLExt.Uniform1i(_uTex, 0);
+        if (scissored)
+        {
+            GL.Enable(GL.GL_SCISSOR_TEST);
+        }
+
+        var identity = new[] { 1f };
+        var first = state.ReducedFirst;
+        var second = state.ReducedSecond;
+        // Shrink, blur across, blur down, stretch back; bilinear sampling does the shrinking and the stretching.
+        BlurPass(source.Texture, first.Fbo, reducedWidth, reducedHeight, 0f, 0f, identity, 0, scissored ? shrunk : null);
+        BlurPass(first.Tex, second.Fbo, reducedWidth, reducedHeight, 1f / reducedWidth, 0f, wxArr, rx, scissored ? verticalInput : null);
+        BlurPass(second.Tex, first.Fbo, reducedWidth, reducedHeight, 0f, 1f / reducedHeight, wyArr, ry, scissored ? reducedOutput : null);
+        BlurPass(first.Tex, dest.Fbo, w, h, 0f, 0f, identity, 0, scissored ? output : null);
+
+        if (scissored)
+        {
+            GL.Disable(GL.GL_SCISSOR_TEST);
+        }
+
+        OpenGLExt.BindVertexArray(0);
+        OpenGLExt.UseProgram(0);
+        OpenGLExt.BindFramebuffer(OpenGLExt.GL_FRAMEBUFFER, (uint)prevFbo);
+        dest.RequestDeferredReadback();
+        dest.IncrementVersion();
+        return true;
+    }
+
+    /// <summary>A rectangle of surface pixels, counted top-down.</summary>
+    private readonly record struct PixelSpan(int Left, int Top, int Right, int Bottom)
+    {
+        /// <summary>The whole pixels <paramref name="area"/> touches, inside a surface of the given size.</summary>
+        internal static PixelSpan Within(Rect area, int width, int height)
+            => new(
+                Math.Clamp((int)Math.Floor(area.X), 0, width),
+                Math.Clamp((int)Math.Floor(area.Y), 0, height),
+                Math.Clamp((int)Math.Ceiling(area.Right), 0, width),
+                Math.Clamp((int)Math.Ceiling(area.Bottom), 0, height));
+
+        internal PixelSpan Grown(int horizontal, int vertical, int width, int height)
+            => new(
+                Math.Max(0, Left - horizontal),
+                Math.Max(0, Top - vertical),
+                Math.Min(width, Right + horizontal),
+                Math.Min(height, Bottom + vertical));
     }
 
     private static (float[] weights, int radius) BuildKernel(double sigma)
@@ -320,9 +430,15 @@ void main() {{
     /// </para>
     /// Returns false when the shader pipeline is unavailable, program creation failed, or
     /// either target has no GPU resources.
+    /// <para>
+    /// <paramref name="outputPixels"/>, in the surfaces' top-down pixels, limits the result to the pixels the
+    /// caller will use; the blur still reads the source around them, and leaves the rest of the destination as it was.
+    /// <paramref name="reduce"/> lets a wide blur run at a lower resolution and be stretched back, for a caller that
+    /// draws the result as it is rather than feeding it to filters that read single pixels.
+    /// </para>
     /// </summary>
     public static bool TryApply(OpenGLPixelRenderSurface source, OpenGLPixelRenderSurface dest,
-        double sigmaX, double sigmaY)
+        double sigmaX, double sigmaY, Rect? outputPixels = null, bool reduce = false)
     {
         if (source.Texture == 0 || dest.Fbo == 0 || dest.Texture == 0) return false;
         if (sigmaX <= 0 && sigmaY <= 0)
@@ -355,6 +471,12 @@ void main() {{
         int w = Math.Min(source.PixelWidth, dest.PixelWidth);
         int h = Math.Min(source.PixelHeight, dest.PixelHeight);
         var state = CurrentState();
+        int factor = reduce ? ReductionFactor(Math.Max(sigmaX, sigmaY), w, h) : 1;
+        if (factor > 1)
+        {
+            return EnsureVertexArray(state) && TryApplyReduced(state, source, dest, w, h, sigmaX, sigmaY, outputPixels, factor);
+        }
+
         if (!EnsureVertexArray(state) || !EnsureScratch(state, w, h)) return false;
 
         // Snapshot only the active FBO. NVG re-sets viewport at the next BeginFrame, so
@@ -373,24 +495,40 @@ void main() {{
         bool needHorizontal = sigmaX > 0;
         bool needVertical = sigmaY > 0;
 
+        // The second pass writes only the pixels asked for; the first one writes them and the rows the second
+        // pass reads around them. Without a region both cover the whole surface.
+        var whole = new PixelSpan(0, 0, w, h);
+        var output = outputPixels is Rect asked ? PixelSpan.Within(asked, w, h) : whole;
+        var firstPass = needVertical ? output.Grown(0, ry, w, h) : output;
+        bool scissored = outputPixels != null;
+        if (scissored)
+        {
+            GL.Enable(GL.GL_SCISSOR_TEST);
+        }
+
         if (needHorizontal && needVertical)
         {
             // Pass 1: horizontal source.tex → scratch.fbo
-            BlurPass(source.Texture, state.ScratchFbo, w, h, dirX: 1f / w, dirY: 0f, wxArr, rx);
+            BlurPass(source.Texture, state.Scratch.Fbo, w, h, dirX: 1f / w, dirY: 0f, wxArr, rx, scissored ? firstPass : null);
             // Pass 2: vertical scratch.tex → dest.fbo
-            BlurPass(state.ScratchTex, dest.Fbo, w, h, dirX: 0f, dirY: 1f / h, wyArr, ry);
+            BlurPass(state.Scratch.Tex, dest.Fbo, w, h, dirX: 0f, dirY: 1f / h, wyArr, ry, scissored ? output : null);
         }
         else if (needHorizontal)
         {
             // Horizontal only: source.tex → scratch.fbo, then identity copy → dest.fbo.
-            BlurPass(source.Texture, state.ScratchFbo, w, h, dirX: 1f / w, dirY: 0f, wxArr, rx);
-            BlurPass(state.ScratchTex, dest.Fbo, w, h, dirX: 0f, dirY: 0f, new[] { 1f }, 0);
+            BlurPass(source.Texture, state.Scratch.Fbo, w, h, dirX: 1f / w, dirY: 0f, wxArr, rx, scissored ? firstPass : null);
+            BlurPass(state.Scratch.Tex, dest.Fbo, w, h, dirX: 0f, dirY: 0f, new[] { 1f }, 0, scissored ? output : null);
         }
         else
         {
             // Vertical only.
-            BlurPass(source.Texture, state.ScratchFbo, w, h, dirX: 0f, dirY: 1f / h, wyArr, ry);
-            BlurPass(state.ScratchTex, dest.Fbo, w, h, dirX: 0f, dirY: 0f, new[] { 1f }, 0);
+            BlurPass(source.Texture, state.Scratch.Fbo, w, h, dirX: 0f, dirY: 1f / h, wyArr, ry, scissored ? output : null);
+            BlurPass(state.Scratch.Tex, dest.Fbo, w, h, dirX: 0f, dirY: 0f, new[] { 1f }, 0, scissored ? output : null);
+        }
+
+        if (scissored)
+        {
+            GL.Disable(GL.GL_SCISSOR_TEST);
         }
 
         OpenGLExt.BindVertexArray(0);
@@ -405,10 +543,16 @@ void main() {{
         return true;
     }
 
-    private static void BlurPass(uint srcTex, uint dstFbo, int w, int h, float dirX, float dirY, float[] weights, int radius)
+    private static void BlurPass(uint srcTex, uint dstFbo, int w, int h, float dirX, float dirY, float[] weights, int radius, PixelSpan? scissor = null)
     {
         OpenGLExt.BindFramebuffer(OpenGLExt.GL_FRAMEBUFFER, dstFbo);
         GL.Viewport(0, 0, w, h);
+        if (scissor is PixelSpan area)
+        {
+            // The surfaces keep their rows bottom-up, so a top-down span counts its rows from the bottom here.
+            GL.Scissor(area.Left, h - area.Bottom, area.Right - area.Left, area.Bottom - area.Top);
+        }
+
         GL.Disable(GL.GL_BLEND);
         GL.BindTexture(GL.GL_TEXTURE_2D, srcTex);
 

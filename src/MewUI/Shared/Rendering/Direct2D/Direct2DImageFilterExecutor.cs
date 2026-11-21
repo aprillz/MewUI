@@ -65,7 +65,9 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
         _ => _fallback.Execute(filter, context),
     };
 
-    private static void ConfigureBlur(nint effect, float sigma)
+    private static bool ExtendsEdges(IImageFilterContext context) => context is DefaultFilterContext { ExtendsSourceEdges: true };
+
+    private static void ConfigureBlur(nint effect, float sigma, bool extendsEdges)
     {
         D2D1VTable.SetEffectValueFloat(effect, (uint)D2D1_GAUSSIANBLUR_PROP.STANDARD_DEVIATION, sigma);
         // SOFT border mode matches Metal MPS's default edge mode (Clamp) and OpenGL's
@@ -76,11 +78,15 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
         // rectangular boundary that shifts with zoom (because the source bitmap pixel
         // grid changes resolution). SOFT keeps the visual result invariant under zoom
         // and matches the Metal/GL backends.
-        D2D1VTable.SetEffectValueEnum(effect, (uint)D2D1_GAUSSIANBLUR_PROP.BORDER_MODE, (uint)D2D1_BORDER_MODE.SOFT);
+        // A backdrop is cut to its box and takes the pixels at the box's edge for what lies beyond it.
+        D2D1VTable.SetEffectValueEnum(effect, (uint)D2D1_GAUSSIANBLUR_PROP.BORDER_MODE, (uint)(extendsEdges ? D2D1_BORDER_MODE.HARD : D2D1_BORDER_MODE.SOFT));
         // QUALITY uses a higher-precision kernel sampling than SPEED - smoother gradient,
         // less visible stair-stepping at the halo. Cost is moderate (single-digit ms on
         // the source sizes we hit), and the result cache amortizes it across pan frames.
-        D2D1VTable.SetEffectValueEnum(effect, (uint)D2D1_GAUSSIANBLUR_PROP.OPTIMIZATION, (uint)D2D1_GAUSSIANBLUR_OPTIMIZATION.QUALITY);
+        // A backdrop is drawn straight back as it is, so its blur may let Direct2D shrink a wide kernel the way
+        // the other backends do; a filter result that later nodes read keeps the full-precision kernel.
+        var optimization = extendsEdges ? D2D1_GAUSSIANBLUR_OPTIMIZATION.BALANCED : D2D1_GAUSSIANBLUR_OPTIMIZATION.QUALITY;
+        D2D1VTable.SetEffectValueEnum(effect, (uint)D2D1_GAUSSIANBLUR_PROP.OPTIMIZATION, (uint)optimization);
     }
 
     private static byte[] ReadAndPremultiply(Direct2DPixelRenderSurface rt)
@@ -139,7 +145,8 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
                 scratch.UnderlyingSurface is Direct2DGpuPixelRenderSurface dstGpu &&
                 dstGpu.DeviceContext is var dc and not 0)
             {
-                if (!RunGpuOnlyBlur(dc, srcGpu, dstGpu, sigma))
+                Rect? outputPixels = ctx is DefaultFilterContext defaultContext ? defaultContext.OutputPixels : null;
+                if (!RunGpuOnlyBlur(dc, srcGpu, dstGpu, sigma, ExtendsEdges(ctx), outputPixels))
                 {
                     return null;
                 }
@@ -153,7 +160,7 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
             if (input.UnderlyingSurface is Direct2DPixelRenderSurface srcDib &&
                 scratch.UnderlyingSurface is Direct2DPixelRenderSurface dstDib)
             {
-                if (!RunDibRoundtripBlur(srcDib, dstDib, sigma))
+                if (!RunDibRoundtripBlur(srcDib, dstDib, sigma, ExtendsEdges(ctx)))
                 {
                     return null;
                 }
@@ -177,7 +184,7 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
             }
         }
     }
-    private bool RunGpuOnlyBlur(nint dc, Direct2DGpuPixelRenderSurface srcGpu, Direct2DGpuPixelRenderSurface dstGpu, float sigma)
+    private bool RunGpuOnlyBlur(nint dc, Direct2DGpuPixelRenderSurface srcGpu, Direct2DGpuPixelRenderSurface dstGpu, float sigma, bool extendsEdges, Rect? outputPixels = null)
     {
         if (DebugLogs)
             System.Diagnostics.Debug.WriteLine($"[D2DBlur] GPU path src={srcGpu.PixelWidth}x{srcGpu.PixelHeight} σ={sigma:F2}");
@@ -190,7 +197,7 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
         }
         try
         {
-            ConfigureBlur(effect, sigma);
+            ConfigureBlur(effect, sigma, extendsEdges);
             D2D1VTable.GetEffectOutput(effect, out nint effectImage);
             if (effectImage == 0) return false;
             try
@@ -233,9 +240,21 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
                     // Reset transform (the parent left a Scale+Translate set) so DrawImage
                     // lands at the dst bitmap's (0,0) pixel-for-pixel.
                     D2D1VTable.SetTransform((ID2D1RenderTarget*)dc, D2D1_MATRIX_3X2_F.Identity);
+                    // The effect works out only what the clip lets through; the rest of the bitmap is left as it was.
+                    if (outputPixels is Rect asked)
+                    {
+                        float toDips = (float)(1.0 / dstGpu.DpiScale);
+                        D2D1VTable.PushAxisAlignedClip((ID2D1RenderTarget*)dc, new D2D1_RECT_F(
+                            (float)asked.X * toDips, (float)asked.Y * toDips, (float)asked.Right * toDips, (float)asked.Bottom * toDips));
+                    }
+
                     D2D1VTable.Clear((ID2D1RenderTarget*)dc, new D2D1_COLOR_F(0, 0, 0, 0));
                     D2D1VTable.DrawImage((ID2D1DeviceContext*)dc, effectImage,
                         D2D1_INTERPOLATION_MODE.LINEAR, D2D1_COMPOSITE_MODE.SOURCE_COPY);
+                    if (outputPixels != null)
+                    {
+                        D2D1VTable.PopAxisAlignedClip((ID2D1RenderTarget*)dc);
+                    }
                     if (issuedBeginDraw)
                     {
                         int endHr = D2D1VTable.EndDraw((ID2D1RenderTarget*)dc);
@@ -272,7 +291,7 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
         return true;
     }
 
-    private bool RunDibRoundtripBlur(Direct2DPixelRenderSurface srcDib, Direct2DPixelRenderSurface dstDib, float sigma)
+    private bool RunDibRoundtripBlur(Direct2DPixelRenderSurface srcDib, Direct2DPixelRenderSurface dstDib, float sigma, bool extendsEdges)
     {
         if (DebugLogs)
             System.Diagnostics.Debug.WriteLine($"[D2DBlur] DIB path src={srcDib.PixelWidth}x{srcDib.PixelHeight} σ={sigma:F2}");
@@ -312,7 +331,7 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
                     if (hr < 0 || effect == 0) return false;
 
                     D2D1VTable.SetEffectInput(effect, 0, sourceBitmap);
-                    ConfigureBlur(effect, sigma);
+                    ConfigureBlur(effect, sigma, extendsEdges);
 
                     var rt = (ID2D1RenderTarget*)dcRt;
                     // Reset DC transform - Direct2DGraphicsContext.BeginFrame doesn't push
