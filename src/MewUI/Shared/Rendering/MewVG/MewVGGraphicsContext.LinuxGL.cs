@@ -105,6 +105,9 @@ internal sealed partial class MewVGX11GraphicsContext
     /// <summary>Binds the framebuffer this frame draws into.</summary>
     private void BindFrameTarget() => _frameSession.BindFrameTarget();
 
+    /// <summary>The surface this frame draws into, or null for a window frame.</summary>
+    private OpenGLPixelRenderSurface? FramePixelSurface => _frameSession.PixelSurfaceTarget;
+
     partial void DestroyPlatform()
     {
         _frameSession.DisposeContext(this);

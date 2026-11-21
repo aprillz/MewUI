@@ -64,6 +64,9 @@ internal sealed partial class MewVGWin32GraphicsContext
     /// <summary>Binds the framebuffer this frame draws into.</summary>
     private void BindFrameTarget() => _frameSession.BindFrameTarget();
 
+    /// <summary>The surface this frame draws into, or null for a window frame.</summary>
+    private OpenGLPixelRenderSurface? FramePixelSurface => _frameSession.PixelSurfaceTarget;
+
     private static nint GetCurrentGLContext() => Native.OpenGL32.wglGetCurrentContext();
 
     partial void DestroyPlatform()

@@ -14,7 +14,7 @@ namespace Aprillz.MewUI.Rendering.Gdi;
 /// <summary>
 /// GDI+ graphics context (vector/clip quality), while keeping GDI text measurement/rendering.
 /// </summary>
-internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparentDirtyRectContext, IOpaqueDirtyRectContext, IPartialPresentContext
+internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparentDirtyRectContext, IOpaqueDirtyRectContext, IPartialPresentContext, ITargetSnapshotContext
 {
     private readonly nint _hwnd;
     private readonly bool _ownsDc;
@@ -457,6 +457,74 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
 
     void IOpaqueDirtyRectContext.ClearRectangle(Rect rect, Color color)
         => ClearRectangleCore(rect, color);
+
+    bool ITargetSnapshotContext.TryGetSnapshotTarget(out int pixelWidth, out int pixelHeight, out bool hasAlpha)
+        => TryGetTargetBits(out _, out pixelWidth, out pixelHeight, out hasAlpha);
+
+    unsafe bool ITargetSnapshotContext.TryCopyTargetPixels(int left, int top, int width, int height, IRenderSurface destination, int destinationLeft, int destinationTop)
+    {
+        if (!TryGetTargetBits(out nint bits, out int targetWidth, out int targetHeight, out bool hasAlpha) ||
+            RenderSurfaceResource.ResolveBackendSurface(destination) is not GdiPixelRenderSurface destinationSurface ||
+            destinationSurface.DibBits == 0 ||
+            width <= 0 || height <= 0 || left < 0 || top < 0 || destinationLeft < 0 || destinationTop < 0 ||
+            left + width > targetWidth || top + height > targetHeight ||
+            destinationLeft + width > destinationSurface.PixelWidth || destinationTop + height > destinationSurface.PixelHeight)
+        {
+            return false;
+        }
+
+        // GDI batches calls against a DC; pending ones would land in the memory after it was read.
+        Gdi32.GdiFlush();
+
+        int targetStride = targetWidth * 4;
+        int destinationStride = destinationSurface.StrideBytes;
+        for (int row = 0; row < height; row++)
+        {
+            byte* source = (byte*)bits + (top + row) * targetStride + left * 4;
+            byte* target = (byte*)destinationSurface.DibBits + (destinationTop + row) * destinationStride + destinationLeft * 4;
+            Buffer.MemoryCopy(source, target, width * 4, width * 4);
+            if (!hasAlpha)
+            {
+                // GDI leaves the fourth byte of an opaque buffer undefined; the copy is opaque.
+                for (int column = 0; column < width; column++)
+                {
+                    target[column * 4 + 3] = 255;
+                }
+            }
+        }
+
+        destinationSurface.IncrementVersion();
+        return true;
+    }
+
+    /// <summary>The memory this frame draws into: a top-down buffer of 32-bit pixels, premultiplied where it has alpha.</summary>
+    private bool TryGetTargetBits(out nint bits, out int pixelWidth, out int pixelHeight, out bool hasAlpha)
+    {
+        if (_pixelSurface != null && _pixelSurface.DibBits != 0)
+        {
+            bits = _pixelSurface.DibBits;
+            pixelWidth = _pixelSurface.PixelWidth;
+            pixelHeight = _pixelSurface.PixelHeight;
+            hasAlpha = _pixelSurface.HasAlpha;
+            return true;
+        }
+
+        if (_backBuffer != null && _backBuffer.Bits != 0)
+        {
+            bits = _backBuffer.Bits;
+            pixelWidth = _backBuffer.Width;
+            pixelHeight = _backBuffer.Height;
+            // Only a window composed with per-pixel alpha keeps alpha in its buffer.
+            hasAlpha = _transparentComposition;
+            return true;
+        }
+
+        bits = 0;
+        pixelWidth = 0;
+        pixelHeight = 0;
+        hasAlpha = false;
+        return false;
+    }
 
     private const double ERASE_EDGE_TOLERANCE_PX = 0.001;
 
@@ -3190,6 +3258,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase, ITransparent
         private nint _bits;
 
         public nint MemDc { get; private set; }
+        public nint Bits => _bits;
         public int Width { get; private set; }
         public int Height { get; private set; }
 

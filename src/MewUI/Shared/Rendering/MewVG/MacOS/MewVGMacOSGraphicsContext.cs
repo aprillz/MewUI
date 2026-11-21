@@ -41,6 +41,8 @@ internal sealed partial class MewVGMacOSGraphicsContext
     private nint _commandBuffer;
     private nint _encoder;
     private nint _currentFrameDevice;
+    private nint _frameColorTexture;
+    private nint _frameCommandQueue;
     private readonly HashSet<GpuDeviceIdentity> _reportedExternalMismatches = new();
     private bool _beganFrame;
     private nint _framePool; // Frame-spanning autorelease pool: created in BeginFrame, drained in EndFrame.
@@ -94,6 +96,8 @@ internal sealed partial class MewVGMacOSGraphicsContext
         _commandBuffer = 0;
         _encoder = 0;
         _currentFrameDevice = 0;
+        _frameColorTexture = 0;
+        _frameCommandQueue = 0;
         _beganFrame = false;
 
         if (!_frameSession.TryBeginFrame(_viewportWidthPx, _viewportHeightPx, out var frame))
@@ -103,6 +107,8 @@ internal sealed partial class MewVGMacOSGraphicsContext
 
         _drawable = frame.Drawable;
         _currentFrameDevice = frame.Device;
+        _frameColorTexture = frame.ColorTexture;
+        _frameCommandQueue = frame.CommandQueue;
 
         nint cmdBuf = ObjCRuntime.SendMessage(frame.CommandQueue, SelCommandBuffer);
         if (cmdBuf == 0)
@@ -189,6 +195,8 @@ internal sealed partial class MewVGMacOSGraphicsContext
             _encoder = 0;
             _commandBuffer = 0;
             _drawable = 0;
+            _frameColorTexture = 0;
+            _frameCommandQueue = 0;
             _beganFrame = false;
 
             // Main frame only: NVG.Flush has just consumed any draw calls
@@ -205,6 +213,114 @@ internal sealed partial class MewVGMacOSGraphicsContext
         }
     }
 
+    private static readonly nint SelBlitCommandEncoder = ObjCRuntime.RegisterSelector("blitCommandEncoder");
+    private static readonly nint SelCopyFromTextureToTexture = ObjCRuntime.RegisterSelector(
+        "copyFromTexture:sourceSlice:sourceLevel:sourceOrigin:sourceSize:toTexture:destinationSlice:destinationLevel:destinationOrigin:");
+
+    [System.Runtime.InteropServices.LibraryImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")]
+    private static unsafe partial void CopyTextureToTextureMsgSend(
+        nint receiver, nint selector,
+        nint sourceTexture, nuint sourceSlice, nuint sourceLevel,
+        MTLOrigin* sourceOrigin, MTLSize* sourceSize,
+        nint destinationTexture, nuint destinationSlice, nuint destinationLevel,
+        MTLOrigin* destinationOrigin);
+
+    bool ITargetSnapshotContext.TryGetSnapshotTarget(out int pixelWidth, out int pixelHeight, out bool hasAlpha)
+    {
+        pixelWidth = _viewportWidthPx;
+        pixelHeight = _viewportHeightPx;
+        var target = _frameSession.PixelSurfaceTarget;
+        hasAlpha = target == null || target.HasAlpha;
+        return CanReadTarget();
+    }
+
+    unsafe bool ITargetSnapshotContext.TryCopyTargetPixels(int left, int top, int width, int height, IRenderSurface destination, int destinationLeft, int destinationTop)
+    {
+        if (!CanReadTarget() ||
+            RenderSurfaceResource.ResolveBackendSurface(destination) is not MewVGMetalPixelRenderSurface destinationSurface ||
+            width <= 0 || height <= 0 || left < 0 || top < 0 || destinationLeft < 0 || destinationTop < 0 ||
+            left + width > _viewportWidthPx || top + height > _viewportHeightPx ||
+            destinationLeft + width > destinationSurface.PixelWidth || destinationTop + height > destinationSurface.PixelHeight)
+        {
+            return false;
+        }
+
+        destinationSurface.EnsureGpuTextures(_currentFrameDevice, _frameCommandQueue);
+        if (destinationSurface.ColorTexture == 0)
+        {
+            return false;
+        }
+
+        // The draws queued so far go into the pass, which then ends so its texture can be read; the path
+        // clips in effect are queued again for the pass that follows.
+        _textCache.FlushGlyphUploads();
+        _vg.Flush();
+        _vg.FrameCompleted();
+        ObjCRuntime.SendMessageNoReturn(_encoder, SelEndEncoding);
+        ReleaseIfNotNull(_encoder);
+        _encoder = 0;
+
+        nint blit = ObjCRuntime.SendMessage(_commandBuffer, SelBlitCommandEncoder);
+        if (blit != 0)
+        {
+            var sourceOrigin = MTLOrigin.Make((nuint)left, (nuint)top, 0);
+            var sourceSize = MTLSize.Make((nuint)width, (nuint)height, 1);
+            var destinationOrigin = MTLOrigin.Make((nuint)destinationLeft, (nuint)destinationTop, 0);
+            CopyTextureToTextureMsgSend(
+                blit, SelCopyFromTextureToTexture,
+                _frameColorTexture, 0, 0, &sourceOrigin, &sourceSize,
+                destinationSurface.ColorTexture, 0, 0, &destinationOrigin);
+            ObjCRuntime.SendMessageNoReturn(blit, SelEndEncoding);
+        }
+
+        // Whatever filters the copy commits command buffers of its own, and a queue runs them in commit
+        // order: the copy is committed first, and the frame goes on in a new command buffer.
+        ObjCRuntime.SendMessageNoReturn(_commandBuffer, SelCommit);
+        _frameSession.TrackSplit(_commandBuffer);
+        destinationSurface.RequestDeferredReadback(_commandBuffer);
+        destinationSurface.IncrementVersion();
+        ReleaseIfNotNull(_commandBuffer);
+        _commandBuffer = 0;
+
+        // The frame goes on even when the copy failed, so the rest of it is not lost.
+        bool resumed = ResumeFrameAfterSplit();
+        return blit != 0 && resumed;
+    }
+
+    /// <summary>Opens a new command buffer and pass that keep drawing onto what the frame drew so far.</summary>
+    private bool ResumeFrameAfterSplit()
+    {
+        nint commandBuffer = ObjCRuntime.SendMessage(_frameCommandQueue, SelCommandBuffer);
+        if (commandBuffer == 0)
+        {
+            _beganFrame = false;
+            return false;
+        }
+
+        RetainIfNotNull(commandBuffer);
+        _commandBuffer = commandBuffer;
+
+        nint coverageTexture = _vg.EnsureCoverageTexture(_viewportWidthPx, _viewportHeightPx);
+        nint clipTexture = _vg.EnsureClipMaskTexture(_viewportWidthPx, _viewportHeightPx);
+        nint passDescriptor = CreateRenderPass(_frameColorTexture, coverageTexture, clipTexture, preserveColorContents: true);
+        nint encoder = passDescriptor != 0 ? ObjCRuntime.SendMessage(_commandBuffer, SelRenderCommandEncoderWithDescriptor, passDescriptor) : 0;
+        if (encoder == 0)
+        {
+            _beganFrame = false;
+            return false;
+        }
+
+        RetainIfNotNull(encoder);
+        _encoder = encoder;
+        _vg.SetRenderEncoder(_encoder, _commandBuffer);
+        return true;
+    }
+
+    /// <summary>Whether the target can be read now: only a frame drawn into a surface can be.</summary>
+    private bool CanReadTarget()
+        => _frameSession.PixelSurfaceTarget != null && _beganFrame && _encoder != 0 && _commandBuffer != 0 &&
+           _frameColorTexture != 0 && _frameCommandQueue != 0;
+
     private readonly record struct MetalFrame(
         nint Device,
         nint ColorTexture,
@@ -220,9 +336,15 @@ internal sealed partial class MewVGMacOSGraphicsContext
 
         bool IsOffscreen { get; }
 
+        /// <summary>The surface an offscreen frame draws into; null for a window frame.</summary>
+        MewVGMetalPixelRenderSurface? PixelSurfaceTarget { get; }
+
         bool TryBeginFrame(int viewportWidthPx, int viewportHeightPx, out MetalFrame frame);
 
         void AfterCommit(nint commandBuffer, nint drawable);
+
+        /// <summary>Records a command buffer the frame was split at, which may still run on the GPU.</summary>
+        void TrackSplit(nint commandBuffer);
 
         void ReleasePendingFrameResources();
 
@@ -245,6 +367,8 @@ internal sealed partial class MewVGMacOSGraphicsContext
         public MewVGMetalTextCache TextCache => _resources.TextCache;
 
         public bool IsOffscreen => false;
+
+        public MewVGMetalPixelRenderSurface? PixelSurfaceTarget => null;
 
         public bool TryBeginFrame(int viewportWidthPx, int viewportHeightPx, out MetalFrame frame)
         {
@@ -283,6 +407,11 @@ internal sealed partial class MewVGMacOSGraphicsContext
             ObjCRuntime.SendMessageNoReturn(drawable, SelPresent);
         }
 
+        // A window frame is never split: its drawable cannot be read.
+        public void TrackSplit(nint commandBuffer)
+        {
+        }
+
         public void ReleasePendingFrameResources()
         {
             // Per-NVG drain: only delete image-ids belonging to the window's NVG. Worker
@@ -318,6 +447,8 @@ internal sealed partial class MewVGMacOSGraphicsContext
 
         public bool IsOffscreen => true;
 
+        public MewVGMetalPixelRenderSurface? PixelSurfaceTarget => _target;
+
         public bool TryBeginFrame(int viewportWidthPx, int viewportHeightPx, out MetalFrame frame)
         {
             _target.EnsureGpuTextures(_offscreen.Device, _offscreen.CommandQueue);
@@ -339,6 +470,8 @@ internal sealed partial class MewVGMacOSGraphicsContext
             _offscreen.TrackFrame(commandBuffer);
             _target.RequestDeferredReadback(commandBuffer);
         }
+
+        public void TrackSplit(nint commandBuffer) => _offscreen.TrackFrame(commandBuffer);
 
         public void ReleasePendingFrameResources()
         {

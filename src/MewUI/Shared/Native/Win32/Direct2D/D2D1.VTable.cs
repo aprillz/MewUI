@@ -763,6 +763,15 @@ internal static unsafe class D2D1VTable
         return fn(dstBitmap, null, srcBitmap, null);
     }
 
+    /// <summary>ID2D1Bitmap::CopyFromBitmap (vtbl 8) for one region: copies <paramref name="sourceRect"/> of the source to <paramref name="destinationPoint"/>.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int CopyFromBitmap(nint dstBitmap, D2D1_POINT_2U destinationPoint, nint srcBitmap, D2D1_RECT_U sourceRect)
+    {
+        var vtbl = *(void***)dstBitmap;
+        var fn = (delegate* unmanaged[Stdcall]<nint, D2D1_POINT_2U*, nint, D2D1_RECT_U*, int>)(vtbl[8]);
+        return fn(dstBitmap, &destinationPoint, srcBitmap, &sourceRect);
+    }
+
     /// <summary>ID2D1Bitmap::CopyFromMemory (vtbl 10). Uploads CPU-side pixel data into a
     /// GPU bitmap. <paramref name="srcData"/> is the source buffer (must contain at least
     /// <c>height * pitch</c> bytes covering the destination rect). The destination rect is
