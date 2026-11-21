@@ -1529,6 +1529,7 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
         {
             subMenuPopup.ItemPadding = subPadding;
         }
+        CopySystemBackdropTo(subMenuPopup);
         subMenuPopup._parentMenu = this;
 
         // Sub-menus inherit the same target snapshot so nesting never re-targets commands.
@@ -1700,7 +1701,8 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
     {
         // The rows draw the entries; the menu draws only what surrounds them.
         var bounds = GetSnappedBorderBounds(Bounds);
-        DrawBackgroundAndBorder(context, bounds, Background, BorderBrush, BorderThickness, CornerRadius);
+        DrawNativeBackdropFallback(context, bounds);
+        DrawBackgroundAndBorder(context, bounds, BackgroundOverBackdrop, BorderBrush, BorderThickness, CornerRadius);
     }
 
     /// <summary>The clip the rows are drawn under, or null when the viewport has no area.</summary>

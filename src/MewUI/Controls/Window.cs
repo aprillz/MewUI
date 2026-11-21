@@ -1021,7 +1021,14 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
     private void OnOpacityChanged() => _backend?.SetOpacity(Opacity);
 
-    private void OnAllowsTransparencyChanged() => _backend?.SetAllowsTransparency(AllowsTransparency);
+    private void OnAllowsTransparencyChanged()
+    {
+        _backend?.SetAllowsTransparency(AllowsTransparency);
+        if (SystemBackdrop != SystemBackdrop.None)
+        {
+            PushSystemBackdrop();
+        }
+    }
 
     private void OnExtendClientAreaChanged() => _backend?.SetExtendClientAreaToTitleBar(ExtendClientAreaTitleBarHeight);
 
@@ -2833,6 +2840,8 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             _backend.SetCanClose(false);
         if (PlatformOptions != null)
             _backend.SetPlatformOptions(PlatformOptions);
+        if (SystemBackdrop != SystemBackdrop.None)
+            PushSystemBackdrop();
         if (AllowDrop)
             _backend.SetAllowDrop(true);
     }
@@ -3267,7 +3276,13 @@ public partial class Window : ContentControl, ILayoutRoundingHost
                         context.Clear(clearColor);
                     }
 
-                    if (AllowsTransparency && Background.A > 0)
+                    bool drawsBackdropFallback = DrawsBackdropFallback;
+                    if (drawsBackdropFallback)
+                    {
+                        context.FillRectangle(paintedArea ?? new Rect(0, 0, clientSize.Width, clientSize.Height), BackdropFallbackBrush!);
+                    }
+
+                    if ((AllowsTransparency || drawsBackdropFallback) && Background.A > 0)
                     {
                         // Draw the background through the normal pipeline so alpha is handled consistently.
                         context.FillRectangle(paintedArea ?? new Rect(0, 0, clientSize.Width, clientSize.Height), Background);

@@ -12,6 +12,11 @@ internal static partial class Dwmapi
     internal enum DwmWindowAttribute : uint
     {
         /// <summary>
+        /// Lets a host backdrop brush of the system compositor show what is behind the window. Value is BOOL.
+        /// </summary>
+        DWMWA_USE_HOSTBACKDROPBRUSH = 17,
+
+        /// <summary>
         /// Use immersive dark mode (Windows 10 build 17763-18985).
         /// </summary>
         DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 = 19,

@@ -25,6 +25,10 @@ internal sealed class PopupWindow : Window
         SetHostedPortalRoot(hostedRoot);
     }
 
+    // The menu in this window draws the fallback itself, in its own box.
+    private protected override void OnActualSystemBackdropChanged()
+        => (HostedPortalRoot as PopupChrome)?.Child.InvalidateVisual();
+
     /// <summary>Raised when the platform dismiss watch requests light-dismiss (outside press, watch stolen).</summary>
     internal Action? DismissRequested { get; set; }
 
@@ -36,6 +40,11 @@ internal sealed class PopupWindow : Window
     {
         base.OnDpiChanged(oldDpi, newDpi);
         RefreshPlacement?.Invoke();
+        // The area is kept in DIPs, so its device pixels change even when it does not.
+        if (SystemBackdrop != SystemBackdrop.None)
+        {
+            PushSystemBackdrop();
+        }
     }
 
     /// <summary>Decides whether the window taking over the dismiss watch is a related popup surface.</summary>

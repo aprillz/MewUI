@@ -3,7 +3,7 @@ using Aprillz.MewUI.Input;
 
 namespace Aprillz.MewUI.Platform.MacOS;
 
-internal sealed class MacOSWindowBackend : IWindowBackend
+internal sealed class MacOSWindowBackend : IWindowBackend, IWindowSystemBackdropBackend
 {
     // NOTE: Cocoa defines NSNotFound as NSIntegerMax (not NSUIntegerMax).
     private const ulong NSNotFound = (ulong)long.MaxValue;
@@ -30,6 +30,7 @@ internal sealed class MacOSWindowBackend : IWindowBackend
     private bool _displayingOwnRender;
     private nint _nsWindow;
     private nint _nsView;
+    private MacOSWindowBackdrop? _backdrop;
     private nint _metalLayer;
     private bool _shown;
     // Owner attach requested before the first Show; applied once the window is ordered in (see SetOwner).
@@ -857,6 +858,23 @@ internal sealed class MacOSWindowBackend : IWindowBackend
         }
     }
 
+    public void SetSystemBackdrop(Controls.SystemBackdrop material, SystemBackdropArea? area)
+    {
+        if (_nsWindow == 0 || _nsView == 0)
+        {
+            return;
+        }
+
+        if (_backdrop == null && material == Controls.SystemBackdrop.None)
+        {
+            _window.SetActualSystemBackdrop(material);
+            return;
+        }
+
+        _backdrop ??= new MacOSWindowBackdrop(_nsWindow, _nsView);
+        _window.SetActualSystemBackdrop(_backdrop.Apply(material, area));
+    }
+
     public void SetAllowsTransparency(bool allowsTransparency)
     {
         _allowsTransparency = allowsTransparency;
@@ -1058,6 +1076,7 @@ internal sealed class MacOSWindowBackend : IWindowBackend
                 MacOSWindowInterop.UnregisterMetalLayerTarget(_metalLayer);
             }
             MacOSWindowInterop.ReleaseWindow(_nsWindow);
+            _backdrop = null;
             _nsWindow = 0;
             _nsView = 0;
             _metalLayer = 0;

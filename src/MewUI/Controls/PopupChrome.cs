@@ -110,8 +110,23 @@ internal sealed class PopupChrome : FrameworkElement, IVisualTreeHost
         byte alpha = (byte)(strength * opacity);
 
         var shadowBounds = new Rect(cb.X, cb.Y + ShadowOffsetY, cb.Width, cb.Height - ShadowOffsetY);
+        // A material shows through the box, and the shadow's fill under it would show as a dark sheet.
+        bool keepsBoxClear = _child is ContextMenu { SystemBackdrop: not SystemBackdrop.None };
+        if (keepsBoxClear)
+        {
+            context.Save();
+            var outsideBox = new PathGeometry { FillRule = FillRule.EvenOdd };
+            outsideBox.AddPath(PathGeometry.FromRect(Bounds));
+            outsideBox.AddPath(PathGeometry.FromRoundedRect(cb, radius));
+            context.SetClipPath(outsideBox);
+        }
+
         context.DrawBoxShadow(shadowBounds, radius, ShadowBlurRadius,
             Color.FromArgb(alpha, 0, 0, 0));
+        if (keepsBoxClear)
+        {
+            context.Restore();
+        }
     }
 
     protected override UIElement? OnHitTest(Point point)

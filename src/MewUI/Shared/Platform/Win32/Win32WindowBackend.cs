@@ -11,7 +11,7 @@ using Aprillz.MewUI.Resources;
 
 namespace Aprillz.MewUI.Platform.Win32;
 
-internal sealed class Win32WindowBackend : IWindowBackend
+internal sealed class Win32WindowBackend : IWindowBackend, IWindowSystemBackdropBackend
 {
     private static readonly EnvDebugLogger ImeLogger = new("MEWUI_IME_DEBUG", "[Win32][IME]");
     private const int GwlHwndParent = -8;
@@ -30,6 +30,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
     private bool _presented;
     private double _opacity = 1.0;
     private bool _allowsTransparency;
+    private Win32WindowBackdrop? _backdrop;
     private nint _dropTargetCom;
     private nint _nativeOwnerHandle;
 
@@ -425,6 +426,30 @@ internal sealed class Win32WindowBackend : IWindowBackend
             ApplyOpacity();
         }
         Invalidate(erase: false);
+    }
+
+    public void SetSystemBackdrop(Controls.SystemBackdrop material, SystemBackdropArea? area)
+    {
+        if (Handle == 0)
+        {
+            return;
+        }
+
+        // A layered window hands the system its pixels as a bitmap, which a compositor visual under it hides
+        // instead of showing through; only a window drawn to a composition surface can stand on a material.
+        if (ResolveTransparencyMode() != Win32TransparencyMode.Surface)
+        {
+            material = Controls.SystemBackdrop.None;
+        }
+
+        if (_backdrop == null && material == Controls.SystemBackdrop.None)
+        {
+            Window.SetActualSystemBackdrop(material);
+            return;
+        }
+
+        _backdrop ??= new Win32WindowBackdrop(Handle);
+        Window.SetActualSystemBackdrop(_backdrop.Apply(material, area, Window.DpiScale));
     }
 
     private double _extendTitleBarHeight;
@@ -1670,6 +1695,8 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
         RevokeDropTarget();
         _titleBarThemeSync.Dispose();
+        _backdrop?.Dispose();
+        _backdrop = null;
         DestroyIcons();
 
         // ReleaseCapture works on the thread, not on this window: releasing it unconditionally took
