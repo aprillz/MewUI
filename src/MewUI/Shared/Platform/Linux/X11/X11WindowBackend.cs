@@ -845,6 +845,7 @@ internal sealed class X11WindowBackend : IWindowBackend, IWindowSystemBackdropBa
 
         SetTitle(Window.Title);
         ApplyIcon();
+        ApplyClassHint();
 
         // WM_DELETE_WINDOW
         _wmProtocolsAtom = NativeX11.XInternAtom(Display, "WM_PROTOCOLS", false);
@@ -1390,6 +1391,22 @@ internal sealed class X11WindowBackend : IWindowBackend, IWindowSystemBackdropBa
         }
 
         NativeX11.XFlush(Display);
+    }
+
+    private void ApplyClassHint()
+    {
+        nint instanceName = Marshal.StringToCoTaskMemUTF8(LinuxApplicationIdentity.InstanceName);
+        nint className = Marshal.StringToCoTaskMemUTF8(LinuxApplicationIdentity.Id);
+        try
+        {
+            var hint = new XClassHint { res_name = instanceName, res_class = className };
+            NativeX11.XSetClassHint(Display, Handle, ref hint);
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(instanceName);
+            Marshal.FreeCoTaskMem(className);
+        }
     }
 
     private static void AppendNetWmIconPayload(List<nint> dst, IconSource icon, int desiredSizePx)
