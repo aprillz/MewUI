@@ -123,7 +123,7 @@ public sealed class LinuxTrayIconTests
 
     [TestMethod]
     [OSCondition(OperatingSystems.Linux)]
-    public async Task OnLinux_BeforeAnyWindow_TheMenuOpensWithoutItsIcons()
+    public async Task OnLinux_WithoutAnOpenWindow_TheMenuShowsItsIcons()
     {
         if (Environment.GetEnvironmentVariable("MEWUI_TRAY_TEST_BUS") != "1")
         {
@@ -145,6 +145,20 @@ public sealed class LinuxTrayIconTests
                 string service = await watcher.Registered.Task.WaitAsync(TimeSpan.FromSeconds(5));
                 var root = await GetLayoutAsync(bus, service);
                 Assert.AreEqual("Plain", root.Children[0].Properties["label"].GetString());
+                AssertIsOpaqueBlackPng(root.Children[0].Properties["icon-data"].GetArray<byte>());
+
+                var window = new Window { Title = "Tray worker context" };
+                window.Show();
+                await Task.Delay(200);
+                window.Close();
+                await Task.Delay(200);
+
+                var later = new IconTemplate(static _ => new Border { Background = Color.Black });
+                tray.ContextMenu = new ContextMenu().Add(new MenuItem("Later").Icon(later));
+                await Task.Delay(100);
+                root = await GetLayoutAsync(bus, service);
+                Assert.AreEqual("Later", root.Children[0].Properties["label"].GetString());
+                AssertIsOpaqueBlackPng(root.Children[0].Properties["icon-data"].GetArray<byte>());
             }
             finally
             {
