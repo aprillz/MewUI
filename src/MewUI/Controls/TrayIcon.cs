@@ -121,6 +121,8 @@ public sealed class TrayIcon : MewObject, IDisposable
 
     internal bool IsShown => _backend != null;
 
+    internal bool HasClickHandler => Click != null;
+
     /// <summary>The target the icon's and its menu's commands resolve against through the application's router.</summary>
     internal CommandTarget CommandTarget => CommandTarget.From(Commands);
 
