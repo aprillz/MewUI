@@ -14,7 +14,7 @@ namespace Aprillz.MewUI.Platform.Win32;
 /// Win32 platform host: owns the window class, the message loop and the per-process services (clipboard,
 /// dialogs, shell icons).
 /// </summary>
-public sealed class Win32PlatformHost : IPlatformHost
+public sealed partial class Win32PlatformHost : IPlatformHost
 {
     /// <summary>The identifier the platform registers under.</summary>
     public const string PlatformIdentifier = "Win32";
@@ -135,6 +135,12 @@ public sealed class Win32PlatformHost : IPlatformHost
     bool IPlatformHost.IsTrayIconSupported => true;
 
     ITrayIconBackend? IPlatformHost.CreateTrayIconBackend(Controls.TrayIcon trayIcon) => new Win32TrayIconBackend(trayIcon);
+
+    void IPlatformHost.ApplyApplicationId(string applicationId)
+        => Marshal.ThrowExceptionForHR(SetCurrentProcessExplicitAppUserModelID(applicationId));
+
+    [LibraryImport("shell32.dll", StringMarshalling = StringMarshalling.Utf16)]
+    private static partial int SetCurrentProcessExplicitAppUserModelID(string appId);
 
     /// <summary>Creates a UI dispatcher associated with <paramref name="windowHandle"/>.</summary>
     public IDispatcher CreateDispatcher(nint windowHandle) => new Win32Dispatcher(windowHandle);
