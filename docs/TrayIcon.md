@@ -1,6 +1,8 @@
 # Tray Icon
 
-`TrayIcon` shows an icon for the application in the Windows notification area or the macOS menu bar, with an optional menu. It needs no window, so a utility that runs without a main window (see [Application Lifecycle](ApplicationLifecycle.md)) can live in the tray alone. On other platforms `TrayIcon.IsSupported` is false and the icon does nothing.
+`TrayIcon` shows an icon for the application in the Windows notification area, the macOS menu bar or a Linux desktop's status area, with an optional menu. It needs no window, so a utility that runs without a main window (see [Application Lifecycle](ApplicationLifecycle.md)) can live in the tray alone. On other platforms `TrayIcon.IsSupported` is false and the icon does nothing.
+
+On Linux the icon uses the StatusNotifierItem protocol, which KDE Plasma and Xfce panels host. GNOME shows it only with the AppIndicator extension installed. `TrayIcon.IsSupported` is false while the desktop has no host, and a visible icon appears by itself when one starts.
 
 ```csharp
 var show = new Command("app.show", "_Show");
@@ -38,6 +40,7 @@ The menu is an ordinary `ContextMenu`, built the same way as an element's contex
 |---|---|
 | Windows | The `ContextMenu` itself, with the application's theme, fonts, icons and item layout. It opens at the icon and closes on a click outside, on Escape, or when another window becomes active. The keyboard works as in any MewUI menu. |
 | macOS | A native menu read from the `ContextMenu` each time it opens: item text (macOS menus have no access keys, so the `_` markers are dropped), separators, submenus, enabled state, check marks, icons and shortcut labels. Single-color icons follow the menu's colors. The `ContextMenu`'s own look (`ItemHeight`, `ItemPadding`, `MaxMenuHeight`, fonts) does not apply. |
+| Linux | A menu the desktop's panel draws from the `ContextMenu`: item text with access keys, separators, submenus, enabled state, check marks, icons and shortcut labels. The `ContextMenu`'s own look does not apply. An item icon needs a rendering context, so with a GPU backend it appears once the application has shown a window. |
 
 `MenuOpening` is raised just before the menu opens. A handler may fill the menu or replace `ContextMenu`; it cannot cancel the opening.
 
@@ -55,3 +58,17 @@ An item is enabled only while its command has a handler that can run. A menu ite
 |---|---|---|---|
 | Windows | Left click, or Enter or Space on the focused icon | Yes | Right click, Shift+F10, or the menu key |
 | macOS | A click, while the icon has no menu | No | A click, while the icon has a menu |
+| Linux | A left click, where the panel reports it | No | A right click. Some panels also open the menu on a left click and report no `Click`, so offer every action in the menu as well |
+
+## Application identifier
+
+`WithApplicationId` names the application to the desktop, which uses the name to group its windows, tray icons and launcher entry:
+
+```csharp
+Application.Create()
+    .WithApplicationId("com.example.MyApp")
+    .BuildMainWindow(() => new MainWindow())
+    .Run();
+```
+
+On Linux the identifier is the window class and the tray item's id, and should match the name of the application's `.desktop` file. Without one, the entry assembly's name is used. On Windows it is the process's AppUserModelID, and is left unset unless the application sets it. macOS uses the bundle identifier instead.

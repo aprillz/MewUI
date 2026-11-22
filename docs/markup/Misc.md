@@ -27,6 +27,7 @@ Receiver: `ApplicationBuilder`.
 | `UseMetrics(ThemeMetrics metrics)` |  | Sets the theme metric overrides. |
 | `UseSeed(ThemeSeed lightSeed, ThemeSeed darkSeed)` |  | Sets the seed palettes used to generate light/dark themes. |
 | `UseTheme(ThemeVariant themeMode)` |  | Sets the default theme mode. |
+| `WithApplicationId(string applicationId)` |  | Sets the identifier the desktop uses to group the application's windows, tray icons and launcher entry. |
 | `WithShutdownMode(ShutdownMode shutdownMode)` |  | Sets when the run loop ends automatically as windows close. |
 
 ### Command
