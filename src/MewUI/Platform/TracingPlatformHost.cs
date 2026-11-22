@@ -49,6 +49,8 @@ internal sealed class TracingPlatformHost : IPlatformHost
 
     public bool SupportsTransparentOverlay => _inner.SupportsTransparentOverlay;
 
+    public nint NativeDisplay => _inner.NativeDisplay;
+
     public bool IsTrayIconSupported => _inner.IsTrayIconSupported;
 
     public ITrayIconBackend? CreateTrayIconBackend(Controls.TrayIcon trayIcon)

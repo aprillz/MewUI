@@ -81,6 +81,13 @@ internal interface IPersistentFrameSurface
     bool PreserveContentsOnBeginFrame { get; set; }
 }
 
+/// <summary>A factory whose rendering depends on the platform host's display connection.</summary>
+internal interface IDisplayBoundGraphicsFactory
+{
+    /// <summary>Stops background rendering on the display, which the host closes when this returns.</summary>
+    void OnDisplayClosing();
+}
+
 /// <summary>A factory whose surfaces can be rendered into while their contents are preserved.</summary>
 internal interface IPersistentFrameGraphicsFactory
 {
