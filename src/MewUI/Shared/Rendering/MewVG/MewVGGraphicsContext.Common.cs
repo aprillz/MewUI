@@ -384,10 +384,39 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
 #if !MEWUI_MEWVG_MACOS
         ClearTargetPixels(new Rect(0, 0, _viewportWidthDip, _viewportHeightDip), ToNvgColor(color));
 #else
-        // A target that keeps its frame still holds the last one here: blending a transparent color over it erases nothing.
-        FillReplacing(new Rect(0, 0, _viewportWidthDip, _viewportHeightDip), ToNvgColor(color));
+        var fill = ToNvgColor(color);
+        if (_clipBoundsWorld == null)
+        {
+            // A target that keeps its frame still holds the last one here: blending a transparent color over it erases nothing.
+            FillReplacing(new Rect(0, 0, _viewportWidthDip, _viewportHeightDip), fill);
+            return;
+        }
+
+        // The paint is multiplied by the clip, so a fill that replaces pixels would write zero outside it. Taking the
+        // clip's share of the old color out and adding the new one's leaves source * clip + destination * (1 - clip).
+        FillTargetThroughClip(MewVGCompositeOperation.DestinationOut, new MewVGColor(0, 0, 0, 1));
+        if (fill.A > 0)
+        {
+            FillTargetThroughClip(MewVGCompositeOperation.Lighter, fill);
+        }
 #endif
     }
+
+#if MEWUI_MEWVG_MACOS
+    private void FillTargetThroughClip(MewVGCompositeOperation operation, MewVGColor color)
+    {
+        _vg.Save();
+        ApplyDeviceTransform();
+        _vg.GlobalAlpha(1f);
+        _vg.ShapeAntiAlias(false);
+        _vg.GlobalCompositeOperation(operation);
+        _vg.BeginPath();
+        _vg.Rect(0, 0, (float)_viewportWidthDip, (float)_viewportHeightDip);
+        _vg.FillColor(color);
+        _vg.Fill();
+        _vg.Restore();
+    }
+#endif
 
     void ITransparentDirtyRectContext.ClearRectangleToTransparent(Rect rect)
         => ClearRectangleCore(rect, new MewVGColor(0, 0, 0, 0));
