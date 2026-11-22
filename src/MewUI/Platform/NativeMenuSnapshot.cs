@@ -1,3 +1,5 @@
+using System.Buffers.Binary;
+using System.IO.Compression;
 using System.Runtime.CompilerServices;
 using System.Text;
 
@@ -77,6 +79,13 @@ internal sealed class NativeMenuEntry
 /// <summary>A menu icon drawn to premultiplied BGRA pixels.</summary>
 internal sealed class NativeMenuIcon(int pixelSize, double scale, byte[] premultipliedBgra, bool isGlyph)
 {
+    private const byte PNG_BIT_DEPTH = 8;
+    private const byte PNG_COLOR_RGBA = 6;
+    private const uint PNG_CRC_POLYNOMIAL = 0xEDB88320;
+
+    private static readonly byte[] _pngSignature = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+    private static readonly uint[] _crcTable = BuildCrcTable();
+
     public int PixelSize { get; } = pixelSize;
 
     public double Scale { get; } = scale;
@@ -85,6 +94,93 @@ internal sealed class NativeMenuIcon(int pixelSize, double scale, byte[] premult
 
     /// <summary>Whether the icon is drawn only in its foreground color, so a platform may tint it.</summary>
     public bool IsGlyph { get; } = isGlyph;
+
+    /// <summary>The icon as an 8-bit RGBA PNG file with straight alpha.</summary>
+    public byte[] EncodePng()
+    {
+        int rowLength = 1 + PixelSize * 4;
+        var scanlines = new byte[rowLength * PixelSize];
+        for (int row = 0; row < PixelSize; row++)
+        {
+            int target = row * rowLength + 1;
+            int source = row * PixelSize * 4;
+            for (int column = 0; column < PixelSize; column++, target += 4, source += 4)
+            {
+                byte alpha = PremultipliedBgra[source + 3];
+                if (alpha == 0)
+                {
+                    continue;
+                }
+
+                scanlines[target] = Unpremultiply(PremultipliedBgra[source + 2], alpha);
+                scanlines[target + 1] = Unpremultiply(PremultipliedBgra[source + 1], alpha);
+                scanlines[target + 2] = Unpremultiply(PremultipliedBgra[source], alpha);
+                scanlines[target + 3] = alpha;
+            }
+        }
+
+        using var compressed = new MemoryStream();
+        using (var deflate = new ZLibStream(compressed, CompressionLevel.Optimal, leaveOpen: true))
+        {
+            deflate.Write(scanlines);
+        }
+
+        var header = new byte[13];
+        BinaryPrimitives.WriteInt32BigEndian(header, PixelSize);
+        BinaryPrimitives.WriteInt32BigEndian(header.AsSpan(4), PixelSize);
+        header[8] = PNG_BIT_DEPTH;
+        header[9] = PNG_COLOR_RGBA;
+
+        using var png = new MemoryStream();
+        png.Write(_pngSignature);
+        WritePngChunk(png, "IHDR"u8, header);
+        WritePngChunk(png, "IDAT"u8, compressed.GetBuffer().AsSpan(0, (int)compressed.Length));
+        WritePngChunk(png, "IEND"u8, []);
+        return png.ToArray();
+    }
+
+    private static byte Unpremultiply(byte channel, byte alpha)
+        => (byte)Math.Min(255, (channel * 255 + alpha / 2) / alpha);
+
+    private static void WritePngChunk(Stream stream, ReadOnlySpan<byte> type, ReadOnlySpan<byte> data)
+    {
+        Span<byte> number = stackalloc byte[4];
+        BinaryPrimitives.WriteInt32BigEndian(number, data.Length);
+        stream.Write(number);
+        stream.Write(type);
+        stream.Write(data);
+
+        uint crc = UpdateCrc(UpdateCrc(uint.MaxValue, type), data) ^ uint.MaxValue;
+        BinaryPrimitives.WriteUInt32BigEndian(number, crc);
+        stream.Write(number);
+    }
+
+    private static uint UpdateCrc(uint crc, ReadOnlySpan<byte> data)
+    {
+        foreach (byte value in data)
+        {
+            crc = _crcTable[(crc ^ value) & 0xFF] ^ (crc >> 8);
+        }
+
+        return crc;
+    }
+
+    private static uint[] BuildCrcTable()
+    {
+        var table = new uint[256];
+        for (uint index = 0; index < table.Length; index++)
+        {
+            uint value = index;
+            for (int bit = 0; bit < 8; bit++)
+            {
+                value = (value & 1) != 0 ? PNG_CRC_POLYNOMIAL ^ (value >> 1) : value >> 1;
+            }
+
+            table[index] = value;
+        }
+
+        return table;
+    }
 }
 
 /// <summary>
@@ -213,7 +309,16 @@ internal sealed class NativeMenuSnapshot
         var bySize = _icons.GetOrCreateValue(template);
         if (!bySize.TryGetValue(size.Pixel, out var icon))
         {
-            icon = DrawIcon(template, size, _iconScale);
+            try
+            {
+                icon = DrawIcon(template, size, _iconScale);
+            }
+            catch (InvalidOperationException)
+            {
+                // A GPU backend has no context before the first window; not cached, so a later menu draws the icon.
+                return null;
+            }
+
             bySize[size.Pixel] = icon;
         }
 
@@ -235,6 +340,8 @@ internal sealed class NativeMenuSnapshot
 
         int pixelSize = size.Pixel;
         var factory = Application.Current.GraphicsFactory;
+        // A native menu opens between frames, when a GPU backend has no context current on this thread.
+        using var renderScope = factory.AcquireBackgroundRenderScope();
         using var surface = factory.CreateSurface(
             RenderSurfaceDescriptor.CpuPixels(pixelSize, pixelSize, scale, premultiplied: true, nameof(NativeMenuSnapshot)));
         using (var context = factory.CreateContext(surface))
