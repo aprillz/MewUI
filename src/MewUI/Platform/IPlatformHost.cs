@@ -160,6 +160,11 @@ internal interface IPlatformHost : IDisposable
     IPlacesProvider PlacesProvider => EmptyPlacesProvider.Instance;
 
     /// <summary>
+    /// The running host's native display connection, or 0 where it has none.
+    /// </summary>
+    nint NativeDisplay => 0;
+
+    /// <summary>
     /// Whether the platform has somewhere to show tray icons right now.
     /// </summary>
     bool IsTrayIconSupported => false;

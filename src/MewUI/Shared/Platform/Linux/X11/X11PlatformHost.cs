@@ -6,6 +6,7 @@ using System.Text;
 using Aprillz.MewUI.Animation;
 using Aprillz.MewUI.Diagnostics;
 using Aprillz.MewUI.Native;
+using Aprillz.MewUI.Rendering;
 
 using NativeX11 = Aprillz.MewUI.Native.X11;
 
@@ -75,6 +76,8 @@ public sealed class X11PlatformHost : IPlatformHost
     public IClipboardService Clipboard { get; } = new LinuxClipboardService();
 
     public IWindowBackend CreateWindowBackend(Window window) => new X11WindowBackend(this, window);
+
+    nint IPlatformHost.NativeDisplay => Display;
 
     bool IPlatformHost.IsTrayIconSupported => LinuxStatusNotifierMonitor.Instance.IsAvailable;
 
@@ -158,6 +161,15 @@ public sealed class X11PlatformHost : IPlatformHost
 
             if (Display != 0)
             {
+                try
+                {
+                    (app.GraphicsFactory as IDisplayBoundGraphicsFactory)?.OnDisplayClosing();
+                }
+                catch (Exception exception)
+                {
+                    Logger.Write($"display closing notification failed: {exception.Message}");
+                }
+
                 FreeCursorCache();   // release shared cursors before the display goes away
                 try
                 {

@@ -12,7 +12,7 @@ using NativeX11 = Aprillz.MewUI.Native.X11;
 
 namespace Aprillz.MewUI.Rendering.MewVG;
 
-public sealed partial class MewVGX11GraphicsFactory : IPersistentFrameGraphicsFactory
+public sealed partial class MewVGX11GraphicsFactory : IPersistentFrameGraphicsFactory, IDisplayBoundGraphicsFactory
 {
     public const string BackendIdentifier = "MewVG.X11";
 
@@ -55,8 +55,8 @@ public sealed partial class MewVGX11GraphicsFactory : IPersistentFrameGraphicsFa
     private bool _workerInitFailed;
     // The worker renders on a surfaceless EGL display of its own, which no window opens or closes.
     private bool _workerIsSurfaceless;
-    // Set while no window exists, because the platform host closes the X display once the last
-    // one goes away and a scope still rendering on that display crashes inside the driver.
+    // Set when the platform host is about to close the X display, because a scope still rendering
+    // on that display crashes inside the driver.
     private volatile bool _workerSuspended;
 
     /// <summary>GLXContext of the shared worker context. 0 if not yet created
@@ -134,7 +134,18 @@ public sealed partial class MewVGX11GraphicsFactory : IPersistentFrameGraphicsFa
             return true;
         }
 
-        return false;
+        // The running host's connection, so that the windows created later can share with this context.
+        nint display = Application.IsRunning ? Application.Current.PlatformHost.NativeDisplay : 0;
+        if (display == 0
+            || !GLBackend.VisualChooser.TryChooseVisual(display, NativeX11.XDefaultScreen(display), allowsTransparency: false, out var visual))
+        {
+            return false;
+        }
+
+        _workerDisplay = display;
+        _workerVisualInfo = visual;
+        _workerHasVisualInfo = true;
+        return true;
     }
 
     /// <summary>
@@ -306,10 +317,10 @@ public sealed partial class MewVGX11GraphicsFactory : IPersistentFrameGraphicsFa
         handled = true;
     }
 
-    partial void TryReleaseWindowResources(nint hwnd)
+    void IDisplayBoundGraphicsFactory.OnDisplayClosing()
     {
-        // A surfaceless worker has no display that closes with the last window.
-        if (!_windows.IsEmpty || _workerIsSurfaceless)
+        // A surfaceless worker does not render on the display that closes.
+        if (_workerIsSurfaceless)
         {
             return;
         }
