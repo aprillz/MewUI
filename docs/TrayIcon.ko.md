@@ -1,6 +1,8 @@
 # 트레이 아이콘
 
-`TrayIcon`은 Windows 알림 영역이나 macOS 메뉴 막대에 앱의 아이콘을 보이고, 메뉴를 붙일 수 있습니다. 창이 필요 없으므로 메인 창 없이 실행하는 유틸리티([Application 및 Window 수명 주기](ApplicationLifecycle.ko.md) 참고)가 트레이에만 머물 수 있습니다. 그 밖의 플랫폼에서는 `TrayIcon.IsSupported`가 false이고 아이콘은 아무 일도 하지 않습니다.
+`TrayIcon`은 Windows 알림 영역, macOS 메뉴 막대, Linux 데스크톱의 상태 영역에 앱의 아이콘을 보이고, 메뉴를 붙일 수 있습니다. 창이 필요 없으므로 메인 창 없이 실행하는 유틸리티([Application 및 Window 수명 주기](ApplicationLifecycle.ko.md) 참고)가 트레이에만 머물 수 있습니다. 그 밖의 플랫폼에서는 `TrayIcon.IsSupported`가 false이고 아이콘은 아무 일도 하지 않습니다.
+
+Linux에서는 StatusNotifierItem 규약을 사용하며 KDE Plasma와 Xfce 패널이 이를 표시합니다. GNOME은 AppIndicator 확장을 설치해야 표시합니다. 데스크톱에 표시할 곳이 없는 동안 `TrayIcon.IsSupported`는 false이고, 보이도록 설정한 아이콘은 표시할 곳이 생기면 저절로 나타납니다.
 
 ```csharp
 var show = new Command("app.show", "_Show");
@@ -38,6 +40,7 @@ tray.Commands.Register(exit, Application.Shutdown);
 |---|---|
 | Windows | `ContextMenu` 자체를 앱의 테마, 글꼴, 아이콘, 항목 배치 그대로 보입니다. 아이콘 위치에서 열리고 바깥 클릭, Esc, 다른 창 활성화로 닫힙니다. 키보드는 다른 MewUI 메뉴와 같게 동작합니다. |
 | macOS | 열릴 때마다 `ContextMenu`를 읽어 네이티브 메뉴로 보입니다: 항목 텍스트(macOS 메뉴에는 접근 키가 없어 `_` 표시는 빠집니다), 구분선, 하위 메뉴, 사용 가능 상태, 체크 표시, 아이콘, 단축키 표시. 단색 아이콘은 메뉴의 색을 따릅니다. `ContextMenu` 자체의 외형(`ItemHeight`, `ItemPadding`, `MaxMenuHeight`, 글꼴)은 적용되지 않습니다. |
+| Linux | 데스크톱 패널이 `ContextMenu`를 읽어 그립니다: 접근 키를 포함한 항목 텍스트, 구분선, 하위 메뉴, 사용 가능 상태, 체크 표시, 아이콘, 단축키 표시. `ContextMenu` 자체의 외형은 적용되지 않습니다. 항목 아이콘은 렌더링 컨텍스트가 필요하므로 GPU 백엔드에서는 앱이 창을 한 번 보인 뒤부터 나타납니다. |
 
 `MenuOpening`은 메뉴가 열리기 직전에 발생합니다. 처리기는 메뉴를 채우거나 `ContextMenu`를 바꿀 수 있고, 열기를 취소할 수는 없습니다.
 
@@ -55,3 +58,17 @@ tray.Commands.Register(exit, Application.Shutdown);
 |---|---|---|---|
 | Windows | 왼쪽 클릭, 또는 포커스가 있는 아이콘에서 Enter나 Space | 있음 | 오른쪽 클릭, Shift+F10, 메뉴 키 |
 | macOS | 아이콘에 메뉴가 없을 때 클릭 | 없음 | 아이콘에 메뉴가 있을 때 클릭 |
+| Linux | 패널이 알려 오는 왼쪽 클릭 | 없음 | 오른쪽 클릭. 일부 패널은 왼쪽 클릭에도 메뉴를 열고 `Click`을 알리지 않으므로, 모든 동작을 메뉴에도 넣어 주세요 |
+
+## 앱 식별자
+
+`WithApplicationId`는 데스크톱에 앱의 이름을 알립니다. 데스크톱은 이 이름으로 앱의 창, 트레이 아이콘, 실행 항목을 하나로 묶습니다.
+
+```csharp
+Application.Create()
+    .WithApplicationId("com.example.MyApp")
+    .BuildMainWindow(() => new MainWindow())
+    .Run();
+```
+
+Linux에서는 창 클래스와 트레이 항목의 id로 쓰이며, 앱의 `.desktop` 파일 이름과 같아야 합니다. 지정하지 않으면 진입 어셈블리 이름을 씁니다. Windows에서는 프로세스의 AppUserModelID이고, 앱이 지정할 때만 설정합니다. macOS는 번들 식별자를 대신 사용합니다.
