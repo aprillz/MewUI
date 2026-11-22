@@ -84,6 +84,11 @@ public sealed class Application
     public static Application Current => _current ?? throw new InvalidOperationException("Application not initialized. Call Application.Run() first.");
 
     /// <summary>
+    /// Gets the identifier set with <see cref="ApplicationBuilderExtensions.WithApplicationId"/>, or null when none was set.
+    /// </summary>
+    public static string? ApplicationId { get; internal set; }
+
+    /// <summary>
     /// Gets the currently active theme.
     /// </summary>
     public Theme Theme => _themeManager.CurrentTheme;
