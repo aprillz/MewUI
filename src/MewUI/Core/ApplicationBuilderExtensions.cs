@@ -6,6 +6,18 @@ namespace Aprillz.MewUI;
 public static class ApplicationBuilderExtensions
 {
     /// <summary>
+    /// Sets the identifier the desktop uses to group the application's windows, tray icons and launcher entry.
+    /// </summary>
+    /// <param name="builder">The builder.</param>
+    /// <param name="applicationId">A stable identifier, typically in reverse domain form such as <c>com.example.App</c>.</param>
+    public static ApplicationBuilder WithApplicationId(this ApplicationBuilder builder, string applicationId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(applicationId);
+        builder.Options.ApplicationId = applicationId;
+        return builder;
+    }
+
+    /// <summary>
     /// Sets the default theme mode.
     /// </summary>
     public static ApplicationBuilder UseTheme(this ApplicationBuilder builder, ThemeVariant themeMode)

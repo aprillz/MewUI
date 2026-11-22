@@ -57,6 +57,8 @@ internal sealed class TracingPlatformHost : IPlatformHost
         return _inner.CreateTrayIconBackend(trayIcon);
     }
 
+    public void ApplyApplicationId(string applicationId) => _inner.ApplyApplicationId(applicationId);
+
     public void Run(Application app, Window? mainWindow)
     {
         DiagLog.Write(mainWindow != null

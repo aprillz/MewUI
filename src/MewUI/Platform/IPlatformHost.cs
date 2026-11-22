@@ -169,4 +169,10 @@ internal interface IPlatformHost : IDisposable
     /// Called on the UI thread.
     /// </summary>
     ITrayIconBackend? CreateTrayIconBackend(Controls.TrayIcon trayIcon) => null;
+
+    /// <summary>
+    /// Applies the identifier the application chose, before its first window. Called only when one was set.
+    /// </summary>
+    void ApplyApplicationId(string applicationId)
+    { }
 }

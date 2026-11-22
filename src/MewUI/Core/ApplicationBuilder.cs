@@ -139,6 +139,12 @@ public sealed class ApplicationBuilder
             throw new InvalidOperationException("ApplicationBuilder cannot be used after Application is running.");
         }
 
+        if (Options.ApplicationId != null)
+        {
+            Application.ApplicationId = Options.ApplicationId;
+            Application.DefaultPlatformHost.ApplyApplicationId(Options.ApplicationId);
+        }
+
         if (Options.Metrics != null)
         {
             ThemeManager.DefaultMetrics = Options.Metrics;

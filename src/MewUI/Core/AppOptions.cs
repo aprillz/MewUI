@@ -5,6 +5,8 @@ namespace Aprillz.MewUI;
 /// </summary>
 public sealed class AppOptions
 {
+    internal string? ApplicationId { get; set; }
+
     /// <summary>
     /// Gets or sets the default theme mode.
     /// </summary>
