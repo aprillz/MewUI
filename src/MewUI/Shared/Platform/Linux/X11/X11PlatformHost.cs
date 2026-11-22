@@ -76,6 +76,11 @@ public sealed class X11PlatformHost : IPlatformHost
 
     public IWindowBackend CreateWindowBackend(Window window) => new X11WindowBackend(this, window);
 
+    bool IPlatformHost.IsTrayIconSupported => LinuxStatusNotifierMonitor.Instance.IsAvailable;
+
+    ITrayIconBackend? IPlatformHost.CreateTrayIconBackend(Controls.TrayIcon trayIcon)
+        => Tmds.DBus.Protocol.DBusAddress.Session != null ? new LinuxTrayIconBackend(trayIcon) : null;
+
     public IDispatcher CreateDispatcher(nint windowHandle) => new LinuxDispatcher();
 
     public uint GetSystemDpi()
