@@ -384,18 +384,8 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, I
 #if !MEWUI_MEWVG_MACOS
         ClearTargetPixels(new Rect(0, 0, _viewportWidthDip, _viewportHeightDip), ToNvgColor(color));
 #else
-        _vg.Save();
-        ApplyDeviceTransform();
-        _vg.ResetScissor();
-        _vg.ShapeAntiAlias(false);
-        _vg.BeginPath();
-
-        //_vg.Rect(-1, -1, (float)_viewportWidthDip + 2, (float)_viewportHeightDip + 2);
-        _vg.Rect(0, 0, (float)_viewportWidthDip, (float)_viewportHeightDip);
-
-        _vg.FillColor(ToNvgColor(color));
-        _vg.Fill();
-        _vg.Restore();
+        // A target that keeps its frame still holds the last one here: blending a transparent color over it erases nothing.
+        FillReplacing(new Rect(0, 0, _viewportWidthDip, _viewportHeightDip), ToNvgColor(color));
 #endif
     }
 
