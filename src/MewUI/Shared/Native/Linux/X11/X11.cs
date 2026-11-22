@@ -109,6 +109,9 @@ internal static partial class X11
     [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
     public static partial int XStoreName(nint display, nint window, string windowName);
 
+    [LibraryImport(LibraryName)]
+    public static partial int XSetClassHint(nint display, nint window, ref XClassHint classHint);
+
     // Sets WM_NAME and WM_ICON_NAME from UTF-8, encoded as STRING when Latin-1 holds the text and as COMPOUND_TEXT
     // otherwise; null hint and argv arguments leave those properties alone.
     [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
@@ -598,6 +601,13 @@ internal struct XConfigureEvent
     public int border_width;
     public nint above;
     public int override_redirect;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct XClassHint
+{
+    public nint res_name;
+    public nint res_class;
 }
 
 [StructLayout(LayoutKind.Sequential)]
