@@ -40,7 +40,7 @@ The menu is an ordinary `ContextMenu`, built the same way as an element's contex
 |---|---|
 | Windows | The `ContextMenu` itself, with the application's theme, fonts, icons and item layout. It opens at the icon and closes on a click outside, on Escape, or when another window becomes active. The keyboard works as in any MewUI menu. |
 | macOS | A native menu read from the `ContextMenu` each time it opens: item text (macOS menus have no access keys, so the `_` markers are dropped), separators, submenus, enabled state, check marks, icons and shortcut labels. Single-color icons follow the menu's colors. The `ContextMenu`'s own look (`ItemHeight`, `ItemPadding`, `MaxMenuHeight`, fonts) does not apply. |
-| Linux | A menu the desktop's panel draws from the `ContextMenu`: item text with access keys, separators, submenus, enabled state, check marks, icons and shortcut labels. The `ContextMenu`'s own look does not apply. An item icon needs a rendering context, so with a GPU backend it appears once the application has shown a window. |
+| Linux | A menu the desktop's panel draws from the `ContextMenu`: item text with access keys, separators, submenus, enabled state, check marks, icons and shortcut labels. The `ContextMenu`'s own look does not apply. |
 
 `MenuOpening` is raised just before the menu opens. A handler may fill the menu or replace `ContextMenu`; it cannot cancel the opening.
 

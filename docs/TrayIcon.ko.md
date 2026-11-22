@@ -40,7 +40,7 @@ tray.Commands.Register(exit, Application.Shutdown);
 |---|---|
 | Windows | `ContextMenu` 자체를 앱의 테마, 글꼴, 아이콘, 항목 배치 그대로 보입니다. 아이콘 위치에서 열리고 바깥 클릭, Esc, 다른 창 활성화로 닫힙니다. 키보드는 다른 MewUI 메뉴와 같게 동작합니다. |
 | macOS | 열릴 때마다 `ContextMenu`를 읽어 네이티브 메뉴로 보입니다: 항목 텍스트(macOS 메뉴에는 접근 키가 없어 `_` 표시는 빠집니다), 구분선, 하위 메뉴, 사용 가능 상태, 체크 표시, 아이콘, 단축키 표시. 단색 아이콘은 메뉴의 색을 따릅니다. `ContextMenu` 자체의 외형(`ItemHeight`, `ItemPadding`, `MaxMenuHeight`, 글꼴)은 적용되지 않습니다. |
-| Linux | 데스크톱 패널이 `ContextMenu`를 읽어 그립니다: 접근 키를 포함한 항목 텍스트, 구분선, 하위 메뉴, 사용 가능 상태, 체크 표시, 아이콘, 단축키 표시. `ContextMenu` 자체의 외형은 적용되지 않습니다. 항목 아이콘은 렌더링 컨텍스트가 필요하므로 GPU 백엔드에서는 앱이 창을 한 번 보인 뒤부터 나타납니다. |
+| Linux | 데스크톱 패널이 `ContextMenu`를 읽어 그립니다: 접근 키를 포함한 항목 텍스트, 구분선, 하위 메뉴, 사용 가능 상태, 체크 표시, 아이콘, 단축키 표시. `ContextMenu` 자체의 외형은 적용되지 않습니다. |
 
 `MenuOpening`은 메뉴가 열리기 직전에 발생합니다. 처리기는 메뉴를 채우거나 `ContextMenu`를 바꿀 수 있고, 열기를 취소할 수는 없습니다.
 
