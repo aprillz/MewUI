@@ -77,7 +77,7 @@ public sealed class FontFamilyFallbackTests
     }
 
     [TestMethod]
-    public void Direct2D_NoCandidateInstalled_KeepsTheFirstName()
+    public void Direct2D_NoCandidateInstalled_UsesThePlatformFont()
     {
         if (!OperatingSystem.IsWindows())
         {
@@ -88,7 +88,8 @@ public sealed class FontFamilyFallbackTests
         using var factory = new Direct2DGraphicsFactory();
         using var font = factory.CreateFont($"{MISSING}, {MISSING} Two", 16);
 
-        Assert.AreEqual(MISSING, font.Family);
+        Assert.AreEqual(ThemeMetrics.PlatformFontFamily, font.Family);
+        Assert.IsGreaterThan(0, font.Ascent);
     }
 
     [TestMethod]
