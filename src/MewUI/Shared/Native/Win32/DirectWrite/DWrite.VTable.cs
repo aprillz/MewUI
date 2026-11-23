@@ -675,6 +675,27 @@ internal static unsafe class DWriteTextLayout2VTable
     }
 }
 
+/// <summary>IDWriteFont2 vtable helper; the interface is available from Windows 8.1.</summary>
+internal static unsafe class DWriteFont2VTable
+{
+    private static readonly Guid IID_IDWriteFont2 = new("29748ED6-8C9C-4A6A-BE0B-D912E8538944");
+
+    /// <summary>IDWriteFont2::IsColorFont (vtable index 18). False where the interface is unavailable.</summary>
+    public static bool IsColorFont(nint font)
+    {
+        if (ComHelpers.QueryInterface(font, in IID_IDWriteFont2, out nint font2) < 0 || font2 == 0)
+        {
+            return false;
+        }
+
+        var vtbl = *(nint**)font2;
+        var fn = (delegate* unmanaged[Stdcall]<nint, int>)vtbl[18];
+        bool isColor = fn(font2) != 0;
+        ComHelpers.Release(font2);
+        return isColor;
+    }
+}
+
 [StructLayout(LayoutKind.Sequential)]
 internal struct DWRITE_UNICODE_RANGE
 {
