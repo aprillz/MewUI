@@ -28,6 +28,12 @@ public sealed class FontFamilyListFallbackTests
     private const string LATIN_FAMILY = "Consolas";
     private const string LISTED_FAMILY = "Batang";
     private const string MISSING_FAMILY = "MewUI Missing Family";
+    private const string COLOR_FAMILY = "Segoe UI Emoji";
+    private const string SYMBOL_FAMILY = "MS Gothic";
+
+    // A plain symbol the color font also carries and Consolas lacks, so it always comes from the chain.
+    private const string PLAIN_SYMBOL = "Ⓐ";
+    private const string EMOJI = "☀";
 
     [TestMethod]
     public void DirectWrite_MissingFamilyDrawsWithThePlatformFont()
@@ -44,6 +50,42 @@ public sealed class FontFamilyListFallbackTests
             var font = fonts.CreateFont(family, SIZE, FontWeight.Normal, false, false, false, 96);
             Assert.AreEqual(ThemeMetrics.PlatformFontFamily, font.Family, $"'{family}' did not resolve to the platform font");
             Assert.IsGreaterThan(0, font.Ascent, $"'{family}' has no line metrics");
+        }
+    }
+
+    [TestMethod]
+    public void DirectWrite_ColorFontInTheChainSuppliesOnlyEmoji()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("DirectWrite is Windows-only.");
+            return;
+        }
+
+        var previousChain = FontFallback.FallbackChain.ToArray();
+        using var fonts = new DWriteRendering.DirectWriteFontFactory();
+        string Draw(string family, string text)
+        {
+            var font = fonts.CreateFont(family, SIZE, FontWeight.Normal, false, false, false, 96);
+            var bitmap = DWriteRendering.DirectWriteTextRasterizer.Rasterize(
+                fonts.Factory, font, text, WIDTH, HEIGHT, Color.FromArgb(255, 0, 0, 0),
+                TextAlignment.Left, TextAlignment.Top, TextWrapping.NoWrap, TextTrimming.None, pixelsPerDip: 1f);
+            return Shape(bitmap.Data, WIDTH * 4, bitmap.WidthPx, bitmap.HeightPx, (data, offset) => data[offset + 3] >= 128);
+        }
+
+        try
+        {
+            FontFallback.SetFallbacks([COLOR_FAMILY, SYMBOL_FAMILY]);
+            string plainFromChain = Draw(LATIN_FAMILY, PLAIN_SYMBOL);
+            string emojiFromChain = Draw(LATIN_FAMILY, EMOJI);
+
+            Assert.AreNotEqual(Draw(COLOR_FAMILY, PLAIN_SYMBOL), Draw(SYMBOL_FAMILY, PLAIN_SYMBOL), "the two families draw the symbol alike, so this probe cannot tell them apart");
+            Assert.AreEqual(Draw(SYMBOL_FAMILY, PLAIN_SYMBOL), plainFromChain, "a plain symbol was drawn from the color font");
+            Assert.AreEqual(Draw(COLOR_FAMILY, EMOJI), emojiFromChain, "an emoji was not drawn from the color font");
+        }
+        finally
+        {
+            FontFallback.SetFallbacks(previousChain);
         }
     }
 

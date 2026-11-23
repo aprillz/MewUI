@@ -29,6 +29,31 @@ internal static unsafe class DWriteFontFallbackHelper
         new() { first = 0x0000, last = 0x10FFFF },
     ];
 
+    // Emoji blocks and the joiner, keycap and selectors their sequences use. A color font also carries
+    // plain letters and digits, which must not be drawn from it just because it comes first in the chain.
+    private static readonly DWRITE_UNICODE_RANGE[] EmojiRanges =
+    [
+        new() { first = 0x200D, last = 0x200D },
+        new() { first = 0x203C, last = 0x203C },
+        new() { first = 0x2049, last = 0x2049 },
+        new() { first = 0x20E3, last = 0x20E3 },
+        new() { first = 0x2122, last = 0x2122 },
+        new() { first = 0x2139, last = 0x2139 },
+        new() { first = 0x2190, last = 0x21FF },
+        new() { first = 0x2300, last = 0x23FF },
+        new() { first = 0x24C2, last = 0x24C2 },
+        new() { first = 0x25A0, last = 0x27BF },
+        new() { first = 0x2900, last = 0x297F },
+        new() { first = 0x2B00, last = 0x2BFF },
+        new() { first = 0x3030, last = 0x3030 },
+        new() { first = 0x303D, last = 0x303D },
+        new() { first = 0x3297, last = 0x3297 },
+        new() { first = 0x3299, last = 0x3299 },
+        new() { first = 0xFE00, last = 0xFE0F },
+        new() { first = 0x1F000, last = 0x1FAFF },
+        new() { first = 0xE0020, last = 0xE007F },
+    ];
+
     /// <summary>
     /// Gets or creates the fallback for <paramref name="font"/>: its listed families and the user's chain ahead of the
     /// system defaults. Returns 0 when neither adds anything, or when IDWriteFactory2 is not available; the system
@@ -91,8 +116,9 @@ internal static unsafe class DWriteFontFallbackHelper
 
                 string locale = FontFallback.ResolvedLocale;
 
-                // Add the listed families, then the user chain - each family maps to full Unicode range
+                // Listed families were named for this font and take every character; the chain's color fonts take emoji only.
                 fixed (DWRITE_UNICODE_RANGE* pRanges = FullRange)
+                fixed (DWRITE_UNICODE_RANGE* pEmojiRanges = EmojiRanges)
                 fixed (char* pLocale = locale)
                 {
                     foreach (var family in listed)
@@ -108,12 +134,15 @@ internal static unsafe class DWriteFontFallbackHelper
 
                     foreach (var family in chain)
                     {
+                        bool isColor = IsColorFamily(collection, family);
                         fixed (char* pFamily = family)
                         {
                             char** familyNames = &pFamily;
                             // Errors on individual mappings are non-fatal - skip.
                             _ = DWriteFontFallbackBuilderVTable.AddMapping(
-                                builder, pRanges, (uint)FullRange.Length,
+                                builder,
+                                isColor ? pEmojiRanges : pRanges,
+                                (uint)(isColor ? EmojiRanges.Length : FullRange.Length),
                                 familyNames, 1, collection, pLocale, null, 1.0f);
                         }
                     }
@@ -145,6 +174,38 @@ internal static unsafe class DWriteFontFallbackHelper
         }
 
         return 0;
+    }
+
+    private static bool IsColorFamily(nint collection, string family)
+    {
+        if (collection == 0 ||
+            DWriteVTable.FindFamilyName(collection, family, out uint index, out int exists) < 0 || exists == 0 ||
+            DWriteVTable.GetFontFamily(collection, index, out nint fontFamily) < 0 || fontFamily == 0)
+        {
+            return false;
+        }
+
+        try
+        {
+            if (DWriteVTable.GetFirstMatchingFont(fontFamily, DWRITE_FONT_WEIGHT.NORMAL, DWRITE_FONT_STRETCH.NORMAL,
+                    DWRITE_FONT_STYLE.NORMAL, out nint font) < 0 || font == 0)
+            {
+                return false;
+            }
+
+            try
+            {
+                return DWriteFont2VTable.IsColorFont(font);
+            }
+            finally
+            {
+                ComHelpers.Release(font);
+            }
+        }
+        finally
+        {
+            ComHelpers.Release(fontFamily);
+        }
     }
 
     private static void ReleaseCachedNoLock()
