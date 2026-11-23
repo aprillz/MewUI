@@ -55,25 +55,29 @@ internal sealed unsafe class DirectWriteFontFactory : IDisposable
     }
 
     /// <summary>
-    /// Picks the first installed family from a comma-separated list to draw with, and the installed families after
-    /// it to supply what it lacks. A single name, or a list with none installed, draws with its first name.
+    /// Picks the first available family of a name or comma-separated list to draw with, and the available families
+    /// after it to supply what it lacks. When none is available, the platform's UI font draws the text.
     /// </summary>
     internal (string Primary, string[] Listed) SelectFamilyCandidates(string family)
     {
-        if (!FontFamilyList.IsList(family))
+        string[] candidates = FontFamilyList.IsList(family) ? FontFamilyList.Split(family) : [family];
+        var available = candidates.Where(IsFamilyAvailable).ToArray();
+        if (available.Length > 0)
         {
-            return (family, []);
+            return (available[0], available[1..]);
         }
-
-        string[] candidates = FontFamilyList.Split(family);
-        var installed = candidates.Where(candidate => FontRegistry.Resolve(candidate) != null || IsSystemFamilyInstalled(candidate)).ToArray();
-        if (installed.Length == 0)
+        else
         {
-            return (candidates.Length > 0 ? candidates[0] : family, []);
+            string platformFamily = ThemeMetrics.PlatformFontFamily;
+            string requested = candidates.Length > 0 ? candidates[0] : family;
+            return (IsFamilyAvailable(platformFamily) ? platformFamily : requested, []);
         }
-
-        return (installed[0], installed[1..]);
     }
+
+    private bool IsFamilyAvailable(string family)
+        => FontRegistry.Resolve(family) != null
+            || (OperatingSystem.IsWindows() && FontResources.LooksLikeFontFilePath(family))
+            || IsSystemFamilyInstalled(family);
 
     internal static string ValidateFamilyName(string? family)
     {

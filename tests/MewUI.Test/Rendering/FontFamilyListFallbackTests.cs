@@ -27,6 +27,25 @@ public sealed class FontFamilyListFallbackTests
     private const string HAN = "行";
     private const string LATIN_FAMILY = "Consolas";
     private const string LISTED_FAMILY = "Batang";
+    private const string MISSING_FAMILY = "MewUI Missing Family";
+
+    [TestMethod]
+    public void DirectWrite_MissingFamilyDrawsWithThePlatformFont()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("DirectWrite is Windows-only.");
+            return;
+        }
+
+        using var fonts = new DWriteRendering.DirectWriteFontFactory();
+        foreach (string family in new[] { MISSING_FAMILY, $"{MISSING_FAMILY}, Another Missing Family" })
+        {
+            var font = fonts.CreateFont(family, SIZE, FontWeight.Normal, false, false, false, 96);
+            Assert.AreEqual(ThemeMetrics.PlatformFontFamily, font.Family, $"'{family}' did not resolve to the platform font");
+            Assert.IsGreaterThan(0, font.Ascent, $"'{family}' has no line metrics");
+        }
+    }
 
     [TestMethod]
     public void Direct2D_ListedFamilySuppliesMissingCharacters()
