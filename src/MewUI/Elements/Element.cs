@@ -79,6 +79,11 @@ public abstract partial class Element : MewObject
     public Size DesiredSize { get; private set; }
 
     /// <summary>
+    /// Gets the size the last Measure pass asked for before it was clipped to the measure constraint.
+    /// </summary>
+    internal Size UnclippedDesiredSize { get; private set; }
+
+    /// <summary>
     /// Gets the bounds from the arrange pass in window coordinates, not the parent's, left untransformed
     /// under an element that transforms its children.
     /// </summary>
@@ -468,6 +473,7 @@ public abstract partial class Element : MewObject
                 : Math.Min(measured.Height, availableSize.Height));
 
         DesiredSize = ApplyLayoutRounding(clamped);
+        UnclippedDesiredSize = ApplyLayoutRounding(measured);
         IsMeasureDirty = false;
         _lastMeasureConstraint = availableSize;
         _hasMeasureConstraint = true;

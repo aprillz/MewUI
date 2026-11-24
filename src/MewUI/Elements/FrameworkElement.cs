@@ -631,8 +631,12 @@ public abstract class FrameworkElement : UIElement, IDisposable
         double layoutHeight = limits.Height;
 
         // If we have explicit size, use it; otherwise use desired (excluding margin)
-        double arrangeWidth = !double.IsNaN(layoutWidth) ? layoutWidth : DesiredSize.Width - limits.Margin.HorizontalThickness;
-        double arrangeHeight = !double.IsNaN(layoutHeight) ? layoutHeight : DesiredSize.Height - limits.Margin.VerticalThickness;
+        double arrangeWidth = !double.IsNaN(layoutWidth)
+            ? layoutWidth
+            : ResolveDesiredExtent(DesiredSize.Width, UnclippedDesiredSize.Width, limits.Margin.HorizontalThickness, availableWidth);
+        double arrangeHeight = !double.IsNaN(layoutHeight)
+            ? layoutHeight
+            : ResolveDesiredExtent(DesiredSize.Height, UnclippedDesiredSize.Height, limits.Margin.VerticalThickness, availableHeight);
 
         arrangeWidth = Math.Clamp(arrangeWidth, limits.MinWidth, limits.MaxWidth);
         arrangeHeight = Math.Clamp(arrangeHeight, limits.MinHeight, limits.MaxHeight);
@@ -668,6 +672,21 @@ public abstract class FrameworkElement : UIElement, IDisposable
         }
 
         return new Rect(x, y, width, height);
+    }
+
+    /// <summary>
+    /// Returns the extent, without margin, an auto-sized element takes on one axis of a slot whose inner extent is
+    /// <paramref name="available"/>.
+    /// </summary>
+    private static double ResolveDesiredExtent(double desired, double unclippedDesired, double margin, double available)
+    {
+        double clipped = desired - margin;
+        double natural = unclippedDesired - margin;
+
+        // A measure constraint can be tighter than the slot the element is then arranged in (a span over Auto and
+        // Star tracks is measured against the Star tracks alone), so what the constraint clipped is given back as
+        // far as the slot holds it.
+        return natural > clipped ? Math.Max(clipped, Math.Min(natural, available)) : clipped;
     }
 
     protected override Size MeasureOverride(Size availableSize)
