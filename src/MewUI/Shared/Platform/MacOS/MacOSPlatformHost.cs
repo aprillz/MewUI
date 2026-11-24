@@ -653,7 +653,7 @@ public sealed class MacOSPlatformHost : IPlatformHost
         List<nint>? closed = null;
         foreach (var kvp in _windows)
         {
-            if (!MacOSInterop.IsWindowVisible(kvp.Key) && !MacOSInterop.IsWindowMiniaturized(kvp.Key))
+            if (!kvp.Value.IsHidden && !MacOSInterop.IsWindowVisible(kvp.Key) && !MacOSInterop.IsWindowMiniaturized(kvp.Key))
             {
                 (closed ??= new List<nint>()).Add(kvp.Key);
             }

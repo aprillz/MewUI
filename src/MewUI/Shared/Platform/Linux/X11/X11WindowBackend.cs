@@ -17,6 +17,8 @@ internal sealed class X11WindowBackend : IWindowBackend, IWindowSystemBackdropBa
     private readonly X11PlatformHost _host;
 
     private bool _shown;
+    // Withdrawn by Hide after the first show; the next PresentSurface maps it again.
+    private bool _hidden;
     private bool _disposed;
     private bool _cleanupDone;
     private bool _closedRaised;
@@ -157,6 +159,11 @@ internal sealed class X11WindowBackend : IWindowBackend, IWindowSystemBackdropBa
     {
         if (_shown)
         {
+            if (_hidden)
+            {
+                _hidden = false;
+                MapSurface(firstShow: false);
+            }
             return;
         }
 
@@ -165,7 +172,11 @@ internal sealed class X11WindowBackend : IWindowBackend, IWindowSystemBackdropBa
         ApplyResolvedStartupPosition();
 
         _shown = true;
+        MapSurface(firstShow: true);
+    }
 
+    private void MapSurface(bool firstShow)
+    {
         if (Window.Kind is Controls.WindowKind.Overlay or Controls.WindowKind.Popup)
         {
             // Paint BEFORE mapping: a mapped-but-unpainted surface is composited as-is until the first
@@ -202,10 +213,22 @@ internal sealed class X11WindowBackend : IWindowBackend, IWindowSystemBackdropBa
             }
         }
 
+        if (!firstShow)
+        {
+            // The window manager places a withdrawn window anew when it maps again, unless it is told the
+            // position is the user's. It reads the position from the window itself, where it left it.
+            _startupPositionFlags = XSizeHintsFlags.USPosition;
+            var hints = BuildNormalHints();
+            NativeX11.XSetWMNormalHints(Display, Handle, ref hints);
+        }
+
         NativeX11.XMapWindow(Display, Handle);
 
         NativeX11.XFlush(Display);
-        ApplyResolvedStartupPosition();
+        if (firstShow)
+        {
+            ApplyResolvedStartupPosition();
+        }
         if (Window.WindowState != Controls.WindowState.Normal)
         {
             SetWindowState(Window.WindowState);
@@ -229,7 +252,10 @@ internal sealed class X11WindowBackend : IWindowBackend, IWindowSystemBackdropBa
 
         if (Display != 0 && Handle != 0)
         {
-            NativeX11.XUnmapWindow(Display, Handle);
+            _hidden = true;
+            // Withdrawing, unlike a plain unmap, also takes down an iconified window, which is already unmapped.
+            NativeX11.XWithdrawWindow(Display, Handle, NativeX11.XDefaultScreen(Display));
+            NativeX11.XFlush(Display);
         }
     }
 
@@ -1805,7 +1831,8 @@ internal sealed class X11WindowBackend : IWindowBackend, IWindowSystemBackdropBa
 
     private void HandlePropertyNotify(in XPropertyEvent e)
     {
-        if (_netWmStateAtom == 0 || e.atom != _netWmStateAtom)
+        // The window manager clears _NET_WM_STATE when the window is withdrawn; the hidden window keeps its state.
+        if (_netWmStateAtom == 0 || e.atom != _netWmStateAtom || _hidden)
         {
             return;
         }

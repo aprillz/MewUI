@@ -33,6 +33,8 @@ internal sealed class MacOSWindowBackend : IWindowBackend, IWindowSystemBackdrop
     private MacOSWindowBackdrop? _backdrop;
     private nint _metalLayer;
     private bool _shown;
+    // Ordered out by Hide after the first show; the next PresentSurface orders it in again.
+    private bool _hidden;
     // Owner attach requested before the first Show; applied once the window is ordered in (see SetOwner).
     private nint _pendingOwnerHandle;
     private int _needsRender;
@@ -205,6 +207,14 @@ internal sealed class MacOSWindowBackend : IWindowBackend, IWindowSystemBackdrop
         {
             UpdateDpiIfNeeded();
             UpdateClientSizeIfNeeded(forceLayout: true);
+            if (_hidden)
+            {
+                _hidden = false;
+                Interlocked.Exchange(ref _needsRender, 1);
+                _host.RequestRender();
+                OrderFront();
+                ApplyWindowLevel(MacOSInterop.IsApplicationActive());
+            }
             return;
         }
 
@@ -215,33 +225,7 @@ internal sealed class MacOSWindowBackend : IWindowBackend, IWindowSystemBackdrop
             MacOSWindowInterop.SetAlertPanelAnimation(_nsWindow);
         }
 
-        switch (_window.Kind)
-        {
-            // Input-transparent overlay (drag preview): click-through (ignoresMouseEvents) + float above all +
-            // order front WITHOUT making it key/main, so it never steals capture/focus from the drag source.
-            case Controls.WindowKind.Overlay:
-                MacOSWindowInterop.SetWindowEnabled(_nsWindow, false); // ignoresMouseEvents = true
-                MacOSWindowInterop.SetWindowLevel(_nsWindow, 25);      // NSStatusWindowLevel: above normal/floating
-                MacOSWindowInterop.OrderFrontWindow(_nsWindow);
-                break;
-
-            // Non-activating popup: order front without key/main so the owner keeps its active look;
-            // the borderless popup window still receives mouse input.
-            case Controls.WindowKind.Popup:
-                MacOSWindowInterop.OrderFrontWindow(_nsWindow);
-                break;
-
-            default:
-                if (_window.ShowActivated)
-                {
-                    MacOSWindowInterop.ShowWindow(_nsWindow);
-                }
-                else
-                {
-                    MacOSWindowInterop.OrderFrontWindow(_nsWindow);
-                }
-                break;
-        }
+        OrderFront();
 
         ApplyPendingOwner();
         ApplyWindowLevel(MacOSInterop.IsApplicationActive());
@@ -284,10 +268,42 @@ internal sealed class MacOSWindowBackend : IWindowBackend, IWindowSystemBackdrop
         _host.RequestRender();
     }
 
+    private void OrderFront()
+    {
+        switch (_window.Kind)
+        {
+            // Input-transparent overlay (drag preview): click-through (ignoresMouseEvents) + float above all +
+            // order front WITHOUT making it key/main, so it never steals capture/focus from the drag source.
+            case Controls.WindowKind.Overlay:
+                MacOSWindowInterop.SetWindowEnabled(_nsWindow, false); // ignoresMouseEvents = true
+                MacOSWindowInterop.SetWindowLevel(_nsWindow, 25);      // NSStatusWindowLevel: above normal/floating
+                MacOSWindowInterop.OrderFrontWindow(_nsWindow);
+                break;
+
+            // Non-activating popup: order front without key/main so the owner keeps its active look;
+            // the borderless popup window still receives mouse input.
+            case Controls.WindowKind.Popup:
+                MacOSWindowInterop.OrderFrontWindow(_nsWindow);
+                break;
+
+            default:
+                if (_window.ShowActivated)
+                {
+                    MacOSWindowInterop.ShowWindow(_nsWindow);
+                }
+                else
+                {
+                    MacOSWindowInterop.OrderFrontWindow(_nsWindow);
+                }
+                break;
+        }
+    }
+
     public void Hide()
     {
         if (_nsWindow != 0)
         {
+            _hidden = true;
             ObjC.MsgSend_void_nint_nint(_nsWindow, ObjC.Sel("orderOut:"), 0);
         }
     }
@@ -784,6 +800,9 @@ internal sealed class MacOSWindowBackend : IWindowBackend, IWindowSystemBackdrop
     }
 
     internal nint NsWindow => _nsWindow;
+
+    /// <summary>Whether <see cref="Hide"/> ordered the window out; such a window is off screen but not closed.</summary>
+    internal bool IsHidden => _hidden;
 
     /// <summary>
     /// The level AppKit gives this kind of window. Window levels order windows across every application, so
@@ -1298,6 +1317,8 @@ internal sealed class MacOSWindowBackend : IWindowBackend, IWindowSystemBackdrop
         }
 
         _closedRaised = true;
+        // A window closed while hidden is gone for good, so the host's cleanup must dispose it.
+        _hidden = false;
         try
         {
             _window.RaiseClosed();

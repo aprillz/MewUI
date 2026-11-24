@@ -69,6 +69,9 @@ internal static partial class X11
     public static partial int XIconifyWindow(nint display, nint window, int screenNumber);
 
     [LibraryImport(LibraryName)]
+    public static partial int XWithdrawWindow(nint display, nint window, int screenNumber);
+
+    [LibraryImport(LibraryName)]
     public static partial int XRaiseWindow(nint display, nint window);
 
     [LibraryImport(LibraryName)]
