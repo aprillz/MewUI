@@ -21,6 +21,10 @@ internal sealed class TestBackendSession : IDisposable
     // RetainedDirtyRegionExactnessTests.
     private const int MEWVG_CHANNEL_TOLERANCE = 1;
 
+    // Direct2D rounds a single shape faded by its fill one level apart from the same shape faded in a
+    // group; see RetainedGroupOpacityTests.
+    private const int DIRECT2D_CHANNEL_TOLERANCE = 1;
+
     private readonly IDisposable? _renderScope;
     private readonly DefaultGraphicsFactoryScope _factoryScope;
     private bool _disposed;
@@ -42,7 +46,7 @@ internal sealed class TestBackendSession : IDisposable
         switch (backend)
         {
             case TestBackend.Direct2D:
-                return new TestBackendSession(new Aprillz.MewUI.Rendering.Direct2D.Direct2DGraphicsFactory(), null, 0);
+                return new TestBackendSession(new Aprillz.MewUI.Rendering.Direct2D.Direct2DGraphicsFactory(), null, DIRECT2D_CHANNEL_TOLERANCE);
             case TestBackend.MewVG:
                 var factory = new MewVGWin32GraphicsFactory();
                 return new TestBackendSession(factory, factory.AcquireBackgroundRenderScope(), MEWVG_CHANNEL_TOLERANCE);
