@@ -12,7 +12,7 @@ using static Aprillz.MewUI.Rendering.GradientBrushHelper;
 
 namespace Aprillz.MewUI.Rendering.Direct2D;
 
-internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITransparentDirtyRectContext, IOpaqueDirtyRectContext, IGroupOpacityContext, IBoundedOpaqueBackdropContext, ITargetSnapshotContext
+internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITransparentDirtyRectContext, IOpaqueDirtyRectContext, IGroupOpacityContext, IBoundedOpaqueBackdropContext, ITargetSnapshotContext, ITargetReadScopeContext
 {
     private const int D2DERR_RECREATE_TARGET = unchecked((int)0x8899000C);
     private const int D2DERR_WRONG_RESOURCE_DOMAIN = unchecked((int)0x88990015);
@@ -563,16 +563,25 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITra
     }
 
     /// <summary>Whether drawing goes into a layer that reaches the target only when it is popped.</summary>
-    private bool HasOpenLayer()
+    private bool HasOpenLayer() => CountClipLayers() > 0 || HasOpenScopeLayer();
+
+    private int CountClipLayers()
     {
+        int count = 0;
         foreach (var entry in _clipStack)
         {
             if (entry.Kind == ClipKind.Layer)
             {
-                return true;
+                count++;
             }
         }
 
+        return count;
+    }
+
+    /// <summary>Whether an opacity or opaque backdrop scope holds its drawing in a layer, which no read may close early.</summary>
+    private bool HasOpenScopeLayer()
+    {
         foreach (nint layer in _opacityLayers)
         {
             if (layer != 0)
@@ -590,6 +599,59 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITra
         }
 
         return false;
+    }
+
+    // The clips a read of the target closed, innermost first, pushed again when the read ends.
+    private readonly List<ClipEntry> _clipsClosedForRead = new();
+
+    void ITargetReadScopeContext.BeginTargetRead()
+    {
+        // Only a target that can be read is worth closing clips for, and a group layer cannot be closed early.
+        if (_renderTarget == 0 || _gpuPixelSurfaceTarget == null || _clipsClosedForRead.Count > 0 || HasOpenScopeLayer())
+        {
+            return;
+        }
+
+        // A layer holds its drawing back from the target until it is popped, and a flush with one open fails
+        // the frame. Clips are popped in order, so everything down to the outermost layer is closed.
+        int layers = CountClipLayers();
+        while (layers > 0)
+        {
+            var entry = _clipStack.Pop();
+            if (entry.Kind == ClipKind.AxisAligned)
+            {
+                D2D1VTable.PopAxisAlignedClip((ID2D1RenderTarget*)_renderTarget);
+            }
+            else
+            {
+                D2D1VTable.PopLayer((ID2D1RenderTarget*)_renderTarget);
+                layers--;
+            }
+
+            _clipsClosedForRead.Add(entry);
+        }
+    }
+
+    void ITargetReadScopeContext.EndTargetRead()
+    {
+        if (_clipsClosedForRead.Count == 0)
+        {
+            return;
+        }
+
+        for (int index = _clipsClosedForRead.Count - 1; index >= 0; index--)
+        {
+            var entry = _clipsClosedForRead[index];
+            D2D1VTable.SetTransform((ID2D1RenderTarget*)_renderTarget, entry.Transform);
+            // What the layer held is on the target now, and a layer that starts as a copy of the target blends
+            // that copy over it once more as it closes. Only ClearType text needs the copy, and only an opaque
+            // target has ClearType, where the second blend changes nothing.
+            PushNativeClip(in entry, startsFromTarget: _clearTypeEnabled);
+            _clipStack.Push(entry);
+        }
+
+        _clipsClosedForRead.Clear();
+        SyncNativeTransform();
     }
 
     void ITransparentDirtyRectContext.ClearRectangleToTransparent(Rect rect)
@@ -1402,8 +1464,9 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITra
         // Track bounding box in world space for text-culling heuristics.
         _clipBoundsWorld = IntersectClipBounds(_clipBoundsWorld, TransformRect(rect));
 
-        D2D1VTable.PushAxisAlignedClip((ID2D1RenderTarget*)_renderTarget, ToRectF(rect));
-        _clipStack.Push(new ClipEntry(ClipKind.AxisAligned, 0, 0));
+        var entry = new ClipEntry(ClipKind.AxisAligned, ToRectF(rect), NativeTransform());
+        PushNativeClip(in entry, startsFromTarget: true);
+        _clipStack.Push(entry);
     }
 
     protected override void SetClipRoundedRectCore(Rect rect, double radiusX, double radiusY)
@@ -1443,36 +1506,9 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITra
             return;
         }
 
-        if (_deviceContext != 0)
-        {
-            // D2D 1.1: INITIALIZE_FROM_BACKGROUND copies the existing render target content into the layer,
-            // providing an opaque backing so ClearType works even without an explicit background fill.
-            var parameters1 = new D2D1_LAYER_PARAMETERS1(
-                contentBounds: ToRectF(rect),
-                geometricMask: geometry,
-                maskAntialiasMode: D2D1_ANTIALIAS_MODE.PER_PRIMITIVE,
-                maskTransform: D2D1_MATRIX_3X2_F.Identity,
-                opacity: 1.0f,
-                opacityBrush: 0,
-                layerOptions: D2D1_LAYER_OPTIONS1.INITIALIZE_FROM_BACKGROUND);
-
-            D2D1VTable.PushLayer((ID2D1DeviceContext*)_deviceContext, parameters1, layer);
-        }
-        else
-        {
-            var parameters = new D2D1_LAYER_PARAMETERS(
-                contentBounds: ToRectF(rect),
-                geometricMask: geometry,
-                maskAntialiasMode: D2D1_ANTIALIAS_MODE.PER_PRIMITIVE,
-                maskTransform: D2D1_MATRIX_3X2_F.Identity,
-                opacity: 1.0f,
-                opacityBrush: 0,
-                layerOptions: _clearTypeEnabled ? D2D1_LAYER_OPTIONS.INITIALIZE_FOR_CLEARTYPE : D2D1_LAYER_OPTIONS.NONE);
-
-            D2D1VTable.PushLayer((ID2D1RenderTarget*)_renderTarget, parameters, layer);
-        }
-
-        _clipStack.Push(new ClipEntry(ClipKind.Layer, layer, geometry));
+        var entry = new ClipEntry(ClipKind.Layer, ToRectF(rect), NativeTransform(), layer, geometry);
+        PushNativeClip(in entry, startsFromTarget: true);
+        _clipStack.Push(entry);
     }
 
     protected override void SetClipPathCore(PathGeometry path)
@@ -1503,34 +1539,52 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITra
             return;
         }
 
+        var entry = new ClipEntry(ClipKind.Layer, ToRectF(bounds), NativeTransform(), layer, geometry, ownsGeometry);
+        PushNativeClip(in entry, startsFromTarget: true);
+        _clipStack.Push(entry);
+    }
+
+    private D2D1_MATRIX_3X2_F NativeTransform()
+        => new(_transform.M11, _transform.M12, _transform.M21, _transform.M22, _transform.M31, _transform.M32);
+
+    /// <summary>
+    /// Pushes <paramref name="entry"/> on the target under the current native transform. A layer that
+    /// <paramref name="startsFromTarget"/> begins as a copy of what is under it, which ClearType text needs.
+    /// </summary>
+    private void PushNativeClip(in ClipEntry entry, bool startsFromTarget)
+    {
+        if (entry.Kind == ClipKind.AxisAligned)
+        {
+            D2D1VTable.PushAxisAlignedClip((ID2D1RenderTarget*)_renderTarget, entry.Bounds);
+            return;
+        }
+
         if (_deviceContext != 0)
         {
             var parameters1 = new D2D1_LAYER_PARAMETERS1(
-                contentBounds: ToRectF(bounds),
-                geometricMask: geometry,
+                contentBounds: entry.Bounds,
+                geometricMask: entry.Geometry,
                 maskAntialiasMode: D2D1_ANTIALIAS_MODE.PER_PRIMITIVE,
                 maskTransform: D2D1_MATRIX_3X2_F.Identity,
                 opacity: 1.0f,
                 opacityBrush: 0,
-                layerOptions: D2D1_LAYER_OPTIONS1.INITIALIZE_FROM_BACKGROUND);
+                layerOptions: startsFromTarget ? D2D1_LAYER_OPTIONS1.INITIALIZE_FROM_BACKGROUND : D2D1_LAYER_OPTIONS1.NONE);
 
-            D2D1VTable.PushLayer((ID2D1DeviceContext*)_deviceContext, parameters1, layer);
+            D2D1VTable.PushLayer((ID2D1DeviceContext*)_deviceContext, parameters1, entry.Layer);
         }
         else
         {
             var parameters = new D2D1_LAYER_PARAMETERS(
-                contentBounds: ToRectF(bounds),
-                geometricMask: geometry,
+                contentBounds: entry.Bounds,
+                geometricMask: entry.Geometry,
                 maskAntialiasMode: D2D1_ANTIALIAS_MODE.PER_PRIMITIVE,
                 maskTransform: D2D1_MATRIX_3X2_F.Identity,
                 opacity: 1.0f,
                 opacityBrush: 0,
                 layerOptions: _clearTypeEnabled ? D2D1_LAYER_OPTIONS.INITIALIZE_FOR_CLEARTYPE : D2D1_LAYER_OPTIONS.NONE);
 
-            D2D1VTable.PushLayer((ID2D1RenderTarget*)_renderTarget, parameters, layer);
+            D2D1VTable.PushLayer((ID2D1RenderTarget*)_renderTarget, parameters, entry.Layer);
         }
-
-        _clipStack.Push(new ClipEntry(ClipKind.Layer, layer, geometry, ownsGeometry));
     }
 
     protected override void ResetClipCore()
@@ -2213,10 +2267,9 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITra
             return;
         }
 
-        // Subpixel text needs a layer that knows what is under it, which is one that starts as a copy
-        // of the target. Closing such a layer blends the copy back over the target, so anything
-        // translucent inside the layer is blended twice: the layer is kept to the box, which its owner
-        // fills opaquely, and an opaque pixel comes out of that the same.
+        // A device context allows subpixel text only in a layer that starts from the target. Its copy is
+        // cleared at once: blended back on close, it would thicken every translucent pixel the owner
+        // leaves unpainted, such as those past its rounded corners. The owner's opaque fill backs the text.
         var parameters = new D2D1_LAYER_PARAMETERS1(
             contentBounds: ToRectF(box.Inflate(BACKDROP_BOX_MARGIN, BACKDROP_BOX_MARGIN)),
             geometricMask: 0,
@@ -2736,9 +2789,22 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase, ITra
         ComHelpers.Release(entry.Layer);
     }
 
-    private readonly struct ClipEntry(ClipKind kind, nint layer, nint geometry, bool ownsGeometry = true)
+    /// <summary>A clip as it was pushed, so a read of the target can close it and push it again.</summary>
+    private readonly struct ClipEntry(
+        ClipKind kind,
+        D2D1_RECT_F bounds,
+        D2D1_MATRIX_3X2_F transform,
+        nint layer = 0,
+        nint geometry = 0,
+        bool ownsGeometry = true)
     {
         public ClipKind Kind { get; } = kind;
+
+        /// <summary>The clip rectangle, or the layer's content bounds, under <see cref="Transform"/>.</summary>
+        public D2D1_RECT_F Bounds { get; } = bounds;
+
+        /// <summary>The native transform the clip was pushed under.</summary>
+        public D2D1_MATRIX_3X2_F Transform { get; } = transform;
 
         public nint Layer { get; } = layer;
 

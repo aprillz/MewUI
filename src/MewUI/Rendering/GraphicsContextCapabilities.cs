@@ -38,6 +38,21 @@ internal interface ITargetSnapshotContext
 }
 
 /// <summary>
+/// A target snapshot context that holds drawing under some clips back from its target until the clip
+/// closes. A read of the target is bracketed by <see cref="BeginTargetRead"/> and
+/// <see cref="EndTargetRead"/>: in between, the target holds everything drawn so far, and nothing is
+/// drawn to it until the read ends.
+/// </summary>
+internal interface ITargetReadScopeContext
+{
+    /// <summary>Lets the drawing held back under open clips through to the target, keeping the clips for after the read.</summary>
+    void BeginTargetRead();
+
+    /// <summary>Puts back the clips <see cref="BeginTargetRead"/> let through, as they were.</summary>
+    void EndTargetRead();
+}
+
+/// <summary>
 /// A context that can overwrite a rectangle of its target with one colour, alpha included.
 /// Repainting part of an opaque window needs this so the dirty box starts from the window
 /// background instead of the pixels the previous frame left behind.
