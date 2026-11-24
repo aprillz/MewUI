@@ -32,7 +32,8 @@ public interface IWindowBackend : IDisposable
     /// <summary>
     /// Paints the first frame while the window is still hidden, then reveals the already-painted window
     /// (map / order front). Called by the framework after layout and the <c>Loaded</c> event so the first
-    /// on-screen frame reflects Loaded-time changes with no flash.
+    /// on-screen frame reflects Loaded-time changes with no flash. Called again after <see cref="Hide"/>, reveals
+    /// the window again where it was.
     /// </summary>
     void PresentSurface();
 
