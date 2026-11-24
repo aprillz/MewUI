@@ -49,34 +49,75 @@ public sealed class TargetSnapshotContractTests
         using var renderScope = factory.AcquireBackgroundRenderScope();
         using var destination = factory.CreateSurface(RenderSurfaceDescriptor.Offscreen(SIZE, SIZE, 1.0, hasAlpha: true));
 
-        bool offered = false;
         var actual = Draw(factory, hasAlpha: true, context =>
         {
             context.Save();
             context.SetClipRoundedRect(new Rect(4, 4, 56, 56), 20, 20);
             context.FillRectangle(new Rect(0, 0, SIZE, SIZE / 2), Color.FromRgb(30, 120, 200));
-            offered = ((ITargetSnapshotContext)context).TryGetSnapshotTarget(out _, out _, out _);
-            if (offered)
+            var readScope = context as ITargetReadScopeContext;
+            readScope?.BeginTargetRead();
+            try
             {
+                Assert.IsTrue(((ITargetSnapshotContext)context).TryGetSnapshotTarget(out _, out _, out _),
+                    $"{factory.Backend}: the target was not offered under a rounded clip");
                 Assert.IsTrue(((ITargetSnapshotContext)context).TryCopyTargetPixels(0, 0, SIZE, SIZE, destination, 0, 0),
                     $"{factory.Backend}: a target offered under a clip was not copied");
+            }
+            finally
+            {
+                readScope?.EndTargetRead();
             }
 
             context.FillRectangle(new Rect(0, SIZE / 2, SIZE, SIZE / 2), Color.FromRgb(220, 30, 30));
             context.Restore();
         });
 
-        // Only a backend that holds clipped drawing back from its target until the clip closes cannot offer it.
-        if (factory.Backend != "Direct2D")
-        {
-            Assert.IsTrue(offered, $"{factory.Backend}: the target was not offered under a rounded clip");
-        }
-
         // The corners lie outside the rounded clip, above and below the copy alike.
-        Assert.AreEqual(0, actual[3], $"{factory.Backend}: top-left corner (offered: {offered})");
-        Assert.AreEqual(0, actual[((SIZE - 1) * SIZE) * 4 + 3], $"{factory.Backend}: bottom-left corner (offered: {offered})");
+        Assert.AreEqual(0, actual[3], $"{factory.Backend}: top-left corner");
+        Assert.AreEqual(0, actual[((SIZE - 1) * SIZE) * 4 + 3], $"{factory.Backend}: bottom-left corner");
         Assert.AreEqual(255, actual[((SIZE * 3 / 4) * SIZE + SIZE / 2) * 4 + 3], $"{factory.Backend}: inside the clip after the copy");
     });
+
+    [TestMethod]
+    public Task TranslucentDrawingUnderARoundedClip_IsUnchangedByACopy() => CaptureScene.RunAsync(async scene =>
+    {
+        var window = await scene.ShowAsync(new Border { Background = Color.White });
+        var factory = window.GraphicsFactory;
+        using var renderScope = factory.AcquireBackgroundRenderScope();
+        foreach (bool hasAlpha in new[] { true, false })
+        {
+            using var destination = factory.CreateSurface(RenderSurfaceDescriptor.Offscreen(SIZE, SIZE, 1.0, hasAlpha));
+            var reference = Draw(factory, hasAlpha, context => DrawUnderRoundedClip(context, copyTarget: null));
+            var actual = Draw(factory, hasAlpha, context => DrawUnderRoundedClip(context, destination));
+            AssertSamePixels(reference, actual, $"{factory.Backend}, {(hasAlpha ? "alpha" : "opaque")} target: the frame after a copy under a rounded clip");
+        }
+    });
+
+    /// <summary>The translucent scene inside a rounded clip, with the target read halfway through it when <paramref name="copyTarget"/> is given.</summary>
+    private static void DrawUnderRoundedClip(IGraphicsContext context, IRenderSurface? copyTarget)
+    {
+        context.Save();
+        context.SetClipRoundedRect(new Rect(2, 2, 60, 60), 18, 18);
+        DrawTranslucentScene(context);
+        if (copyTarget != null)
+        {
+            var readScope = context as ITargetReadScopeContext;
+            readScope?.BeginTargetRead();
+            try
+            {
+                Assert.IsTrue(((ITargetSnapshotContext)context).TryGetSnapshotTarget(out _, out _, out _), "the target was not offered under a rounded clip");
+                Assert.IsTrue(((ITargetSnapshotContext)context).TryCopyTargetPixels(0, 0, SIZE, SIZE, copyTarget, 0, 0), "the target was not copied under a rounded clip");
+            }
+            finally
+            {
+                readScope?.EndTargetRead();
+            }
+        }
+
+        // Drawn after the read, over what was drawn before it.
+        context.FillRectangle(new Rect(12, 36, 44, 20), Color.FromArgb(102, 240, 200, 20));
+        context.Restore();
+    }
 
     private static Task CopyDrawnBack(bool hasAlpha) => CaptureScene.RunAsync(async scene =>
     {

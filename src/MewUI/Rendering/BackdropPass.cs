@@ -108,8 +108,37 @@ internal static class BackdropPass
             return default;
         }
 
-        if (factory == null || context is not ITargetSnapshotContext snapshot || context is not GraphicsContextBase contextBase ||
-            !snapshot.TryGetSnapshotTarget(out int targetWidth, out int targetHeight, out bool hasAlpha))
+        if (factory == null || context is not ITargetSnapshotContext snapshot || context is not GraphicsContextBase contextBase)
+        {
+            return Fallback(prepared, node, statistics);
+        }
+
+        // The filter runs inside the read as well: a backend may run it on the context that is reading.
+        var readScope = context as ITargetReadScopeContext;
+        readScope?.BeginTargetRead();
+        try
+        {
+            return ReadAndFilter(context, factory, snapshot, contextBase, filter, prepared, surfaceBox, node, dirtyRect, statistics);
+        }
+        finally
+        {
+            readScope?.EndTargetRead();
+        }
+    }
+
+    private static Prepared ReadAndFilter(
+        IGraphicsContext context,
+        IGraphicsFactory factory,
+        ITargetSnapshotContext snapshot,
+        GraphicsContextBase contextBase,
+        ImageFilter filter,
+        Prepared prepared,
+        Rect surfaceBox,
+        VisualNode? node,
+        Rect? dirtyRect,
+        RenderSceneStatistics? statistics)
+    {
+        if (!snapshot.TryGetSnapshotTarget(out int targetWidth, out int targetHeight, out bool hasAlpha))
         {
             return Fallback(prepared, node, statistics);
         }
